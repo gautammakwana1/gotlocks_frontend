@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { JSX, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
@@ -99,6 +99,12 @@ const HomeTab = () => {
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [joinOpen, setJoinOpen] = useState(false);
+    const leagueCarouselRef = useRef<HTMLDivElement | null>(null);
+    const slideDistanceRef = useRef(0);
+    const resetTimeoutRef = useRef<number | null>(null);
+    const resumeTimeoutRef = useRef<number | null>(null);
+    const isCarouselPausedRef = useRef(false);
+    const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
 
     const { group, joinLoading, message, error } = useSelector((state: GroupRootState) => state.group);
     const { pick, postPicks, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
@@ -200,6 +206,17 @@ const HomeTab = () => {
         ) ?? 0,
         [sortedGroups]
     );
+    const orderedGroups = useMemo(
+        () => [...sortedGroups].reverse(),
+        [sortedGroups]
+    );
+    const carouselGroups = useMemo(
+        () =>
+            orderedGroups.length > 1
+                ? [...orderedGroups, ...orderedGroups, ...orderedGroups]
+                : orderedGroups,
+        [orderedGroups]
+    );
 
     const openJoinModal = useCallback(() => {
         setJoinOpen(true);
@@ -219,6 +236,227 @@ const HomeTab = () => {
         dispatch(joinedGroupByInviteCodeRequest({ invite_code: joinCode.trim() }));
         closeJoinModal();
     };
+
+    const jumpCarouselToIndex = useCallback((targetIndex: number, distance?: number) => {
+        const container = leagueCarouselRef.current;
+        if (!container) return;
+        const width = distance ?? slideDistanceRef.current ?? container.clientWidth;
+        if (!width) return;
+        container.style.scrollSnapType = "none";
+        container.style.scrollBehavior = "auto";
+        container.scrollTo({ left: targetIndex * width, behavior: "auto" });
+        window.requestAnimationFrame(() => {
+            container.style.scrollSnapType = "";
+            container.style.scrollBehavior = "";
+        });
+    }, []);
+
+    const scrollLeagueCarouselToIndex = useCallback(
+        (index: number) => {
+            const container = leagueCarouselRef.current;
+            if (!container || orderedGroups.length === 0) return;
+            const clampedIndex = Math.max(0, Math.min(index, orderedGroups.length - 1));
+            const distance = slideDistanceRef.current || container.clientWidth;
+            const targetIndex =
+                orderedGroups.length > 1
+                    ? orderedGroups.length + clampedIndex
+                    : clampedIndex;
+            container.scrollTo({ left: targetIndex * distance, behavior: "smooth" });
+            setActiveLeagueIndex(clampedIndex);
+        },
+        [orderedGroups.length]
+    );
+
+    useEffect(() => {
+        const container = leagueCarouselRef.current;
+        if (!container || orderedGroups.length === 0) return;
+
+        const alignToMiddle = () => {
+            const children = Array.from(container.children) as HTMLElement[];
+            const distance =
+                children.length >= 2
+                    ? children[1].offsetLeft - children[0].offsetLeft
+                    : children[0]?.offsetWidth ?? container.clientWidth;
+            slideDistanceRef.current = distance || container.clientWidth;
+            if (orderedGroups.length > 1) {
+                jumpCarouselToIndex(orderedGroups.length, slideDistanceRef.current);
+                setActiveLeagueIndex(0);
+            }
+        };
+
+        const rafId = window.requestAnimationFrame(alignToMiddle);
+        return () => window.cancelAnimationFrame(rafId);
+    }, [carouselGroups.length, orderedGroups.length, jumpCarouselToIndex]);
+
+    useEffect(() => {
+        const container = leagueCarouselRef.current;
+        if (!container) return;
+
+        const handleScroll = () => {
+            const width = slideDistanceRef.current || container.clientWidth;
+            if (!width || orderedGroups.length === 0) return;
+            const rawIndexFloat = container.scrollLeft / width;
+            const rawIndex = Math.round(rawIndexFloat);
+            const total = orderedGroups.length;
+
+            const normalizedIndex = ((rawIndex % total) + total) % total;
+            setActiveLeagueIndex(normalizedIndex);
+
+            if (resetTimeoutRef.current) {
+                window.clearTimeout(resetTimeoutRef.current);
+                resetTimeoutRef.current = null;
+            }
+
+            if (total > 1) {
+                let resetTarget: number | null = null;
+                if (rawIndexFloat < total - 0.1) {
+                    resetTarget = rawIndex + total;
+                } else if (rawIndexFloat >= total * 2 - 0.1) {
+                    resetTarget = rawIndex - total;
+                }
+
+                if (resetTarget !== null) {
+                    resetTimeoutRef.current = window.setTimeout(() => {
+                        jumpCarouselToIndex(resetTarget as number, width);
+                    }, 140);
+                }
+            }
+        };
+
+        handleScroll();
+        container.addEventListener("scroll", handleScroll, { passive: true });
+        return () => {
+            if (resetTimeoutRef.current) {
+                window.clearTimeout(resetTimeoutRef.current);
+                resetTimeoutRef.current = null;
+            }
+            container.removeEventListener("scroll", handleScroll);
+        };
+    }, [orderedGroups.length, jumpCarouselToIndex]);
+
+    useEffect(() => {
+        const container = leagueCarouselRef.current;
+        if (!container || orderedGroups.length <= 1) return;
+
+        let intervalId: number | null = null;
+        const media = window.matchMedia("(min-width: 640px)");
+
+        const tick = () => {
+            if (!leagueCarouselRef.current) return;
+            const width = slideDistanceRef.current || leagueCarouselRef.current.clientWidth;
+            if (!width) return;
+            leagueCarouselRef.current.scrollBy({ left: width, behavior: "smooth" });
+        };
+
+        const start = () => {
+            if (intervalId !== null) return;
+            if (isCarouselPausedRef.current) return;
+            intervalId = window.setInterval(tick, 5000);
+        };
+
+        const stop = () => {
+            if (intervalId === null) return;
+            window.clearInterval(intervalId);
+            intervalId = null;
+        };
+
+        const scheduleResume = () => {
+            if (resumeTimeoutRef.current) {
+                window.clearTimeout(resumeTimeoutRef.current);
+                resumeTimeoutRef.current = null;
+            }
+            resumeTimeoutRef.current = window.setTimeout(() => {
+                isCarouselPausedRef.current = false;
+                if (!media.matches) {
+                    start();
+                }
+            }, 1200);
+        };
+
+        const pause = () => {
+            isCarouselPausedRef.current = true;
+            stop();
+            if (resumeTimeoutRef.current) {
+                window.clearTimeout(resumeTimeoutRef.current);
+                resumeTimeoutRef.current = null;
+            }
+        };
+
+        const handlePointerEnter = () => pause();
+        const handlePointerLeave = () => scheduleResume();
+        const handlePointerDown = () => pause();
+        const handlePointerUp = () => scheduleResume();
+        const handlePointerCancel = () => scheduleResume();
+        const handleTouchStart = () => pause();
+        const handleTouchEnd = () => scheduleResume();
+        const handleTouchCancel = () => scheduleResume();
+
+        const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+            if (event.matches) {
+                stop();
+            } else {
+                start();
+            }
+        };
+
+        handleChange(media);
+
+        if (media.addEventListener) {
+            media.addEventListener("change", handleChange);
+        } else {
+            media.addListener(handleChange);
+        }
+
+        container.addEventListener("pointerenter", handlePointerEnter);
+        container.addEventListener("pointerleave", handlePointerLeave);
+        container.addEventListener("pointerdown", handlePointerDown);
+        container.addEventListener("pointerup", handlePointerUp);
+        container.addEventListener("pointercancel", handlePointerCancel);
+        container.addEventListener("touchstart", handleTouchStart, { passive: true });
+        container.addEventListener("touchend", handleTouchEnd, { passive: true });
+        container.addEventListener("touchcancel", handleTouchCancel, { passive: true });
+
+        return () => {
+            stop();
+            if (resumeTimeoutRef.current) {
+                window.clearTimeout(resumeTimeoutRef.current);
+                resumeTimeoutRef.current = null;
+            }
+            if (media.removeEventListener) {
+                media.removeEventListener("change", handleChange);
+            } else {
+                media.removeListener(handleChange);
+            }
+            container.removeEventListener("pointerenter", handlePointerEnter);
+            container.removeEventListener("pointerleave", handlePointerLeave);
+            container.removeEventListener("pointerdown", handlePointerDown);
+            container.removeEventListener("pointerup", handlePointerUp);
+            container.removeEventListener("pointercancel", handlePointerCancel);
+            container.removeEventListener("touchstart", handleTouchStart);
+            container.removeEventListener("touchend", handleTouchEnd);
+            container.removeEventListener("touchcancel", handleTouchCancel);
+        };
+    }, [orderedGroups.length]);
+
+    const maxVisibleDots = 5;
+    const total = orderedGroups.length;
+
+    let startIndex = 0;
+
+    if (total > maxVisibleDots) {
+        if (activeLeagueIndex <= 2) {
+            startIndex = 0;
+        } else if (activeLeagueIndex >= total - 3) {
+            startIndex = total - maxVisibleDots;
+        } else {
+            startIndex = activeLeagueIndex - 2;
+        }
+    }
+
+    const visibleDots = orderedGroups.slice(
+        startIndex,
+        startIndex + maxVisibleDots
+    );
 
     const handleReaction = (pickId: string, reaction: PickReaction) => {
         if (reaction && pickId) {
@@ -359,9 +597,6 @@ const HomeTab = () => {
                 <div className="relative z-10 flex flex-col gap-5 sm:gap-6 lg:gap-8">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:items-center sm:gap-4">
                         <div className="max-w-xl">
-                            <p className="text-[10px] tracking-[0.22em] text-emerald-200/80 sm:text-xs sm:tracking-[0.3em]">
-                                home base
-                            </p>
                             <h1 className="mt-2 text-2xl font-extrabold leading-tight text-white sm:mt-3 sm:text-3xl lg:text-4xl">
                                 <span className="block">Welcome back,</span>
                                 <span
@@ -412,36 +647,101 @@ const HomeTab = () => {
                                 You are not in any leagues yet. Start one to get the vibe going.
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                                {sortedGroups.slice(0, 2).map((group) => (
-                                    <button
-                                        key={group.id}
-                                        type="button"
-                                        onClick={() => router.push(`/group/${group.id}`)}
-                                        className="flex flex-col gap-2 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:gap-3 sm:p-4"
+                            <>
+                                <div className="sm:hidden">
+                                    <div
+                                        ref={leagueCarouselRef}
+                                        className="scrollbar-hide flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory"
                                     >
-                                        <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.12em] text-gray-400 sm:text-[11px] sm:tracking-[0.14em]">
-                                            <span>League</span>
-                                            <span className="text-[9px] text-gray-300 sm:text-[10px]">
-                                                code {group.invite_code}
-                                            </span>
+                                        {carouselGroups.map((group, index) => (
+                                            <button
+                                                key={`${group.id}-${index}`}
+                                                type="button"
+                                                onClick={() => router.push(`/group/${group.id}`)}
+                                                className="min-w-full snap-center flex flex-col gap-2 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
+                                            >
+                                                <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.12em] text-gray-400">
+                                                    <span>League</span>
+                                                    <span className="text-[9px] text-gray-300">
+                                                        code {group.invite_code}
+                                                    </span>
+                                                </div>
+                                                <h3
+                                                    className="allow-caps text-base font-extrabold text-transparent bg-clip-text"
+                                                    style={displayNameGradientStyle}
+                                                >
+                                                    {group.name}
+                                                </h3>
+                                                <p className="text-[10px] text-gray-300 line-clamp-2">
+                                                    {group.description ??
+                                                        "Run slips, share picks, and climb the table together."}
+                                                </p>
+                                                <span className="text-[9px] uppercase tracking-[0.16em] text-gray-400">
+                                                    {group.members?.length} members
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {orderedGroups.length > 1 && (
+                                        <div className="mt-3 flex items-center justify-center gap-2">
+                                            {visibleDots.map((group, index) => {
+                                                const realIndex = startIndex + index;
+                                                const isActive = realIndex === activeLeagueIndex;
+
+                                                const distance = Math.abs(realIndex - activeLeagueIndex);
+
+                                                return (
+                                                    <button
+                                                        key={group.id}
+                                                        type="button"
+                                                        onClick={() => scrollLeagueCarouselToIndex(realIndex)}
+                                                        aria-label={`Go to league ${realIndex + 1}`}
+                                                        className={`
+                                                            rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+                                                            ${isActive
+                                                                ? "w-2 h-2 bg-white"
+                                                                : distance === 1
+                                                                    ? "w-1.5 h-1.5 bg-white/60"
+                                                                    : "w-1 h-1 bg-white/30"
+                                                            }
+                                                        `}
+                                                    />
+                                                );
+                                            })}
                                         </div>
-                                        <h3
-                                            className="allow-caps text-base font-extrabold text-transparent bg-clip-text sm:text-lg"
-                                            style={displayNameGradientStyle}
+                                    )}
+                                </div>
+                                <div className="hidden sm:grid sm:grid-cols-2 sm:gap-4">
+                                    {orderedGroups.slice(0, 2).map((group) => (
+                                        <button
+                                            key={group.id}
+                                            type="button"
+                                            onClick={() => router.push(`/group/${group.id}`)}
+                                            className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
                                         >
-                                            {group.name}
-                                        </h3>
-                                        <p className="text-[10px] text-gray-300 line-clamp-2 sm:text-xs">
-                                            {group.description ??
-                                                "Run slips, share picks, and climb the table together."}
-                                        </p>
-                                        <span className="text-[9px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px] sm:tracking-[0.18em]">
-                                            {group?.members?.length} members
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
+                                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-gray-400">
+                                                <span>League</span>
+                                                <span className="text-[10px] text-gray-300">
+                                                    code {group.invite_code}
+                                                </span>
+                                            </div>
+                                            <h3
+                                                className="allow-caps text-lg font-extrabold text-transparent bg-clip-text"
+                                                style={displayNameGradientStyle}
+                                            >
+                                                {group.name}
+                                            </h3>
+                                            <p className="text-xs text-gray-300 line-clamp-2">
+                                                {group.description ??
+                                                    "Run slips, share picks, and climb the table together."}
+                                            </p>
+                                            <span className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                                                {group.members?.length} members
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>

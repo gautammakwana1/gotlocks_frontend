@@ -172,8 +172,9 @@ const ProfileView = ({
                 duration: 3000
             });
             dispatch(clearDeletePostPickMessage());
+            if (targetUserId) dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId }));
         }
-    }, [dispatch, deleteMessage, postLoader, setToast]);
+    }, [dispatch, deleteMessage, postLoader, setToast, targetUserId]);
 
     const isFollowing = useCallback(
         (followerId: string | undefined, targetUserId: string | undefined): boolean => {
