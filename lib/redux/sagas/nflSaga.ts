@@ -27,7 +27,7 @@ function* handleFetchLiveNFLSchedule(action: PayloadAction<FetchNFLSchedulePaylo
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-schedules`,
+            `${API_BASE_URL}/nfl/nfl-schedules-with-odds`,
             {
                 params: { pick_deadline, result_deadline, is_pick_of_day, date },
             }

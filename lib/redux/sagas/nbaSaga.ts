@@ -27,7 +27,7 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nba/nba-schedules`,
+            `${API_BASE_URL}/nba/nba-schedules-with-odds`,
             {
                 params: { pick_deadline, result_deadline, is_pick_of_day, date },
             }

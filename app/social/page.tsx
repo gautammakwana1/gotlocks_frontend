@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearFetchAllOverPickOfDayMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
+import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import Image from "next/image";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -150,7 +150,7 @@ const SocialPage = () => {
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
 
-        dispatch(clearFetchAllOverPickOfDayMessage());
+        dispatch(clearFetchAllGlobalPostPicksMessage());
         fetchDataByTab();
     }, [pickLoader, pickMessage, dispatch]);
 

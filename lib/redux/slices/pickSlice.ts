@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickOfDayPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPickOfDayByUserIdPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, Pick, Picks, ReactionPickOfDayPayload, SessionState, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, Pick, Picks, ReactionPickOfDayPayload, SessionState, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 type PickState = {
     pick: Pick | null;
@@ -141,164 +141,6 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        // pick of the day
-        createPickOfDayRequest: (state, action: PayloadAction<CreatePickOfDayPayload>) => {
-            void action;
-            state.loading = true;
-            state.error = null;
-        },
-        createPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.pick;
-            state.message = action.payload?.message;
-        },
-        createPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearCreatePickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchPickOfDayRequest: (state, action) => {
-            void action;
-            state.loading = true;
-            state.error = null;
-        },
-        fetchPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.pick;
-        },
-        fetchPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllMyPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllMyPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchAllMyPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllMyPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllGroupsMembersPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllGroupsMembersPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchAllGroupsMembersPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllGroupsMembersPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllPickOfDayByUserIdRequest: (state, action: PayloadAction<FetchPickOfDayByUserIdPayload>) => {
-            void action;
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllPickOfDayByUserIdSuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchAllPickOfDayByUserIdFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllPickOfDayByUserIdMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllOverPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllOverPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchAllOverPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllOverPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchFollowingUsersPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchFollowingUsersPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchFollowingUsersPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchFollowingUsersPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchGlobalWinnerPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchGlobalWinnerPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchGlobalWinnerPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchGlobalWinnerPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchFollowingUsersWinnerPickOfDayRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchFollowingUsersWinnerPickOfDaySuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.picks;
-        },
-        fetchFollowingUsersWinnerPickOfDayFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchFollowingUsersWinnerPickOfDayMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
         // Pick Reaction
         createPickReactionRequest: (state, action: PayloadAction<ReactionPickOfDayPayload>) => {
             void action;
@@ -314,60 +156,6 @@ const pickSlice = createSlice({
             state.error = action.payload;
         },
         clearCreatePickReactionMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        createVibePickRequest: (state, action: PayloadAction<CreatePickOfDayPayload>) => {
-            void action;
-            state.loading = true;
-            state.error = null;
-        },
-        createVibePickSuccess: (state, action) => {
-            state.loading = false;
-            state.pickOfDay = action.payload?.pick;
-            state.message = action.payload?.message;
-        },
-        createVibePickFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearCreateVibePickMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllMyVibePicksRequest: (state) => {
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllMyVibePicksSuccess: (state, action) => {
-            state.loading = false;
-            state.vibePicks = action.payload?.picks;
-        },
-        fetchAllMyVibePicksFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllMyVibePicksMessage(state) {
-            state.error = null;
-            state.message = null;
-        },
-
-        fetchAllVibePicksByUserIdRequest: (state, action: PayloadAction<FetchPickOfDayByUserIdPayload>) => {
-            void action;
-            state.loading = true;
-            state.error = null;
-        },
-        fetchAllVibePicksByUserIdSuccess: (state, action) => {
-            state.loading = false;
-            state.vibePicks = action.payload?.picks;
-        },
-        fetchAllVibePicksByUserIdFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
-        },
-        clearFetchAllVibePicksByUserIdMessage(state) {
             state.error = null;
             state.message = null;
         },
@@ -587,62 +375,14 @@ export const {
     deletePickSuccess,
     deletePickFailure,
     clearDeletePickMessage,
-    createPickOfDayRequest,
-    createPickOfDaySuccess,
-    createPickOfDayFailure,
-    clearCreatePickOfDayMessage,
-    fetchPickOfDayRequest,
-    fetchPickOfDaySuccess,
-    fetchPickOfDayFailure,
-    clearFetchPickOfDayMessage,
-    fetchAllMyPickOfDayRequest,
-    fetchAllMyPickOfDaySuccess,
-    fetchAllMyPickOfDayFailure,
-    clearFetchAllMyPickOfDayMessage,
     createPickReactionRequest,
     createPickReactionSuccess,
     createPickReactionFailure,
     clearCreatePickReactionMessage,
-    fetchAllGroupsMembersPickOfDayRequest,
-    fetchAllGroupsMembersPickOfDaySuccess,
-    fetchAllGroupsMembersPickOfDayFailure,
-    clearFetchAllGroupsMembersPickOfDayMessage,
-    fetchAllPickOfDayByUserIdRequest,
-    fetchAllPickOfDayByUserIdSuccess,
-    fetchAllPickOfDayByUserIdFailure,
-    clearFetchAllPickOfDayByUserIdMessage,
-    fetchAllOverPickOfDayRequest,
-    fetchAllOverPickOfDaySuccess,
-    fetchAllOverPickOfDayFailure,
-    clearFetchAllOverPickOfDayMessage,
-    fetchFollowingUsersPickOfDayRequest,
-    fetchFollowingUsersPickOfDaySuccess,
-    fetchFollowingUsersPickOfDayFailure,
-    clearFetchFollowingUsersPickOfDayMessage,
-    fetchGlobalWinnerPickOfDayRequest,
-    fetchGlobalWinnerPickOfDaySuccess,
-    fetchGlobalWinnerPickOfDayFailure,
-    clearFetchGlobalWinnerPickOfDayMessage,
-    fetchFollowingUsersWinnerPickOfDayRequest,
-    fetchFollowingUsersWinnerPickOfDaySuccess,
-    fetchFollowingUsersWinnerPickOfDayFailure,
-    clearFetchFollowingUsersWinnerPickOfDayMessage,
     fetchMyPicksBySlipIdRequest,
     fetchMyPicksBySlipIdSuccess,
     fetchMyPicksBySlipIdFailure,
     clearFetchMyPicksBySlipIdMessage,
-    createVibePickRequest,
-    createVibePickSuccess,
-    createVibePickFailure,
-    clearCreateVibePickMessage,
-    fetchAllMyVibePicksRequest,
-    fetchAllMyVibePicksSuccess,
-    fetchAllMyVibePicksFailure,
-    clearFetchAllMyVibePicksMessage,
-    fetchAllVibePicksByUserIdRequest,
-    fetchAllVibePicksByUserIdSuccess,
-    fetchAllVibePicksByUserIdFailure,
-    clearFetchAllVibePicksByUserIdMessage,
     createPostPickRequest,
     createPostPickSuccess,
     createPostPickFailure,

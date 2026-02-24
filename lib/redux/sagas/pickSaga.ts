@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickOfDayFailure, createPickOfDayRequest, createPickOfDaySuccess, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, createVibePickFailure, createVibePickRequest, createVibePickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllGroupsMembersPickOfDayFailure, fetchAllGroupsMembersPickOfDayRequest, fetchAllGroupsMembersPickOfDaySuccess, fetchAllMyPickOfDayFailure, fetchAllMyPickOfDayRequest, fetchAllMyPickOfDaySuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllMyVibePicksFailure, fetchAllMyVibePicksRequest, fetchAllMyVibePicksSuccess, fetchAllOverPickOfDayFailure, fetchAllOverPickOfDayRequest, fetchAllOverPickOfDaySuccess, fetchAllPickOfDayByUserIdFailure, fetchAllPickOfDayByUserIdRequest, fetchAllPickOfDayByUserIdSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchAllVibePicksByUserIdFailure, fetchAllVibePicksByUserIdRequest, fetchAllVibePicksByUserIdSuccess, fetchFollowingUsersPickOfDayFailure, fetchFollowingUsersPickOfDayRequest, fetchFollowingUsersPickOfDaySuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinnerPickOfDayFailure, fetchFollowingUsersWinnerPickOfDayRequest, fetchFollowingUsersWinnerPickOfDaySuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerPickOfDayFailure, fetchGlobalWinnerPickOfDayRequest, fetchGlobalWinnerPickOfDaySuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPickOfDayFailure, fetchPickOfDayRequest, fetchPickOfDaySuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
+import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AutoGradingPicksPayload, CreatePickOfDayPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPickOfDayByUserIdPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
     message?: string;
@@ -92,46 +92,6 @@ function* handleDeletePicks(action: PayloadAction<DeletePickPayload>): SagaItera
     }
 }
 
-function* handleCreatePickOfDay(action: PayloadAction<CreatePickOfDayPayload>): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.post,
-            `${API_BASE_URL}/pick/create-pick-of-day`,
-            action.payload
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(createPickOfDaySuccess(payload));
-    } catch (error: unknown) {
-        yield put(createPickOfDayFailure(getErrorMessage(error, "Pick of the day Creation Failed")));
-    }
-}
-
-function* handleFetchOwnPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/own-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchPickOfDayFailure(getErrorMessage(error, "Pick of the day Fetch Failed")));
-    }
-}
-
-function* handleFetchAllOwnPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/own-all-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllMyPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllMyPickOfDayFailure(getErrorMessage(error, "All My Pick of the day Fetch Failed")));
-    }
-}
-
 function* handlePickReaction(action: PayloadAction<ReactionPickOfDayPayload>): SagaIterator {
     try {
         const response: AxiosResponse<unknown> = yield call(
@@ -143,88 +103,6 @@ function* handlePickReaction(action: PayloadAction<ReactionPickOfDayPayload>): S
         yield put(createPickReactionSuccess(payload));
     } catch (error: unknown) {
         yield put(createPickReactionFailure(getErrorMessage(error, "Pick Reaction Failed")));
-    }
-}
-
-function* handleFetchAllGroupMembersPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/group-members-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllGroupsMembersPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllGroupsMembersPickOfDayFailure(getErrorMessage(error, "All Group Members Pick of the day Fetch Failed")));
-    }
-}
-
-function* handleFetchAllPickOfDayByUserId(action: PayloadAction<FetchPickOfDayByUserIdPayload>): SagaIterator {
-    try {
-        const { userId } = action.payload;
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/pick-of-day-by-userId`,
-            {
-                params: { userId }
-            }
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllPickOfDayByUserIdSuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllPickOfDayByUserIdFailure(getErrorMessage(error, "Fetch Picks by User Id Failed")));
-    }
-}
-
-function* handleFetchAllOverPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/all-users-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllOverPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllOverPickOfDayFailure(getErrorMessage(error, "Failed to fetch all over pick of the day!")));
-    }
-}
-
-function* handleFetchFollowingUsersPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/following-users-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchFollowingUsersPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchFollowingUsersPickOfDayFailure(getErrorMessage(error, "Failed to fetch following feeds!")));
-    }
-}
-
-function* handleFetchGlobalWinnerPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/global-winner-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchGlobalWinnerPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchGlobalWinnerPickOfDayFailure(getErrorMessage(error, "Failed to fetch global winners!")));
-    }
-}
-
-function* handleFetchFollowingUsersWinnerPickOfDay(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/following-users-winner-pick-of-day`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchFollowingUsersWinnerPickOfDaySuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchFollowingUsersWinnerPickOfDayFailure(getErrorMessage(error, "Failed to fetch following users winners!")));
     }
 }
 
@@ -242,50 +120,6 @@ function* handleFetchMyPicksBySlipId(action: PayloadAction<FetchPicksPayload>): 
         yield put(fetchMyPicksBySlipIdSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchMyPicksBySlipIdFailure(getErrorMessage(error, "Failed to fetch picks!")));
-    }
-}
-
-function* handleCreateVibePick(action: PayloadAction<CreatePickOfDayPayload>): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.post,
-            `${API_BASE_URL}/pick/create-vibe-picks`,
-            action.payload
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(createVibePickSuccess(payload));
-    } catch (error: unknown) {
-        yield put(createVibePickFailure(getErrorMessage(error, "Vibe Pick Creation Failed")));
-    }
-}
-
-function* handleFetchAllMyVibePicks(): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/own-all-vibe-picks`,
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllMyVibePicksSuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllMyVibePicksFailure(getErrorMessage(error, "All My Vibe Picks Fetch Failed")));
-    }
-}
-
-function* handleFetchAllVibePicksByUserId(action: PayloadAction<FetchPickOfDayByUserIdPayload>): SagaIterator {
-    try {
-        const { userId } = action.payload;
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/pick/vibe-picks-by-userId`,
-            {
-                params: { userId }
-            }
-        );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchAllVibePicksByUserIdSuccess(payload.data));
-    } catch (error: unknown) {
-        yield put(fetchAllVibePicksByUserIdFailure(getErrorMessage(error, "Fetch Vibe Picks by User Id Failed")));
     }
 }
 
@@ -448,20 +282,8 @@ export default function* pickSaga() {
     yield takeLatest(updatePicksRequest.type, handleUpdateMultiplePicks);
     yield takeLatest(fetchRecentPicksRequest.type, handleFetchRecentPicks);
     yield takeLatest(deletePickRequest.type, handleDeletePicks);
-    yield takeLatest(createPickOfDayRequest.type, handleCreatePickOfDay);
-    yield takeLatest(fetchPickOfDayRequest.type, handleFetchOwnPickOfDay);
-    yield takeLatest(fetchAllMyPickOfDayRequest.type, handleFetchAllOwnPickOfDay);
     yield takeLatest(createPickReactionRequest.type, handlePickReaction);
-    yield takeLatest(fetchAllGroupsMembersPickOfDayRequest.type, handleFetchAllGroupMembersPickOfDay);
-    yield takeLatest(fetchAllPickOfDayByUserIdRequest.type, handleFetchAllPickOfDayByUserId);
-    yield takeLatest(fetchAllOverPickOfDayRequest.type, handleFetchAllOverPickOfDay);
-    yield takeLatest(fetchFollowingUsersPickOfDayRequest.type, handleFetchFollowingUsersPickOfDay);
-    yield takeLatest(fetchGlobalWinnerPickOfDayRequest.type, handleFetchGlobalWinnerPickOfDay);
-    yield takeLatest(fetchFollowingUsersWinnerPickOfDayRequest.type, handleFetchFollowingUsersWinnerPickOfDay);
     yield takeLatest(fetchMyPicksBySlipIdRequest.type, handleFetchMyPicksBySlipId);
-    yield takeLatest(createVibePickRequest.type, handleCreateVibePick);
-    yield takeLatest(fetchAllMyVibePicksRequest.type, handleFetchAllMyVibePicks);
-    yield takeLatest(fetchAllVibePicksByUserIdRequest.type, handleFetchAllVibePicksByUserId);
     yield takeLatest(createPostPickRequest.type, handleCreatePostPick);
     yield takeLatest(fetchAllMyPostPicksRequest.type, handleFetchAllMyPostPick);
     yield takeLatest(fetchAllGlobalPostPicksRequest.type, handleFetchAllGlobalPostPick);

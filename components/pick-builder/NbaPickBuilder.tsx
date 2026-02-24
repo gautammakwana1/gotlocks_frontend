@@ -214,12 +214,12 @@ const buildGameOptions = (snapshot: NBASchedules[], odds: OddsObject[]): GameOpt
             awayTeamId: event.teams.away.id,
             date: event.date,
             live: event.live,
-            odds: odds,
+            odds: event.odds,
             homeAbbr: normalizeAbbr(event.teams.home),
             awayAbbr: normalizeAbbr(event.teams.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
-            hasOdds: odds.length > 0,
+            hasOdds: event.odds.length > 0,
         };
     });
 
@@ -589,10 +589,13 @@ const LineScroller = ({
 
     if (lines.length === 0) return null;
     return (
-        <div className="relative mt-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03]">
+        <div className="relative mt-4 overflow-hidden rounded-2xl bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03]">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/80 to-transparent" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/80 to-transparent" />
-            <div ref={scrollerRef} className="flex gap-3 overflow-x-auto px-6 py-2">
+            <div
+                ref={scrollerRef}
+                className="scrollbar-hide flex gap-3 overflow-x-auto px-6 py-2"
+            >
                 {lines.map((line) => {
                     const isActive = line === activeLine;
                     return (
@@ -805,7 +808,6 @@ export const NbaPickBuilder = ({
             : getTierForAmericanOdds(americanOdds);
     const [nbaMatchSchedules, setNBAMatchSchedules] = useState<NBASchedules[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
-    // const [selectedMatch, setSelectedMatch] = useState<GameOption>();
 
     const { nbaSchedules, nbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
 
@@ -824,16 +826,18 @@ export const NbaPickBuilder = ({
         if (slip?.results_deadline_at && slip?.pick_deadline_at) {
             const resultDate = new Date(slip.results_deadline_at).toISOString().split('T')[0];
             const pickDate = new Date(slip.pick_deadline_at).toISOString().split('T')[0];
-            dispatch(fetchNBAScheduleRequest({ result_deadline: String(resultDate), pick_deadline: String(pickDate) }));
+            dispatch(fetchNBAScheduleRequest({ result_deadline: String(resultDate), pick_deadline: String(pickDate), is_range: false, is_pick_of_day: false }));
+        } else {
+            dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
         }
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
-    useEffect(() => {
-        if (activeDateKey) {
-            dispatch(fetchNBAScheduleRequest({ date: activeDateKey }));
-        } else {
-            dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true }));
-        }
-    }, [activeDateKey, dispatch]);
+    // useEffect(() => {
+    //     if (activeDateKey) {
+    //         dispatch(fetchNBAScheduleRequest({ date: activeDateKey, is_range: false, is_pick_of_day: false }));
+    //     } else {
+    //         dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
+    //     }
+    // }, [activeDateKey, dispatch]);
     useEffect(() => {
         if (Array.isArray(nbaSchedules?.events) && nbaSchedules?.events?.length) {
             setNBAMatchSchedules(nbaSchedules?.events);
@@ -847,17 +851,6 @@ export const NbaPickBuilder = ({
         if (!nbaMatchSchedules) return [];
         return buildMergedGameOptions(oddsData, nbaMatchSchedules);
     }, [nbaMatchSchedules, oddsData]);
-    // const upcomingGames = useMemo(() => {
-    //     const base = games.filter((game) => !game.live && !isPast(game.date));
-    //     if (!enforceEligibilityWindow && !isPodMode) {
-    //         return filterUpcomingWindowGames(base, 6, false);
-    //     }
-    //     return base;
-    // }, [enforceEligibilityWindow, games, isPodMode]);
-    // const eligibleGames = useMemo(() => {
-    //     if (!enforceEligibilityWindow) return upcomingGames;
-    //     return filterEligibleGames(upcomingGames, slip.pick_deadline_at, windowDays);
-    // }, [enforceEligibilityWindow, upcomingGames, slip.pick_deadline_at, windowDays]);
 
     const todayIso = useMemo(() => new Date().toISOString(), []);
     const visibleGames = useMemo(() => {
@@ -867,10 +860,6 @@ export const NbaPickBuilder = ({
             }
         );
     }, [games]);
-    // const visibleGames = useMemo(() => {
-    //     if (!isPodMode) return eligibleGames;
-    //     return eligibleGames.filter((game) => isSameDay(game.date, todayIso));
-    // }, [eligibleGames, isPodMode, todayIso]);
     const shouldFilterByDate = true;
     // const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
@@ -1127,6 +1116,10 @@ export const NbaPickBuilder = ({
                 const game = games.find((option) => option.id === leg.eventId);
                 const matchup = game ? matchupLabel(game) : leg.matchup ?? null;
                 const startTime = game?.date ?? leg.startTime;
+                const americanOdds = parseAmericanOdds(leg.price);
+                const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
+                const difficultyLabel = tierMeta ? tierLabelFromTier(tierMeta.tier) : undefined;
+
                 return {
                     description: matchup
                         ? `${matchup}${DASH_SEPARATOR}${leg.displayName}`
@@ -1141,6 +1134,12 @@ export const NbaPickBuilder = ({
                         gameStartTime: startTime,
                         external_pick_key: leg.id
                     },
+                    difficulty_label: difficultyLabel,
+                    difficulty_tier: tierMeta?.tier,
+                    result: "pending",
+                    points: 0,
+                    matchup: matchup,
+                    match_time: startTime,
                 };
             }),
         [games, parlayLegs]
@@ -1286,6 +1285,23 @@ export const NbaPickBuilder = ({
         setSelected(null);
     };
 
+    const handleRemoveSinglePick = () => {
+        if (isParlayMode && parlayLegs.length > 0) {
+            handleRemoveParlayLeg(parlayLegs[0].id);
+            return;
+        }
+        onDraftPickChange?.(null);
+        setSelected(null);
+    };
+
+    const resetAfterPost = () => {
+        setIsReviewOpen(false);
+        setSelected(null);
+        setParlayLegs([]);
+        setSelectedConfidence(null);
+        onDraftPickChange?.(null);
+    };
+
     const reviewListItems: ReviewListItem[] = hasMultipick
         ? parlayLegs.map((leg) => {
             const legContext = findLegContext(leg);
@@ -1320,6 +1336,7 @@ export const NbaPickBuilder = ({
                     description: activeDraft.summary,
                     odds: activeDraft.odds_bracket ?? activeDraft.odds,
                     sourceTabLabel: activeDraft.sourceTab ?? "Pick",
+                    onDelete: handleRemoveSinglePick,
                 },
             ]
             : [];
@@ -1472,6 +1489,7 @@ export const NbaPickBuilder = ({
                     ...activeDraft,
                     confidence: selectedConfidence ?? activeDraft.confidence ?? null,
                 });
+                resetAfterPost();
                 return;
             }
 
@@ -1517,6 +1535,7 @@ export const NbaPickBuilder = ({
                     confidence: selectedConfidence ?? payload.confidence ?? null,
                 });
             });
+            resetAfterPost();
             return;
         }
         if (!activeDraft) return;
@@ -1528,6 +1547,7 @@ export const NbaPickBuilder = ({
                     ? selectedConfidence ?? activeDraft.confidence ?? null
                     : null,
         });
+        resetAfterPost();
     };
 
     const buildOddsBoxClasses = (
@@ -1546,14 +1566,14 @@ export const NbaPickBuilder = ({
 
     const oddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "min-w-[88px] h-[44px] shrink-0 rounded-xl border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 sm:text-base flex items-center justify-center",
+            "min-w-[88px] h-[44px] shrink-0 rounded-md border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 flex items-center justify-center",
             selected,
             muted
         );
 
     const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "h-[40px] w-[60px] shrink-0 whitespace-nowrap rounded-xl border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:w-[96px] sm:px-3 sm:text-sm flex items-center justify-center",
+            "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap rounded-md border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
             selected,
             muted
         );
@@ -1604,7 +1624,7 @@ export const NbaPickBuilder = ({
                 type="button"
                 onClick={() => odd && handleSelectOdd(odd, activeGame as GameOption)}
                 disabled={!odd || locked}
-                className={`flex min-h-[72px] flex-col items-center justify-center px-2 py-2 text-center transition sm:px-3 sm:py-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
+                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
                     } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
             >
                 {hasLine
@@ -1796,14 +1816,12 @@ export const NbaPickBuilder = ({
                 type="button"
                 onClick={() => odd && handleSelectOdd(odd, activeGame as GameOption)}
                 disabled={!odd || locked}
-                className={`flex min-h-[64px] items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${isSelected
-                    ? "border-emerald-300/60 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]"
-                    : "border-white/10 bg-black/70 hover:border-white/20"
+                className={`flex min-h-[64px] items-center justify-between rounded-2xl px-4 py-3 text-left transition ${isSelected ? "bg-black/70" : "bg-black/70"
                     } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
             >
                 <div>
                     <p className="text-sm font-semibold text-white">{label}</p>
-                    <p className="text-lg font-semibold text-white">{lineLabel}</p>
+                    <p className="text-sm font-semibold text-white">{lineLabel}</p>
                 </div>
                 {renderOddsBox(odd ? formatOdds(odd.price) : "-", isSelected, !odd)}
             </button>
@@ -1830,9 +1848,6 @@ export const NbaPickBuilder = ({
             activeLine !== null ? -activeLine : awayOdd?.selection?.line ?? undefined;
         return (
             <div className="mt-4 space-y-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                    Spread alternate
-                </p>
                 <div className="grid gap-2 md:grid-cols-2">
                     {renderAltLineCard(
                         awayOdd,
@@ -1872,9 +1887,6 @@ export const NbaPickBuilder = ({
         const lineLabel = formatNumberLine(activeLine ?? undefined);
         return (
             <div className="mt-4 space-y-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                    Total alternate
-                </p>
                 <div className="grid gap-2 md:grid-cols-2">
                     {renderAltLineCard(
                         overOdd,
@@ -2101,16 +2113,11 @@ export const NbaPickBuilder = ({
                 <div className="grid gap-6">
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-semibold text-white">Choose a matchup</h4>
+                            <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                             <span className="text-xs uppercase tracking-wide text-gray-400">
-                                Game lines + props
+                                game lines + props
                             </span>
                         </div>
-                        <p className="text-xs text-gray-400">
-                            {enforceEligibilityWindow
-                                ? "Showing eligible games for this slip."
-                                : "Showing the upcoming NBA slate."}
-                        </p>
                         {filteredGames.length === 0 ? (
                             <div className="rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
                                 <p className="font-semibold text-white">
@@ -2127,58 +2134,175 @@ export const NbaPickBuilder = ({
                                 )}
                             </div>
                         ) : (
-                            <div className="scrollbar-hide grid max-h-[640px] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-                                {filteredGames && filteredGames.map((game) => (
-                                    <button
-                                        key={game.id}
-                                        type="button"
-                                        onClick={() => handleSelectGame(game)}
-                                        className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-emerald-500/10 p-4 text-left text-white transition hover:border-emerald-300/60 hover:shadow-[0_12px_30px_-16px_rgba(16,185,129,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
-                                        disabled={locked}
-                                    >
-                                        <div className="flex items-start justify-between text-sm font-semibold text-white">
-                                            <span>
-                                                <span className="block">{game.awayTeam} @</span>
-                                                <span className="block">{game.homeTeam}</span>
-                                            </span>
-                                            <span className="text-xs text-emerald-200">
-                                                {formatDateTime(game.date)}
-                                            </span>
+                            <div className="-mx-5 max-h-[640px] divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
+                                {filteredGames.map((game) => {
+                                    const spreadAway = findMainTeamOdd(
+                                        game,
+                                        "Point Spread",
+                                        game.awayTeam
+                                    );
+                                    const spreadHome = findMainTeamOdd(
+                                        game,
+                                        "Point Spread",
+                                        game.homeTeam
+                                    );
+                                    const moneyAway = findMainTeamOdd(game, "Moneyline", game.awayTeam);
+                                    const moneyHome = findMainTeamOdd(game, "Moneyline", game.homeTeam);
+                                    const totalOver = findMainTotalOdd(game, "Over");
+                                    const totalUnder = findMainTotalOdd(game, "Under");
+                                    const totalLine =
+                                        totalOver?.selection?.line ?? totalUnder?.selection?.line ?? null;
+
+                                    const renderPreviewCell = (
+                                        odd: OddsBlazeOdd | undefined,
+                                        lineLabel: string,
+                                        oddsLabel: string,
+                                        muted: boolean,
+                                        withLine: boolean
+                                    ) => {
+                                        const isSelected = isOddSelected(odd);
+                                        const isDisabled = locked || !game.hasOdds || !odd;
+                                        return (
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    if (isDisabled || !odd) return;
+                                                    handleSelectOdd(odd, game);
+                                                    setIsReviewOpen(false);
+                                                }}
+                                                tabIndex={isDisabled ? -1 : 0}
+                                                aria-disabled={isDisabled}
+                                                className={`flex min-h-[48px] w-full items-center justify-center bg-transparent p-0 text-left ${isDisabled ? "cursor-not-allowed" : ""
+                                                    }`}
+                                            >
+                                                {withLine
+                                                    ? renderLineOddsBox(lineLabel, oddsLabel, isSelected, muted)
+                                                    : renderTableOddsBox(oddsLabel, isSelected, muted)}
+                                            </button>
+                                        );
+                                    };
+                                    const isRowDisabled = locked || !game.hasOdds;
+                                    return (
+                                        <div
+                                            key={game.id}
+                                            role="button"
+                                            tabIndex={isRowDisabled ? -1 : 0}
+                                            aria-disabled={isRowDisabled}
+                                            onClick={() => {
+                                                if (isRowDisabled) return;
+                                                handleSelectGame(game);
+                                            }}
+                                            onKeyDown={(event) => {
+                                                if (isRowDisabled) return;
+                                                if (event.key === "Enter" || event.key === " ") {
+                                                    event.preventDefault();
+                                                    handleSelectGame(game);
+                                                }
+                                            }}
+                                            className={`grid w-full items-start gap-3 px-5 py-4 text-left transition grid-cols-[minmax(0,1fr)_200px] sm:grid-cols-[minmax(0,1fr)_320px] sm:gap-4 sm:px-6 ${isRowDisabled
+                                                ? "cursor-not-allowed opacity-60"
+                                                : "cursor-pointer hover:bg-white/[0.02]"
+                                                }`}
+                                        >
+                                            <div className="min-w-0 self-start pt-8">
+                                                <p className="text-xs font-semibold leading-snug text-white">
+                                                    <span className="block">{game.awayTeam} @</span>
+                                                    <span className="block">{game.homeTeam}</span>
+                                                </p>
+                                                <p className="mt-3 text-[11px] text-gray-400">
+                                                    {formatDateTime(game.date)}
+                                                </p>
+                                            </div>
+
+                                            <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
+                                                <div className="w-full space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                    <div
+                                                        className="grid gap-1 text-[10px] uppercase tracking-wide text-gray-500"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        <span className="text-center">Spread</span>
+                                                        <span className="text-center">Money</span>
+                                                        <span className="text-center">Total</span>
+                                                    </div>
+                                                    <div
+                                                        className="grid gap-1"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        {renderPreviewCell(
+                                                            spreadAway,
+                                                            formatLineValue(spreadAway?.selection?.line),
+                                                            spreadAway ? formatOdds(spreadAway.price) : "-",
+                                                            !spreadAway,
+                                                            true
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            moneyAway,
+                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                            !moneyAway,
+                                                            false
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            totalOver,
+                                                            totalLine !== null ? `O ${totalLine}` : "-",
+                                                            totalOver ? formatOdds(totalOver.price) : "-",
+                                                            !totalOver,
+                                                            true
+                                                        )}
+                                                    </div>
+                                                    <div
+                                                        className="grid gap-1 -mt-3 sm:mt-0"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        {renderPreviewCell(
+                                                            spreadHome,
+                                                            formatLineValue(spreadHome?.selection?.line),
+                                                            spreadHome ? formatOdds(spreadHome.price) : "-",
+                                                            !spreadHome,
+                                                            true
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            moneyHome,
+                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                            !moneyHome,
+                                                            false
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            totalUnder,
+                                                            totalLine !== null ? `U ${totalLine}` : "-",
+                                                            totalUnder ? formatOdds(totalUnder.price) : "-",
+                                                            !totalUnder,
+                                                            true
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs text-gray-500">→</span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-gray-400">
-                                            <span>
-                                                {game.awayAbbr} @ {game.homeAbbr}
-                                            </span>
-                                            {game.live && (
-                                                <>
-                                                    <span className="flex items-center gap-1 text-red-300 font-medium">
-                                                        <span className="relative flex h-2 w-2">
-                                                            <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
-                                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600"></span>
-                                                        </span>
-                                                        Live
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-                                    </button>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
                 </div>
             ) : (
                 <>
-                    <div className="rounded-3xl border border-white/10 bg-black/70 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                    <div className="-mx-5 px-5 sm:-mx-6 sm:px-6">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                             <button
                                 type="button"
-                                onClick={() => {
-                                    handleBackToMatchups();
-                                }}
-                                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                onClick={handleBackToMatchups}
+                                className="text-xs font-semibold lowercase text-gray-200 transition hover:text-white"
                             >
-                                Back to matchups
+                                &larr; back to all matchups
                             </button>
                             <p className="flex text-xs text-gray-500 gap-2">
                                 <span>Updated {formatDateTime(nbaSchedules?.updated)}</span>
@@ -2202,13 +2326,10 @@ export const NbaPickBuilder = ({
                                     {formatDateTime(activeGame.date)}
                                 </p>
                             </div>
-                            <div className="text-xs uppercase tracking-wide text-gray-400">
-                                {activeGame.marketCount} markets - {activeGame.propCount} players
-                            </div>
                         </div>
                         <div
                             id="game-prop-details-tabs-container"
-                            className="scrollbar-hide mt-4 flex gap-3 overflow-x-auto border-b border-white/10 pb-2"
+                            className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0"
                         >
                             {TAB_ORDER.map((tab) => {
                                 const active = tab === activeTab;
@@ -2227,20 +2348,6 @@ export const NbaPickBuilder = ({
                                 );
                             })}
                         </div>
-
-                        {activeTab !== "GAME_LINES" && (
-                            <div className="mt-4 grid gap-3">
-                                <label className="flex flex-col gap-2 text-xs text-gray-400">
-                                    Search players or markets
-                                    <input
-                                        value={search}
-                                        onChange={(event) => setSearch(event.target.value)}
-                                        className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
-                                        placeholder="Curry, rebounds, total points"
-                                    />
-                                </label>
-                            </div>
-                        )}
                     </div>
 
                     {!hasActiveMarketLines ? (
@@ -2248,8 +2355,8 @@ export const NbaPickBuilder = ({
                             No matching lines. Try a different tab or search term.
                         </div>
                     ) : activeTab === "GAME_LINES" ? (
-                        <>
-                            <section className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]">
+                        <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                            <section className="px-5 pb-6 pt-3 sm:px-6">
                                 {(() => {
                                     const sectionKey = "game-lines-main";
                                     const collapsed = isSectionCollapsed(sectionKey, true);
@@ -2260,9 +2367,9 @@ export const NbaPickBuilder = ({
                                                 type="button"
                                                 onClick={() => toggleSection(sectionKey, true)}
                                                 aria-expanded={!collapsed}
-                                                className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                                                className="flex w-full items-center justify-between pb-0 text-left"
                                             >
-                                                <span className="text-base font-semibold text-white">Game Lines</span>
+                                                <span className="text-sm font-semibold text-white">Game Lines</span>
                                                 <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
                                                     <span
                                                         className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
@@ -2274,7 +2381,7 @@ export const NbaPickBuilder = ({
                                             </button>
 
                                             {!collapsed && activeGame && (
-                                                <div className="mt-4 space-y-3 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                <div className="mt-4 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                                                     <div
                                                         className="grid items-center gap-2 text-xs uppercase tracking-wide text-gray-400"
                                                         style={{
@@ -2289,7 +2396,7 @@ export const NbaPickBuilder = ({
                                                     </div>
 
                                                     <div
-                                                        className="grid items-stretch gap-2"
+                                                        className="grid items-stretch gap-1"
                                                         style={{
                                                             gridTemplateColumns:
                                                                 "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -2300,11 +2407,8 @@ export const NbaPickBuilder = ({
                                                                 {activeGame.awayAbbr}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="hidden truncate text-sm font-semibold text-white sm:block">
+                                                                <p className="truncate text-sm font-semibold text-white">
                                                                     {activeGame.awayTeam}
-                                                                </p>
-                                                                <p className="whitespace-nowrap text-xs font-normal text-gray-400">
-                                                                    {activeGame.awayAbbr}
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -2330,7 +2434,7 @@ export const NbaPickBuilder = ({
                                                     </div>
 
                                                     <div
-                                                        className="grid items-stretch gap-2"
+                                                        className="grid items-stretch gap-1 -mt-4 sm:mt-0"
                                                         style={{
                                                             gridTemplateColumns:
                                                                 "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -2341,11 +2445,8 @@ export const NbaPickBuilder = ({
                                                                 {activeGame.homeAbbr}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="hidden truncate text-sm font-semibold text-white sm:block">
+                                                                <p className="truncate text-sm font-semibold text-white">
                                                                     {activeGame.homeTeam}
-                                                                </p>
-                                                                <p className="whitespace-nowrap text-xs font-normal text-gray-400">
-                                                                    {activeGame.homeAbbr}
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -2398,15 +2499,15 @@ export const NbaPickBuilder = ({
                                 return (
                                     <section
                                         key={section.key}
-                                        className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]"
+                                        className="px-5 py-6 sm:px-6"
                                     >
                                         <button
                                             type="button"
                                             onClick={() => toggleSection(section.key, false)}
                                             aria-expanded={!collapsed}
-                                            className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                                            className="flex w-full items-center justify-between pb-0 text-left"
                                         >
-                                            <span className="text-base font-semibold text-white">
+                                            <span className="text-sm font-semibold text-white">
                                                 {section.title}
                                             </span>
                                             <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
@@ -2429,307 +2530,311 @@ export const NbaPickBuilder = ({
                                     </section>
                                 );
                             })}
-                        </>
+                        </div>
                     ) : (
-                        TAB_MARKETS[activeTab].map((market, index) => {
-                            const odds = activeMarketMap.get(market) ?? [];
-                            if (odds.length === 0 || !activeGame) return null;
+                        <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                            {TAB_MARKETS[activeTab].map((market, index) => {
+                                const odds = activeMarketMap.get(market) ?? [];
+                                if (odds.length === 0 || !activeGame) return null;
 
-                            const isAltPlayerPoints = market === ALT_POINTS_MARKET;
-                            const isMainPlayerPoints = market === "Player Points";
-                            const isTableMarket = isAltPlayerPoints || TABLE_MARKETS.has(market);
-                            const sides = new Set(
-                                odds
-                                    .map((item) => item.odd.selection?.side?.toLowerCase())
-                                    .filter(Boolean) as string[]
-                            );
-                            const hasOver = sides.has("over");
-                            const hasUnder = sides.has("under");
-                            const defaultSide = hasOver ? "Over" : "Under";
-                            const activeSide = pointsSideByMarket[market] ?? defaultSide;
-                            const table = isTableMarket
-                                ? buildPointsTable(odds, activeGame, activeSide, {
-                                    normalizeToFive: isAltPlayerPoints,
-                                })
-                                : { lines: [], rows: [] };
-                            const showTable =
-                                isTableMarket &&
-                                activeSide === "Over" &&
-                                table.lines.length > 1 &&
-                                table.rows.length > 0;
-                            const simpleRows = isTableMarket
-                                ? buildSimplePropRows(odds, activeGame, activeSide)
-                                : [];
-                            const mainPointsRows = isMainPlayerPoints
-                                ? buildMainPointsRows(odds, activeGame)
-                                : [];
-                            const sectionKey = `${activeTab}-${market}`;
-                            const collapsed = isSectionCollapsed(sectionKey, index === 0);
+                                const isAltPlayerPoints = market === ALT_POINTS_MARKET;
+                                const isMainPlayerPoints = market === "Player Points";
+                                const isTableMarket = isAltPlayerPoints || TABLE_MARKETS.has(market);
+                                const sides = new Set(
+                                    odds
+                                        .map((item) => item.odd.selection?.side?.toLowerCase())
+                                        .filter(Boolean) as string[]
+                                );
+                                const hasOver = sides.has("over");
+                                const hasUnder = sides.has("under");
+                                const defaultSide = hasOver ? "Over" : "Under";
+                                const activeSide = pointsSideByMarket[market] ?? defaultSide;
+                                const table = isTableMarket
+                                    ? buildPointsTable(odds, activeGame, activeSide, {
+                                        normalizeToFive: isAltPlayerPoints,
+                                    })
+                                    : { lines: [], rows: [] };
+                                const showTable =
+                                    isTableMarket &&
+                                    activeSide === "Over" &&
+                                    table.lines.length > 1 &&
+                                    table.rows.length > 0;
+                                const simpleRows = isTableMarket
+                                    ? buildSimplePropRows(odds, activeGame, activeSide)
+                                    : [];
+                                const mainPointsRows = isMainPlayerPoints
+                                    ? buildMainPointsRows(odds, activeGame)
+                                    : [];
+                                const sectionKey = `${activeTab}-${market}`;
+                                const collapsed = isSectionCollapsed(sectionKey, index === 0);
 
-                            return (
-                                <section
-                                    key={`${activeGame.id}-${market}`}
-                                    className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]"
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSection(sectionKey, index === 0)}
-                                        aria-expanded={!collapsed}
-                                        className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                                const sectionPadding =
+                                    index === 0 ? "px-5 pb-6 pt-3 sm:px-6" : "px-5 py-6 sm:px-6";
+                                return (
+                                    <section
+                                        key={`${activeGame.id}-${market}`}
+                                        className={sectionPadding}
                                     >
-                                        <span className="text-base font-semibold text-white">{market}</span>
-                                        <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
-                                            <span
-                                                className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
-                                                    }`}
-                                            >
-                                                v
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSection(sectionKey, index === 0)}
+                                            aria-expanded={!collapsed}
+                                            className="flex w-full items-center justify-between pb-0 text-left"
+                                        >
+                                            <span className="text-sm font-semibold text-white">{market}</span>
+                                            <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
+                                                <span
+                                                    className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
+                                                        }`}
+                                                >
+                                                    v
+                                                </span>
                                             </span>
-                                        </span>
-                                    </button>
+                                        </button>
 
-                                    {!collapsed && (
-                                        <>
-                                            {isTableMarket && (hasOver || hasUnder) ? (
-                                                <div className="mt-4 flex flex-wrap items-center gap-2">
-                                                    {["Over", "Under"].map((side) => {
-                                                        if (side === "Over" && !hasOver) return null;
-                                                        if (side === "Under" && !hasUnder) return null;
-                                                        const active = activeSide === side;
-                                                        return (
-                                                            <button
-                                                                key={`${market}-${side}`}
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setPointsSideByMarket((prev) => ({
-                                                                        ...prev,
-                                                                        [market]: side as "Over" | "Under",
-                                                                    }))
-                                                                }
-                                                                className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                                    ? "border-emerald-300/70 bg-emerald-500/20 text-white"
-                                                                    : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
-                                                                    }`}
-                                                            >
-                                                                {side}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : null}
-
-
-                                            {isMainPlayerPoints ? (
-                                                <div className="mt-4 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    <div
-                                                        className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="px-3 py-2">Player</div>
-                                                        <div className="px-3 py-2 text-center">Over line</div>
-                                                        <div className="px-3 py-2 text-center">Under line</div>
-                                                    </div>
-                                                    {mainPointsRows.map((row, rowIndex) => {
-                                                        const rowBand =
-                                                            rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                        const overLine = row.over?.selection?.line ?? row.line;
-                                                        const underLine = row.under?.selection?.line ?? row.line;
-                                                        const renderPointButton = (
-                                                            odd: OddsBlazeOdd | undefined,
-                                                            prefix: "O" | "U",
-                                                            line?: number
-                                                        ) => {
-                                                            const isSelected = isOddSelected(odd);
-                                                            const label = `${prefix} ${line ?? "-"}`;
+                                        {!collapsed && (
+                                            <>
+                                                {isTableMarket && (hasOver || hasUnder) ? (
+                                                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                                                        {["Over", "Under"].map((side) => {
+                                                            if (side === "Over" && !hasOver) return null;
+                                                            if (side === "Under" && !hasUnder) return null;
+                                                            const active = activeSide === side;
                                                             return (
                                                                 <button
+                                                                    key={`${market}-${side}`}
                                                                     type="button"
-                                                                    onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                                    disabled={!odd || locked}
-                                                                    className={`${tableOddsBoxClasses(
-                                                                        isSelected,
-                                                                        !odd
-                                                                    )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                                    onClick={() =>
+                                                                        setPointsSideByMarket((prev) => ({
+                                                                            ...prev,
+                                                                            [market]: side as "Over" | "Under",
+                                                                        }))
+                                                                    }
+                                                                    className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
+                                                                        ? "border-emerald-300/70 bg-emerald-500/20 text-white"
+                                                                        : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
+                                                                        }`}
                                                                 >
-                                                                    <div className="flex flex-col items-center leading-tight">
-                                                                        <span
-                                                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"}`}
-                                                                        >
-                                                                            {label}
-                                                                        </span>
-                                                                        <span
-                                                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"}`}
-                                                                        >
-                                                                            {odd ? formatOdds(odd.price) : "-"}
-                                                                        </span>
-                                                                    </div>
+                                                                    {side}
                                                                 </button>
                                                             );
-                                                        };
+                                                        })}
+                                                    </div>
+                                                ) : null}
 
-                                                        return (
-                                                            <div
-                                                                key={`${market}-${row.player.id}`}
-                                                                className={`grid items-center gap-2 border-b border-white/5 px-0 text-left ${rowBand}`}
-                                                                style={{
-                                                                    gridTemplateColumns:
-                                                                        "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                                                }}
-                                                            >
-                                                                <div className="min-w-0 px-3 py-2.5">
-                                                                    <p className="truncate text-sm font-semibold text-white">
-                                                                        {row.player.name}
-                                                                    </p>
-                                                                    <p className="mt-1 truncate text-xs text-gray-400">
-                                                                        {row.teamLabel}
-                                                                    </p>
-                                                                </div>
-                                                                {renderPointButton(row.over, "O", overLine)}
-                                                                {renderPointButton(row.under, "U", underLine)}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : showTable ? (
-                                                <div className="mt-4 overflow-x-auto">
-                                                    <div className="min-w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+
+                                                {isMainPlayerPoints ? (
+                                                    <div className="mt-4 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                                                         <div
                                                             className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
                                                             style={{
-                                                                gridTemplateColumns: table.lines.length
-                                                                    ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                                    : "minmax(160px,1fr)",
+                                                                gridTemplateColumns:
+                                                                    "minmax(0,1fr) repeat(2, var(--table-chip-width))",
                                                             }}
                                                         >
-                                                            <div className="sticky left-0 z-20 bg-black/80 px-3 py-2 sm:min-w-[190px]">
-                                                                Scroll right to see more
-                                                            </div>
-                                                            {table.lines.map((line) => {
-                                                                const headerLabel = isAltPlayerPoints
-                                                                    ? `${formatLineLabel(line)} pts`
-                                                                    : formatLineLabel(line);
+                                                            <div className="px-3 py-2">Player</div>
+                                                            <div className="px-3 py-2 text-center">Over line</div>
+                                                            <div className="px-3 py-2 text-center">Under line</div>
+                                                        </div>
+                                                        {mainPointsRows.map((row, rowIndex) => {
+                                                            const rowBand =
+                                                                rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                            const overLine = row.over?.selection?.line ?? row.line;
+                                                            const underLine = row.under?.selection?.line ?? row.line;
+                                                            const renderPointButton = (
+                                                                odd: OddsBlazeOdd | undefined,
+                                                                prefix: "O" | "U",
+                                                                line?: number
+                                                            ) => {
+                                                                const isSelected = isOddSelected(odd);
+                                                                const label = `${prefix} ${line ?? "-"}`;
                                                                 return (
-                                                                    <div key={`${market}-${line}`} className="px-3 py-2 text-center">
-                                                                        {headerLabel}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                                                        disabled={!odd || locked}
+                                                                        className={`${tableOddsBoxClasses(
+                                                                            isSelected,
+                                                                            !odd
+                                                                        )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                                    >
+                                                                        <div className="flex flex-col items-center leading-tight">
+                                                                            <span
+                                                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"}`}
+                                                                            >
+                                                                                {label}
+                                                                            </span>
+                                                                            <span
+                                                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"}`}
+                                                                            >
+                                                                                {odd ? formatOdds(odd.price) : "-"}
+                                                                            </span>
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            };
+
+                                                            return (
+                                                                <div
+                                                                    key={`${market}-${row.player.id}`}
+                                                                    className={`grid items-center gap-2 border-b border-white/5 px-0 text-left ${rowBand}`}
+                                                                    style={{
+                                                                        gridTemplateColumns:
+                                                                            "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                                                                    }}
+                                                                >
+                                                                    <div className="min-w-0 px-3 py-2.5">
+                                                                        <p className="truncate text-sm font-semibold text-white">
+                                                                            {row.player.name}
+                                                                        </p>
+                                                                        <p className="mt-1 truncate text-xs text-gray-400">
+                                                                            {row.teamLabel}
+                                                                        </p>
+                                                                    </div>
+                                                                    {renderPointButton(row.over, "O", overLine)}
+                                                                    {renderPointButton(row.under, "U", underLine)}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : showTable ? (
+                                                    <div className="mt-4 overflow-x-auto">
+                                                        <div className="min-w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                            <div
+                                                                className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                                style={{
+                                                                    gridTemplateColumns: table.lines.length
+                                                                        ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
+                                                                        : "minmax(160px,1fr)",
+                                                                }}
+                                                            >
+                                                                <div className="sticky left-0 z-20 bg-black/80 px-3 py-2 sm:min-w-[190px]">
+                                                                    Scroll right to see more
+                                                                </div>
+                                                                {table.lines.map((line) => {
+                                                                    const headerLabel = isAltPlayerPoints
+                                                                        ? `${formatLineLabel(line)} pts`
+                                                                        : formatLineLabel(line);
+                                                                    return (
+                                                                        <div key={`${market}-${line}`} className="px-3 py-2 text-center">
+                                                                            {headerLabel}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            {table.rows.map((row, rowIndex) => {
+                                                                const rowBand =
+                                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                                return (
+                                                                    <div
+                                                                        key={`${market}-${row.player.id}`}
+                                                                        className={`grid gap-2 border-b border-white/5 ${rowBand}`}
+                                                                        style={{
+                                                                            gridTemplateColumns: table.lines.length
+                                                                                ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
+                                                                                : "minmax(160px,1fr)",
+                                                                        }}
+                                                                    >
+                                                                        <div className="sticky left-0 z-10 bg-black/80 px-3 py-3 sm:min-w-[190px]">
+                                                                            <p className="text-sm font-semibold text-white">
+                                                                                {row.player.name}
+                                                                            </p>
+                                                                            <p className="mt-1 text-xs text-gray-400">
+                                                                                {row.teamLabel}
+                                                                            </p>
+                                                                        </div>
+                                                                        {table.lines.map((line) => {
+                                                                            const odd = row.lines.get(line);
+                                                                            const isSelected = isOddSelected(odd);
+                                                                            const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                                                                            return (
+                                                                                <div key={`${row.player.id}-${line}`} className="flex justify-center px-1 py-2">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                                                                        disabled={!odd || locked}
+                                                                                        className={`${tableOddsBoxClasses(
+                                                                                            isSelected,
+                                                                                            !odd
+                                                                                        )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                                                    >
+                                                                                        {oddsLabel}
+                                                                                    </button>
+                                                                                </div>
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                 );
                                                             })}
                                                         </div>
-                                                        {table.rows.map((row, rowIndex) => {
-                                                            const rowBand =
-                                                                rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                            return (
-                                                                <div
-                                                                    key={`${market}-${row.player.id}`}
-                                                                    className={`grid gap-2 border-b border-white/5 ${rowBand}`}
-                                                                    style={{
-                                                                        gridTemplateColumns: table.lines.length
-                                                                            ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                                            : "minmax(160px,1fr)",
-                                                                    }}
-                                                                >
-                                                                    <div className="sticky left-0 z-10 bg-black/80 px-3 py-3 sm:min-w-[190px]">
-                                                                        <p className="text-sm font-semibold text-white">
-                                                                            {row.player.name}
-                                                                        </p>
-                                                                        <p className="mt-1 text-xs text-gray-400">
-                                                                            {row.teamLabel}
-                                                                        </p>
-                                                                    </div>
-                                                                    {table.lines.map((line) => {
-                                                                        const odd = row.lines.get(line);
-                                                                        const isSelected = isOddSelected(odd);
-                                                                        const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                                        return (
-                                                                            <div key={`${row.player.id}-${line}`} className="flex justify-center px-1 py-2">
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                                                    disabled={!odd || locked}
-                                                                                    className={`${tableOddsBoxClasses(
-                                                                                        isSelected,
-                                                                                        !odd
-                                                                                    )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                                                                >
-                                                                                    {oddsLabel}
-                                                                                </button>
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                    </div>
+                                                ) : isTableMarket ? (
+                                                    <div className="mt-4 overflow-x-auto">
+                                                        <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                            <div
+                                                                className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                                style={{
+                                                                    gridTemplateColumns:
+                                                                        "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                }}
+                                                            >
+                                                                <div className="px-3 py-2">Player</div>
+                                                                <div className="px-3 py-2 text-center">
+                                                                    {activeSide} line
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : isTableMarket ? (
-                                                <div className="mt-4 overflow-x-auto">
-                                                    <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                        <div
-                                                            className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                            style={{
-                                                                gridTemplateColumns:
-                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                            }}
-                                                        >
-                                                            <div className="px-3 py-2">Player</div>
-                                                            <div className="px-3 py-2 text-center">
-                                                                {activeSide} line
+                                                                <div className="px-3 py-2 text-center">Odds</div>
                                                             </div>
-                                                            <div className="px-3 py-2 text-center">Odds</div>
+                                                            {simpleRows.map((row, rowIndex) => {
+                                                                const isSelected = isOddSelected(row.odd);
+                                                                const rowBand =
+                                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                                return (
+                                                                    <button
+                                                                        key={`${market}-${row.player.id}`}
+                                                                        type="button"
+                                                                        onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
+                                                                        disabled={!row.odd || locked}
+                                                                        className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
+                                                                            ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                            : "hover:bg-white/[0.02]"
+                                                                            } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                                        style={{
+                                                                            gridTemplateColumns:
+                                                                                "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                        }}
+                                                                    >
+                                                                        <div className="px-3 py-3">
+                                                                            <p className="text-sm font-semibold text-white">
+                                                                                {row.player.name}
+                                                                            </p>
+                                                                            <p className="mt-1 text-xs text-gray-400">
+                                                                                {row.teamLabel}
+                                                                            </p>
+                                                                        </div>
+                                                                        <div className="px-3 py-3 text-center text-xs text-gray-300">
+                                                                            {row.line ?? "-"}
+                                                                        </div>
+                                                                        <div className="flex justify-center px-3 py-3">
+                                                                            {renderTableOddsBox(
+                                                                                row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                isSelected,
+                                                                                !row.odd
+                                                                            )}
+                                                                        </div>
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
-                                                        {simpleRows.map((row, rowIndex) => {
-                                                            const isSelected = isOddSelected(row.odd);
-                                                            const rowBand =
-                                                                rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                            return (
-                                                                <button
-                                                                    key={`${market}-${row.player.id}`}
-                                                                    type="button"
-                                                                    onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                                                    disabled={!row.odd || locked}
-                                                                    className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
-                                                                        ? "border-emerald-300/60 bg-emerald-500/10"
-                                                                        : "hover:bg-white/[0.02]"
-                                                                        } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                                    style={{
-                                                                        gridTemplateColumns:
-                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                    }}
-                                                                >
-                                                                    <div className="px-3 py-3">
-                                                                        <p className="text-sm font-semibold text-white">
-                                                                            {row.player.name}
-                                                                        </p>
-                                                                        <p className="mt-1 text-xs text-gray-400">
-                                                                            {row.teamLabel}
-                                                                        </p>
-                                                                    </div>
-                                                                    <div className="px-3 py-3 text-center text-xs text-gray-300">
-                                                                        {row.line ?? "-"}
-                                                                    </div>
-                                                                    <div className="flex justify-center px-3 py-3">
-                                                                        {renderTableOddsBox(
-                                                                            row.odd ? formatOdds(row.odd.price) : "-",
-                                                                            isSelected,
-                                                                            !row.odd
-                                                                        )}
-                                                                    </div>
-                                                                </button>
-                                                            );
-                                                        })}
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                renderOddCards(odds)
-                                            )}
-                                        </>
-                                    )}
-                                </section>
-                            );
-                        })
+                                                ) : (
+                                                    renderOddCards(odds)
+                                                )}
+                                            </>
+                                        )}
+                                    </section>
+                                );
+                            })}
+                        </div>
                     )}
                 </>
             )}

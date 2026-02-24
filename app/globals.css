@@ -132,15 +132,15 @@ body {
   }
 }
 
-@media (max-width: 639px) {
-  .scrollbar-hide {
-    scrollbar-width: none;
-  }
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 
-  .scrollbar-hide::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .matchup-detail .rounded-2xl,

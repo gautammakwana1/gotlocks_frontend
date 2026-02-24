@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 export type ResultFilter = "all" | "win" | "loss" | "pending" | "void";
@@ -17,6 +18,7 @@ type ProfileControlsProps = {
     confidenceFilter: ConfidenceFilter;
     sortOption: SortOption;
     variant?: "card" | "embedded";
+    showPostLock?: boolean;
     onResultChange: (next: ResultFilter) => void;
     onTypeChange: (next: TypeFilter) => void;
     onConfidenceChange: (next: ConfidenceFilter) => void;
@@ -29,6 +31,7 @@ const ProfileControls = ({
     confidenceFilter,
     sortOption,
     variant = "card",
+    showPostLock = false,
     onResultChange,
     onTypeChange,
     onConfidenceChange,
@@ -303,7 +306,15 @@ const ProfileControls = ({
                         />
                     </div>
                 </div>
-                <div className="flex items-center justify-end">
+                <div className={`flex items-center ${showPostLock ? "justify-between" : "justify-end"}`}>
+                    {showPostLock && (
+                        <Link
+                            href="/pick-builder?intent=post"
+                            className="inline-flex items-center text-[11px] font-semibold uppercase tracking-wide text-sky-200 transition hover:text-sky-100 md:text-sm"
+                        >
+                            post a pick &rarr;
+                        </Link>
+                    )}
                     <button
                         type="button"
                         onClick={handleReset}

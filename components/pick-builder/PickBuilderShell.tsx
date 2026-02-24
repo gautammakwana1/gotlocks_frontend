@@ -494,9 +494,8 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     return (
         <div className="space-y-4">
             <div className="sticky top-0 z-20 -mx-5 bg-gradient-to-b from-black to-black/60 px-5 py-3">
-                <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Pick builder</p>
-                    {onDismiss && (
+                {onDismiss && (
+                    <div className="flex items-center justify-end">
                         <button
                             type="button"
                             onClick={onDismiss}
@@ -504,8 +503,8 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         >
                             Close
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
                 {hasDateOptions && (
                     <div
                         id="active-date-key--container"

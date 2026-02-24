@@ -365,8 +365,12 @@ const ProfileView = ({
         [currentUser, mode]
     );
 
-    const today = new Date().toISOString().slice(0, 10);
-    const isTodayXp = progress?.last_xp_date === today;
+    const now = new Date();
+    const lastXP = new Date(progress?.last_xp_date ?? 0);
+
+    const isTodayXp =
+        now.toISOString().slice(0, 10) ===
+        lastXP.toISOString().slice(0, 10);
     const { level, xpIntoLevel, xpToNext, xpRemaining } = getLevelProgress(
         progress?.lifetime_xp ?? 0
     );
@@ -587,6 +591,7 @@ const ProfileView = ({
                             confidenceFilter={confidenceFilter}
                             sortOption={sortOption}
                             variant="embedded"
+                            showPostLock={mode === "self"}
                             onResultChange={setResultFilter}
                             onTypeChange={setTypeFilter}
                             onConfidenceChange={setConfidenceFilter}

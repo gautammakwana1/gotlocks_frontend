@@ -150,7 +150,7 @@ const FeedList = ({
         <div
             className={`-mx-5 divide-y divide-white/10 overflow-y-auto sm:mx-0 ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
                 }`}
-            style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
+        // style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
         >
             {items?.length === 0 && (
                 <div className="px-5 py-4 sm:px-6">

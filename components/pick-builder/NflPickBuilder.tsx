@@ -525,6 +525,18 @@ const findMainTeamOdd = (game: GameOption, market: string, teamName: string) =>
         (odd) => odd.market === market && odd.main && matchesTeamName(odd, teamName)
     );
 
+const findMainTeamNFLOdds = (game: NFLSchedules, market: string, teamName: string) =>
+    game.odds.find(
+        (odd) => odd.market === market && odd.main && matchesTeamName(odd, teamName)
+    );
+
+const findMainTeamTotalNFLOdds = (game: NFLSchedules, side: "Over" | "Under") =>
+    game.odds.find(
+        (odd) =>
+            odd.market === "Total Points" &&
+            odd.main &&
+            odd.selection?.side?.toLowerCase() === side.toLowerCase()
+    );
 const findMainTotalOdd = (game: GameOption, side: "Over" | "Under") =>
     game.odds.find(
         (odd) =>
@@ -581,10 +593,13 @@ const LineScroller = ({
 
     if (lines.length === 0) return null;
     return (
-        <div className="relative mt-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03]">
+        <div className="relative mt-4 overflow-hidden rounded-2xl bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03]">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/80 to-transparent" />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/80 to-transparent" />
-            <div ref={scrollerRef} className="flex gap-3 overflow-x-auto px-6 py-2">
+            <div
+                ref={scrollerRef}
+                className="scrollbar-hide flex gap-3 overflow-x-auto px-6 py-2"
+            >
                 {lines.map((line) => {
                     const isActive = line === activeLine;
                     return (
@@ -993,16 +1008,17 @@ export const NflPickBuilder = ({
     const { nflSchedules, nflOdds, validPickError, validPickMessage, loading, validateLoading } = useSelector((state: RootState) => state.nfl);
 
     useEffect(() => {
-        if (activeDateKey) {
-            dispatch(fetchLiveNFLScheduleRequest({ date: activeDateKey }));
-        } else if (slip?.results_deadline_at && slip?.pick_deadline_at) {
+        // if (activeDateKey) {
+        //     dispatch(fetchLiveNFLScheduleRequest({ date: activeDateKey }));
+        // }
+        if (slip?.results_deadline_at && slip?.pick_deadline_at) {
             const resultDate = new Date(slip.results_deadline_at).toISOString().split('T')[0];
             const pickDate = new Date(slip.pick_deadline_at).toISOString().split('T')[0];
             dispatch(fetchLiveNFLScheduleRequest({ result_deadline: String(resultDate), pick_deadline: String(pickDate), is_pick_of_day: false }));
         } else {
             dispatch(fetchLiveNFLScheduleRequest({ is_pick_of_day: true }));
         }
-    }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at, activeDateKey]);
+    }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
 
     useEffect(() => {
         if (selectedMatch?.id) {
@@ -1874,6 +1890,14 @@ export const NflPickBuilder = ({
         return payloads;
     };
 
+    const resetAfterPost = () => {
+        setIsReviewOpen(false);
+        setParlayLegs([]);
+        setSelectedConfidence(null);
+        onDraftPickChange?.(null);
+        clearSelection();
+    };
+
     const handleSubmitPick = (action: "post" | "slip") => {
         if (locked) return;
 
@@ -1897,6 +1921,7 @@ export const NflPickBuilder = ({
                     ...activeDraft,
                     confidence: selectedConfidence ?? activeDraft.confidence ?? null,
                 });
+                resetAfterPost();
                 return;
             }
 
@@ -1941,6 +1966,7 @@ export const NflPickBuilder = ({
                     confidence: selectedConfidence ?? activeDraft?.confidence ?? null,
                 });
             });
+            resetAfterPost();
             return;
         }
 
@@ -1949,6 +1975,7 @@ export const NflPickBuilder = ({
             ...activeDraft,
             confidence: selectedConfidence ?? activeDraft?.confidence ?? null,
         });
+        resetAfterPost();
     };
 
     const renderGameCards = () => {
@@ -1982,37 +2009,154 @@ export const NflPickBuilder = ({
         }
 
         return (
-            <div className="scrollbar-hide grid max-h-[640px] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-                {filteredGames.map((game) => (
-                    <button
-                        key={game.id}
-                        type="button"
-                        onClick={() => handleGameChoice(game)}
-                        className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] via-white/[0.04] to-emerald-500/10 p-4 text-left text-white transition hover:border-emerald-300/60 hover:shadow-[0_12px_30px_-16px_rgba(16,185,129,0.65)] disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={locked}
-                    >
-                        <div className="flex items-start justify-between text-sm font-semibold text-white">
-                            <span>
-                                <span className="block">{game.teams.away.name} @</span>
-                                <span className="block">{game.teams.home.name}</span>
-                            </span>
-                            <span className="text-xs text-emerald-200">
-                                {formatDateTime(game.date)}
-                            </span>
+            <div className="-mx-5 max-h-[640px] divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
+                {filteredGames.map((game) => {
+                    const spreadAway = findMainTeamNFLOdds(game, "Point Spread", game.teams.away.name);
+                    const spreadHome = findMainTeamNFLOdds(game, "Point Spread", game.teams.home.name);
+                    const moneyAway = findMainTeamNFLOdds(game, "Moneyline", game.teams.away.name);
+                    const moneyHome = findMainTeamNFLOdds(game, "Moneyline", game.teams.home.name);
+                    const totalOver = findMainTeamTotalNFLOdds(game, "Over");
+                    const totalUnder = findMainTeamTotalNFLOdds(game, "Under");
+                    const totalLine =
+                        totalOver?.selection?.line ?? totalUnder?.selection?.line ?? null;
+
+                    const renderPreviewCell = (
+                        odd: OddsBlazeOdd | undefined,
+                        lineLabel: string,
+                        oddsLabel: string,
+                        muted: boolean,
+                        withLine: boolean
+                    ) => {
+                        const isSelected = isOddSelected(odd);
+                        const isDisabled = locked || !odd;
+                        return (
+                            <button
+                                type="button"
+                                // onClick={(event) => {
+                                //     event.stopPropagation();
+                                //     if (isDisabled || !odd) return;
+                                //     handleOddsSelection(odd, game);
+                                //     setIsReviewOpen(false);
+                                // }}
+                                tabIndex={isDisabled ? -1 : 0}
+                                aria-disabled={isDisabled}
+                                className={`flex min-h-[48px] w-full items-center justify-center bg-transparent p-0 text-left ${isDisabled ? "cursor-not-allowed" : ""
+                                    }`}
+                            >
+                                {withLine
+                                    ? renderLineOddsBox(lineLabel, oddsLabel, isSelected, muted)
+                                    : renderTableOddsBox(oddsLabel, isSelected, muted)}
+                            </button>
+                        );
+                    };
+                    const isRowDisabled = locked;
+
+                    return (
+                        <div
+                            key={game.id}
+                            role="button"
+                            tabIndex={isRowDisabled ? -1 : 0}
+                            aria-disabled={isRowDisabled}
+                            onClick={() => {
+                                if (isRowDisabled) return;
+                                handleGameChoice(game);
+                            }}
+                            onKeyDown={(event) => {
+                                if (isRowDisabled) return;
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    handleGameChoice(game);
+                                }
+                            }}
+                            className={`grid w-full items-start gap-3 px-5 py-4 text-left transition grid-cols-[minmax(0,1fr)_200px] sm:grid-cols-[minmax(0,1fr)_320px] sm:gap-4 sm:px-6 ${isRowDisabled
+                                ? "cursor-not-allowed opacity-60"
+                                : "cursor-pointer hover:bg-white/[0.02]"
+                                }`}
+                        >
+                            <div className="min-w-0 self-start pt-8">
+                                <p className="text-xs font-semibold leading-snug text-white">
+                                    <span className="block">{game.teams.away.name} @</span>
+                                    <span className="block">{game.teams.home.name}</span>
+                                </p>
+                                <p className="mt-3 text-[11px] text-gray-400">
+                                    {formatDateTime(game.date)}
+                                </p>
+                            </div>
+
+                            <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
+                                <div className="w-full space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                    <div
+                                        className="grid gap-1 text-[10px] uppercase tracking-wide text-gray-500"
+                                        style={{
+                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                        }}
+                                    >
+                                        <span className="text-center">Spread</span>
+                                        <span className="text-center">Money</span>
+                                        <span className="text-center">Total</span>
+                                    </div>
+                                    <div
+                                        className="grid gap-1"
+                                        style={{
+                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                        }}
+                                    >
+                                        {renderPreviewCell(
+                                            spreadAway,
+                                            formatLineValue(spreadAway?.selection?.line),
+                                            spreadAway ? formatOdds(spreadAway.price) : "-",
+                                            !spreadAway,
+                                            true
+                                        )}
+                                        {renderPreviewCell(
+                                            moneyAway,
+                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                            !moneyAway,
+                                            false
+                                        )}
+                                        {renderPreviewCell(
+                                            totalOver,
+                                            totalLine !== null ? `O ${totalLine}` : "-",
+                                            totalOver ? formatOdds(totalOver.price) : "-",
+                                            !totalOver,
+                                            true
+                                        )}
+                                    </div>
+                                    <div
+                                        className="grid gap-1 -mt-3 sm:mt-0"
+                                        style={{
+                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                        }}
+                                    >
+                                        {renderPreviewCell(
+                                            spreadHome,
+                                            formatLineValue(spreadHome?.selection?.line),
+                                            spreadHome ? formatOdds(spreadHome.price) : "-",
+                                            !spreadHome,
+                                            true
+                                        )}
+                                        {renderPreviewCell(
+                                            moneyHome,
+                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                            !moneyHome,
+                                            false
+                                        )}
+                                        {renderPreviewCell(
+                                            totalUnder,
+                                            totalLine !== null ? `U ${totalLine}` : "-",
+                                            totalUnder ? formatOdds(totalUnder.price) : "-",
+                                            !totalUnder,
+                                            true
+                                        )}
+                                    </div>
+                                </div>
+                                <span className="text-xs text-gray-500">→</span>
+                            </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-gray-400">
-                            <span>
-                                {game.teams.away.abbreviation} @ {game.teams.home.abbreviation}
-                            </span>
-                            {game.live && (
-                                <>
-                                    <span>-</span>
-                                    <span className="text-rose-200">Live</span>
-                                </>
-                            )}
-                        </div>
-                    </button>
-                ))}
+                    );
+                })}
             </div>
         );
     };
@@ -2021,16 +2165,12 @@ export const NflPickBuilder = ({
         <div className="grid gap-6">
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-white">Choose a matchup</h4>
+                    <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                     <span className="text-xs uppercase tracking-wide text-gray-400">
-                        Game lines + props
+                        game lines + props
                     </span>
                 </div>
-                {!enforceEligibilityWindow ? (
-                    <p className="text-xs text-gray-400">
-                        Showing the upcoming NFL slate.
-                    </p>
-                ) : (
+                {enforceEligibilityWindow && (
                     <p className="text-xs text-gray-400">
                         Eligible games start after the pick deadline and before{" "}
                         {formatDateTime(eligibilityWindowEnd ?? "")}.
@@ -2369,17 +2509,14 @@ export const NflPickBuilder = ({
         const collapsed = isSectionCollapsed(sectionKey, defaultOpen);
         const filteredOdds = filterOdds(marketOdds, game);
         return (
-            <section
-                key={sectionKey}
-                className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]"
-            >
+            <section key={sectionKey} className="px-5 py-6 sm:px-6">
                 <button
                     type="button"
                     onClick={() => toggleSection(sectionKey, defaultOpen)}
                     aria-expanded={!collapsed}
-                    className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                    className="flex w-full items-center justify-between pb-0 text-left"
                 >
-                    <span className="text-base font-semibold text-white">{title}</span>
+                    <span className="text-sm font-semibold text-white">{title}</span>
                     <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
                         <span
                             className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
@@ -2426,17 +2563,14 @@ export const NflPickBuilder = ({
         const simpleRows = buildSimpleAltRows(altOdds, game, activeSide);
 
         return (
-            <section
-                key={sectionKey}
-                className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]"
-            >
+            <section key={sectionKey} className="px-5 py-6 sm:px-6">
                 <button
                     type="button"
                     onClick={() => toggleSection(sectionKey, defaultOpen)}
                     aria-expanded={!collapsed}
-                    className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                    className="flex w-full items-center justify-between pb-0 text-left"
                 >
-                    <span className="text-base font-semibold text-white">{title}</span>
+                    <span className="text-sm font-semibold text-white">{title}</span>
                     <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
                         <span
                             className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
@@ -2667,30 +2801,28 @@ export const NflPickBuilder = ({
                 enabled: tabMarketOptions.TD_SCORER.length > 0,
             },
         ];
-        const showSearchControls =
-            step.kind === "GAME_DETAIL" && gameDetailTab !== "GAME_LINES";
         const showStepBack =
             step.kind !== "GAME_SELECT" && step.kind !== "GAME_DETAIL";
 
         return (
             <div className="flex flex-col gap-4">
-                <div className="rounded-3xl border border-white/10 bg-black/70 p-4 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                <div className="-mx-5 px-5 sm:-mx-6 sm:px-6">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
                                 onClick={handleBackToGames}
-                                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                className="text-xs font-semibold lowercase text-gray-200 transition hover:text-white"
                             >
-                                Back to matchups
+                                &larr; back to all matchups
                             </button>
                             {showStepBack && (
                                 <button
                                     type="button"
                                     onClick={goBack}
-                                    className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                    className="text-xs font-semibold lowercase text-gray-200 transition hover:text-white"
                                 >
-                                    Back
+                                    back
                                 </button>
                             )}
                         </div>
@@ -2707,12 +2839,9 @@ export const NflPickBuilder = ({
                                 {formatDateTime(activeGame.date)}
                             </p>
                         </div>
-                        <div className="text-xs uppercase tracking-wide text-gray-400">
-                            {activeGame.marketCount} markets - {activeGame.propCount} players
-                        </div>
                     </div>
 
-                    <div className="scrollbar-hide mt-4 flex gap-3 overflow-x-auto border-b border-white/10 pb-2">
+                    <div className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0">
                         {tabs.map((tab) => {
                             const isActive = gameDetailTab === tab.key;
                             const isDisabled = !tab.enabled;
@@ -2732,20 +2861,6 @@ export const NflPickBuilder = ({
                             );
                         })}
                     </div>
-
-                    {showSearchControls && (
-                        <div className="mt-4 grid gap-3">
-                            <label className="flex flex-col gap-2 text-xs text-gray-400">
-                                Search players or markets
-                                <input
-                                    value={search}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                    className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
-                                    placeholder="Mahomes, passing, touchdown"
-                                />
-                            </label>
-                        </div>
-                    )}
                 </div>
 
                 <div className="flex flex-col gap-4">{children}</div>
@@ -2974,14 +3089,14 @@ export const NflPickBuilder = ({
 
     const oddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "min-w-[88px] h-[44px] shrink-0 rounded-xl border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 sm:text-base flex items-center justify-center",
+            "min-w-[88px] h-[44px] shrink-0 rounded-md border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 flex items-center justify-center",
             selected,
             muted
         );
 
     const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "h-[40px] w-[60px] shrink-0 whitespace-nowrap rounded-xl border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:w-[96px] sm:px-3 sm:text-sm flex items-center justify-center",
+            "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap rounded-md border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
             selected,
             muted
         );
@@ -3033,7 +3148,7 @@ export const NflPickBuilder = ({
                 type="button"
                 onClick={() => odd && handleOddsSelection(odd)}
                 disabled={!odd || locked}
-                className={`flex min-h-[72px] flex-col items-center justify-center px-2 py-2 text-center transition sm:px-3 sm:py-3 
+                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 
                     ${isSelected ? "text-emerald-50" : "text-gray-200"} 
                     ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
             >
@@ -3055,14 +3170,12 @@ export const NflPickBuilder = ({
                 type="button"
                 onClick={() => odd && handleOddsSelection(odd)}
                 disabled={!odd || locked}
-                className={`flex min-h-[64px] items-center justify-between rounded-2xl border px-4 py-3 text-left transition ${isSelected
-                    ? "border-emerald-300/60 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]"
-                    : "border-white/10 bg-black/70 hover:border-white/20"
-                    } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                className={`flex min-h-[64px] items-center justify-between rounded-2xl px-4 py-3 text-left transition bg-black/70 ${!odd ? "cursor-not-allowed text-gray-600" : ""
+                    }`}
             >
                 <div>
                     <p className="text-sm font-semibold text-white">{label}</p>
-                    <p className="text-lg font-semibold text-white">{lineLabel}</p>
+                    <p className="text-sm font-semibold text-white">{lineLabel}</p>
                 </div>
                 {renderOddsBox(odd ? formatOdds(odd.price) : "-", isSelected, !odd)}
             </button>
@@ -3090,9 +3203,6 @@ export const NflPickBuilder = ({
             activeLine !== null ? -activeLine : awayOdd?.selection?.line ?? undefined;
         return (
             <div className="mt-4 space-y-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                    Spread alternate
-                </p>
                 <div className="grid gap-2 md:grid-cols-2">
                     {renderAltLineCard(
                         awayOdd,
@@ -3133,9 +3243,6 @@ export const NflPickBuilder = ({
         const lineLabel = formatNumberLine(activeLine ?? undefined);
         return (
             <div className="mt-4 space-y-3">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                    Total alternate
-                </p>
                 <div className="grid gap-2 md:grid-cols-2">
                     {renderAltLineCard(
                         overOdd,
@@ -3168,15 +3275,15 @@ export const NflPickBuilder = ({
         const collapsed = isSectionCollapsed(sectionKey, true);
         const totalLine = mainLineOdds?.totalLine;
         return (
-            <>
-                <section className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]">
+            <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                <section className="px-5 pb-6 pt-3 sm:px-6">
                     <button
                         type="button"
                         onClick={() => toggleSection(sectionKey, true)}
                         aria-expanded={!collapsed}
-                        className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                        className="flex w-full items-center justify-between pb-0 text-left"
                     >
-                        <span className="text-base font-semibold text-white">Game Lines</span>
+                        <span className="text-sm font-semibold text-white">Game Lines</span>
                         <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
                             <span
                                 className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
@@ -3188,7 +3295,7 @@ export const NflPickBuilder = ({
                     </button>
 
                     {!collapsed && (
-                        <div className="mt-4 space-y-3 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div className="mt-4 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                             <div
                                 className="grid items-center gap-2 text-xs uppercase tracking-wide text-gray-400"
                                 style={{
@@ -3203,7 +3310,7 @@ export const NflPickBuilder = ({
                             </div>
 
                             <div
-                                className="grid items-stretch gap-2"
+                                className="grid items-stretch gap-1"
                                 style={{
                                     gridTemplateColumns:
                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -3214,11 +3321,8 @@ export const NflPickBuilder = ({
                                         {activeGame.away_abbr}
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="hidden truncate text-sm font-semibold text-white sm:block">
+                                        <p className="truncate text-sm font-semibold text-white">
                                             {activeGame.away_team}
-                                        </p>
-                                        <p className="whitespace-nowrap text-xs font-normal text-gray-400">
-                                            {activeGame.away_abbr}
                                         </p>
                                     </div>
                                 </div>
@@ -3244,7 +3348,7 @@ export const NflPickBuilder = ({
                             </div>
 
                             <div
-                                className="grid items-stretch gap-2"
+                                className="grid items-stretch gap-1 -mt-4 sm:mt-0"
                                 style={{
                                     gridTemplateColumns:
                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -3255,11 +3359,8 @@ export const NflPickBuilder = ({
                                         {activeGame.home_abbr}
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="hidden truncate text-sm font-semibold text-white sm:block">
+                                        <p className="truncate text-sm font-semibold text-white">
                                             {activeGame.home_team}
-                                        </p>
-                                        <p className="whitespace-nowrap text-xs font-normal text-gray-400">
-                                            {activeGame.home_abbr}
                                         </p>
                                     </div>
                                 </div>
@@ -3302,17 +3403,14 @@ export const NflPickBuilder = ({
                     const collapsed = isSectionCollapsed(section.key, false);
                     if (section.odds.length === 0) return null;
                     return (
-                        <section
-                            key={section.key}
-                            className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]"
-                        >
+                        <section key={section.key} className="px-5 py-6 sm:px-6">
                             <button
                                 type="button"
                                 onClick={() => toggleSection(section.key, false)}
                                 aria-expanded={!collapsed}
-                                className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
+                                className="flex w-full items-center justify-between pb-0 text-left"
                             >
-                                <span className="text-base font-semibold text-white">
+                                <span className="text-sm font-semibold text-white">
                                     {section.title}
                                 </span>
                                 <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
@@ -3331,7 +3429,7 @@ export const NflPickBuilder = ({
                         </section>
                     );
                 })}
-            </>
+            </div>
         );
     };
 
@@ -3384,24 +3482,26 @@ export const NflPickBuilder = ({
 
         return (
             <div className="flex flex-col gap-3">
-                {options.map((market, index) =>
-                    renderPropMarketSection(
-                        `passing-market-${market}`,
-                        marketDisplayName(market),
-                        activeGame.odds.filter((odd) => odd.market === market && odd.player),
-                        activeGame,
-                        index === 0
-                    )
-                )}
-                {altSections.map((section, index) =>
-                    renderAltPropMarketSection(
-                        section.key,
-                        section.title,
-                        section.markets,
-                        activeGame,
-                        index === 0
-                    )
-                )}
+                <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                    {options.map((market, index) =>
+                        renderPropMarketSection(
+                            `passing-market-${market}`,
+                            marketDisplayName(market),
+                            activeGame.odds.filter((odd) => odd.market === market && odd.player),
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                    {altSections.map((section, index) =>
+                        renderAltPropMarketSection(
+                            section.key,
+                            section.title,
+                            section.markets,
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                </div>
                 {validation.status !== "idle" && renderValidationNotice()}
             </div>
         );
@@ -3433,24 +3533,26 @@ export const NflPickBuilder = ({
 
         return (
             <div className="flex flex-col gap-3">
-                {options.map((market, index) =>
-                    renderPropMarketSection(
-                        `receiving-market-${market}`,
-                        marketDisplayName(market),
-                        activeGame.odds.filter((odd) => odd.market === market && odd.player),
-                        activeGame,
-                        index === 0
-                    )
-                )}
-                {altSections.map((section, index) =>
-                    renderAltPropMarketSection(
-                        section.key,
-                        section.title,
-                        section.markets,
-                        activeGame,
-                        index === 0
-                    )
-                )}
+                <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                    {options.map((market, index) =>
+                        renderPropMarketSection(
+                            `receiving-market-${market}`,
+                            marketDisplayName(market),
+                            activeGame.odds.filter((odd) => odd.market === market && odd.player),
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                    {altSections.map((section, index) =>
+                        renderAltPropMarketSection(
+                            section.key,
+                            section.title,
+                            section.markets,
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                </div>
                 {validation.status !== "idle" && renderValidationNotice()}
             </div>
         );
@@ -3482,24 +3584,26 @@ export const NflPickBuilder = ({
 
         return (
             <div className="flex flex-col gap-3">
-                {options.map((market, index) =>
-                    renderPropMarketSection(
-                        `rushing-market-${market}`,
-                        marketDisplayName(market),
-                        activeGame.odds.filter((odd) => odd.market === market && odd.player),
-                        activeGame,
-                        index === 0
-                    )
-                )}
-                {altSections.map((section, index) =>
-                    renderAltPropMarketSection(
-                        section.key,
-                        section.title,
-                        section.markets,
-                        activeGame,
-                        index === 0
-                    )
-                )}
+                <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                    {options.map((market, index) =>
+                        renderPropMarketSection(
+                            `rushing-market-${market}`,
+                            marketDisplayName(market),
+                            activeGame.odds.filter((odd) => odd.market === market && odd.player),
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                    {altSections.map((section, index) =>
+                        renderAltPropMarketSection(
+                            section.key,
+                            section.title,
+                            section.markets,
+                            activeGame,
+                            index === 0
+                        )
+                    )}
+                </div>
                 {validation.status !== "idle" && renderValidationNotice()}
             </div>
         );
@@ -3528,96 +3632,98 @@ export const NflPickBuilder = ({
 
         return (
             <div className="flex flex-col gap-3">
-                <section className="rounded-3xl border border-white/10 bg-black/70 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.4)]">
-                    <button
-                        type="button"
-                        onClick={() => toggleSection(sectionKey, true)}
-                        aria-expanded={!collapsed}
-                        className="flex w-full items-center justify-between border-b border-white/10 pb-3 text-left"
-                    >
-                        <span className="text-base font-semibold text-white">Touchdown Scorers</span>
-                        <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
-                            <span
-                                className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
-                                    }`}
-                            >
-                                v
-                            </span>
-                        </span>
-                    </button>
-                    {!collapsed && (table.rows.length === 0 || table.columns.length === 0 ? (
-                        <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-                            No touchdown props available for this matchup yet.
-                        </div>
-                    ) : (
-                        <div className="mt-4 overflow-x-auto">
-                            <div className="min-w-full text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                <div
-                                    className="grid gap-1 border-b border-white/10 text-[10px] uppercase tracking-wide text-gray-400 sm:gap-2 sm:text-xs"
-                                    style={{
-                                        gridTemplateColumns: tdGridTemplate,
-                                    }}
+                <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                    <section className="px-5 py-6 sm:px-6">
+                        <button
+                            type="button"
+                            onClick={() => toggleSection(sectionKey, true)}
+                            aria-expanded={!collapsed}
+                            className="flex w-full items-center justify-between pb-0 text-left"
+                        >
+                            <span className="text-sm font-semibold text-white">Touchdown Scorers</span>
+                            <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
+                                <span
+                                    className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
+                                        }`}
                                 >
-                                    <div className="sticky left-0 z-20 min-w-0 bg-black/80 px-2 py-2 sm:min-w-[220px] sm:px-3">
-                                        Player
-                                    </div>
-                                    {table.columns.map((column) => (
-                                        <div key={column.key} className="px-2 py-2 text-center sm:px-3">
-                                            {column.label}
-                                        </div>
-                                    ))}
-                                </div>
-                                {table.rows.map((row, rowIndex) => {
-                                    const rowBand =
-                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                    return (
-                                        <div
-                                            key={`td-${row.player.id}`}
-                                            className={`grid gap-1 border-b border-white/5 sm:gap-2 ${rowBand}`}
-                                            style={{
-                                                gridTemplateColumns: tdGridTemplate,
-                                            }}
-                                        >
-                                            <div className="sticky left-0 z-10 min-w-0 bg-black/80 px-2 py-3 sm:min-w-[220px] sm:px-3">
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-sm font-semibold text-white">
-                                                        {row.player.name}
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-gray-400">
-                                                        {playerMetaLabel(row.player, row.teamLabel)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {table.columns.map((column) => {
-                                                const odd = row.odds.get(column.key);
-                                                const isSelected = isOddSelected(odd);
-                                                const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                return (
-                                                    <div
-                                                        key={`${row.player.id}-${column.key}`}
-                                                        className="flex justify-center px-0.5 py-2 sm:px-1"
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => odd && handleOddsSelection(odd)}
-                                                            disabled={!odd || locked}
-                                                            className={`${tableOddsBoxClasses(
-                                                                isSelected,
-                                                                !odd
-                                                            )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                                        >
-                                                            {oddsLabel}
-                                                        </button>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })}
+                                    v
+                                </span>
+                            </span>
+                        </button>
+                        {!collapsed && (table.rows.length === 0 || table.columns.length === 0 ? (
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
+                                No touchdown props available for this matchup yet.
                             </div>
-                        </div>
-                    ))}
-                </section>
+                        ) : (
+                            <div className="mt-4 overflow-x-auto">
+                                <div className="min-w-full text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                    <div
+                                        className="grid gap-1 border-b border-white/10 text-[10px] uppercase tracking-wide text-gray-400 sm:gap-2 sm:text-xs"
+                                        style={{
+                                            gridTemplateColumns: tdGridTemplate,
+                                        }}
+                                    >
+                                        <div className="sticky left-0 z-20 min-w-0 bg-black/80 px-2 py-2 sm:min-w-[220px] sm:px-3">
+                                            Player
+                                        </div>
+                                        {table.columns.map((column) => (
+                                            <div key={column.key} className="px-2 py-2 text-center sm:px-3">
+                                                {column.label}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {table.rows.map((row, rowIndex) => {
+                                        const rowBand =
+                                            rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                        return (
+                                            <div
+                                                key={`td-${row.player.id}`}
+                                                className={`grid gap-1 border-b border-white/5 sm:gap-2 ${rowBand}`}
+                                                style={{
+                                                    gridTemplateColumns: tdGridTemplate,
+                                                }}
+                                            >
+                                                <div className="sticky left-0 z-10 min-w-0 bg-black/80 px-2 py-3 sm:min-w-[220px] sm:px-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-sm font-semibold text-white">
+                                                            {row.player.name}
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-gray-400">
+                                                            {playerMetaLabel(row.player, row.teamLabel)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {table.columns.map((column) => {
+                                                    const odd = row.odds.get(column.key);
+                                                    const isSelected = isOddSelected(odd);
+                                                    const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                                                    return (
+                                                        <div
+                                                            key={`${row.player.id}-${column.key}`}
+                                                            className="flex justify-center px-0.5 py-2 sm:px-1"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => odd && handleOddsSelection(odd)}
+                                                                disabled={!odd || locked}
+                                                                className={`${tableOddsBoxClasses(
+                                                                    isSelected,
+                                                                    !odd
+                                                                )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                            >
+                                                                {oddsLabel}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </section>
+                </div>
                 {validation.status !== "idle" && renderValidationNotice()}
             </div>
         );
@@ -3845,6 +3951,14 @@ export const NflPickBuilder = ({
         const postActionLabel = showMultipick ? "post combo" : "post pick";
         const tierLine = `${sheetTierPrimary}${sheetPoints ? ` · ${sheetPoints} pts` : ""
             }${sheetTierName && sheetTierName !== "—" ? ` · ${sheetTierName}` : ""}`;
+        const handleRemoveSinglePick = () => {
+            if (isParlayMode && parlayLegs.length > 0) {
+                handleRemoveParlayLeg(parlayLegs[0].id);
+                return;
+            }
+            onDraftPickChange?.(null);
+            clearSelection();
+        };
         const listItems: ReviewListItem[] = showMultipick
             ? parlayLegs.map((leg) => {
                 const legContext = findLegContext(leg);
@@ -3885,6 +3999,7 @@ export const NflPickBuilder = ({
                         description: activeDraft.summary,
                         odds: activeDraft.odds_bracket ?? activeDraft.odds,
                         sourceTabLabel: activeDraft.sourceTab ?? "Pick",
+                        onDelete: handleRemoveSinglePick,
                     },
                 ]
                 : [];

@@ -11,7 +11,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
-import { clearFetchAllOverPickOfDayMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest, fetchRecentPicksRequest } from "@/lib/redux/slices/pickSlice";
+import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest, fetchRecentPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
 
@@ -122,7 +122,7 @@ const HomeTab = () => {
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
 
-        dispatch(clearFetchAllOverPickOfDayMessage());
+        dispatch(clearFetchAllGlobalPostPicksMessage());
         dispatch(fetchGlobalPendingTopHitPostsRequest());
     }, [pickLoader, pickMessage, dispatch]);
 

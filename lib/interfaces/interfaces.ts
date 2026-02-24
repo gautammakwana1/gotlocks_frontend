@@ -27,6 +27,7 @@ export type TierIndex =
     | 12
     | 13
     | 14;
+
 export type TierName =
     | "LOCK"
     | "SAFE"
@@ -903,8 +904,9 @@ export type FetchNFLSchedulePayload = {
 export type FetchNBASchedulePayload = {
     result_deadline?: string;
     pick_deadline?: string;
-    is_pick_of_day?: true;
+    is_pick_of_day: boolean;
     date?: string;
+    is_range: boolean;
 };
 
 export type FetchLiveNFLOddsPayload = {
@@ -985,6 +987,7 @@ export type NFLSchedules = {
     teams: TeamsObject,
     date: string;
     live: boolean;
+    odds: OddsObject[];
 }
 
 export type NBASchedules = {
@@ -992,6 +995,7 @@ export type NBASchedules = {
     teams: TeamsObject,
     date: string;
     live: boolean;
+    odds: OddsObject[];
 }
 
 export type OddSelectionObject = {
@@ -1252,11 +1256,16 @@ export type PickSelectionMeta = {
     threshold?: number;
     home_team?: string;
     away_team?: string;
+    matchup?: string;
+    match_date?: string;
 };
 
 export type PickLeg = {
     description: string;
     odds_bracket: string;
+    difficulty_label?: DifficultyLabel | null;
+    difficulty_tier?: number;
+    external_pick_key?: string;
     selection?: PickSelectionMeta;
 };
 
