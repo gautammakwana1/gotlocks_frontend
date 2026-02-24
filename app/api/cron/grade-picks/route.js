@@ -1,23 +1,21 @@
 import { NextResponse } from 'next/server';
 
 
-export async function GET(request) {
-    const authHeader = request.headers.get('authorization');
-    // if (process.env.NODE_ENV === 'production') {
-    //     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    //         return new Response('Unauthorized', { status: 401 });
-    //     }
-    // }
+export async function GET(req) {
+    if (req.headers.get("x-vercel-cron") !== "1") {
+        return new Response("Unauthorized", { status: 401 });
+    }
     const start = Date.now();
     try {
         console.log('Cron Job Started: grade-picks', new Date().toISOString());
 
         const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/pick/apply-grading`,
+            `${process.env.API_BASE_URL}/pick/apply-grading`,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    "Authorization": `Bearer ${process.env.CRON_SECRET}`
                 }
             }
         );

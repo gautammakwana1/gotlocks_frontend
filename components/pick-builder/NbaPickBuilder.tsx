@@ -329,7 +329,7 @@ const buildSlipWindowDateOptions = (
     return buildDateOptionsFromStart(start, Math.max(1, windowDays + 1));
 };
 
-const matchupLabel = (game: GameOption) => `${game?.awayAbbr} @ ${game?.homeAbbr}`;
+const matchupLabel = (game: GameOption) => game?.awayAbbr && game?.homeAbbr ? `${game?.awayAbbr} @ ${game?.homeAbbr}` : undefined;
 
 const formatOdds = (american?: number | string | null) => {
     const value = parseAmericanOdds(american);

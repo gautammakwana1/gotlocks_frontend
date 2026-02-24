@@ -3,6 +3,10 @@
         {
             "path": "/api/cron/grade-picks",
             "schedule": "0 * * * *"
+        },
+        {
+            "path": "api/cron/combo-grade-picks",
+            "schedule": "0 * * * *"
         }
     ]
 }

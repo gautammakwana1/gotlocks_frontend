@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    ReactNode,
     useEffect,
     useId,
     useMemo,
@@ -246,6 +247,11 @@ const ProfileHeader = ({
         const formData = new FormData();
         formData.append("username", username);
 
+        if (username === user?.username) {
+            setIsEditing(false);
+            return;
+        }
+
         dispatch(updateProfileRequest(formData));
         const storedUser = getLocalStorage<CurrentUser>("currentUser");
         setLocalStorage("currentUser", { ...storedUser, username: username });
@@ -364,41 +370,9 @@ const ProfileHeader = ({
                                         <div className="flex flex-wrap items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    {isEditing ? (
-                                                        <input
-                                                            type="text"
-                                                            value={username}
-                                                            onChange={(e) => setUsername(e.target.value)}
-                                                            className="rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-base font-semibold text-white outline-none focus:border-emerald-400/70"
-                                                            placeholder="Enter username"
-                                                        />
-                                                    ) : (
-                                                        <div className="truncate text-xl font-semibold leading-tight text-white sm:text-2xl">
-                                                            {displayName}
-                                                        </div>
-                                                    )}
-                                                    {mode === "self" && (
-                                                        <div className="flex flex-col items-start gap-2">
-                                                            {isEditing && (
-                                                                <div className="flex gap-3">
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            handleSave()
-                                                                        }}
-                                                                        className="rounded-2xl border border-white/12 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-300/60 hover:text-emerald-100"
-                                                                    >
-                                                                        {loading ? "Saving..." : "Save Changes"}
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={handleCancel}
-                                                                        className="rounded-2xl border border-white/12 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-300/60 hover:text-emerald-100"
-                                                                    >
-                                                                        Cancel
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    <div className="truncate text-xl font-semibold leading-tight text-white sm:text-2xl">
+                                                        {displayName}
+                                                    </div>
                                                     {mode === "self" && (
                                                         <details ref={settingsMenuRef} className="relative z-20">
                                                             <summary
@@ -584,8 +558,66 @@ const ProfileHeader = ({
                     className="sr-only"
                 />
             </div>
+
+            {isEditing && (
+                <ModalShell onClose={handleCancel} maxWidthClass="max-w-sm">
+                    <form onSubmit={handleSave} className="space-y-4 text-center">
+                        <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">choose unique username</p>
+                            <p className="text-lg font-semibold text-white">Enter Username</p>
+                        </div>
+                        <input
+                            type="text"
+                            value={username}
+                            onChange={(event) => {
+                                setUsername(event.target.value);
+                            }}
+                            placeholder="username"
+                            autoFocus
+                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-sky-400/70"
+                        />
+                        <div className="flex justify-center gap-3">
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-xl border border-sky-400/60 bg-sky-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-sky-100 transition hover:border-sky-300/80 hover:text-white"
+                            >
+                                {loading ? "Updating.." : "Update"}
+                            </button>
+                        </div>
+                    </form>
+                </ModalShell>
+            )}
         </header>
     );
 };
 
 export default ProfileHeader;
+
+const ModalShell = ({
+    children,
+    onClose,
+    maxWidthClass = "max-w-3xl",
+}: {
+    children: ReactNode;
+    onClose: () => void;
+    maxWidthClass?: string;
+}) => (
+    <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-[2px]"
+        onClick={onClose}
+    >
+        <div
+            className={`relative w-full ${maxWidthClass} max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-black p-5 shadow-2xl`}
+            onClick={(event) => event.stopPropagation()}
+        >
+            {children}
+        </div>
+    </div>
+);

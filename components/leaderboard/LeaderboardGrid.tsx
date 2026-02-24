@@ -413,7 +413,7 @@ const SlipCellCard = ({
                                 {sourceTabLabel}
                             </span>
                             <p
-                                className="mt-1 min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug text-slate-100 drop-shadow-[0_1px_4px_rgba(226,232,240,0.25)] md:text-base"
+                                className="mt-1 min-w-0 text-[11px] font-semibold leading-snug text-slate-100 drop-shadow-[0_1px_4px_rgba(226,232,240,0.25)] line-clamp-2 md:line-clamp-none md:text-base"
                                 title={displayPick}
                             >
                                 {pickLine}

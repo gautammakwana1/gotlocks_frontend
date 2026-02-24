@@ -1,17 +1,25 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req) {
+    if (req.headers.get("x-vercel-cron") !== "1") {
+        return new Response("Unauthorized", { status: 401 });
+    }
     const start = Date.now();
     try {
         console.log('Cron Job Start: -> Combo Pick <-', new Date().toISOString());
+        if (!process.env.CRON_SECRET) {
+            throw new Error("CRON_SECRET is not defined in Vercel env");
+        }
 
         const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL}/pick/apply-combo-grading`,
+            `${process.env.API_BASE_URL}/pick/apply-combo-grading`,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                    "Authorization": `Bearer ${process.env.CRON_SECRET}`
+                },
+                cache: "no-store",
             }
         );
 
@@ -36,12 +44,15 @@ export async function GET() {
             timestamp: new Date().toISOString(),
             durationMs: Date.now() - start,
         });
-    } catch (error) {
-        console.error('Cron Job Error: -> Combo Pick <-', error);
+    } catch (err) {
+        const message =
+            err instanceof Error ? err.message : "Unknown error occurred";
+
+        console.error("Unknown Cron Error:", message);
         return NextResponse.json(
             {
                 success: false,
-                error: error.message,
+                error: message,
                 durationMs: Date.now() - start
             },
             { status: 500 }

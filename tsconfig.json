@@ -33,7 +33,7 @@
     "**/*.tsx",
     "next-env.d.ts",
     ".next/types/**/*.ts"
-  ],
+, "app/api/cron/combo-grade-picks/route.js"  ],
   "exclude": [
     "node_modules"
   ]

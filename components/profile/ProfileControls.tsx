@@ -163,7 +163,7 @@ const ProfileControls = ({
 
     const dropdownSummaryClass = `${compactSelectClass} relative cursor-pointer list-none text-left [&::-webkit-details-marker]:hidden`;
     const dropdownMenuClass =
-        "absolute left-0 right-0 z-30 mt-2 min-w-full rounded-2xl border border-white/10 bg-black/90 p-1 text-[10px] text-white shadow-lg backdrop-blur sm:text-[11px]";
+        "absolute left-0 right-0 z-30 mt-2 min-w-full rounded-2xl border border-white/10 bg-black/90 p-1 text-[9px] text-white shadow-lg backdrop-blur sm:text-[11px]";
     const dropdownOptionClass =
         "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition whitespace-nowrap";
 
