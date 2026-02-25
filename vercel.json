@@ -5,7 +5,7 @@
             "schedule": "0 * * * *"
         },
         {
-            "path": "api/cron/combo-grade-picks",
+            "path": "/api/cron/combo-grade-picks",
             "schedule": "0 * * * *"
         }
     ]

@@ -363,7 +363,7 @@ export const NflPickBuilder = ({
     }, [nflSchedules, nflOdds, nflPassingProps, nflReceivingProps, nflRushingProps, nflTouchDownProps]);
     useEffect(() => {
         if (selectedMatch?.id) {
-            dispatch(fetchLiveOddsRequest({ match_id: selectedMatch?.id }));
+            // dispatch(fetchLiveOddsRequest({ match_id: selectedMatch?.id }));
             dispatch(fetchPassingPropsPlayersRequest({ match_id: selectedMatch?.id }));
             dispatch(fetchReceivingPropsPlayersRequest({ match_id: selectedMatch?.id }));
             dispatch(fetchRushingPropsPlayersRequest({ match_id: selectedMatch?.id }));

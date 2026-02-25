@@ -2219,6 +2219,15 @@ export const NbaPickBuilder = ({
                                                 </p>
                                                 <p className="mt-3 text-[11px] text-gray-400">
                                                     {formatDateTime(game.date)}
+                                                    {game.live && (
+                                                        <span className="flex items-center gap-1 text-red-500 font-medium">
+                                                            <span className="relative flex h-2 w-2">
+                                                                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
+                                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600"></span>
+                                                            </span>
+                                                            Live
+                                                        </span>
+                                                    )}
                                                 </p>
                                             </div>
 
