@@ -1008,9 +1008,6 @@ export const NflPickBuilder = ({
     const { nflSchedules, nflOdds, validPickError, validPickMessage, loading, validateLoading } = useSelector((state: RootState) => state.nfl);
 
     useEffect(() => {
-        // if (activeDateKey) {
-        //     dispatch(fetchLiveNFLScheduleRequest({ date: activeDateKey }));
-        // }
         if (slip?.results_deadline_at && slip?.pick_deadline_at) {
             const resultDate = new Date(slip.results_deadline_at).toISOString().split('T')[0];
             const pickDate = new Date(slip.pick_deadline_at).toISOString().split('T')[0];
@@ -1021,10 +1018,21 @@ export const NflPickBuilder = ({
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
 
     useEffect(() => {
-        if (selectedMatch?.id) {
-            dispatch(fetchLiveOddsRequest({ match_id: selectedMatch?.id }));
-        }
-    }, [selectedMatch?.id, dispatch]);
+        if (!selectedMatch?.id || !selectedMatch.live) return;
+        const interval = setInterval(() => {
+            dispatch(
+                fetchLiveOddsRequest({
+                    match_id: selectedMatch.id,
+                    is_live: selectedMatch?.live,
+                    silent: true,
+                })
+            );
+        }, 65 * 1000); // 1 min 05 sec
+
+        return () => {
+            clearInterval(interval);
+        };
+    }, [selectedMatch?.id, selectedMatch?.live, dispatch]);
 
     useEffect(() => {
         if (Array.isArray(nflSchedules?.events) && nflSchedules?.events?.length) {
@@ -1438,6 +1446,9 @@ export const NflPickBuilder = ({
             market: undefined,
         });
         setSelectedMatch(game)
+        if (game.id) {
+            dispatch(fetchLiveOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+        }
         setValidation({ status: "idle", response: undefined, error: null });
         setSelectedOdd(null);
         setManualTier(undefined);

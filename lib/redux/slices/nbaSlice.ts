@@ -34,9 +34,11 @@ const nbaSlice = createSlice({
             state.message = null;
         },
 
-        fetchNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload | undefined>) => {
+        fetchNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
-            state.loading = true;
+            if (!action.payload?.silent) {
+                state.loading = true;
+            }
             state.error = null;
         },
         fetchNBAOddsSuccess: (state, action) => {

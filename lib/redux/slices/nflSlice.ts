@@ -40,9 +40,11 @@ const nflSlice = createSlice({
             state.message = null;
         },
 
-        fetchLiveOddsRequest: (state, action: PayloadAction<FetchLiveNFLOddsPayload | undefined>) => {
+        fetchLiveOddsRequest: (state, action: PayloadAction<FetchLiveNFLOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
-            state.loading = true;
+            if (!action.payload?.silent) {
+                state.loading = true;
+            }
             state.error = null;
         },
         fetchLiveOddsSuccess: (state, action) => {

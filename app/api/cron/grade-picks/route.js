@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 
 
-export async function GET(req) {
-    if (req.headers.get("x-vercel-cron") !== "1") {
-        return new Response("Unauthorized", { status: 401 });
-    }
+export async function GET() {
     const start = Date.now();
     try {
         console.log('Cron Job Started: grade-picks', new Date().toISOString());

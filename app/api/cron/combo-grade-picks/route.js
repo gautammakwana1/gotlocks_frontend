@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(req) {
-    if (req.headers.get("x-vercel-cron") !== "1") {
-        return new Response("Unauthorized", { status: 401 });
-    }
+export async function GET() {
     const start = Date.now();
     try {
         console.log('Cron Job Start: -> Combo Pick <-', new Date().toISOString());
-        if (!process.env.CRON_SECRET) {
-            throw new Error("CRON_SECRET is not defined in Vercel env");
-        }
 
         const response = await fetch(
             `${process.env.API_BASE_URL}/pick/apply-combo-grading`,

@@ -911,10 +911,12 @@ export type FetchNBASchedulePayload = {
 
 export type FetchLiveNFLOddsPayload = {
     match_id: string;
+    is_live: boolean;
 };
 
 export type FetchNBAOddsPayload = {
     match_id: string;
+    is_live: boolean;
 };
 
 export type FetchPassingPropsPlayersPayload = {

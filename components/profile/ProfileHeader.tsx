@@ -196,6 +196,12 @@ const ProfileHeader = ({
     };
 
     useEffect(() => {
+        if (!user?.username) return;
+
+        setUsername(user?.username);
+    }, [user?.username]);
+
+    useEffect(() => {
         const handleClick = (event: globalThis.MouseEvent) => {
             const menus = [avatarMenuRef.current, settingsMenuRef.current].filter(
                 Boolean

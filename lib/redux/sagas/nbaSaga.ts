@@ -41,13 +41,13 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
 
 function* handleFetchNBAOdds(action: PayloadAction<FetchNBAOddsPayload | undefined>): SagaIterator {
     try {
-        const { match_id } = action.payload || {};
+        const { match_id, is_live } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/nba/nba-odds`,
             {
-                params: { match_id },
+                params: { match_id, is_live },
             }
         );
         const payload = response.data as { data?: unknown };

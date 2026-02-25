@@ -235,7 +235,7 @@ const SocialPage = () => {
             className={`-mx-5 divide-y divide-white/10 overflow-y-auto sm:mx-0 
                 ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
                 }`}
-            style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
+            // style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
         >
             {items.map((item) => {
                 if (!currentUser?.userId) return;

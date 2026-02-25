@@ -41,13 +41,13 @@ function* handleFetchLiveNFLSchedule(action: PayloadAction<FetchNFLSchedulePaylo
 
 function* handleFetchLiveOdds(action: PayloadAction<FetchLiveNFLOddsPayload | undefined>): SagaIterator {
     try {
-        const { match_id = '' } = action.payload || {};
+        const { match_id = '', is_live = false } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/nfl/nfl-odds`,
             {
-                params: { match_id },
+                params: { match_id, is_live },
             }
         );
         const payload = response.data as { data?: unknown };

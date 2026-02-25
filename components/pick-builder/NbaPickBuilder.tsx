@@ -831,13 +831,6 @@ export const NbaPickBuilder = ({
             dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
         }
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
-    // useEffect(() => {
-    //     if (activeDateKey) {
-    //         dispatch(fetchNBAScheduleRequest({ date: activeDateKey, is_range: false, is_pick_of_day: false }));
-    //     } else {
-    //         dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
-    //     }
-    // }, [activeDateKey, dispatch]);
     useEffect(() => {
         if (Array.isArray(nbaSchedules?.events) && nbaSchedules?.events?.length) {
             setNBAMatchSchedules(nbaSchedules?.events);
@@ -1023,6 +1016,23 @@ export const NbaPickBuilder = ({
         () => visibleGames.find((game) => game.id === activeGameId) ?? null,
         [activeGameId, visibleGames]
     );
+
+    useEffect(() => {
+        if (!activeGame?.id || !activeGame.live) return;
+        const interval = setInterval(() => {
+            dispatch(
+                fetchNBAOddsRequest({
+                    match_id: activeGame.id,
+                    is_live: activeGame.live,
+                    silent: true,
+                })
+            );
+        }, 65 * 1000); // 1 min 05 sec
+
+        return () => {
+            clearInterval(interval);
+        };
+    }, [activeGame?.id, activeGame?.live, dispatch]);
 
     const activeMarketMap = useMemo(() => {
         if (!activeGame) return new Map<string, SelectedOdd[]>();
@@ -2078,7 +2088,7 @@ export const NbaPickBuilder = ({
         // setSelectedMatch(game);
         setActiveGameId(game.id);
         if (game.id) {
-            dispatch(fetchNBAOddsRequest({ match_id: game.id }))
+            dispatch(fetchNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
         }
         setActiveTab("GAME_LINES");
         setSearch("");
@@ -2104,10 +2114,7 @@ export const NbaPickBuilder = ({
 
     return (
         <div
-            className={`space-y-4 ${activeGame ? "matchup-detail" : ""} ${showReviewSheet
-                ? "pb-[calc(10rem+env(safe-area-inset-bottom))] sm:pb-[calc(9rem+env(safe-area-inset-bottom))]"
-                : "pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-[calc(6.5rem+env(safe-area-inset-bottom))] md:pb-[calc(8rem+env(safe-area-inset-bottom))]"
-                }`}
+            className={`space-y-4 ${activeGame ? "matchup-detail" : ""}`}
         >
             {!activeGame ? (
                 <div className="grid gap-6">
@@ -2134,7 +2141,7 @@ export const NbaPickBuilder = ({
                                 )}
                             </div>
                         ) : (
-                            <div className="-mx-5 max-h-[640px] divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
+                            <div className="-mx-5 divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
                                 {filteredGames.map((game) => {
                                     const spreadAway = findMainTeamOdd(
                                         game,
