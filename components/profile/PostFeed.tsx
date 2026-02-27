@@ -1,6 +1,6 @@
 "use client";
 
-import { Pick, Picks } from "@/lib/interfaces/interfaces";
+import { Pick, PickReaction, Picks } from "@/lib/interfaces/interfaces";
 import PostCard from "./PostCard";
 
 type PostFeedProps = {
@@ -11,6 +11,7 @@ type PostFeedProps = {
     variant?: "card" | "embedded";
     canDeletePick: (pick: Pick) => boolean;
     onDeletePick: (pickId: string) => void;
+    onReaction: (reaction: PickReaction, pickId: string) => void;
     lastItemRef?: (node: HTMLDivElement | null) => void;
     loading?: boolean;
 };
@@ -23,6 +24,7 @@ const PostFeed = ({
     variant = "card",
     canDeletePick,
     onDeletePick,
+    onReaction,
     lastItemRef,
     loading,
 }: PostFeedProps) => {
@@ -74,6 +76,7 @@ const PostFeed = ({
                             mode={mode}
                             canDelete={canDeletePick(pick)}
                             onDelete={onDeletePick}
+                            onReaction={onReaction}
                         />
                     </div>
                 ))}

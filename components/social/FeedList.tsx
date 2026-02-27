@@ -15,6 +15,8 @@ type FeedListProps = {
     showTopBorder?: boolean;
     onReaction?: (pickId: string, reaction: PickReaction) => void;
     onViewProfile?: (userId: string) => void;
+    lastItemRef?: (node: HTMLDivElement | null) => void;
+    loading?: boolean;
 };
 
 export type FeedItem = Pick & { userName: string };
@@ -115,6 +117,8 @@ const FeedList = ({
     showTopBorder = true,
     onReaction,
     onViewProfile,
+    lastItemRef,
+    loading,
 }: FeedListProps) => {
     const router = useRouter();
     const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
@@ -159,7 +163,7 @@ const FeedList = ({
                     </div>
                 </div>
             )}
-            {items?.map((item) => {
+            {items?.map((item, index) => {
                 const showResultChip = item.result && item.result !== "pending";
                 const isCollapsed = Boolean(collapsedPicks[item.id]);
                 const resultLabel = item.result === "not_found" ? "n/a" : item.result;
@@ -227,7 +231,11 @@ const FeedList = ({
                 const profileImg = item?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${item?.profiles?.profile_image}` : "";
 
                 return (
-                    <div key={item.id} className="py-4">
+                    <div
+                        key={item.id}
+                        ref={(index === (items?.length ?? 0) - 1) ? lastItemRef : null}
+                        className="py-4"
+                    >
                         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
                             <button
                                 type="button"
@@ -481,6 +489,12 @@ const FeedList = ({
                     </div>
                 );
             })}
+
+            {loading && (
+                <div className="flex justify-center py-8">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+                </div>
+            )}
         </div>
     );
 };

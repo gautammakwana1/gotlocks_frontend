@@ -105,15 +105,24 @@ const HomeTab = () => {
     const resumeTimeoutRef = useRef<number | null>(null);
     const isCarouselPausedRef = useRef(false);
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef<IntersectionObserver | null>(null);
+    const limit = 10;
 
     const { group, joinLoading, message, error } = useSelector((state: GroupRootState) => state.group);
     const { pick, postPicks, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
     const { progress } = useSelector((state: RootState) => state.progress);
 
+    const fetchData = useCallback((pageNum: number, customLimit?: number) => {
+        const payload = { page: pageNum, limit: customLimit ?? limit };
+        dispatch(fetchGlobalPendingTopHitPostsRequest(payload));
+    }, [dispatch, limit]);
+
     useEffect(() => {
         dispatch(fetchAllGroupsRequest({}));
         dispatch(fetchRecentPicksRequest({}));
-        dispatch(fetchGlobalPendingTopHitPostsRequest());
+        fetchData(1);
         if (currentUserId) {
             dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
         }
@@ -123,8 +132,31 @@ const HomeTab = () => {
         if (pickLoader || !pickMessage) return;
 
         dispatch(clearFetchAllGlobalPostPicksMessage());
-        dispatch(fetchGlobalPendingTopHitPostsRequest());
-    }, [pickLoader, pickMessage, dispatch]);
+        fetchData(1, page * limit);
+    }, [pickLoader, pickMessage, dispatch, page, limit]);
+
+    const lastItemRef = useCallback((node: HTMLDivElement | null) => {
+        if (pickLoader) return;
+        if (observer.current) observer.current.disconnect();
+
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage);
+            }
+        });
+
+        if (node) observer.current.observe(node);
+    }, [pickLoader, hasMore, page, fetchData]);
+
+    useEffect(() => {
+        if (!pickLoader && postPicks) {
+            if (postPicks.length < page * limit) {
+                setHasMore(false);
+            }
+        }
+    }, [postPicks, pickLoader, page, limit]);
 
     useEffect(() => {
         if (!joinLoading && message && group) {
@@ -777,6 +809,8 @@ const HomeTab = () => {
                         onViewProfile={handleViewProfile}
                         showReactions={true}
                         showTopBorder={true}
+                        loading={pickLoader}
+                        lastItemRef={lastItemRef}
                     />
                 </div>
             </section>

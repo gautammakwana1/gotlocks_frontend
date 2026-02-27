@@ -122,8 +122,8 @@ const SocialPage = () => {
 
     const { loading: pickLoader, message: pickMessage, postPicks } = useSelector((state: RootState) => state.pick);
 
-    const fetchDataByTab = (pageNum: number) => {
-        const payload = { page: pageNum, limit };
+    const fetchDataByTab = (pageNum: number, customLimit?: number) => {
+        const payload = { page: pageNum, limit: customLimit ?? limit };
         if (activeTab === "for-you") {
             if (forYouScope === "posts") {
                 dispatch(fetchGlobalPendingTopHitPostsRequest(payload));
@@ -153,8 +153,9 @@ const SocialPage = () => {
         if (pickLoader || !pickMessage) return;
 
         dispatch(clearFetchAllGlobalPostPicksMessage());
-        fetchDataByTab(page); // No need to re-fetch on message here anymore if pagination is controlled
-    }, [pickLoader, pickMessage, dispatch]);
+        // Refresh all pages from 1 up to the current viewport to ensure data consistency
+        fetchDataByTab(1, page * limit);
+    }, [pickLoader, pickMessage, dispatch, page, limit]);
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (pickLoader) return;

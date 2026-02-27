@@ -14,6 +14,7 @@ type PostCardProps = {
     mode: "self" | "public";
     canDelete: boolean;
     onDelete: (pickId: string) => void;
+    onReaction: (reaction: PickReaction, pickId: string) => void;
 };
 
 const resultTone = (result: PickResult) => {
@@ -100,18 +101,11 @@ const extractMatchup = (description?: string | null) => {
     return match ? match[1].trim() : null;
 };
 
-const PostCard = ({ pick, displayName, mode, canDelete, onDelete }: PostCardProps) => {
+const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: PostCardProps) => {
     const dispatch = useDispatch();
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
-    const { loading, message } = useSelector((state: RootState) => state.pick)
-
-    useEffect(() => {
-        if (loading || !message) return;
-        dispatch(clearCreatePickReactionMessage())
-        dispatch(fetchPostPicksByUserIdRequest({ user_id: pick.user_id }));
-    }, [message, loading, dispatch, pick.user_id]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -246,7 +240,8 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete }: PostCardProp
                         )}
                         <button
                             type="button"
-                            onClick={() => handleReaction("up")}
+                            // onClick={() => handleReaction("up")}
+                            onClick={() => onReaction("up", pick.id)}
                             aria-pressed={upActive}
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${upActive
                                 ? "border-emerald-300/70 bg-emerald-500/20 text-emerald-100"
@@ -258,7 +253,7 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete }: PostCardProp
                         </button>
                         <button
                             type="button"
-                            onClick={() => handleReaction("down")}
+                            onClick={() => onReaction("down", pick.id)}
                             aria-pressed={downActive}
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${downActive
                                 ? "border-rose-300/70 bg-rose-500/20 text-rose-100"

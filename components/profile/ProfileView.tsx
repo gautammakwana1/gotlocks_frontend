@@ -10,11 +10,11 @@ import ProfileControls, {
     type TypeFilter,
 } from "./ProfileControls";
 import ProfileHeader from "./ProfileHeader";
-import { CurrentUser, FollowersList, FollowingsList, Pick, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
+import { CurrentUser, FollowersList, FollowingsList, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowersListRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchMemberProfileRequest, followUnfollowUserRequest, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
-import { clearDeletePostPickMessage, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
+import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import FootballAnimation from "../animations/FootballAnimation";
 import { getPickPoints } from "@/lib/utils/scoring";
@@ -107,13 +107,14 @@ const ProfileView = ({
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
-    const { postPicks, deleteMessage, loading: postLoader } = useSelector((state: RootState) => state.pick);
+    const { postPicks, deleteMessage, loading: postLoader, message } = useSelector((state: RootState) => state.pick);
     const { followings, followers, followersById, followingsById, loading: authLoader, message: authMessage, user, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
     const { progress } = useSelector((state: RootState) => state.progress);
 
-    const fetchData = useCallback((pageNum: number) => {
+    const fetchData = useCallback((pageNum: number, customLimit?: number) => {
+        const payload = { page: pageNum, limit: customLimit ?? limit };
         if (!targetUserId) return;
-        dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId, page: pageNum, limit }));
+        dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId, ...payload }));
     }, [dispatch, targetUserId, limit]);
 
     useEffect(() => {
@@ -215,6 +216,12 @@ const ProfileView = ({
             }
         }
     }, [postPicks, postLoader, page, limit]);
+
+    useEffect(() => {
+        if (postLoader || !message) return;
+        dispatch(clearCreatePickReactionMessage())
+        fetchData(1, page * limit)
+    }, [message, postLoader, dispatch, targetUserId]);
 
     const isFollowing = useCallback(
         (followerId: string | undefined, targetUserId: string | undefined): boolean => {
@@ -404,6 +411,12 @@ const ProfileView = ({
         },
         [currentUser, mode]
     );
+
+    const handleReaction = (reaction: PickReaction, pickId: string) => {
+        if (reaction && pickId) {
+            dispatch(createPickReactionRequest({ pick_id: pickId, action: reaction === "up" ? "liked" : "dislike" }));
+        }
+    };
 
     const now = new Date();
     const lastXP = new Date(progress?.last_xp_date ?? 0);
@@ -650,6 +663,7 @@ const ProfileView = ({
                                     onDeletePick={handleDeletePick}
                                     lastItemRef={lastItemRef}
                                     loading={postLoader}
+                                    onReaction={handleReaction}
                                 />
                             </div>
                         </div>
