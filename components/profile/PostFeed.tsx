@@ -11,6 +11,8 @@ type PostFeedProps = {
     variant?: "card" | "embedded";
     canDeletePick: (pick: Pick) => boolean;
     onDeletePick: (pickId: string) => void;
+    lastItemRef?: (node: HTMLDivElement | null) => void;
+    loading?: boolean;
 };
 
 const PostFeed = ({
@@ -21,6 +23,8 @@ const PostFeed = ({
     variant = "card",
     canDeletePick,
     onDeletePick,
+    lastItemRef,
+    loading,
 }: PostFeedProps) => {
     const countLabel =
         totalCount === picks.length
@@ -59,15 +63,19 @@ const PostFeed = ({
             ) : null}
 
             <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
-                {picks.map((pick) => (
-                    <PostCard
+                {picks.map((pick, index) => (
+                    <div
                         key={pick.id}
-                        pick={pick}
-                        displayName={displayName}
-                        mode={mode}
-                        canDelete={canDeletePick(pick)}
-                        onDelete={onDeletePick}
-                    />
+                        ref={index === picks.length - 1 ? lastItemRef : undefined}
+                    >
+                        <PostCard
+                            pick={pick}
+                            displayName={displayName}
+                            mode={mode}
+                            canDelete={canDeletePick(pick)}
+                            onDelete={onDeletePick}
+                        />
+                    </div>
                 ))}
 
                 {picks.length === 0 && (
@@ -75,6 +83,11 @@ const PostFeed = ({
                         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-[var(--text-secondary)]">
                             {emptyMessage}
                         </div>
+                    </div>
+                )}
+                {loading && (
+                    <div className="flex justify-center py-8">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
                     </div>
                 )}
             </div>

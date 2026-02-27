@@ -362,7 +362,7 @@ const SlipCellCard = ({
     const legsCount = 0;
     const legsCopy =
         legsCount > 0 ? `${legsCount} legs` : null;
-    const matchupCopy = matchupCandidate ?? matchupCandidate ?? "—";
+    const matchupCopy = matchupCandidate ?? pick?.selection?.matchup ?? "—";
     const gameTimeCopy = formatDateTime(pick?.selection?.gameStartTime);
     const showMatchup = matchupCopy !== "—";
     const showGameTime = gameTimeCopy !== "—";

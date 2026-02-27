@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
     message?: string;
@@ -163,66 +163,86 @@ function* handleFetchAllGlobalPostPick(): SagaIterator {
     }
 }
 
-function* handleFetchGlobalWinnerTopHitPosts(): SagaIterator {
+function* handleFetchGlobalWinnerTopHitPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
     try {
+        const { page = 1, limit = 10 } = action.payload || {};
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/all-global-winner-post-picks`,
+            {
+                params: { page, limit }
+            }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchGlobalWinnerTopHitPostsSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchGlobalWinnerTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchGlobalWinnerTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
 }
 
-function* handleFetchGlobalPendingTopHitPosts(): SagaIterator {
+function* handleFetchGlobalPendingTopHitPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
     try {
+        const { page = 1, limit = 10 } = action.payload || {};
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/all-global-pending-post-picks`,
+            {
+                params: { page, limit }
+            }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchGlobalPendingTopHitPostsSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchGlobalPendingTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchGlobalPendingTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
 }
 
-function* handleFetchGlobalReactedPendingTopHitPosts(): SagaIterator {
+function* handleFetchGlobalReactedPendingTopHitPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
     try {
+        const { page = 1, limit = 10 } = action.payload || {};
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/global-reacted-pending-post-picks`,
+            {
+                params: { page, limit }
+            }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchGlobalPendingReactedPostsSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchGlobalPendingReactedPostsSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchGlobalPendingReactedPostsFailure(getErrorMessage(error, "Globally Reacted Top Posts Fetch Failed")));
     }
 }
 
-function* handleFetchFollowingUsersWinTopHitPosts(): SagaIterator {
+function* handleFetchFollowingUsersWinTopHitPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
     try {
+        const { page = 1, limit = 10 } = action.payload || {};
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/following-users-top-hit-posts`,
+            {
+                params: { page, limit }
+            }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchFollowingUsersWinTopHitPostsSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchFollowingUsersWinTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchFollowingUsersWinTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
 }
 
-function* handleFetchFollowingUsersPicksPosts(): SagaIterator {
+function* handleFetchFollowingUsersPicksPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
     try {
+        const { page = 1, limit = 10 } = action.payload || {};
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/following-users-post-picks`,
+            {
+                params: { page, limit }
+            }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchFollowingUsersPostsSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchFollowingUsersPostsSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchFollowingUsersPostsFailure(getErrorMessage(error, "Followed Users Posts Fetch Failed")));
     }
@@ -230,16 +250,16 @@ function* handleFetchFollowingUsersPicksPosts(): SagaIterator {
 
 function* handleFetchPostPicksByUserIdPosts(action: PayloadAction<FetchPostPicksByUserIdPayload>): SagaIterator {
     try {
-        const { user_id } = action.payload;
+        const { user_id, page = 1, limit = 10 } = action.payload;
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/post-picks-by-user-id`,
             {
-                params: { user_id }
+                params: { user_id, page, limit }
             }
         );
-        const payload = response.data as { data?: unknown };
-        yield put(fetchPostPicksByUserIdSuccess(payload.data));
+        const payload = response.data as { data?: { picks: Picks } };
+        yield put(fetchPostPicksByUserIdSuccess({ picks: payload.data?.picks ?? [], page }));
     } catch (error: unknown) {
         yield put(fetchPostPicksByUserIdFailure(getErrorMessage(error, "User's Post Picks Fetch Failed")));
     }

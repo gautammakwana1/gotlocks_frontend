@@ -524,8 +524,15 @@ export type FetchPicksPayload = {
     slip_id: string | undefined;
 };
 
+export type FetchPostPicksPayload = {
+    page?: number;
+    limit?: number;
+};
+
 export type FetchPostPicksByUserIdPayload = {
     user_id: string;
+    page?: number;
+    limit?: number;
 };
 
 export type DeletePostPickPayload = {
@@ -998,6 +1005,7 @@ export type NBASchedules = {
     date: string;
     live: boolean;
     odds: OddsObject[];
+    updated?: string;
 }
 
 export type OddSelectionObject = {
@@ -1260,6 +1268,7 @@ export type PickSelectionMeta = {
     away_team?: string;
     matchup?: string;
     match_date?: string;
+    external_pick_key?: string;
 };
 
 export type PickLeg = {
@@ -1269,6 +1278,10 @@ export type PickLeg = {
     difficulty_tier?: number;
     external_pick_key?: string;
     selection?: PickSelectionMeta;
+    points?: number;
+    result?: string;
+    matchup?: string;
+    match_time?: string;
 };
 
 export type BuiltPickPayload = {

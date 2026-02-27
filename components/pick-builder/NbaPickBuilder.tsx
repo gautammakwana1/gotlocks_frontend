@@ -197,16 +197,58 @@ const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
 const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
-const buildGameOptions = (snapshot: NBASchedules[], odds: OddsObject[]): GameOption[] =>
+const buildGameOptions = (
+    snapshot: NBASchedules[],
+    odds: OddsObject[],
+    activeGameId?: string | null
+): GameOption[] =>
     snapshot.map((event) => {
+        const isCurrentlyActive = activeGameId && event.id === activeGameId;
+        const currentOdds = isCurrentlyActive ? odds : event.odds;
+
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
-        odds.forEach((odd) => {
+        currentOdds.forEach((odd) => {
             marketSet.add(odd.market);
             if (odd.player?.id) playerSet.add(odd.player.id);
         });
 
         return {
+            id: event.id,
+            homeTeam: event.teams.home.name,
+            awayTeam: event.teams.away.name,
+            homeTeamId: event.teams.home.id,
+            awayTeamId: event.teams.away.id,
+            date: event.date,
+            live: event.live,
+            odds: currentOdds,
+            homeAbbr: normalizeAbbr(event.teams.home),
+            awayAbbr: normalizeAbbr(event.teams.away),
+            marketCount: marketSet.size,
+            propCount: playerSet.size,
+            hasOdds: currentOdds.length > 0,
+        };
+    });
+
+const buildScheduleOptions = (
+    snapshot: NBASchedules[],
+    existingKeys: Set<string>,
+    existingIds: Set<string>
+): GameOption[] => {
+    const options: GameOption[] = [];
+    snapshot.forEach((event) => {
+        if (existingIds.has(event.id)) return;
+        const key = `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
+        if (existingKeys.has(key)) return;
+
+        const marketSet = new Set<string>();
+        const playerSet = new Set<string>();
+        event.odds.forEach((odd) => {
+            marketSet.add(odd.market);
+            if (odd.player?.id) playerSet.add(odd.player.id);
+        });
+
+        options.push({
             id: event.id,
             homeTeam: event.teams.home.name,
             awayTeam: event.teams.away.name,
@@ -220,42 +262,17 @@ const buildGameOptions = (snapshot: NBASchedules[], odds: OddsObject[]): GameOpt
             marketCount: marketSet.size,
             propCount: playerSet.size,
             hasOdds: event.odds.length > 0,
-        };
+        });
     });
-
-const buildScheduleOptions = (
-    snapshot: NBASchedules[],
-    existingKeys: Set<string>,
-    existingIds: Set<string>
-): GameOption[] =>
-    snapshot.flatMap((event) => {
-        if (existingIds.has(event.id)) return [];
-        const key = `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
-        if (existingKeys.has(key)) return [];
-        return [
-            {
-                id: event.id,
-                homeTeam: event.teams.home.name,
-                awayTeam: event.teams.away.name,
-                homeTeamId: event.teams.home.id,
-                awayTeamId: event.teams.away.id,
-                date: event.date,
-                live: event.live,
-                odds: [],
-                homeAbbr: normalizeAbbr(event.teams.home),
-                awayAbbr: normalizeAbbr(event.teams.away),
-                marketCount: 0,
-                propCount: 0,
-                hasOdds: false,
-            },
-        ];
-    });
+    return options;
+};
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NBASchedules[]
+    scheduleSnapshot: NBASchedules[],
+    activeGameId?: string | null
 ): GameOption[] => {
-    const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot);
+    const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
     const existingIds = new Set(oddsOptions.map((option) => option.id));
     const existingKeys = new Set(
         oddsOptions.map(
@@ -471,6 +488,9 @@ const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionM
     threshold: odd.selection?.line,
     home_team: game.homeTeam,
     away_team: game.awayTeam,
+    external_pick_key: odd.id,
+    matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : undefined,
+    match_date: game.date,
 });
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
@@ -808,6 +828,7 @@ export const NbaPickBuilder = ({
             : getTierForAmericanOdds(americanOdds);
     const [nbaMatchSchedules, setNBAMatchSchedules] = useState<NBASchedules[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
+    const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
     const { nbaSchedules, nbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
 
@@ -833,17 +854,29 @@ export const NbaPickBuilder = ({
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
     useEffect(() => {
         if (Array.isArray(nbaSchedules?.events) && nbaSchedules?.events?.length) {
-            setNBAMatchSchedules(nbaSchedules?.events);
+            const events = nbaSchedules.events;
+
+            setNBAMatchSchedules(events);
+
+            // Always compute and set explicitly (true OR false)
+            const anyLive = events.some(e => e.live === true);
+            setIsAnyLiveMatch(anyLive);
         }
-        if (nbaOdds?.events[0]?.odds) {
-            setOddsData(nbaOdds?.events[0].odds);
+        if (nbaOdds?.events?.length) {
+            const activeEvent = activeGameId
+                ? nbaOdds.events.find(e => e.id === activeGameId)
+                : nbaOdds.events[0];
+
+            setOddsData(activeEvent?.odds ?? []);
+        } else if (nbaOdds?.updated) {
+            setOddsData([]);
         }
-    }, [nbaSchedules, nbaOdds]);
+    }, [nbaSchedules, nbaOdds, activeGameId]);
 
     const games = useMemo<GameOption[]>(() => {
         if (!nbaMatchSchedules) return [];
-        return buildMergedGameOptions(oddsData, nbaMatchSchedules);
-    }, [nbaMatchSchedules, oddsData]);
+        return buildMergedGameOptions(oddsData, nbaMatchSchedules, activeGameId);
+    }, [nbaMatchSchedules, oddsData, nbaOdds?.updated, activeGameId]);
 
     const todayIso = useMemo(() => new Date().toISOString(), []);
     const visibleGames = useMemo(() => {
@@ -852,7 +885,7 @@ export const NbaPickBuilder = ({
                 return game
             }
         );
-    }, [games]);
+    }, [games, nbaOdds?.updated]);
     const shouldFilterByDate = true;
     // const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
@@ -1014,7 +1047,7 @@ export const NbaPickBuilder = ({
 
     const activeGame = useMemo(
         () => visibleGames.find((game) => game.id === activeGameId) ?? null,
-        [activeGameId, visibleGames]
+        [activeGameId, visibleGames, nbaOdds?.updated]
     );
 
     useEffect(() => {
@@ -1033,6 +1066,17 @@ export const NbaPickBuilder = ({
             clearInterval(interval);
         };
     }, [activeGame?.id, activeGame?.live, dispatch]);
+
+    useEffect(() => {
+        if (!isAnyLiveMatch) return;
+        const interval = setInterval(() => {
+            dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
+        }, 310 * 1000); // 5 min 10 sec
+
+        return () => {
+            clearInterval(interval);
+        };
+    }, [dispatch, isAnyLiveMatch]);
 
     const activeMarketMap = useMemo(() => {
         if (!activeGame) return new Map<string, SelectedOdd[]>();
@@ -1124,7 +1168,7 @@ export const NbaPickBuilder = ({
         () =>
             parlayLegs.map((leg) => {
                 const game = games.find((option) => option.id === leg.eventId);
-                const matchup = game ? matchupLabel(game) : leg.matchup ?? null;
+                const matchup = game ? matchupLabel(game) : leg.matchup ?? undefined;
                 const startTime = game?.date ?? leg.startTime;
                 const americanOdds = parseAmericanOdds(leg.price);
                 const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
@@ -1140,9 +1184,12 @@ export const NbaPickBuilder = ({
                         market: leg.market,
                         playerId: leg.playerId,
                         side: normalizeSide(leg.side),
+                        scope: leg.marketKey,
                         threshold: leg.line,
                         gameStartTime: startTime,
-                        external_pick_key: leg.id
+                        external_pick_key: leg.id,
+                        away_team: game?.awayTeam,
+                        home_team: game?.homeTeam,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
@@ -1968,7 +2015,7 @@ export const NbaPickBuilder = ({
             totalUnder,
             totalLine,
         };
-    }, [activeGame]);
+    }, [activeGame, nbaOdds?.updated]);
 
     const altSpreadOdds = useMemo(
         () =>

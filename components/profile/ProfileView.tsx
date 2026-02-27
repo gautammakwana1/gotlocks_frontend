@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getLevelProgress } from "@/lib/utils/progression";
 import PostFeed from "./PostFeed";
 import ProfileControls, {
@@ -102,10 +102,19 @@ const ProfileView = ({
     const [followPanelTab, setFollowPanelTab] = useState<"followers" | "following">(
         "followers"
     );
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef<IntersectionObserver | null>(null);
+    const limit = 10;
 
     const { postPicks, deleteMessage, loading: postLoader } = useSelector((state: RootState) => state.pick);
     const { followings, followers, followersById, followingsById, loading: authLoader, message: authMessage, user, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
     const { progress } = useSelector((state: RootState) => state.progress);
+
+    const fetchData = useCallback((pageNum: number) => {
+        if (!targetUserId) return;
+        dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId, page: pageNum, limit }));
+    }, [dispatch, targetUserId, limit]);
 
     useEffect(() => {
         if (!targetUserId) return;
@@ -117,8 +126,12 @@ const ProfileView = ({
             dispatch(fetchFollowingListByIdRequest({ user_id: targetUserId }));
         }
         dispatch(fetchProgressByUserIdRequest({ user_id: targetUserId }));
-        dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId }));
-    }, [targetUserId, dispatch, mode]);
+
+        // Reset pagination and fetch page 1
+        setPage(1);
+        setHasMore(true);
+        fetchData(1);
+    }, [targetUserId, dispatch, mode, fetchData]);
 
     useEffect(() => {
         if (user?.profile && !authLoader) {
@@ -172,9 +185,36 @@ const ProfileView = ({
                 duration: 3000
             });
             dispatch(clearDeletePostPickMessage());
-            if (targetUserId) dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId }));
+            if (targetUserId) {
+                setPage(1);
+                setHasMore(true);
+                fetchData(1);
+            }
         }
-    }, [dispatch, deleteMessage, postLoader, setToast, targetUserId]);
+    }, [dispatch, deleteMessage, postLoader, setToast, targetUserId, fetchData]);
+
+    const lastItemRef = useCallback((node: HTMLDivElement | null) => {
+        if (postLoader) return;
+        if (observer.current) observer.current.disconnect();
+
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage);
+            }
+        });
+
+        if (node) observer.current.observe(node);
+    }, [postLoader, hasMore, page, fetchData]);
+
+    useEffect(() => {
+        if (!postLoader && postPicks) {
+            if (postPicks.length < page * limit) {
+                setHasMore(false);
+            }
+        }
+    }, [postPicks, postLoader, page, limit]);
 
     const isFollowing = useCallback(
         (followerId: string | undefined, targetUserId: string | undefined): boolean => {
@@ -608,6 +648,8 @@ const ProfileView = ({
                                     variant="embedded"
                                     canDeletePick={canDeletePick}
                                     onDeletePick={handleDeletePick}
+                                    lastItemRef={lastItemRef}
+                                    loading={postLoader}
                                 />
                             </div>
                         </div>

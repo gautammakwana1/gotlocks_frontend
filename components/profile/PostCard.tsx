@@ -173,7 +173,7 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete }: PostCardProp
     const sportLabel = pick.sport?.toString().toUpperCase() || "SPORT";
     const displayPick = pick.description ?? "No pick was submitted";
     const pickLine = extractPickLine(displayPick);
-    const matchupCopy = extractMatchup(displayPick) ?? PLACEHOLDER;
+    const matchupCopy = pick.matchup ?? extractMatchup(displayPick) ?? PLACEHOLDER;
     const gameTimeCopy = formatDateTime(pick.selection?.gameStartTime);
     const showMatchup = matchupCopy !== PLACEHOLDER;
     const showGameTime = gameTimeCopy !== PLACEHOLDER;
@@ -392,7 +392,7 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete }: PostCardProp
                                     <ul className="mt-3 space-y-2">
                                         {pick.legs?.map((leg, index) => {
                                             const legPickLine = extractPickLine(leg.description);
-                                            const legMatchup = extractMatchup(leg.description);
+                                            const legMatchup = leg.matchup ?? extractMatchup(leg.description);
                                             const legTime = formatDateTime(leg.selection?.gameStartTime);
                                             const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
                                                 .filter(Boolean)

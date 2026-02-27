@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, Pick, Picks, ReactionPickOfDayPayload, SessionState, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Pick, Picks, ReactionPickOfDayPayload, SessionState, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 type PickState = {
     pick: Pick | null;
@@ -213,13 +213,21 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        fetchGlobalWinnerTopHitPostsRequest: (state) => {
+        fetchGlobalWinnerTopHitPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalWinnerTopHitPostsSuccess: (state, action) => {
+        fetchGlobalWinnerTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchGlobalWinnerTopHitPostsFailure: (state, action) => {
             state.loading = false;
@@ -230,13 +238,21 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        fetchGlobalPendingTopHitPostsRequest: (state) => {
+        fetchGlobalPendingTopHitPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalPendingTopHitPostsSuccess: (state, action) => {
+        fetchGlobalPendingTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchGlobalPendingTopHitPostsFailure: (state, action) => {
             state.loading = false;
@@ -247,13 +263,21 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        fetchGlobalPendingReactedPostsRequest: (state) => {
+        fetchGlobalPendingReactedPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalPendingReactedPostsSuccess: (state, action) => {
+        fetchGlobalPendingReactedPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchGlobalPendingReactedPostsFailure: (state, action) => {
             state.loading = false;
@@ -264,13 +288,21 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        fetchFollowingUsersWinTopHitPostsRequest: (state) => {
+        fetchFollowingUsersWinTopHitPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
             state.loading = true;
             state.error = null;
         },
-        fetchFollowingUsersWinTopHitPostsSuccess: (state, action) => {
+        fetchFollowingUsersWinTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchFollowingUsersWinTopHitPostsFailure: (state, action) => {
             state.loading = false;
@@ -281,13 +313,21 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
-        fetchFollowingUsersPostsRequest: (state) => {
+        fetchFollowingUsersPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
             state.loading = true;
             state.error = null;
         },
-        fetchFollowingUsersPostsSuccess: (state, action) => {
+        fetchFollowingUsersPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchFollowingUsersPostsFailure: (state, action) => {
             state.loading = false;
@@ -303,9 +343,16 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchPostPicksByUserIdSuccess: (state, action) => {
+        fetchPostPicksByUserIdSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
             state.loading = false;
-            state.postPicks = action.payload?.picks;
+            const { picks, page } = action.payload;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
         },
         fetchPostPicksByUserIdFailure: (state, action) => {
             state.loading = false;

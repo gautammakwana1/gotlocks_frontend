@@ -198,7 +198,7 @@ const FeedList = ({
                     : null;
                 const displayPick = item.description ?? "No pick was submitted";
                 const pickLine = extractPickLine(displayPick);
-                const matchupCopy = extractMatchup(displayPick) ?? PLACEHOLDER;
+                const matchupCopy = item.matchup ?? extractMatchup(displayPick) ?? PLACEHOLDER;
                 const gameTimeCopy = formatDateTime(item.selection?.gameStartTime);
                 const showMatchup = matchupCopy !== PLACEHOLDER;
                 const showGameTime = gameTimeCopy !== PLACEHOLDER;
@@ -389,7 +389,7 @@ const FeedList = ({
                                                 <ul className="mt-3 space-y-2">
                                                     {item.legs?.map((leg, index) => {
                                                         const legPickLine = extractPickLine(leg.description);
-                                                        const legMatchup = extractMatchup(leg.description);
+                                                        const legMatchup = leg.matchup ?? extractMatchup(leg.description);
                                                         const legTime = formatDateTime(leg.selection?.gameStartTime);
                                                         const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
                                                             .filter(Boolean)

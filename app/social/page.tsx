@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
@@ -103,8 +103,8 @@ const extractMatchup = (description?: string | null) => {
     return match ? match[1].trim() : null;
 };
 
-const FEED_MAX_VISIBLE = 7;
-const FEED_CARD_EST_HEIGHT = 220;
+// const FEED_MAX_VISIBLE = 7;
+// const FEED_CARD_EST_HEIGHT = 220;
 
 const SocialPage = () => {
     const router = useRouter();
@@ -113,46 +113,71 @@ const SocialPage = () => {
     const [topHitsScope, setTopHitsScope] = useState<"global" | "following">("global");
     const [forYouScope, setForYouScope] = useState<"posts" | "reacted">("posts");
     const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+    const observer = useRef<IntersectionObserver | null>(null);
+    const limit = 10;
 
     const currentUser = useCurrentUser();
 
     const { loading: pickLoader, message: pickMessage, postPicks } = useSelector((state: RootState) => state.pick);
 
-    // useEffect(() => {
-    //     // dispatch(fetchFollowersListRequest());
-    //     dispatch(fetchFollowingListRequest());
-    // }, [dispatch]);
-
-    const fetchDataByTab = () => {
+    const fetchDataByTab = (pageNum: number) => {
+        const payload = { page: pageNum, limit };
         if (activeTab === "for-you") {
             if (forYouScope === "posts") {
-                dispatch(fetchGlobalPendingTopHitPostsRequest());
+                dispatch(fetchGlobalPendingTopHitPostsRequest(payload));
             } else if (forYouScope === "reacted") {
-                dispatch(fetchGlobalPendingReactedPostsRequest());
+                dispatch(fetchGlobalPendingReactedPostsRequest(payload));
             }
         }
         else if (activeTab === "following") {
-            dispatch(fetchFollowingUsersPostsRequest());
+            dispatch(fetchFollowingUsersPostsRequest(payload));
         }
         else if (activeTab === "top-hits") {
             if (topHitsScope === "global") {
-                dispatch(fetchGlobalWinnerTopHitPostsRequest());
+                dispatch(fetchGlobalWinnerTopHitPostsRequest(payload));
             } else if (topHitsScope === "following") {
-                dispatch(fetchFollowingUsersWinTopHitPostsRequest());
+                dispatch(fetchFollowingUsersWinTopHitPostsRequest(payload));
             }
         }
     };
 
     useEffect(() => {
-        fetchDataByTab();
+        setPage(1);
+        setHasMore(true);
+        fetchDataByTab(1);
     }, [activeTab, forYouScope, topHitsScope, dispatch]);
 
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
 
         dispatch(clearFetchAllGlobalPostPicksMessage());
-        fetchDataByTab();
+        fetchDataByTab(page); // No need to re-fetch on message here anymore if pagination is controlled
     }, [pickLoader, pickMessage, dispatch]);
+
+    const lastItemRef = useCallback((node: HTMLDivElement | null) => {
+        if (pickLoader) return;
+        if (observer.current) observer.current.disconnect();
+
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchDataByTab(nextPage);
+            }
+        });
+
+        if (node) observer.current.observe(node);
+    }, [pickLoader, hasMore, page]);
+
+    useEffect(() => {
+        if (!pickLoader && postPicks) {
+            if (postPicks.length < page * limit) {
+                setHasMore(false);
+            }
+        }
+    }, [postPicks, pickLoader, page]);
 
     const feedItems: Picks = useMemo(() => {
         if (!Array.isArray(postPicks) || !postPicks?.length) return [];
@@ -235,9 +260,9 @@ const SocialPage = () => {
             className={`-mx-5 divide-y divide-white/10 overflow-y-auto sm:mx-0 
                 ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
                 }`}
-            // style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
+        // style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
         >
-            {items.map((item) => {
+            {items.map((item, index) => {
                 if (!currentUser?.userId) return;
                 const showResultChip = item.result && item.result !== "pending";
                 const isCollapsed = Boolean(collapsedPicks[item.id]);
@@ -278,7 +303,7 @@ const SocialPage = () => {
                     : null;
                 const displayPick = item.description ?? "No pick was submitted";
                 const pickLine = extractPickLine(displayPick);
-                const matchupCopy = extractPickLine(displayPick) ?? item.matchup ?? PLACEHOLDER;
+                const matchupCopy = item.matchup ?? extractMatchup(displayPick) ?? PLACEHOLDER;
                 const gameTimeCopy = formatDateTime(item.selection?.gameStartTime);
                 const showMatchup = matchupCopy !== PLACEHOLDER;
                 const showGameTime = gameTimeCopy !== PLACEHOLDER;
@@ -307,6 +332,7 @@ const SocialPage = () => {
                 return (
                     <div
                         key={item.id}
+                        ref={index === items.length - 1 ? lastItemRef : null}
                         className="py-4"
                     >
                         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
@@ -473,7 +499,7 @@ const SocialPage = () => {
                                                 <ul className="mt-3 space-y-2">
                                                     {item.legs?.map((leg, index) => {
                                                         const legPickLine = extractPickLine(leg.description);
-                                                        const legMatchup = extractMatchup(leg.description);
+                                                        const legMatchup = leg.matchup ?? extractMatchup(leg.description);
                                                         const legTime = formatDateTime(leg.selection?.gameStartTime);
                                                         const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
                                                             .filter(Boolean)
@@ -568,11 +594,17 @@ const SocialPage = () => {
                 );
             })}
 
-            {items.length === 0 && (
+            {items.length === 0 && !pickLoader && (
                 <div className="px-5 py-4 sm:px-6">
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-[var(--text-secondary)]">
                         {emptyCopy}
                     </div>
+                </div>
+            )}
+
+            {pickLoader && (
+                <div className="flex justify-center py-8">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
                 </div>
             )}
         </div>
