@@ -103,13 +103,12 @@ const ProfileView = ({
         "followers"
     );
     const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
-    const { postPicks, deleteMessage, loading: postLoader, message } = useSelector((state: RootState) => state.pick);
+    const { postPicks, deleteMessage, loading: postLoader, message, hasMore } = useSelector((state: RootState) => state.pick);
     const { followings, followers, followersById, followingsById, loading: authLoader, message: authMessage, user, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
-    const { progress } = useSelector((state: RootState) => state.progress);
+    const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -130,7 +129,6 @@ const ProfileView = ({
 
         // Reset pagination and fetch page 1
         setPage(1);
-        setHasMore(true);
         fetchData(1);
     }, [targetUserId, dispatch, mode, fetchData]);
 
@@ -188,7 +186,6 @@ const ProfileView = ({
             dispatch(clearDeletePostPickMessage());
             if (targetUserId) {
                 setPage(1);
-                setHasMore(true);
                 fetchData(1);
             }
         }
@@ -210,18 +207,10 @@ const ProfileView = ({
     }, [postLoader, hasMore, page, fetchData]);
 
     useEffect(() => {
-        if (!postLoader && postPicks) {
-            if (postPicks.length < page * limit) {
-                setHasMore(false);
-            }
-        }
-    }, [postPicks, postLoader, page, limit]);
-
-    useEffect(() => {
         if (postLoader || !message) return;
         dispatch(clearCreatePickReactionMessage())
         fetchData(1, page * limit)
-    }, [message, postLoader, dispatch, targetUserId]);
+    }, [message, postLoader, dispatch, targetUserId, page, fetchData]);
 
     const isFollowing = useCallback(
         (followerId: string | undefined, targetUserId: string | undefined): boolean => {
@@ -309,17 +298,6 @@ const ProfileView = ({
         () => postPicksList.filter((pick) => pick.is_combo).length,
         [postPicksList]
     );
-
-    const tally = useMemo(() => {
-        const wins = visiblePicks.filter((pick) => normalizeResult(pick.result) === "win").length;
-        const losses = visiblePicks.filter(
-            (pick) => normalizeResult(pick.result) === "loss"
-        ).length;
-        const pending = visiblePicks.filter(
-            (pick) => normalizeResult(pick.result) === "pending"
-        ).length;
-        return { wins, losses, pending };
-    }, [visiblePicks]);
 
     const handleFollowToggle = () => {
         if (!currentUser?.userId || !targetUser?.id) return;
@@ -490,7 +468,11 @@ const ProfileView = ({
                 isFollowing={
                     !!targetUser && !!currentUser && isFollowing(currentUser.userId, targetUser.id)
                 }
-                record={tally}
+                record={{
+                    wins: picksCount?.win ?? 0,
+                    losses: picksCount?.loss ?? 0,
+                    pending: picksCount?.pending ?? 0,
+                }}
                 stats={{
                     posts: showStats ? postPicksList.length : 0,
                     wins: showStats ? postWins : 0,

@@ -520,6 +520,14 @@ export type CreatePickOfDayPayload = {
     external_pick_key?: string;
 };
 
+export type FetchPicksPaginationPayload = {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
 export type FetchPicksPayload = {
     slip_id: string | undefined;
 };
@@ -740,6 +748,7 @@ export type PickSliceState = {
     message: string | null;
     deleteMessage: string | null;
     loading: boolean;
+    hasMore: boolean;
 }
 
 export type RootState = {
@@ -1233,11 +1242,20 @@ export type Progress = {
     updated_at?: string | null;
 }
 
+export type PicksCount = {
+    total: number,
+    win: number,
+    loss: number,
+    void: number,
+    pending: number,
+}
+
 export type ProgressState = {
     loading: boolean,
     error: string | null,
     message: string | null,
     progress: Progress | null,
+    picksCount: PicksCount | null,
 }
 
 export type NBAState = {

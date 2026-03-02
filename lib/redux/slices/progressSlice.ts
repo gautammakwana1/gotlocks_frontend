@@ -6,6 +6,7 @@ const initialState: ProgressState = {
     error: null,
     message: null,
     progress: null,
+    picksCount: null,
 };
 
 const progressSlice = createSlice({
@@ -37,6 +38,7 @@ const progressSlice = createSlice({
         fetchProgressByUserIdSuccess: (state, action) => {
             state.loading = false;
             state.progress = action.payload.progress;
+            state.picksCount = action.payload.picksCount;
         },
         fetchProgressByUserIdFailure: (state, action) => {
             state.loading = false;

@@ -197,8 +197,8 @@ const GroupPage = () => {
   const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
     searchParams.get("mode") === "vibe" ? "vibe" : "leaderboard"
   );
-  const [showFootballOverlay, setShowFootballOverlay] = useState(false);
-  const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // const [showFootballOverlay, setShowFootballOverlay] = useState(false);
+  // const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaderboardMenuRef = useRef<HTMLDivElement>(null);
 
@@ -324,9 +324,9 @@ const GroupPage = () => {
 
   useEffect(() => {
     return () => {
-      if (overlayTimeoutRef.current) {
-        clearTimeout(overlayTimeoutRef.current);
-      }
+      // if (overlayTimeoutRef.current) {
+      //   clearTimeout(overlayTimeoutRef.current);
+      // }
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
@@ -520,17 +520,17 @@ const GroupPage = () => {
     router.push(basePath);
   };
 
-  const showOverlayBriefly = () => {
-    setShowFootballOverlay(true);
-    if (overlayTimeoutRef.current) {
-      clearTimeout(overlayTimeoutRef.current);
-    }
-    overlayTimeoutRef.current = setTimeout(() => setShowFootballOverlay(false), 800);
-  };
+  // const showOverlayBriefly = () => {
+  //   setShowFootballOverlay(true);
+  //   if (overlayTimeoutRef.current) {
+  //     clearTimeout(overlayTimeoutRef.current);
+  //   }
+  //   overlayTimeoutRef.current = setTimeout(() => setShowFootballOverlay(false), 800);
+  // };
 
   const handleCreateSlipNavigation = () => {
     if (!group) return;
-    showOverlayBriefly();
+    // showOverlayBriefly();
     if (navigationTimeoutRef.current) {
       clearTimeout(navigationTimeoutRef.current);
     }

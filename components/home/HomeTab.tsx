@@ -5,13 +5,12 @@ import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { getLevelProgress } from "@/lib/utils/progression";
-import { normalizePickResult } from "@/lib/slips/state";
-import { Group, GroupSummary, Members, Pick, PickReaction, PickType, RootState } from "@/lib/interfaces/interfaces";
+import { Group, GroupSummary, Members, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
-import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest, fetchRecentPicksRequest } from "@/lib/redux/slices/pickSlice";
+import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
 
@@ -106,13 +105,12 @@ const HomeTab = () => {
     const isCarouselPausedRef = useRef(false);
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
     const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
     const { group, joinLoading, message, error } = useSelector((state: GroupRootState) => state.group);
-    const { pick, postPicks, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
-    const { progress } = useSelector((state: RootState) => state.progress);
+    const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
+    const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -121,19 +119,18 @@ const HomeTab = () => {
 
     useEffect(() => {
         dispatch(fetchAllGroupsRequest({}));
-        dispatch(fetchRecentPicksRequest({}));
         fetchData(1);
         if (currentUserId) {
             dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
         }
-    }, [dispatch, currentUserId]);
+    }, [dispatch, currentUserId, fetchData]);
 
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
 
         dispatch(clearFetchAllGlobalPostPicksMessage());
         fetchData(1, page * limit);
-    }, [pickLoader, pickMessage, dispatch, page, limit]);
+    }, [pickLoader, pickMessage, dispatch, page, limit, fetchData]);
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (pickLoader) return;
@@ -149,14 +146,6 @@ const HomeTab = () => {
 
         if (node) observer.current.observe(node);
     }, [pickLoader, hasMore, page, fetchData]);
-
-    useEffect(() => {
-        if (!pickLoader && postPicks) {
-            if (postPicks.length < page * limit) {
-                setHasMore(false);
-            }
-        }
-    }, [postPicks, pickLoader, page, limit]);
 
     useEffect(() => {
         if (!joinLoading && message && group) {
@@ -185,34 +174,7 @@ const HomeTab = () => {
     );
     const xpLevelRatio = Math.min(1, xpIntoLevel / xpToNext);
 
-    const recentPicks = useMemo<Pick[]>(() => {
-        if (!Array.isArray(pick)) return [];
-        return pick;
-    }, [pick]);
-
-    const recentPostPicks = useMemo(
-        () =>
-            recentPicks.filter(
-                (pick) => pick.user_id === currentUser?.userId
-                    && pick.pick_type === PickType.POST
-            ),
-        [currentUser, recentPicks]
-    );
-
-    const pickStats = useMemo(() => {
-        const wins = recentPostPicks.filter(
-            (pick) => normalizePickResult(pick.result) === "win"
-        ).length;
-        const losses = recentPostPicks.filter(
-            (pick) => normalizePickResult(pick.result) === "loss"
-        ).length;
-        const pending = recentPostPicks.filter(
-            (pick) => normalizePickResult(pick.result) === "pending"
-        ).length;
-        const settled = wins + losses;
-        const winRate = settled ? Math.round((wins / settled) * 100) : 0;
-        return { wins, losses, pending, winRate };
-    }, [recentPostPicks]);
+    const winRate = picksCount?.win && picksCount?.total ? (picksCount.win / picksCount.total * 100) : 0;
 
     const sortedGroups = useMemo(() => {
         if (!group?.data?.groups) return [];
@@ -519,7 +481,7 @@ const HomeTab = () => {
         },
         {
             label: "Post win rate",
-            value: `${pickStats.winRate}%`,
+            value: `${winRate.toFixed(1)}%`,
         },
     ];
 

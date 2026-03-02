@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
     message?: string;
@@ -173,8 +173,10 @@ function* handleFetchGlobalWinnerTopHitPosts(action: PayloadAction<FetchPostPick
                 params: { page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchGlobalWinnerTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchGlobalWinnerTopHitPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchGlobalWinnerTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
@@ -190,8 +192,10 @@ function* handleFetchGlobalPendingTopHitPosts(action: PayloadAction<FetchPostPic
                 params: { page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchGlobalPendingTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchGlobalPendingTopHitPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchGlobalPendingTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
@@ -207,8 +211,10 @@ function* handleFetchGlobalReactedPendingTopHitPosts(action: PayloadAction<Fetch
                 params: { page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchGlobalPendingReactedPostsSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchGlobalPendingReactedPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchGlobalPendingReactedPostsFailure(getErrorMessage(error, "Globally Reacted Top Posts Fetch Failed")));
     }
@@ -224,8 +230,10 @@ function* handleFetchFollowingUsersWinTopHitPosts(action: PayloadAction<FetchPos
                 params: { page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchFollowingUsersWinTopHitPostsSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchFollowingUsersWinTopHitPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchFollowingUsersWinTopHitPostsFailure(getErrorMessage(error, "Globally Top Posts Fetch Failed")));
     }
@@ -241,8 +249,10 @@ function* handleFetchFollowingUsersPicksPosts(action: PayloadAction<FetchPostPic
                 params: { page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchFollowingUsersPostsSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchFollowingUsersPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchFollowingUsersPostsFailure(getErrorMessage(error, "Followed Users Posts Fetch Failed")));
     }
@@ -258,8 +268,10 @@ function* handleFetchPostPicksByUserIdPosts(action: PayloadAction<FetchPostPicks
                 params: { user_id, page, limit }
             }
         );
-        const payload = response.data as { data?: { picks: Picks } };
-        yield put(fetchPostPicksByUserIdSuccess({ picks: payload.data?.picks ?? [], page }));
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchPostPicksByUserIdSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
     } catch (error: unknown) {
         yield put(fetchPostPicksByUserIdFailure(getErrorMessage(error, "User's Post Picks Fetch Failed")));
     }

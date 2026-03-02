@@ -12,6 +12,7 @@ type PickState = {
     error: string | null;
     message: string | null;
     deleteMessage: string | null;
+    hasMore: boolean;
 };
 
 const initialState: PickState = {
@@ -25,6 +26,7 @@ const initialState: PickState = {
     error: null,
     message: null,
     deleteMessage: null,
+    hasMore: true,
 };
 
 const pickSlice = createSlice({
@@ -218,9 +220,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalWinnerTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchGlobalWinnerTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
@@ -243,9 +246,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalPendingTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchGlobalPendingTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
@@ -268,9 +272,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchGlobalPendingReactedPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchGlobalPendingReactedPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
@@ -293,9 +298,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchFollowingUsersWinTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchFollowingUsersWinTopHitPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
@@ -318,9 +324,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchFollowingUsersPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchFollowingUsersPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
@@ -343,9 +350,10 @@ const pickSlice = createSlice({
             state.loading = true;
             state.error = null;
         },
-        fetchPostPicksByUserIdSuccess: (state, action: PayloadAction<{ picks: Picks, page: number }>) => {
+        fetchPostPicksByUserIdSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;
-            const { picks, page } = action.payload;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
             if (page === 1) {
                 state.postPicks = picks;
             } else {
