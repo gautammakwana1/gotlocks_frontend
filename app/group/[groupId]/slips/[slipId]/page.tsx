@@ -621,12 +621,12 @@ const SlipDetailsPage = () => {
     const handleFinalizeSlip = (event?: FormEvent) => {
         event?.preventDefault();
         if (!canFinalizeSlip) return;
-        const confirmed = window.confirm(
-            slip.isGraded
-                ? "Finalize results and post them to the leaderboard?"
-                : "Finalize results and close out this slip?"
-        );
-        if (!confirmed) return;
+        // const confirmed = window.confirm(
+        //     slip.isGraded
+        //         ? "Finalize results and post them to the leaderboard?"
+        //         : "Finalize results and close out this slip?"
+        // );
+        // if (!confirmed) return;
         if (slip.id && group.id) {
             dispatch(markFinalizeSlipRequest({ slip_id: slip.id, group_id: group.id }));
         }

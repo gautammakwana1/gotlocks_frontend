@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { getLevelProgress } from "@/lib/utils/progression";
-import { Group, GroupSummary, Members, PickReaction, RootState } from "@/lib/interfaces/interfaces";
+import { Group, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -17,7 +17,7 @@ import { useToast } from "@/lib/state/ToastContext";
 type GroupSliceState = {
     group: {
         data?: {
-            groups?: Array<Group & { members?: Members }>;
+            groups?: Array<Group>;
         };
         message?: string;
     } | null;

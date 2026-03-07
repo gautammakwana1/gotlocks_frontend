@@ -758,6 +758,8 @@ export type RootState = {
     user: AuthSliceState;
     nfl: NFLState;
     nba: NBAState;
+    ncaab: NCAABState;
+    nhl: NHLState;
     progress: ProgressState;
 };
 
@@ -925,12 +927,34 @@ export type FetchNBASchedulePayload = {
     is_range: boolean;
 };
 
+export type FetchNCAABSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
+export type FetchNHLSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
 export type FetchLiveNFLOddsPayload = {
     match_id: string;
     is_live: boolean;
 };
 
 export type FetchNBAOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchNCAABOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchNHLOddsPayload = {
     match_id: string;
     is_live: boolean;
 };
@@ -959,6 +983,18 @@ export type ValidateMyPickPayload = {
 export type ValidateMyNBAPickPayload = {
     external_pick_key: string;
     match_id: string;
+};
+
+export type ValidateMyNCAABPickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
+};
+
+export type ValidateMyNHLPickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
 };
 
 export type NFLPlayer = {
@@ -1017,6 +1053,24 @@ export type NBASchedules = {
     updated?: string;
 }
 
+export type NCAABSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+    odds: OddsObject[];
+    updated?: string;
+}
+
+export type NHLSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+    odds: OddsObject[];
+    updated?: string;
+}
+
 export type OddSelectionObject = {
     name?: string;
     side?: string;
@@ -1067,6 +1121,20 @@ export type NFLOdds = {
 }
 
 export type NBAOdds = {
+    updated: string;
+    league: LeagueObject;
+    sportsBook: SportsBookObject;
+    events: OddsData[];
+}
+
+export type NCAABOdds = {
+    updated: string;
+    league: LeagueObject;
+    sportsBook: SportsBookObject;
+    events: OddsData[];
+}
+
+export type NHLOdds = {
     updated: string;
     league: LeagueObject;
     sportsBook: SportsBookObject;
@@ -1265,6 +1333,36 @@ export type NBAState = {
         events: NBASchedules[];
     } | null,
     nbaOdds: NBAOdds | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+    validateLoading: boolean;
+    validatePickMessage: string | null;
+    validatePickError: string | null;
+};
+
+export type NCAABState = {
+    ncaabSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: NCAABSchedules[];
+    } | null,
+    ncaabOdds: NCAABOdds | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+    validateLoading: boolean;
+    validatePickMessage: string | null;
+    validatePickError: string | null;
+};
+
+export type NHLState = {
+    nhlSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: NHLSchedules[];
+    } | null,
+    nhlOdds: NHLOdds | null;
     loading: boolean;
     error: string | null;
     message: string | null;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BuiltPickPayload, Group, Members, PickSliceState, PickType, Slip, SlipSliceState } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, Group, PickSliceState, PickType, Slip, SlipSliceState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { isGameEligible } from "@/lib/utils/games";
 import PickBuilderShell from "@/components/pick-builder/PickBuilderShell";
@@ -17,7 +17,7 @@ import { canUserEditSlipPicks } from "@/lib/slips/state";
 type GroupSliceState = {
     group: {
         data?: {
-            groups?: Array<Group & { members?: Members }>;
+            groups?: Array<Group>;
         };
         message?: string;
     } | null;

@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { Group, Members } from "@/lib/interfaces/interfaces";
+import { Group } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
@@ -13,7 +13,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 type GroupSliceState = {
     group: {
         data?: {
-            groups?: Array<Group & { members?: Members }>;
+            groups?: Array<Group>;
         };
         message?: string;
     } | null;

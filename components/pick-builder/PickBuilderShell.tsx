@@ -12,6 +12,8 @@ import { BuildMode, BuiltPickPayload, CurrentUser, DraftPick, Group, League, Mem
 import NbaPickBuilder from "./NbaPickBuilder";
 import NflPickBuilder from "./NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
+import NcaabPickBuilder from "./NcaabPickBuilder";
+import NhlPickBuilder from "./NhlPickBuilder";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -440,9 +442,9 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}
-                        // onDateChange={handleDateChange}
-                        // allowAutoDateAdvance={!hasManualDateSelection}
-                        // hideDateControls
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
                         onDateOptionsChange={handleDateOptionsChange}
                         {...sharedParlayProps}
                     />
@@ -468,9 +470,123 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}
-                        // onDateChange={handleDateChange}
-                        // allowAutoDateAdvance={!hasManualDateSelection}
-                        // hideDateControls
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+        }
+
+        if (activeLeague === "NCAAB") {
+            if (context.mode === "slip") {
+                return (
+                    <NcaabPickBuilder
+                        sport={activeLeague}
+                        group={context.group}
+                        slip={context.slip}
+                        currentUser={context.currentUser}
+                        picks={context.picks}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCancel={onDismiss}
+                        isCommissioner={context.isCommissioner}
+                        showCurrentPick={context.showCurrentPick}
+                        enforceEligibilityWindow
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+
+            if (standaloneGroup && standaloneSlip) {
+                return (
+                    <NcaabPickBuilder
+                        sport={activeLeague}
+                        group={standaloneGroup}
+                        slip={standaloneSlip}
+                        currentUser={context.currentUser}
+                        picks={[]}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCreatePostPick={context.onCreatePostPick}
+                        onPostToSlip={context.onPostToSlip}
+                        onCancel={onDismiss}
+                        isCommissioner
+                        showCurrentPick
+                        builderMode={context.intent}
+                        enforceEligibilityWindow={false}
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+        }
+
+        if (activeLeague === "NHL") {
+            if (context.mode === "slip") {
+                return (
+                    <NhlPickBuilder
+                        sport={activeLeague}
+                        group={context.group}
+                        slip={context.slip}
+                        currentUser={context.currentUser}
+                        picks={context.picks}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCancel={onDismiss}
+                        isCommissioner={context.isCommissioner}
+                        showCurrentPick={context.showCurrentPick}
+                        enforceEligibilityWindow
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+
+            if (standaloneGroup && standaloneSlip) {
+                return (
+                    <NhlPickBuilder
+                        sport={activeLeague}
+                        group={standaloneGroup}
+                        slip={standaloneSlip}
+                        currentUser={context.currentUser}
+                        picks={[]}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCreatePostPick={context.onCreatePostPick}
+                        onPostToSlip={context.onPostToSlip}
+                        onCancel={onDismiss}
+                        isCommissioner
+                        showCurrentPick
+                        builderMode={context.intent}
+                        enforceEligibilityWindow={false}
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
                         onDateOptionsChange={handleDateOptionsChange}
                         {...sharedParlayProps}
                     />
