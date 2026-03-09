@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch } from "../../lib/redux/hooks";
 import type { Group } from "@/lib/interfaces/interfaces";
@@ -12,6 +12,17 @@ import BackButton from "@/components/ui/BackButton";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { greenGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+
+interface FormData {
+  name: string;
+  description?: string;
+}
+
+interface FormErrors {
+  name?: string;
+  description?: string;
+}
 
 const CagFormPage = () => {
   const router = useRouter();
@@ -19,6 +30,7 @@ const CagFormPage = () => {
   const dispatch = useAppDispatch();
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
   const { setToast } = useToast();
 
   const [form, setForm] = useState({
@@ -29,7 +41,6 @@ const CagFormPage = () => {
   const { group, error, message, loading } = useSelector(
     (state: GroupSelector) => state?.group
   );
-
 
   useEffect(() => {
     if (group && group.id && group.invite_code) {
@@ -61,11 +72,43 @@ const CagFormPage = () => {
     dispatch(clearCreateGroupMessage());
   }, [message, error, loading, setToast, dispatch]);
 
+  const validate = useCallback((): boolean => {
+    const nextErrors: FormErrors = {};
+
+    if (!form.name?.trim()) {
+      nextErrors.name = "Group name is required.";
+    }
+
+    if (form.name.length > 15) {
+      nextErrors.name = "Group name must be 15 characters or less.";
+    }
+
+    if (form.description.length > 50) {
+      nextErrors.description = "Group description must be 50 characters or less.";
+    }
+
+    const containsNameRestricted = checkAnyRestrictedWords(form.name);
+    if (containsNameRestricted) {
+      nextErrors.name = "Group name contains inappropriate language.";
+    }
+
+    const containsDescriptionRestricted = checkAnyRestrictedWords(form.description || "");
+    if (containsDescriptionRestricted) {
+      nextErrors.description = "Group description contains inappropriate language.";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }, [form]);
+
   const handleCreate = () => {
     if (!currentUser) {
       router.push("/landing-page");
       return;
     }
+
+    if (!validate()) return;
+
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
@@ -77,6 +120,18 @@ const CagFormPage = () => {
     };
     dispatch(createGroupRequest(newGroup));
   };
+
+  const handleInputChange = useCallback(
+    (field: keyof FormData) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = event.target.value;
+      setForm((prev) => ({ ...prev, [field]: value }));
+
+      if (errors[field as keyof FormErrors]) {
+        setErrors((prev) => ({ ...prev, [field]: undefined }));
+      }
+    },
+    [errors]
+  );
 
   const handleCopyCode = async () => {
     if (!inviteCode) return;
@@ -135,12 +190,15 @@ const CagFormPage = () => {
                 </span>
                 <input
                   value={form.name}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, name: event.target.value }))
-                  }
+                  onChange={handleInputChange("name")}
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Sunday Locks"
                 />
+                {errors.name && (
+                  <span className="text-xs font-medium text-red-400">
+                    {errors.name}
+                  </span>
+                )}
               </label>
 
               <label className="flex flex-col gap-2">
@@ -149,12 +207,15 @@ const CagFormPage = () => {
                 </span>
                 <textarea
                   value={form.description}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, description: event.target.value }))
-                  }
+                  onChange={handleInputChange("description")}
                   className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Multi-sport slips, leaderboard or just for vibes."
                 />
+                {errors.description && (
+                  <span className="text-xs font-medium text-red-400">
+                    {errors.description}
+                  </span>
+                )}
               </label>
 
               <button

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { Group, GroupSelector, Leaderboard, LeaderboardList, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
@@ -20,6 +20,12 @@ import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGr
 import { X } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+
+interface FormErrors {
+  name?: string;
+  description?: string;
+}
 
 export type GroupDataShape = Group | { group?: Group | null } | null;
 
@@ -194,6 +200,7 @@ const GroupPage = () => {
   const [secondaryLeaderboardsDetailsOpen, setSecondaryLeaderboardsDetailsOpen] = useState(true);
   const [showArchivedLeaderboards, setShowArchivedLeaderboards] = useState(false);
   const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
     searchParams.get("mode") === "vibe" ? "vibe" : "leaderboard"
   );
@@ -209,6 +216,7 @@ const GroupPage = () => {
     leaderboardList: leaderboardListData,
     loadingLeaderboard,
     message: groupMessage,
+    error: errorMessage,
     deleteLoading,
     deleteMessage,
     leaveMessage,
@@ -651,6 +659,15 @@ const GroupPage = () => {
       });
       dispatch(clearCreateNewLeaderboardMessage());
     }
+    if (!loading && errorMessage) {
+      setToast({
+        id: Date.now(),
+        type: "error",
+        message: errorMessage,
+        duration: 3000,
+      });
+      dispatch(clearUpdateGroupMessage());
+    }
     if (!deleteLoading && deleteMessage) {
       setToast({
         id: Date.now(),
@@ -671,7 +688,7 @@ const GroupPage = () => {
       dispatch(clearLeaveGroupMessage());
       router.replace("/fantasy");
     }
-  }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, leaveLoading, leaveMessage, router]);
+  }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, leaveLoading, leaveMessage, router, errorMessage]);
 
   useEffect(() => {
     if (!loading && !groupData && currentUser) {
@@ -710,6 +727,35 @@ const GroupPage = () => {
     }
   }, [leaderboardData?.leaderboard, leaderboardListData]);
 
+  const validate = useCallback((): boolean => {
+    const nextErrors: FormErrors = {};
+
+    if (!editGroupName?.trim()) {
+      nextErrors.name = "Group name is required.";
+    }
+
+    if (editGroupName.length > 15) {
+      nextErrors.name = "Group name must be 15 characters or less.";
+    }
+
+    if (editGroupDescription.length > 50) {
+      nextErrors.description = "Group description must be 50 characters or less.";
+    }
+
+    const containsNameRestricted = checkAnyRestrictedWords(editGroupName);
+    if (containsNameRestricted) {
+      nextErrors.name = "Group name contains inappropriate language.";
+    }
+
+    const containsDescriptionRestricted = checkAnyRestrictedWords(editGroupDescription || "");
+    if (containsDescriptionRestricted) {
+      nextErrors.description = "Group description contains inappropriate language.";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }, [editGroupName, editGroupDescription]);
+
   if (!rawGroup && !loading) {
     return (
       <div className="rounded-3xl border border-white/10 bg-black/60 p-6 text-sm text-gray-400">
@@ -717,25 +763,6 @@ const GroupPage = () => {
       </div>
     );
   }
-
-  // const handleSubmitPick = (payload: CreatePickPayload) => {
-  //   if (!currentUser || !activeSlip) return;
-  //   dispatch(createPickRequest({
-  //     slip_id: activeSlip.id,
-  //     description: payload.description,
-  //     odds_bracket: payload.odds_bracket,
-  //     scope: payload.scope,
-  //     side: payload.side,
-  //     points: payload.points,
-  //     difficultyTier: payload.difficultyTier,
-  //     market: payload.market,
-  //     playerId: payload.playerId,
-  //     gameId: payload.gameId,
-  //     week: payload.week,
-  //     teamId: payload.teamId,
-  //     threshold: payload.threshold,
-  //   }))
-  // };
 
   const handleDeleteGroup = async () => {
     if (!isCommissioner) {
@@ -817,6 +844,9 @@ const GroupPage = () => {
 
   const handleSaveGroupDetails = async () => {
     if (!group || !currentUser) return;
+
+    if (!validate()) return;
+
     if (group?.id) {
       dispatch(updateGroupRequest({
         group_id: group?.id,
@@ -940,12 +970,40 @@ const GroupPage = () => {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <BackButton
-          label="back to all groups"
-          fallback="/fantasy"
-          preferFallback
-          className="inline-flex items-center gap-2 text-[11px] font-semibold normal-case tracking-[0.12em] text-gray-300 transition hover:text-white"
-        />
+        <div className="flex items-center justify-between ">
+          <BackButton
+            label="back to all groups"
+            fallback="/fantasy"
+            preferFallback
+            className="inline-flex items-center justify-center gap-2 text-[11px] font-semibold normal-case py-2 tracking-[0.12em] text-gray-300 transition hover:text-white"
+          />
+          <button
+            type="button"
+            onClick={handleOpenEditGroup}
+            className="inline-flex items-center justify-center rounded-full border border-white/15 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50 sm:ml-auto"
+            aria-label="Edit group"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.862 4.487a2.25 2.25 0 1 1 3.182 3.182L8.818 18.896a4.5 4.5 0 0 1-1.591.999l-2.911.97.97-2.91a4.5 4.5 0 0 1 .999-1.592z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m19.5 7.125-2.625-2.625"
+              />
+            </svg>
+          </button>
+        </div>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-10 sm:flex-nowrap">
             <h1
@@ -954,32 +1012,6 @@ const GroupPage = () => {
             >
               {group?.name}
             </h1>
-            <button
-              type="button"
-              onClick={handleOpenEditGroup}
-              className="inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50 sm:ml-auto"
-              aria-label="Edit group"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.862 4.487a2.25 2.25 0 1 1 3.182 3.182L8.818 18.896a4.5 4.5 0 0 1-1.591.999l-2.911.97.97-2.91a4.5 4.5 0 0 1 .999-1.592z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m19.5 7.125-2.625-2.625"
-                />
-              </svg>
-            </button>
           </div>
           {group?.description && <p className="text-sm text-gray-400">{group.description}</p>}
         </div>
@@ -1655,6 +1687,11 @@ const GroupPage = () => {
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Group name"
                 />
+                {errors.name && (
+                  <span className="text-xs font-medium text-red-400">
+                    {errors.name}
+                  </span>
+                )}
               </label>
 
               <label className="flex flex-col gap-2">
@@ -1667,6 +1704,11 @@ const GroupPage = () => {
                   className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="What's this group about?"
                 />
+                {errors.description && (
+                  <span className="text-xs font-medium text-red-400">
+                    {errors.description}
+                  </span>
+                )}
               </label>
 
               <div className="flex justify-end gap-2 pt-2">

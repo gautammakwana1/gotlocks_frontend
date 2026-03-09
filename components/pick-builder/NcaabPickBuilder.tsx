@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
-import { formatDateTime, isPast } from "@/lib/utils/date";
+import { formatDateTime } from "@/lib/utils/date";
 import {
     DEFAULT_ELIGIBLE_WINDOW_DAYS,
-    filterEligibleGames,
-    filterUpcomingWindowGames,
 } from "@/lib/utils/games";
 import {
     normalizeOddToLeg,

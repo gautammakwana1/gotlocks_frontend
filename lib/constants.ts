@@ -193,3 +193,21 @@ export const ODDS_BRACKETS = [
     color: "from-[#F07B00]/70 via-[#F07B00]/35 to-[#F07B00]/15",
   },
 ] as const;
+
+export const RESTRICTED_WORDS = [
+  "fuck",
+  "shit",
+  "bitch",
+  "asshole",
+  "bastard",
+  "damn",
+  "dick",
+  "piss",
+  "crap",
+  "slut",
+  "whore",
+  "porn",
+  "sex",
+  "nude",
+  "xxx"
+];

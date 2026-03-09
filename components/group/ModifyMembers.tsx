@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CurrentUser, Member } from "@/lib/interfaces/interfaces";
 import Link from "next/link";
 import Image from "next/image";
+import { UserIcon } from "../layout/MainTabBar";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -117,15 +118,15 @@ const MemberCard = ({
 }) => {
     const displayName = formatDisplayName(member.profiles?.username);
     const memberProfileImage = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
-    const initials =
-        displayName.trim().length > 0
-            ? displayName
-                .split(" ")
-                .map((segment) => segment.charAt(0))
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()
-            : "??";
+    // const initials =
+    //     displayName.trim().length > 0
+    //         ? displayName
+    //             .split(" ")
+    //             .map((segment) => segment.charAt(0))
+    //             .join("")
+    //             .slice(0, 2)
+    //             .toUpperCase()
+    //         : "??";
     const showActions = showPromote || showLeave || Boolean(state?.error);
 
     return (
@@ -159,9 +160,7 @@ const MemberCard = ({
                             unoptimized
                         />
                     ) : (
-                        <span className="tracking-wide">
-                            {initials}
-                        </span>
+                        <UserIcon className="h-8 w-8 text-white/80 sm:h-9 sm:w-9" />
                     )}
                 </Link>
                 <div className="text-center">

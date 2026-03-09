@@ -14,6 +14,7 @@ import Link from "next/link";
 import { formatDateTime } from "@/lib/utils/date";
 import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
+import { UserIcon } from "../layout/MainTabBar";
 
 type Props = {
     group: Group | null;
@@ -200,7 +201,7 @@ const RankCell = ({
     user_id: string;
 }) => {
     const displayName = username ?? user_id ?? "Member";
-    const initials = displayName.slice(0, 2).toUpperCase();
+    // const initials = displayName.slice(0, 2).toUpperCase();
     const profileImg = profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${profile_image}` : "";
     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
 
@@ -229,9 +230,7 @@ const RankCell = ({
                             unoptimized
                         />
                     ) : (
-                        <span className="tracking-wide">
-                            {initials}
-                        </span>
+                        <UserIcon className="h-6 w-6 text-white/80 sm:h-9 sm:w-9" />
                     )}
                 </div>
                 <div

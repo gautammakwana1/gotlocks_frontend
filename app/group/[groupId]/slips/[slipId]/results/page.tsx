@@ -16,6 +16,7 @@ import { formatDateTime } from "@/lib/utils/date";
 import Image from "next/image";
 import { isSlipFinal } from "@/lib/slips/state";
 import SlipShareModal from "@/components/slips/SlipShareModal";
+import { UserIcon } from "@/components/layout/MainTabBar";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -54,15 +55,6 @@ const normalizeResult = (result: string | null | undefined) =>
     (result ?? "pending") as keyof typeof PICK_RESULT_ACCENTS;
 
 type SlipResultsTab = "group" | "actions";
-
-const getMemberInitials = (name?: string | null) => {
-    if (!name) return "??";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] ?? "";
-    const second =
-        parts.length > 1 ? parts[parts.length - 1][0] : parts[0]?.[1] ?? "";
-    return `${first}${second}`.toUpperCase() || "??";
-};
 
 const deepJaggedStyle: CSSProperties = {
     clipPath: JAGGED_CLIP_PATH,
@@ -418,10 +410,10 @@ const SlipResultsPage = () => {
                                                     const resultLabel =
                                                         resolvedResult === "not_found" ? "n/a" : resolvedResult;
                                                     const accent = PICK_RESULT_ACCENTS[resolvedResult];
-                                                    const displayName =
-                                                        member.profiles?.username ?? "Member";
+                                                    // const displayName =
+                                                    //     member.profiles?.username ?? "Member";
                                                     const profileImg = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : "";
-                                                    const initials = getMemberInitials(displayName);
+                                                    // const initials = getMemberInitials(displayName);
                                                     const displayPick = pick.description ?? "No pick was submitted";
                                                     const [matchupSegment, ...lineSegments] = displayPick.split(
                                                         DASH_SEPARATOR
@@ -469,7 +461,7 @@ const SlipResultsPage = () => {
                                                                                 unoptimized
                                                                             />
                                                                         ) : (
-                                                                            <span>{initials}</span>
+                                                                            <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                                         )}
                                                                     </div>
                                                                     <span

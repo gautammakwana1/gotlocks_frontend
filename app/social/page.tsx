@@ -10,6 +10,7 @@ import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { formatDateTime } from "@/lib/utils/date";
+import { UserIcon } from "@/components/layout/MainTabBar";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -255,7 +256,8 @@ const SocialPage = () => {
         items: Picks,
         emptyCopy: string,
         showReactions = true,
-        showTopBorder = true
+        showTopBorder = true,
+        showResult = true,
     ) => (
         <div
             className={`-mx-5 divide-y divide-white/10 overflow-y-auto sm:mx-0 
@@ -265,7 +267,7 @@ const SocialPage = () => {
         >
             {items.map((item, index) => {
                 if (!currentUser?.userId) return;
-                const showResultChip = item.result && item.result !== "pending";
+                const showResultChip = showResult && item.result && item.result !== "pending";
                 const isCollapsed = Boolean(collapsedPicks[item.id]);
                 const resultLabel = item.result === "not_found" ? "n/a" : item.result;
                 const username = item?.profiles?.username ?? "";
@@ -357,9 +359,7 @@ const SocialPage = () => {
                                             unoptimized
                                         />
                                     ) : (
-                                        <span className="tracking-wide">
-                                            {item?.profiles?.username ? item?.profiles?.username.slice(0, 2) : "UR"}
-                                        </span>
+                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-7 sm:w-7" />
                                     )}
                                 </div>
                                 <div className="min-w-0">
@@ -685,7 +685,9 @@ const SocialPage = () => {
                             topHitsScope === "following"
                                 ? "No recent wins from the people you follow yet."
                                 : "No winning posts in the last day. Check back soon.",
-                            false
+                            true,
+                            true,
+                            false,
                         )}
                     </section>
                 )}
@@ -695,11 +697,17 @@ const SocialPage = () => {
                         {forYouScope === "posts"
                             ? renderFeedItems(
                                 forYouFeed,
-                                "No pending public posts yet. Share a pick from the builder to light this up."
+                                "No pending public posts yet. Share a pick from the builder to light this up.",
+                                true,
+                                true,
+                                false,
                             )
                             : renderFeedItems(
                                 feedItems,
-                                "No reacted posts yet. Tap up or down on a post to save it here."
+                                "No reacted posts yet. Tap up or down on a post to save it here.",
+                                true,
+                                true,
+                                false,
                             )}
                     </section>
                 )}
@@ -711,7 +719,9 @@ const SocialPage = () => {
                             feedItems.length === 0
                                 ? "Follow members to see their posts land here."
                                 : "No posts from people you follow yet. Check back after they drop picks.",
-                            true
+                            true,
+                            true,
+                            false,
                         )}
                     </section>
                 )}

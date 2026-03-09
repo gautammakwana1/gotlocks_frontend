@@ -29,7 +29,7 @@ const isRouteHidden = (pathname: string | null) => {
     return HIDDEN_ROUTES.some((route) => pathname.startsWith(route));
 };
 
-const HomeIcon = ({ className }: TabIconProps) => (
+export const HomeIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -46,7 +46,7 @@ const HomeIcon = ({ className }: TabIconProps) => (
     </svg>
 );
 
-const SparkIcon = ({ className }: TabIconProps) => (
+export const SparkIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -63,7 +63,7 @@ const SparkIcon = ({ className }: TabIconProps) => (
     </svg>
 );
 
-const PeopleIcon = ({ className }: TabIconProps) => (
+export const PeopleIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -79,7 +79,7 @@ const PeopleIcon = ({ className }: TabIconProps) => (
     </svg>
 );
 
-const GlobeIcon = ({ className }: TabIconProps) => (
+export const GlobeIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -95,7 +95,7 @@ const GlobeIcon = ({ className }: TabIconProps) => (
     </svg>
 );
 
-const UserIcon = ({ className }: TabIconProps) => (
+export const UserIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"

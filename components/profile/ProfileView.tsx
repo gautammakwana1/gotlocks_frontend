@@ -21,6 +21,7 @@ import { getPickPoints } from "@/lib/utils/scoring";
 import ScoringModal from "../modals/ScoringModal";
 import Link from "next/link";
 import Image from "next/image";
+import { UserIcon } from "../layout/MainTabBar";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -65,16 +66,16 @@ export type FollowPanelUser = {
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 
-const buildInitials = (handle: string) => {
-    const segments = handle.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-    const source = segments.length ? segments : [handle];
-    const initials = source
-        .map((segment) => segment.charAt(0))
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-    return initials || "GL";
-};
+// const buildInitials = (handle: string) => {
+//     const segments = handle.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+//     const source = segments.length ? segments : [handle];
+//     const initials = source
+//         .map((segment) => segment.charAt(0))
+//         .join("")
+//         .slice(0, 2)
+//         .toUpperCase();
+//     return initials || "GL";
+// };
 
 const normalizeResult = (result: PickResult): NonNullable<PickResult> =>
     (result ?? "pending") as NonNullable<PickResult>;
@@ -104,6 +105,7 @@ const ProfileView = ({
     );
     const [page, setPage] = useState(1);
     const observer = useRef<IntersectionObserver | null>(null);
+    const followPanelRef = useRef<HTMLDivElement | null>(null);
     const limit = 10;
 
     const { postPicks, deleteMessage, loading: postLoader, message, hasMore } = useSelector((state: RootState) => state.pick);
@@ -323,6 +325,29 @@ const ProfileView = ({
         setFollowPanelOpen(false);
     }, []);
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!followPanelOpen) return;
+
+            const target = event.target;
+
+            if (!(target instanceof Node)) return;
+
+            if (
+                followPanelRef.current &&
+                !followPanelRef.current.contains(target)
+            ) {
+                closeFollowPanel();
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [followPanelOpen, closeFollowPanel]);
+
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -500,6 +525,7 @@ const ProfileView = ({
                 onFollowingClick={openFollowingPanel}
             />
             <div
+                ref={followPanelRef}
                 className={`fixed inset-y-0 right-0 z-50 w-full max-w-[420px] border-l border-white/10 bg-black/95 shadow-2xl transition-all duration-300 ease-out sm:bg-[var(--surface-1)] sm:backdrop-blur ${followPanelOpen
                     ? "translate-x-0 opacity-100"
                     : "translate-x-full opacity-0 pointer-events-none"
@@ -526,13 +552,22 @@ const ProfileView = ({
                         </button>
                     </div>
                     <div className="px-5 pt-4">
-                        <div className="grid w-full grid-cols-2 border-b border-white/10">
+                        <div className="relative grid w-full grid-cols-2 border-b border-white/10">
+                            <div
+                                className={`absolute bottom-0 h-[2px] w-1/2 bg-white transition-transform duration-300 ease-out`}
+                                style={{
+                                    transform:
+                                        followPanelTab === "followers"
+                                            ? "translateX(0%)"
+                                            : "translateX(100%)",
+                                }}
+                            />
                             <button
                                 type="button"
                                 onClick={() => setFollowPanelTab("followers")}
-                                className={`-mb-px w-full border-b-2 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] transition sm:text-[11px] ${followPanelTab === "followers"
-                                    ? "border-white text-white"
-                                    : "border-transparent text-[var(--text-secondary)] hover:text-white"
+                                className={`-mb-px w-full px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] transition sm:text-[11px] ${followPanelTab === "followers"
+                                    ? "text-white"
+                                    : "text-[var(--text-secondary)] hover:text-white"
                                     }`}
                             >
                                 followers
@@ -540,9 +575,9 @@ const ProfileView = ({
                             <button
                                 type="button"
                                 onClick={() => setFollowPanelTab("following")}
-                                className={`-mb-px w-full border-b-2 px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] transition sm:text-[11px] ${followPanelTab === "following"
-                                    ? "border-white text-white"
-                                    : "border-transparent text-[var(--text-secondary)] hover:text-white"
+                                className={`-mb-px w-full px-2 py-3 text-center text-[10px] font-semibold tracking-[0.12em] transition sm:text-[11px] ${followPanelTab === "following"
+                                    ? "text-white"
+                                    : "text-[var(--text-secondary)] hover:text-white"
                                     }`}
                             >
                                 following
@@ -555,7 +590,7 @@ const ProfileView = ({
                                 {followPanelUsers.map((user) => {
                                     const label = user.user.username ?? "Member";
                                     const handle = (user.user.username ?? "member").toLowerCase();
-                                    const initials = buildInitials(label);
+                                    // const initials = buildInitials(label);
                                     const profilePicture = user.user?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.user?.profile_image}` : undefined;
                                     return (
                                         <li
@@ -579,9 +614,7 @@ const ProfileView = ({
                                                             unoptimized
                                                         />
                                                     ) : (
-                                                        <span className="tracking-wide">
-                                                            {initials}
-                                                        </span>
+                                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                     )}
                                                 </div>
                                                 <div className="min-w-0">

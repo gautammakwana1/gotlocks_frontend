@@ -2,6 +2,7 @@
 
 import {
     ReactNode,
+    useCallback,
     useEffect,
     useId,
     useMemo,
@@ -15,6 +16,12 @@ import { CurrentUser, Profile, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { UserIcon } from "../layout/MainTabBar";
+
+interface FormErrors {
+    username?: string;
+}
 
 type ProfileHeaderStats = {
     posts: number;
@@ -78,13 +85,17 @@ type ProfileAvatarProps = {
     avatarUrl?: string | null;
     displayName: string;
     initials: string;
+    setIsAvatarOpen?: (isOpen: boolean) => void;
 };
 
-const ProfileAvatar = ({ avatarUrl, displayName, initials }: ProfileAvatarProps) => (
+const ProfileAvatar = ({ avatarUrl, displayName, setIsAvatarOpen }: ProfileAvatarProps) => (
     <div className="relative -ml-1 flex h-18 w-18 items-center justify-center sm:h-22 sm:w-22">
         <div className="absolute inset-0 rounded-full bg-gradient-to-br from-sky-200/60 via-sky-500/20 to-white/10" />
         <div className="absolute inset-[6px] rounded-full border border-sky-200/40 bg-black/40" />
-        <div className="relative z-10 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-sky-300/40 bg-sky-500/20 text-white sm:h-18 sm:w-18">
+        <div
+            className="relative z-10 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-sky-300/40 bg-sky-500/20 text-white sm:h-18 sm:w-18"
+            onClick={setIsAvatarOpen ? () => setIsAvatarOpen(true) : undefined}
+        >
             {avatarUrl ? (
                 <Image
                     src={avatarUrl}
@@ -97,9 +108,7 @@ const ProfileAvatar = ({ avatarUrl, displayName, initials }: ProfileAvatarProps)
                     unoptimized
                 />
             ) : (
-                <span className="text-base font-semibold uppercase tracking-[0.18em] sm:text-lg">
-                    {initials}
-                </span>
+                <UserIcon className="h-8 w-8 text-white/80 sm:h-10 sm:w-10" />
             )}
         </div>
     </div>
@@ -171,6 +180,8 @@ const ProfileHeader = ({
     const avatarInputId = useId();
     const [isEditing, setIsEditing] = useState(false);
     const [username, setUsername] = useState(user?.username || "");
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [isAvatarOpen, setIsAvatarOpen] = useState(false);
     const avatarMenuRef = useRef<HTMLDetailsElement | null>(null);
     const settingsMenuRef = useRef<HTMLDetailsElement | null>(null);
     const displayName = user.username ?? user.full_name ?? "Member";
@@ -249,18 +260,38 @@ const ProfileHeader = ({
         setIsEditing(true);
     };
 
-    const handleSave = () => {
-        const formData = new FormData();
-        formData.append("username", username);
+    const validate = useCallback((): boolean => {
+        const nextErrors: FormErrors = {};
 
-        if (username === user?.username) {
+        if (!username?.trim()) {
+            nextErrors.username = "Username is required.";
+        }
+
+        const containsNameRestricted = checkAnyRestrictedWords(username);
+        if (containsNameRestricted) {
+            nextErrors.username = "Username contains inappropriate language.";
+        }
+
+        setErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    }, [username]);
+
+    const handleSave = (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!validate()) return;
+        const cleanUsername = username.trim();
+
+        const formData = new FormData();
+        formData.append("username", cleanUsername);
+
+        if (cleanUsername === user?.username) {
             setIsEditing(false);
             return;
         }
 
         dispatch(updateProfileRequest(formData));
         const storedUser = getLocalStorage<CurrentUser>("currentUser");
-        setLocalStorage("currentUser", { ...storedUser, username: username });
+        setLocalStorage("currentUser", { ...storedUser, username: cleanUsername });
 
         setIsEditing(false);
     };
@@ -268,6 +299,7 @@ const ProfileHeader = ({
     const handleCancel = () => {
         setIsEditing(false);
         setUsername(user?.username || "");
+        setErrors({});
     };
 
     const renderFollowControls = (className = "") => {
@@ -358,6 +390,16 @@ const ProfileHeader = ({
                                                         remove photo
                                                     </button>
                                                 )}
+                                                <button
+                                                    type="button"
+                                                    onClick={(event) => {
+                                                        setIsAvatarOpen(true);
+                                                        closeDetailsMenu(event);
+                                                    }}
+                                                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-red-200 transition hover:bg-white/10"
+                                                >
+                                                    view photo
+                                                </button>
                                             </div>
                                         </details>
                                     ) : (
@@ -366,6 +408,7 @@ const ProfileHeader = ({
                                                 avatarUrl={avatarUrl}
                                                 displayName={displayName}
                                                 initials={initials}
+                                                setIsAvatarOpen={setIsAvatarOpen}
                                             />
                                             {showStats && (
                                                 <span className="sr-only">Level {progress.level}</span>
@@ -498,7 +541,7 @@ const ProfileHeader = ({
                                                     <span className="text-[10px] font-semibold text-white/70 sm:text-[11px]">
                                                         {item.label}
                                                     </span>
-                                                    <span className={`text-sm font-bold sm:text-base ${item.tone}`}>
+                                                    <span className={`text-[11px] font-bold sm:text-base ${item.tone}`}>
                                                         {item.value}
                                                     </span>
                                                 </div>
@@ -577,11 +620,17 @@ const ProfileHeader = ({
                             value={username}
                             onChange={(event) => {
                                 setUsername(event.target.value);
+                                setErrors((prev) => ({ ...prev, username: undefined }));
                             }}
                             placeholder="username"
                             autoFocus
                             className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-sky-400/70"
                         />
+                        {errors.username && (
+                            <span className="text-xs font-medium text-red-400">
+                                {errors.username}
+                            </span>
+                        )}
                         <div className="flex justify-center gap-3">
                             <button
                                 type="button"
@@ -598,6 +647,37 @@ const ProfileHeader = ({
                             </button>
                         </div>
                     </form>
+                </ModalShell>
+            )}
+
+            {isAvatarOpen && profileVisible && (
+                <ModalShell onClose={() => setIsAvatarOpen(false)} maxWidthClass="max-w-sm">
+                    <div
+                        className="relative max-h-[90vh] max-w-[90vw]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {avatarUrl ? (
+                            <Image
+                                src={avatarUrl}
+                                alt={`${displayName} avatar`}
+                                className="h-full w-full object-cover"
+                                width={56}
+                                height={56}
+                                draggable={false}
+                                onDragStart={(e) => e.preventDefault()}
+                                unoptimized
+                            />
+                        ) : (
+                            <UserIcon className="h-full w-full text-white/80 sm:h-full sm:w-full" />
+                        )}
+
+                        <button
+                            onClick={() => setIsAvatarOpen(false)}
+                            className="absolute -right-5 -top-5 flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-white shadow-lg hover:bg-white/10"
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </ModalShell>
             )}
         </header>

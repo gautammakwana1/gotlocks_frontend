@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/utils/date";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { Pick, PickReaction, PickResult, Picks } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
+import { UserIcon } from "../layout/MainTabBar";
 
 type FeedListProps = {
     items: Picks | null;
@@ -107,8 +108,8 @@ const extractMatchup = (description?: string | null) => {
     return match ? match[1].trim() : null;
 };
 
-const FEED_MAX_VISIBLE = 7;
-const FEED_CARD_EST_HEIGHT = 220;
+// const FEED_MAX_VISIBLE = 7;
+// const FEED_CARD_EST_HEIGHT = 220;
 
 const FeedList = ({
     items,
@@ -255,9 +256,7 @@ const FeedList = ({
                                             unoptimized
                                         />
                                     ) : (
-                                        <span className="tracking-wide">
-                                            {item?.profiles?.username ? item?.profiles?.username.slice(0, 2) : "UR"}
-                                        </span>
+                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                     )}
                                 </div>
                                 <div className="min-w-0">

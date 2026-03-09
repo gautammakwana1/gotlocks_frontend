@@ -1,12 +1,10 @@
 "use client";
 
-import { Pick, PickReaction, PickResult, PickType, RootState } from "@/lib/interfaces/interfaces";
-import { clearCreatePickReactionMessage, createPickReactionRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
+import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/interfaces";
 import { formatDateTime } from "@/lib/utils/date";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 
 type PostCardProps = {
     pick: Pick;
@@ -184,53 +182,25 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: 
             : normalizedSourceTabLabel
         : "single pick post";
     const showComboLegs = Boolean(pick.is_combo && pick.legs && pick.legs.length > 0);
-    const isSelfProfile = mode === "self";
-    const profilePicture = pick.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${pick.profiles?.profile_image}` : undefined;
+    // const isSelfProfile = mode === "self";
+    // const profilePicture = pick.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${pick.profiles?.profile_image}` : undefined;
     const up = pick.up ?? 0;
     const down = pick.down ?? 0;
     const userReaction = pick.reaction ?? undefined;
     const upActive = userReaction === "up";
     const downActive = userReaction === "down";
-    const displayLabel =
-        displayName.length > 12 ? `${displayName.slice(0, 12)}\u2026` : displayName;
+    // const displayLabel =
+    //     displayName.length > 12 ? `${displayName.slice(0, 12)}\u2026` : displayName;
 
-    const handleReaction = (reaction: PickReaction) => {
-        if (reaction && pick.id) {
-            dispatch(createPickReactionRequest({ pick_id: pick.id, action: reaction === "up" ? "liked" : "dislike" }));
-        }
-    };
+    // const handleReaction = (reaction: PickReaction) => {
+    //     if (reaction && pick.id) {
+    //         dispatch(createPickReactionRequest({ pick_id: pick.id, action: reaction === "up" ? "liked" : "dislike" }));
+    //     }
+    // };
 
     return (
         <div className="py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
-                <div className="flex min-w-0 items-center gap-2">
-                    <div className="-ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100">
-                            {profilePicture ? (
-                                <Image
-                                    src={profilePicture}
-                                    alt="Profile image"
-                                    width={56}
-                                    height={56}
-                                    className={`tracking-wide rounded-full object-cover h-8 w-8`}
-                                    draggable={false}
-                                    onDragStart={(e) => e.preventDefault()}
-                                    unoptimized
-                                />
-                            ) : (
-                                <span className="tracking-wide">
-                                    {displayName.slice(0, 2)}
-                                </span>
-                            )}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[var(--app-text)]">
-                                <span className="sm:hidden">{displayLabel}</span>
-                                <span className="hidden sm:inline">{displayName}</span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 px-5 pb-3 sm:px-6">
                 <div className="flex flex-wrap items-center justify-end gap-2">
                     <div className="flex items-center gap-2">
                         {collapsed && (

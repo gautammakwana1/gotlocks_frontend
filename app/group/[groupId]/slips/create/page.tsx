@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { fromLocalInputValue, toLocalInputValue, formatDateTime } from "@/lib/utils/date";
@@ -12,6 +12,7 @@ import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 
 type Step = 1 | 2;
 type DeadlinesOverviewModalProps = {
@@ -19,6 +20,10 @@ type DeadlinesOverviewModalProps = {
     onClose: () => void;
     windowDays: number;
 };
+
+interface FormErrors {
+    name?: string;
+}
 
 const SPORTS = ["NFL", "NBA", "NCAAF", "NCAAB", "NHL", "MLB", "Soccer"];
 const WINDOW_DAY_OPTIONS = [1, 2, 3, 4, 5];
@@ -106,6 +111,7 @@ const SlipCreationPage = () => {
         windowDays: DEFAULT_ELIGIBLE_WINDOW_DAYS,
         sideLeaderboardId: null as string | null,
     });
+    const [errors, setErrors] = useState<FormErrors>({});
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
     const { slip, loading: slipLoading, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
@@ -150,7 +156,7 @@ const SlipCreationPage = () => {
                 duration: 3000
             });
             dispatch(clearCreateSlipMessage());
-            // setSlipCreating(false)
+            setSlipCreating(false)
         }
     }, [slipLoading, slipMessage, slipError, dispatch, slip, setToast, group, router]);
 
@@ -217,6 +223,26 @@ const SlipCreationPage = () => {
         }
     }, [activeSideLeaderboards, form.sideLeaderboardId, secondaryLeaderboardsEnabled]);
 
+    const validate = useCallback((): boolean => {
+        const nextErrors: FormErrors = {};
+
+        if (!form.name?.trim()) {
+            nextErrors.name = "Slip name is required.";
+        }
+
+        if (form.name.length > 15) {
+            nextErrors.name = "Slip name must be 15 characters or less.";
+        }
+
+        const containsNameRestricted = checkAnyRestrictedWords(form.name);
+        if (containsNameRestricted) {
+            nextErrors.name = "Slip name contains inappropriate language.";
+        }
+
+        setErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    }, [form]);
+
     if (!group || !currentUser) {
         // router.replace("/home");
         return null;
@@ -260,6 +286,7 @@ const SlipCreationPage = () => {
     };
 
     const handleNext = () => {
+        if (!validate()) return;
         if (!canAdvance()) {
             if (isNameMissing) setShowNameError(true);
             if (isSportsMissing) setShowSportsError(true);
@@ -269,7 +296,10 @@ const SlipCreationPage = () => {
     };
 
     const handleSubmit = () => {
-        const slipType = slipIsFantasy ? "fantasy" : "vibe"
+        const slipType = slipIsFantasy ? "fantasy" : "vibe";
+
+        if (!validate()) return;
+
         setSlipCreating(true);
         dispatch(createSlipRequest({
             group_id: group.id,
@@ -352,11 +382,16 @@ const SlipCreationPage = () => {
                                         }`}
                                     placeholder={slipNameSuggestion}
                                 />
-                                {showNameError && !form.name.trim() && (
+                                {errors.name && (
+                                    <span className="text-[11px] text-rose-300">
+                                        {errors.name}
+                                    </span>
+                                )}
+                                {/* {showNameError && !form.name.trim() && (
                                     <p className="text-[11px] text-rose-300">
                                         Add a slip name to continue.
                                     </p>
-                                )}
+                                )} */}
                             </div>
 
                             <div className="h-px bg-white/10" />

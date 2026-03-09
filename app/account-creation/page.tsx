@@ -11,6 +11,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { AuthSelector, RegisterPayload } from "@/lib/interfaces/interfaces";
 import { EyeClosedIcon, EyeIcon } from "lucide-react";
 import CustomDatePicker from "@/components/ui/CustomDatePicker";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 
 interface FormData {
   firstName?: string;
@@ -118,6 +119,11 @@ const AccountCreationPage = () => {
       nextErrors.username = "Pick a unique username.";
     } else if (formData.username.trim().length < 3) {
       nextErrors.username = "Username must be at least 3 characters.";
+    }
+
+    const containsNameRestricted = checkAnyRestrictedWords(formData.username);
+    if (containsNameRestricted) {
+      nextErrors.username = "Username contains inappropriate language.";
     }
 
     setErrors(nextErrors);

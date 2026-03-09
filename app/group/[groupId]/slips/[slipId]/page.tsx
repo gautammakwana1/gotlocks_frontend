@@ -8,6 +8,7 @@ import {
     type ReactNode,
     type CSSProperties,
     useRef,
+    useCallback,
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
@@ -33,12 +34,18 @@ import { canCommissionerReview, canFinalize, canUserEditSlipPicks, isSlipFinal, 
 import { createPortal } from "react-dom";
 import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { UserIcon } from "@/components/layout/MainTabBar";
 
 type BuilderState = {
     mode: "create" | "edit";
     pick?: Pick;
     initialLeague?: League | string;
 };
+
+interface FormErrors {
+    name?: string;
+}
 
 type SlipTab = "picks" | "review" | "actions";
 
@@ -69,15 +76,6 @@ const sortPicksByOdds = (picks: Pick[]) => {
         return aValue - bValue;
     });
     return sorted;
-};
-
-const getMemberInitials = (name?: string | null) => {
-    if (!name) return "??";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] ?? "";
-    const second =
-        parts.length > 1 ? parts[parts.length - 1][0] : parts[0]?.[1] ?? "";
-    return `${first}${second}`.toUpperCase() || "??";
 };
 
 const EM_DASH = "\u2014";
@@ -131,8 +129,8 @@ const SlipDetailsPage = () => {
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
     const activeSlip = group?.active_slip ?? null;
     const members = useMemo(() => group?.members ?? [], [group?.members]);
-    const { slip: slipState, loading: slipLoader, message: slipMessage } = useSelector((state: SlipSelector) => state.slip);
-    const { pick: pickState, loading: pickLoader, message: pickMessage } = useSelector((state: PickSelector) => state.pick);
+    const { slip: slipState, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
+    const { pick: pickState, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: PickSelector) => state.pick);
     const slipData = slipState as { slips?: Slips } | null;
     const pickData = pickState as { picks?: Picks } | null;
     const {
@@ -210,6 +208,7 @@ const SlipDetailsPage = () => {
     const [builderState, setBuilderState] = useState<BuilderState | null>(null);
     const [activeTab, setActiveTab] = useState<SlipTab>("picks");
     const [isRenamingSlip, setIsRenamingSlip] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
     const [isDeadlinesModalOpen, setIsDeadlinesModalOpen] = useState(false);
     const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
     const [reopenDeadlineDraft, setReopenDeadlineDraft] = useState("");
@@ -263,7 +262,7 @@ const SlipDetailsPage = () => {
 
     useEffect(() => {
         if (!pickLoader && pickMessage) {
-            dispatch(clearUpdatePicksMessage())
+            dispatch(clearUpdatePicksMessage());
             setToast({
                 id: Date.now(),
                 type: "success",
@@ -274,7 +273,16 @@ const SlipDetailsPage = () => {
                 dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
             }
         }
-    }, [pickLoader, pickMessage, setToast, params.slipId, dispatch]);
+        if (!pickLoader && pickError) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: pickError,
+                duration: 3000,
+            })
+            dispatch(clearUpdatePicksMessage());
+        }
+    }, [pickLoader, pickMessage, pickError, setToast, params.slipId, dispatch]);
 
     useEffect(() => {
         if (!slipLoader && slipMessage) {
@@ -287,7 +295,16 @@ const SlipDetailsPage = () => {
             dispatch(clearUpdateSlipsMessage())
             dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
         }
-    }, [setToast, slipLoader, slipMessage, dispatch, params.groupId]);
+        if (!slipLoader && slipError) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: slipError,
+                duration: 3000,
+            })
+            dispatch(clearUpdateSlipsMessage());
+        }
+    }, [setToast, slipLoader, slipMessage, slipError, dispatch, params.groupId]);
 
     useEffect(() => {
         if (!slip) return;
@@ -471,6 +488,26 @@ const SlipDetailsPage = () => {
         }
     }, [activeTab, showActionsTab, showReviewTab]);
 
+    const validate = useCallback((): boolean => {
+        const nextErrors: FormErrors = {};
+
+        if (!editingName?.trim()) {
+            nextErrors.name = "Slip name is required.";
+        }
+
+        if (editingName.length > 15) {
+            nextErrors.name = "Slip name must be 15 characters or less.";
+        }
+
+        const containsNameRestricted = checkAnyRestrictedWords(editingName);
+        if (containsNameRestricted) {
+            nextErrors.name = "Slip name contains inappropriate language.";
+        }
+
+        setErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    }, [editingName]);
+
     if (!group || !currentUser || !slip) {
         return null;
     }
@@ -550,8 +587,8 @@ const SlipDetailsPage = () => {
         : totalPossibleLabel;
     const deadlineLabel = pickDeadlinePassed ? "Locked at" : "Pick deadline";
     const deadlineVariant = pickDeadlinePassed ? "alert" : "default";
-    const userDisplayName = currentUser.username ?? "You";
-    const userInitials = getMemberInitials(userDisplayName);
+    // const userDisplayName = currentUser.username ?? "You";
+    // const userInitials = getMemberInitials(userDisplayName);
     const userMember = members.find(
         m => m.user_id === currentUser.userId
     );
@@ -692,20 +729,13 @@ const SlipDetailsPage = () => {
     const cancelRenameSlip = () => {
         setEditingName(slip.name);
         setIsRenamingSlip(false);
+        setErrors({});
     };
 
     const handleRenameSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (!validate()) return;
         const trimmedName = editingName.trim();
-        if (!trimmedName) {
-            setToast({
-                id: Date.now(),
-                type: "error",
-                message: "Slip name cannot be empty.",
-                duration: 3000
-            });
-            return;
-        }
         if (slip.id && group.id) {
             dispatch(updateSlipsRequest({ group_id: group.id, slip_id: slip.id, name: trimmedName }));
         }
@@ -1038,9 +1068,7 @@ const SlipDetailsPage = () => {
                                                             unoptimized
                                                         />
                                                     ) : (
-                                                        <span className="tracking-wide">
-                                                            {userInitials}
-                                                        </span>
+                                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                     )}
                                                 </div>
                                                 <div className="min-w-0">
@@ -1113,7 +1141,7 @@ const SlipDetailsPage = () => {
                                                 {otherMembers.map((member) => {
                                                     const picks = member.user_id ? picksByMember.get(member.user_id) : [];
                                                     const displayName = member.profiles?.username ?? "Member";
-                                                    const initials = getMemberInitials(displayName);
+                                                    // const initials = getMemberInitials(displayName);
                                                     const memberProfilePicture = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
 
                                                     return (
@@ -1133,9 +1161,7 @@ const SlipDetailsPage = () => {
                                                                                 unoptimized
                                                                             />
                                                                         ) : (
-                                                                            <span className="tracking-wide">
-                                                                                {initials}
-                                                                            </span>
+                                                                            <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                                         )}
                                                                     </div>
                                                                     <div className="min-w-0">
@@ -1461,7 +1487,7 @@ const SlipDetailsPage = () => {
                                                 <div className="space-y-4">
                                                     {reviewMembers.map(({ member, picks }) => {
                                                         const displayName = member.profiles?.username ?? "Member";
-                                                        const initials = getMemberInitials(displayName);
+                                                        // const initials = getMemberInitials(displayName);
                                                         const headerPick = picks[0];
                                                         const headerResult = headerPick
                                                             ? normalizePickResult(headerPick.result)
@@ -1513,9 +1539,7 @@ const SlipDetailsPage = () => {
                                                                                     unoptimized
                                                                                 />
                                                                             ) : (
-                                                                                <span className="tracking-wide">
-                                                                                    {initials}
-                                                                                </span>
+                                                                                <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                                             )}
                                                                         </div>
                                                                         <div className="min-w-0">
@@ -1979,6 +2003,11 @@ const SlipDetailsPage = () => {
                                     className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                                     placeholder="Slip name"
                                 />
+                                {errors.name && (
+                                    <span className="text-[11px] text-rose-300">
+                                        {errors.name}
+                                    </span>
+                                )}
                             </label>
                             <div className="flex justify-end gap-2 pt-2">
                                 <button

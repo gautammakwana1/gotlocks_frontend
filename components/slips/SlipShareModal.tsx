@@ -7,6 +7,7 @@ import Image from "next/image";
 import { toPng } from "html-to-image";
 import { Member, Pick, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
+import { UserIcon } from "../layout/MainTabBar";
 
 type SlipShareModalProps = {
     open: boolean;
@@ -24,15 +25,6 @@ const deepJaggedStyle = {
     "--jagged-valley": "34px",
     "--jagged-tip": "0px",
 } as CSSProperties;
-
-const getMemberInitials = (name?: string | null) => {
-    if (!name) return "??";
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    const first = parts[0]?.[0] ?? "";
-    const second =
-        parts.length > 1 ? parts[parts.length - 1][0] : parts[0]?.[1] ?? "";
-    return `${first}${second}`.toUpperCase() || "??";
-};
 
 const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalProps) => {
     const { setToast } = useToast();
@@ -149,7 +141,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                 <ul className="space-y-3 pb-3">
                                     {picksWithMembers.map(({ pick, member }) => {
                                         const displayName = member.profiles?.username ?? "Member";
-                                        const initials = getMemberInitials(displayName);
+                                        // const initials = getMemberInitials(displayName);
                                         const displayPick = pick.description ?? "No pick was submitted";
                                         const oddsCopy = pick.odds_bracket ?? PLACEHOLDER;
                                         const sourceTabLabel = (
@@ -176,9 +168,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                                                     unoptimized
                                                                 />
                                                             ) : (
-                                                                <span className="tracking-wide">
-                                                                    {initials}
-                                                                </span>
+                                                                <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                             )}
                                                         </div>
                                                     </div>
