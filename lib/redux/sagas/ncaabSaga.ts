@@ -27,7 +27,7 @@ function* handleFetchNCAABSchedule(action: PayloadAction<FetchNCAABSchedulePaylo
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/ncaab/ncaab-schedules-with-odds`,
+            `${API_BASE_URL}/leagues/ncaab/ncaab-schedules-with-odds`,
             {
                 params: { is_pick_of_day, date },
             }
@@ -45,7 +45,7 @@ function* handleFetchNCAABOdds(action: PayloadAction<FetchNCAABOddsPayload | und
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/ncaab/ncaab-odds`,
+            `${API_BASE_URL}/leagues/ncaab/ncaab-odds`,
             {
                 params: { match_id, is_live },
             }
@@ -63,7 +63,7 @@ function* handleValidateNCAABPick(action: PayloadAction<ValidateMyNCAABPickPaylo
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/ncaab/ncaab-bet-validate`,
+            `${API_BASE_URL}/leagues/ncaab/ncaab-bet-validate`,
             { match_id, external_pick_key, is_live }
         );
         const payload = response.data as { data?: unknown };

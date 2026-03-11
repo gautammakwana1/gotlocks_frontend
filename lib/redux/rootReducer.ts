@@ -9,6 +9,7 @@ import nbaReduce from "./slices/nbaSlice";
 import progressReducer from "./slices/progressSlice";
 import ncaabReducer from "./slices/ncaabSlice";
 import nhlReducer from "./slices/nhlSlice";
+import leaguesReducer from "./slices/leagueSlice";
 
 export const rootReducer = combineReducers({
 	user: authReducer,
@@ -21,6 +22,7 @@ export const rootReducer = combineReducers({
 	ncaab: ncaabReducer,
 	nhl: nhlReducer,
 	progress: progressReducer,
+	league: leaguesReducer,
 });
 
 export type RootReducer = ReturnType<typeof rootReducer>;

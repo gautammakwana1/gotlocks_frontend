@@ -202,21 +202,6 @@ const SocialPage = () => {
         [forYouBaseFeed]
     );
 
-    // const isFollowing = useCallback(
-    //     (followerId: string | undefined, targetUserId: string | undefined): boolean => {
-    //         if (!Array.isArray(followings) || followings.length === 0) {
-    //             return false;
-    //         }
-
-    //         return followings.some(
-    //             (f) =>
-    //                 f.follower_id === followerId &&
-    //                 f.following_id === targetUserId
-    //         );
-    //     },
-    //     [followings]
-    // );
-
     const toggleCollapsed = useCallback((pickId: string) => {
         setCollapsedPicks((prev) => ({
             ...prev,
@@ -435,11 +420,11 @@ const SocialPage = () => {
                                         }`}
                                 >
                                     <div
-                                        className={`order-2 flex w-full gap-2 sm:order-1 sm:w-[140px] sm:flex-col ${showComboLegs ? "sm:self-start" : "sm:self-stretch"
+                                        className={`order-2 flex w-full h-full gap-2 sm:order-1 sm:w-[140px] sm:h-[140px] sm:flex-col ${showComboLegs ? "sm:self-start" : "sm:self-stretch"
                                             }`}
                                     >
                                         <div
-                                            className={`w-full flex-1 rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
+                                            className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
                                                 } ${tierCardTone}`}
                                             style={tierCardStyle}
                                         >
@@ -451,7 +436,7 @@ const SocialPage = () => {
                                             </span>
                                         </div>
                                         <div
-                                            className={`w-full flex-1 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
+                                            className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
                                                 }`}
                                         >
                                             <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">

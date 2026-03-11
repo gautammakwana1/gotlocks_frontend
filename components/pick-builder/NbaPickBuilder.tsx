@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils/date";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBASchedules, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBAOdds, NBASchedules, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { cleatNbaPickValidateMessage, fetchNBAOddsRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
+import { cleatNbaPickValidateMessage, fetchDraftkingsNBAOddsRequest, fetchFanduelNBAOddsRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import FootballAnimation from "../animations/FootballAnimation";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
@@ -14,6 +14,8 @@ import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds,
 import { canUserEditSlipPicks } from "@/lib/slips/state";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { getShortTeamName } from "@/lib/utils/helpers";
+import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
+import ConfidenceDropdown from "../ui/ConfidenceDropdown";
 
 type GameOption = {
     id: string;
@@ -90,6 +92,64 @@ type Props = {
     allowAutoDateAdvance?: boolean;
     hideDateControls?: boolean;
     onDateOptionsChange?: (options: Array<{ key: string; label: string }>) => void;
+};
+
+const eventKey = (event: OddsData) =>
+    `${event.date.slice(0, 10)}|${event.teams.away.id}|${event.teams.home.id}`;
+
+const latestUpdatedAt = (snapshots: NBAOdds[]) =>
+    snapshots.reduce((latest, snapshot) => {
+        const currentTime = Date.parse(snapshot.updated);
+        const latestTime = Date.parse(latest);
+        if (Number.isNaN(currentTime)) return latest;
+        if (Number.isNaN(latestTime) || currentTime > latestTime) {
+            return snapshot.updated;
+        }
+        return latest;
+    }, "");
+
+const mergeOddsSnapshots = (...snapshots: NBAOdds[]): NBAOdds => {
+    const baseSnapshot = snapshots[0];
+
+    if (!baseSnapshot) {
+        return {
+            updated: "",
+            league: { id: "nba", name: "NBA", sport: "Basketball" },
+            sportsbook: { id: "multi", name: "Multiple" },
+            events: [],
+        };
+    }
+
+    const mergedEvents = new Map<string, OddsData>();
+
+    snapshots.forEach((snapshot) => {
+        snapshot.events.forEach((event) => {
+            const key = eventKey(event);
+            const existing = mergedEvents.get(key);
+            if (!existing) {
+                mergedEvents.set(key, { ...event, odds: [...event.odds] });
+                return;
+            }
+
+            const oddsById = new Map(existing.odds.map((odd) => [odd.id, odd]));
+            event.odds.forEach((odd) => {
+                if (!oddsById.has(odd.id)) oddsById.set(odd.id, odd);
+            });
+
+            mergedEvents.set(key, {
+                ...existing,
+                live: existing.live || event.live,
+                odds: [...oddsById.values()],
+            });
+        });
+    });
+
+    return {
+        updated: latestUpdatedAt(snapshots),
+        league: baseSnapshot.league,
+        sportsbook: { id: "multi", name: "Multiple" },
+        events: [...mergedEvents.values()],
+    };
 };
 
 const TAB_ORDER = [
@@ -505,8 +565,6 @@ const combineParlayOdds = (legs: ParlayLeg[]) => {
     }
     return toAmericanOdds(decimal);
 };
-
-const CONFIDENCE_LEVELS: ConfidenceLevel[] = ["HIGH", "MEDIUM", "LOW"];
 
 const playerTeamLabel = (player: OddsBlazePlayer, game?: GameOption) => {
     if (player.team?.abbreviation) return player.team.abbreviation;
@@ -1109,7 +1167,7 @@ export const NbaPickBuilder = ({
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { nbaSchedules, nbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
+    const { nbaSchedules, fanduelNbaOdds, draftkingNbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
 
     const currentPick = useMemo(() => {
         if (initialPick) return initialPick;
@@ -1132,7 +1190,7 @@ export const NbaPickBuilder = ({
         }
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
     useEffect(() => {
-        if (Array.isArray(nbaSchedules?.events) && nbaSchedules?.events?.length) {
+        if (nbaSchedules?.events?.length) {
             const events = nbaSchedules.events;
 
             setNBAMatchSchedules(events);
@@ -1141,21 +1199,31 @@ export const NbaPickBuilder = ({
             const anyLive = events.some(e => e.live === true);
             setIsAnyLiveMatch(anyLive);
         }
-        if (nbaOdds?.events?.length) {
+        if (fanduelNbaOdds?.events?.length) {
             const activeEvent = activeGameId
-                ? nbaOdds.events.find(e => e.id === activeGameId)
-                : nbaOdds.events[0];
+                ? fanduelNbaOdds.events.find(e => e.id === activeGameId)
+                : fanduelNbaOdds.events[0];
 
             setOddsData(activeEvent?.odds ?? []);
-        } else if (nbaOdds?.updated) {
+        } else if (fanduelNbaOdds?.updated) {
             setOddsData([]);
         }
-    }, [nbaSchedules, nbaOdds, activeGameId]);
+    }, [nbaSchedules, fanduelNbaOdds, activeGameId]);
+
+    useEffect(() => {
+        if (fanduelNbaOdds?.events?.length && draftkingNbaOdds?.events?.length) {
+            const mergedOdds = mergeOddsSnapshots(fanduelNbaOdds, draftkingNbaOdds);
+            const activeEvent = activeGameId
+                ? mergedOdds.events.find(e => e.id === activeGameId)
+                : mergedOdds.events[0];
+            setOddsData(activeEvent?.odds ?? []);
+        }
+    }, [activeGameId, fanduelNbaOdds, draftkingNbaOdds]);
 
     const games = useMemo<GameOption[]>(() => {
         if (!nbaMatchSchedules) return [];
         return buildMergedGameOptions(oddsData, nbaMatchSchedules, activeGameId);
-    }, [nbaMatchSchedules, oddsData, nbaOdds?.updated, activeGameId]);
+    }, [nbaMatchSchedules, oddsData, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated, activeGameId]);
 
     const todayIso = useMemo(() => new Date().toISOString(), []);
     const visibleGames = useMemo(() => {
@@ -1164,7 +1232,7 @@ export const NbaPickBuilder = ({
                 return game
             }
         );
-    }, [games, nbaOdds?.updated]);
+    }, [games, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
     const shouldFilterByDate = true;
     // const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
@@ -1326,14 +1394,21 @@ export const NbaPickBuilder = ({
 
     const activeGame = useMemo(
         () => visibleGames.find((game) => game.id === activeGameId) ?? null,
-        [activeGameId, visibleGames, nbaOdds?.updated]
+        [activeGameId, visibleGames, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]
     );
 
     useEffect(() => {
         if (!activeGame?.id || !activeGame.live) return;
         const interval = setInterval(() => {
             dispatch(
-                fetchNBAOddsRequest({
+                fetchFanduelNBAOddsRequest({
+                    match_id: activeGame.id,
+                    is_live: activeGame.live,
+                    silent: true,
+                })
+            );
+            dispatch(
+                fetchDraftkingsNBAOddsRequest({
                     match_id: activeGame.id,
                     is_live: activeGame.live,
                     silent: true,
@@ -1539,16 +1614,25 @@ export const NbaPickBuilder = ({
             odds: activeDraft.odds,
             difficultyLabel: activeDraft.difficulty_label,
             points: activeDraft.points,
-            // selection: activeDraft.selection,
+            selection: "selection" in activeDraft ? activeDraft.selection ?? null : null,
             isCombo: activeDraft.isCombo,
-            // legs: activeDraft.legs?.map((leg) => ({
-            //     description: leg.description,
-            //     odds: leg.odds,
-            //     selection: leg.selection,
-            // })),
+            legs: activeDraft.legs?.map((leg) => ({
+                description: leg.description,
+                odds: leg.odds_bracket,
+                selection: leg.selection,
+            })),
+        });
+    }, [activeDraft]);
+    const activeDraftSelectionKey = useMemo(() => {
+        if (!activeDraft) return "";
+        const payload = activeDraft;
+        return JSON.stringify({
+            selection: "selection" in payload ? payload.selection ?? null : null,
+            legs: payload.legs?.map((leg) => leg.selection ?? null) ?? [],
         });
     }, [activeDraft]);
     const lastDraftKeyRef = useRef<string>("");
+    const lastConfidenceSeedKeyRef = useRef<string>("");
 
     useEffect(() => {
         if (!activeDraft) return;
@@ -1563,10 +1647,16 @@ export const NbaPickBuilder = ({
         }
     }, [showReviewSheet]);
 
-    // useEffect(() => {
-    //     if (!activeDraft?.payload.confidence) return;
-    //     setSelectedConfidence(activeDraft.payload.confidence);
-    // }, [activeDraft?.payload.confidence]);
+    useEffect(() => {
+        if (!activeDraft) {
+            lastConfidenceSeedKeyRef.current = "";
+            setSelectedConfidence(null);
+            return;
+        }
+        if (activeDraftSelectionKey === lastConfidenceSeedKeyRef.current) return;
+        lastConfidenceSeedKeyRef.current = activeDraftSelectionKey;
+        setSelectedConfidence(activeDraft.confidence ?? null);
+    }, [activeDraft, activeDraftSelectionKey]);
 
     const isOddSelected = (odd?: OddsBlazeOdd | null) => {
         if (!odd) return false;
@@ -1651,10 +1741,8 @@ export const NbaPickBuilder = ({
             const legTierPrimary = legTierMeta
                 ? formatTierPrimary(legTierMeta.tier)
                 : "Tier —";
-            const legTierName = legTierMeta?.name ?? "—";
             const legPoints = legTierMeta?.points;
-            const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
-                }${legTierName && legTierName !== "—" ? ` · ${legTierName}` : ""}`;
+            const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""}`;
             return {
                 id: leg.id,
                 description: leg.displayName,
@@ -2600,19 +2688,22 @@ export const NbaPickBuilder = ({
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetTierName = sheetTierMeta?.name ?? activeDraft?.difficulty_label ?? "—";
     const sheetPoints = useGroupScoring
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
-    const tierLine = `${sheetTierPrimary}${sheetPoints ? ` · ${sheetPoints} pts` : ""}${sheetTierName && sheetTierName !== "—" ? ` · ${sheetTierName}` : ""
+    const sheetTierCard = resolveTierCardAppearance(sheetTierMeta?.color);
+    const sheetTierLine = `${sheetTierPrimary}${typeof sheetPoints === "number" ? ` · ${sheetPoints} pts` : ""
         }`;
+    const comboOddsLabel = hasMultiSelection
+        ? activeDraft?.odds_bracket ?? activeDraft?.odds ?? null
+        : null;
     const sheetHeaderLabel = hasMultipick
         ? confirmationVariant === "post"
-            ? "Combo post"
-            : "Combo pick"
+            ? "combo pick post"
+            : "combo pick"
         : confirmationVariant === "post"
-            ? "Post pick"
-            : "Selected pick";
+            ? "single pick post"
+            : "selected pick";
 
     const mainLineOdds = useMemo(() => {
         if (!activeGame) return null;
@@ -2621,7 +2712,7 @@ export const NbaPickBuilder = ({
             money: "Moneyline",
             total: "Total Points",
         });
-    }, [activeGame, nbaOdds?.updated]);
+    }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
 
     const quarterSections = useMemo(() => {
         if (!activeGame) return [];
@@ -2652,7 +2743,7 @@ export const NbaPickBuilder = ({
                 )
             ),
         }));
-    }, [activeGame, nbaOdds?.updated]);
+    }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
 
     const halfSections = useMemo(() => {
         if (!activeGame) return [];
@@ -2681,7 +2772,7 @@ export const NbaPickBuilder = ({
                 )
             ),
         }));
-    }, [activeGame, nbaOdds?.updated]);
+    }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
 
     const halfDropdownSections = useMemo(
         () =>
@@ -2998,7 +3089,8 @@ export const NbaPickBuilder = ({
         // setSelectedMatch(game);
         setActiveGameId(game.id);
         if (game.id) {
-            dispatch(fetchNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            dispatch(fetchFanduelNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            dispatch(fetchDraftkingsNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
         }
         setActiveTab("GAME_LINES");
         setSearch("");
@@ -3750,7 +3842,7 @@ export const NbaPickBuilder = ({
                     <div className="w-[360px] sm:w-[390px] md:origin-bottom md:scale-[1.45]">
                         <div
                             className={`rounded-3xl sheet-rounded border border-b-0 border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] pb-[4.5rem] shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur sm:pb-[4.875rem] ${isReviewOpen
-                                ? "max-h-[70vh] overflow-y-auto sheet-scroll"
+                                ? "max-h-[calc(100dvh-6rem)] overflow-y-auto sheet-scroll md:max-h-[calc((100dvh-6rem)*0.689655)]"
                                 : "overflow-hidden"
                                 }`}
                         >
@@ -3763,7 +3855,7 @@ export const NbaPickBuilder = ({
                                     }`}
                             >
                                 <div>
-                                    <p className="text-xs uppercase tracking-wide text-gray-400">
+                                    <p className="text-xs lowercase tracking-wide text-gray-400">
                                         {sheetHeaderLabel}
                                     </p>
                                     {isReviewOpen &&
@@ -3772,11 +3864,9 @@ export const NbaPickBuilder = ({
                                                 {multiSelectionCount} picks selected
                                             </p>
                                         ) : (
-                                            <>
-                                                <p className="mt-1 text-sm font-semibold text-white">
-                                                    {sheetSummary}
-                                                </p>
-                                            </>
+                                            <p className="mt-1 text-sm font-semibold lowercase text-white">
+                                                {confirmationVariant === "post" ? "1 pick selected" : sheetSummary}
+                                            </p>
                                         ))
                                     }
                                 </div>
@@ -3786,26 +3876,38 @@ export const NbaPickBuilder = ({
                             </button>
 
                             {isReviewOpen && (
-                                <div className="border-t border-white/10 px-4 pb-5 pt-4 max-h-[490px]">
+                                <div className="border-t border-white/10 px-4 pb-5 pt-4 max-h-[500px]">
                                     <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="w-full space-y-1">
-                                                <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                    {hasMultiSelection ? "Your picks" : "Your pick"}
-                                                </p>
-                                                <ul className="space-y-2 overflow-y-auto max-h-[250px] custom-scrollbar">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <p className="text-xs uppercase tracking-wide text-gray-400">
+                                                        {hasMultiSelection ? "Your picks" : "Your pick"}
+                                                    </p>
+                                                    {hasMultiSelection && comboOddsLabel && (
+                                                        <div className="shrink-0 pt-3 pr-2 text-right">
+                                                            <span className="block text-[11px] font-semibold text-slate-100">
+                                                                {comboOddsLabel}
+                                                            </span>
+                                                            <span className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                                combo odds
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <ul className="space-y-2 overflow-y-auto max-h-[240px] custom-scrollbar sm:max-h-[170px]">
                                                     {reviewListItems.map((item) => {
                                                         const oddsLabel = formatOdds(item.odds);
                                                         const pickLine = extractPickLine(item.description);
                                                         const canDelete = Boolean(item.onDelete);
                                                         return (
                                                             <li key={item.id} className="flex w-full items-start gap-3 pr-2">
-                                                                <div className="min-w-0 flex flex-1 items-start gap-2">
+                                                                <div className="min-w-0 flex flex-1 items-center gap-2">
                                                                     {canDelete ? (
                                                                         <button
                                                                             type="button"
                                                                             onClick={item.onDelete}
-                                                                            className="mt-1 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
+                                                                            className="flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
                                                                             aria-label="Remove pick"
                                                                             title="Remove pick"
                                                                         >
@@ -3821,14 +3923,16 @@ export const NbaPickBuilder = ({
                                                                             </span>
                                                                         )}
                                                                         <p
-                                                                            className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                                                            className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200 md:text-[11px]"
                                                                             title={item.description}
                                                                         >
                                                                             {pickLine}
                                                                         </p>
-                                                                        <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                                                            {item.tierLine ?? tierLine}
-                                                                        </p>
+                                                                        {hasMultiSelection && item.tierLine && (
+                                                                            <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+                                                                                {item.tierLine}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-start gap-2 pt-3 text-right">
@@ -3843,33 +3947,38 @@ export const NbaPickBuilder = ({
                                             </div>
                                         </div>
 
-                                        {confirmationVariant === "post" && (
-                                            <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
-                                                <p className="text-[10px] uppercase tracking-wide text-gray-400">Confidence</p>
-                                                <div className="mt-2 flex flex-wrap gap-2">
-                                                    {CONFIDENCE_LEVELS.map((level) => {
-                                                        const active = selectedConfidence === level;
-                                                        return (
-                                                            <button
-                                                                key={level}
-                                                                type="button"
-                                                                onClick={() => setSelectedConfidence(level)}
-                                                                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${active
-                                                                    ? "border-emerald-300/70 bg-emerald-500/20 text-emerald-100"
-                                                                    : "border-white/15 bg-white/5 text-gray-200 hover:border-white/30"
-                                                                    }`}
-                                                            >
-                                                                {level.toLowerCase()}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                                {!selectedConfidence && (
-                                                    <p className="mt-2 text-[11px] text-rose-200">
-                                                        Pick a confidence level to post.
-                                                    </p>
-                                                )}
+                                        <div
+                                            className={`grid gap-3 ${confirmationVariant === "post" ? "grid-cols-2" : "grid-cols-1"
+                                                }`}
+                                        >
+                                            <div
+                                                className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.24)] ${sheetTierCard.toneClass}`}
+                                                style={sheetTierCard.style}
+                                            >
+                                                <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                                    tier
+                                                </p>
+                                                <p className="mt-1 text-[10px] font-semibold text-white">
+                                                    {sheetTierLine}
+                                                </p>
                                             </div>
+                                            {confirmationVariant === "post" && (
+                                                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                                                    <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                                        confidence
+                                                    </p>
+                                                    <ConfidenceDropdown
+                                                        value={selectedConfidence}
+                                                        onChange={setSelectedConfidence}
+                                                        disabled={locked}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {confirmationVariant === "post" && !selectedConfidence && (
+                                            <p className="text-[11px] text-rose-200">
+                                                Pick a confidence level to post.
+                                            </p>
                                         )}
 
                                         <div className="flex flex-wrap items-center gap-3">

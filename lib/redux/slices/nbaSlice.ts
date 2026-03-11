@@ -6,7 +6,8 @@ const initialState: NBAState = {
     error: null,
     message: null,
     nbaSchedules: null,
-    nbaOdds: null,
+    fanduelNbaOdds: null,
+    draftkingNbaOdds: null,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -34,22 +35,42 @@ const nbaSlice = createSlice({
             state.message = null;
         },
 
-        fetchNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
+        fetchFanduelNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
                 state.loading = true;
             }
             state.error = null;
         },
-        fetchNBAOddsSuccess: (state, action) => {
+        fetchFanduelNBAOddsSuccess: (state, action) => {
             state.loading = false;
-            state.nbaOdds = action.payload.odds;
+            state.fanduelNbaOdds = action.payload.odds;
         },
-        fetchNBAOddsFailure: (state, action) => {
+        fetchFanduelNBAOddsFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
-        cleatFetchNBAOddsMessage: (state) => {
+        cleatFetchFanduelNBAOddsMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchDraftkingsNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
+            void action;
+            if (!action.payload?.silent) {
+                state.loading = true;
+            }
+            state.error = null;
+        },
+        fetchDraftkingsNBAOddsSuccess: (state, action) => {
+            state.loading = false;
+            state.draftkingNbaOdds = action.payload.odds;
+        },
+        fetchDraftkingsNBAOddsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        cleatFetchDraftkingsNBAOddsMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -79,10 +100,14 @@ export const {
     fetchNBAScheduleSuccess,
     fetchNBAScheduleFailure,
     cleatFetchNBAScheduleMessage,
-    fetchNBAOddsRequest,
-    fetchNBAOddsSuccess,
-    fetchNBAOddsFailure,
-    cleatFetchNBAOddsMessage,
+    fetchFanduelNBAOddsRequest,
+    fetchFanduelNBAOddsSuccess,
+    fetchFanduelNBAOddsFailure,
+    cleatFetchFanduelNBAOddsMessage,
+    fetchDraftkingsNBAOddsRequest,
+    fetchDraftkingsNBAOddsSuccess,
+    fetchDraftkingsNBAOddsFailure,
+    cleatFetchDraftkingsNBAOddsMessage,
     nbaPickValidateRequest,
     nbaPickValidateSuccess,
     nbaPickValidateFailure,

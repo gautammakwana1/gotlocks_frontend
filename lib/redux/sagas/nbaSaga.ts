@@ -4,7 +4,7 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { fetchNBAOddsFailure, fetchNBAOddsRequest, fetchNBAOddsSuccess, fetchNBAScheduleFailure, fetchNBAScheduleRequest, fetchNBAScheduleSuccess, nbaPickValidateFailure, nbaPickValidateRequest, nbaPickValidateSuccess } from "../slices/nbaSlice";
+import { fetchDraftkingsNBAOddsFailure, fetchDraftkingsNBAOddsRequest, fetchDraftkingsNBAOddsSuccess, fetchFanduelNBAOddsFailure, fetchFanduelNBAOddsRequest, fetchFanduelNBAOddsSuccess, fetchNBAScheduleFailure, fetchNBAScheduleRequest, fetchNBAScheduleSuccess, nbaPickValidateFailure, nbaPickValidateRequest, nbaPickValidateSuccess } from "../slices/nbaSlice";
 import { FetchNBAOddsPayload, FetchNBASchedulePayload, ValidateMyNBAPickPayload } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -27,7 +27,7 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nba/nba-schedules-with-odds`,
+            `${API_BASE_URL}/leagues/nba/nba-schedules-with-odds-fanduel`,
             {
                 params: { pick_deadline, result_deadline, is_pick_of_day, date },
             }
@@ -39,21 +39,39 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
     }
 };
 
-function* handleFetchNBAOdds(action: PayloadAction<FetchNBAOddsPayload | undefined>): SagaIterator {
+function* handleFetchFanduelNBAOdds(action: PayloadAction<FetchNBAOddsPayload | undefined>): SagaIterator {
     try {
         const { match_id, is_live } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nba/nba-odds`,
+            `${API_BASE_URL}/leagues/nba/nba-odds-fanduel`,
             {
                 params: { match_id, is_live },
             }
         );
         const payload = response.data as { data?: unknown };
-        yield put(fetchNBAOddsSuccess(payload.data));
+        yield put(fetchFanduelNBAOddsSuccess(payload.data));
     } catch (error: unknown) {
-        yield put(fetchNBAOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+        yield put(fetchFanduelNBAOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+    }
+};
+
+function* handleFetchDraftkingsNBAOdds(action: PayloadAction<FetchNBAOddsPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, is_live } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/nba/nba-odds-draftkings`,
+            {
+                params: { match_id, is_live },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchDraftkingsNBAOddsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchDraftkingsNBAOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
     }
 };
 
@@ -63,7 +81,7 @@ function* handleValidateNBAPick(action: PayloadAction<ValidateMyNBAPickPayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/nba/nba-bet-validate`,
+            `${API_BASE_URL}/leagues/nba/nba-bet-validate`,
             { match_id, external_pick_key }
         );
         const payload = response.data as { data?: unknown };
@@ -75,6 +93,7 @@ function* handleValidateNBAPick(action: PayloadAction<ValidateMyNBAPickPayload |
 
 export default function* nflSaga() {
     yield takeLatest(fetchNBAScheduleRequest.type, handleFetchNBASchedule);
-    yield takeLatest(fetchNBAOddsRequest.type, handleFetchNBAOdds);
+    yield takeLatest(fetchFanduelNBAOddsRequest.type, handleFetchFanduelNBAOdds);
+    yield takeLatest(fetchDraftkingsNBAOddsRequest.type, handleFetchDraftkingsNBAOdds);
     yield takeLatest(nbaPickValidateRequest.type, handleValidateNBAPick);
 };

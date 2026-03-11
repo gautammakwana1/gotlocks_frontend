@@ -761,6 +761,7 @@ export type RootState = {
     ncaab: NCAABState;
     nhl: NHLState;
     progress: ProgressState;
+    league: LeagueState;
 };
 
 export type UpdateGroupPayload = {
@@ -937,6 +938,10 @@ export type FetchNHLSchedulePayload = {
     is_pick_of_day: boolean;
     date?: string;
     is_range: boolean;
+};
+
+export type FetchLeagueCountsPayload = {
+    date?: string;
 };
 
 export type FetchLiveNFLOddsPayload = {
@@ -1123,7 +1128,7 @@ export type NFLOdds = {
 export type NBAOdds = {
     updated: string;
     league: LeagueObject;
-    sportsBook: SportsBookObject;
+    sportsbook: SportsBookObject;
     events: OddsData[];
 }
 
@@ -1332,7 +1337,8 @@ export type NBAState = {
         league: LeagueObject;
         events: NBASchedules[];
     } | null,
-    nbaOdds: NBAOdds | null;
+    fanduelNbaOdds: NBAOdds | null;
+    draftkingNbaOdds: NBAOdds | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -1369,6 +1375,13 @@ export type NHLState = {
     validateLoading: boolean;
     validatePickMessage: string | null;
     validatePickError: string | null;
+};
+
+export type LeagueState = {
+    leagueCounts: Record<string, number> | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
 };
 
 export type PickSelectionMeta = {
@@ -1442,6 +1455,7 @@ export type DraftPick = BuiltPickPayload & {
     displayDifficulty?: string,
     points?: number,
     source?: string,
+    selection?: PickSelectionMeta
 };
 
 export type PickReactionMap = Record<string, string[]>;

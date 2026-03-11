@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
-import { formatDateTime, isPast } from "@/lib/utils/date";
+import { formatDateTime } from "@/lib/utils/date";
 import {
-    DEFAULT_ELIGIBLE_WINDOW_DAYS,
-    filterEligibleGames,
-    filterUpcomingWindowGames,
+    DEFAULT_ELIGIBLE_WINDOW_DAYS
 } from "@/lib/utils/games";
 import {
     normalizeOddToLeg,
@@ -28,6 +26,8 @@ import { clearNhlPickValidateMessage, fetchNHLOddsRequest, fetchNHLScheduleReque
 import FootballAnimation from "../animations/FootballAnimation";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { getShortTeamName } from "@/lib/utils/helpers";
+import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
+import ConfidenceDropdown from "../ui/ConfidenceDropdown";
 
 type OddsBlazeTeam = {
     id: string;
@@ -466,8 +466,6 @@ const combineParlayOdds = (legs: ParlayLeg[]) => {
     }
     return toAmericanOdds(decimal);
 };
-
-const CONFIDENCE_LEVELS: ConfidenceLevel[] = ["HIGH", "MEDIUM", "LOW"];
 
 const playerTeamLabel = (player: OddsBlazePlayer, game?: GameOption) => {
     if (player.team?.abbreviation) return player.team.abbreviation;
@@ -1315,16 +1313,25 @@ export const NhlPickBuilder = ({
             odds: payload.odds,
             difficultyLabel: activeDraft.difficulty_label,
             points: activeDraft.points,
-            // selection: activeDraft.selection,
+            selection: "selection" in activeDraft ? activeDraft.selection ?? null : null,
             isCombo: activeDraft.isCombo,
-            // legs: payload.legs?.map((leg) => ({
-            //     description: leg.description,
-            //     odds: leg.odds,
-            //     selection: leg.selection,
-            // })),
+            legs: payload.legs?.map((leg) => ({
+                description: leg.description,
+                odds: leg.odds_bracket,
+                selection: leg.selection,
+            })),
+        });
+    }, [activeDraft]);
+    const activeDraftSelectionKey = useMemo(() => {
+        if (!activeDraft) return "";
+        const payload = activeDraft;
+        return JSON.stringify({
+            selection: "selection" in payload ? payload.selection ?? null : null,
+            legs: payload.legs?.map((leg) => leg.selection ?? null) ?? [],
         });
     }, [activeDraft]);
     const lastDraftKeyRef = useRef<string>("");
+    const lastConfidenceSeedKeyRef = useRef<string>("");
 
     useEffect(() => {
         if (!activeDraft) return;
@@ -1340,9 +1347,15 @@ export const NhlPickBuilder = ({
     }, [showReviewSheet]);
 
     useEffect(() => {
-        if (!activeDraft?.confidence) return;
-        setSelectedConfidence(activeDraft.confidence);
-    }, [activeDraft?.confidence]);
+        if (!activeDraft) {
+            lastConfidenceSeedKeyRef.current = "";
+            setSelectedConfidence(null);
+            return;
+        }
+        if (activeDraftSelectionKey === lastConfidenceSeedKeyRef.current) return;
+        lastConfidenceSeedKeyRef.current = activeDraftSelectionKey;
+        setSelectedConfidence(activeDraft.confidence ?? null);
+    }, [activeDraft, activeDraftSelectionKey]);
 
     const isOddSelected = (odd?: OddsBlazeOdd | null) => {
         if (!odd) return false;
@@ -1427,10 +1440,9 @@ export const NhlPickBuilder = ({
             const legTierPrimary = legTierMeta
                 ? formatTierPrimary(legTierMeta.tier)
                 : "Tier —";
-            const legTierName = legTierMeta?.name ?? "—";
             const legPoints = legTierMeta?.points;
             const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
-                }${legTierName && legTierName !== "—" ? ` · ${legTierName}` : ""}`;
+                }`;
             return {
                 id: leg.id,
                 description: leg.displayName,
@@ -1926,19 +1938,22 @@ export const NhlPickBuilder = ({
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetTierName = sheetTierMeta?.name ?? activeDraft?.difficulty_label ?? "—";
     const sheetPoints = useGroupScoring
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
-    const tierLine = `${sheetTierPrimary}${sheetPoints ? ` · ${sheetPoints} pts` : ""}${sheetTierName && sheetTierName !== "—" ? ` · ${sheetTierName}` : ""
+    const sheetTierCard = resolveTierCardAppearance(sheetTierMeta?.color);
+    const sheetTierLine = `${sheetTierPrimary}${typeof sheetPoints === "number" ? ` · ${sheetPoints} pts` : ""
         }`;
+    const comboOddsLabel = hasMultiSelection
+        ? activeDraft?.odds_bracket ?? activeDraft?.odds ?? null
+        : null;
     const sheetHeaderLabel = hasMultipick
         ? confirmationVariant === "post"
-            ? "Combo post"
-            : "Combo pick"
+            ? "combo pick post"
+            : "combo pick"
         : confirmationVariant === "post"
-            ? "Post pick"
-            : "Selected pick";
+            ? "single pick post"
+            : "selected pick";
 
     const mainLineOdds = useMemo(() => {
         if (!activeGame) return null;
@@ -2959,7 +2974,7 @@ export const NhlPickBuilder = ({
                     <div className="w-[360px] sm:w-[390px] md:origin-bottom md:scale-[1.45]">
                         <div
                             className={`rounded-3xl sheet-rounded border border-b-0 border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] pb-[4.5rem] shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur sm:pb-[4.875rem] ${isReviewOpen
-                                ? "max-h-[70vh] overflow-y-auto sheet-scroll"
+                                ? "max-h-[calc(100dvh-6rem)] overflow-y-auto sheet-scroll md:max-h-[calc((100dvh-6rem)*0.689655)]"
                                 : "overflow-hidden"
                                 }`}
                         >
@@ -2972,7 +2987,7 @@ export const NhlPickBuilder = ({
                                     }`}
                             >
                                 <div>
-                                    <p className="text-xs uppercase tracking-wide text-gray-400">
+                                    <p className="text-xs lowercase tracking-wide text-gray-400">
                                         {sheetHeaderLabel}
                                     </p>
                                     {isReviewOpen &&
@@ -2981,11 +2996,9 @@ export const NhlPickBuilder = ({
                                                 {multiSelectionCount} picks selected
                                             </p>
                                         ) : (
-                                            <>
-                                                <p className="mt-1 text-sm font-semibold text-white">
-                                                    {sheetSummary}
-                                                </p>
-                                            </>
+                                            <p className="mt-1 text-sm font-semibold lowercase text-white">
+                                                {confirmationVariant === "post" ? "1 pick selected" : sheetSummary}
+                                            </p>
                                         ))}
                                 </div>
                                 <span className="text-gray-400">
@@ -2994,26 +3007,38 @@ export const NhlPickBuilder = ({
                             </button>
 
                             {isReviewOpen && (
-                                <div className="border-t border-white/10 px-4 pb-5 pt-4">
+                                <div className="border-t border-white/10 px-4 pb-5 pt-4 max-h-[500px]">
                                     <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="w-full space-y-1">
-                                                <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                    {hasMultiSelection ? "Your picks" : "Your pick"}
-                                                </p>
-                                                <ul className="space-y-2">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <p className="text-xs uppercase tracking-wide text-gray-400">
+                                                        {hasMultiSelection ? "Your picks" : "Your pick"}
+                                                    </p>
+                                                    {hasMultiSelection && comboOddsLabel && (
+                                                        <div className="shrink-0 pt-3 pr-2 text-right">
+                                                            <span className="block text-[11px] font-semibold text-slate-100">
+                                                                {comboOddsLabel}
+                                                            </span>
+                                                            <span className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                                combo odds
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <ul className="space-y-2 overflow-y-auto max-h-[250px] custom-scrollbar sm:max-h-[170px]">
                                                     {reviewListItems.map((item) => {
                                                         const oddsLabel = formatOdds(item.odds);
                                                         const pickLine = extractPickLine(item.description);
                                                         const canDelete = Boolean(item.onDelete);
                                                         return (
                                                             <li key={item.id} className="flex w-full items-start gap-3 pr-2">
-                                                                <div className="min-w-0 flex flex-1 items-start gap-2">
+                                                                <div className="min-w-0 flex flex-1 items-center gap-2">
                                                                     {canDelete ? (
                                                                         <button
                                                                             type="button"
                                                                             onClick={item.onDelete}
-                                                                            className="mt-1 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
+                                                                            className="flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
                                                                             aria-label="Remove pick"
                                                                             title="Remove pick"
                                                                         >
@@ -3029,14 +3054,16 @@ export const NhlPickBuilder = ({
                                                                             </span>
                                                                         )}
                                                                         <p
-                                                                            className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                                                            className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200 md:text-[11px]"
                                                                             title={item.description}
                                                                         >
                                                                             {pickLine}
                                                                         </p>
-                                                                        <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                                                            {item.tierLine ?? tierLine}
-                                                                        </p>
+                                                                        {hasMultiSelection && item.tierLine && (
+                                                                            <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
+                                                                                {item.tierLine}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex items-start gap-2 pt-3 text-right">
@@ -3051,35 +3078,38 @@ export const NhlPickBuilder = ({
                                             </div>
                                         </div>
 
-                                        {confirmationVariant === "post" && (
-                                            <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
-                                                <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                    Confidence
+                                        <div
+                                            className={`grid gap-3 ${confirmationVariant === "post" ? "grid-cols-2" : "grid-cols-1"
+                                                }`}
+                                        >
+                                            <div
+                                                className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.24)] ${sheetTierCard.toneClass}`}
+                                                style={sheetTierCard.style}
+                                            >
+                                                <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                                    tier
                                                 </p>
-                                                <div className="mt-2 flex flex-wrap gap-2">
-                                                    {CONFIDENCE_LEVELS.map((level) => {
-                                                        const active = selectedConfidence === level;
-                                                        return (
-                                                            <button
-                                                                key={level}
-                                                                type="button"
-                                                                onClick={() => setSelectedConfidence(level)}
-                                                                className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide transition ${active
-                                                                    ? "border-emerald-300/70 bg-emerald-500/20 text-emerald-100"
-                                                                    : "border-white/15 bg-white/5 text-gray-200 hover:border-white/30"
-                                                                    }`}
-                                                            >
-                                                                {level.toLowerCase()}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                                {!selectedConfidence && (
-                                                    <p className="mt-2 text-[11px] text-rose-200">
-                                                        Pick a confidence level to post.
-                                                    </p>
-                                                )}
+                                                <p className="mt-1 text-[10px] font-semibold text-white">
+                                                    {sheetTierLine}
+                                                </p>
                                             </div>
+                                            {confirmationVariant === "post" && (
+                                                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                                                    <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                                        confidence
+                                                    </p>
+                                                    <ConfidenceDropdown
+                                                        value={selectedConfidence}
+                                                        onChange={setSelectedConfidence}
+                                                        disabled={locked}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        {confirmationVariant === "post" && !selectedConfidence && (
+                                            <p className="text-[11px] text-rose-200">
+                                                Pick a confidence level to post.
+                                            </p>
                                         )}
 
                                         <div className="flex flex-wrap items-center gap-3">

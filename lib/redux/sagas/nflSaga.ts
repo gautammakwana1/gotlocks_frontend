@@ -27,7 +27,7 @@ function* handleFetchLiveNFLSchedule(action: PayloadAction<FetchNFLSchedulePaylo
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-schedules-with-odds`,
+            `${API_BASE_URL}/leagues/nfl/nfl-schedules-with-odds`,
             {
                 params: { pick_deadline, result_deadline, is_pick_of_day, date },
             }
@@ -45,7 +45,7 @@ function* handleFetchLiveOdds(action: PayloadAction<FetchLiveNFLOddsPayload | un
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-odds`,
+            `${API_BASE_URL}/leagues/nfl/nfl-odds`,
             {
                 params: { match_id, is_live },
             }
@@ -63,7 +63,7 @@ function* handleFetchPassingPropsPlayers(action: PayloadAction<FetchPassingProps
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-passing-props`,
+            `${API_BASE_URL}/leagues/nfl/nfl-passing-props`,
             {
                 params: { match_id },
             }
@@ -81,7 +81,7 @@ function* handleFetchReceivingPropsPlayers(action: PayloadAction<FetchReceivingP
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-receiving-props`,
+            `${API_BASE_URL}/leagues/nfl/nfl-receiving-props`,
             {
                 params: { match_id },
             }
@@ -99,7 +99,7 @@ function* handleFetchRushingPropsPlayers(action: PayloadAction<FetchRushingProps
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-rushing-props`,
+            `${API_BASE_URL}/leagues/nfl/nfl-rushing-props`,
             {
                 params: { match_id },
             }
@@ -117,7 +117,7 @@ function* handleFetchTouchDownPropsPlayers(action: PayloadAction<FetchTouchDownP
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/nfl/nfl-touchdown-scorers-props`,
+            `${API_BASE_URL}/leagues/nfl/nfl-touchdown-scorers-props`,
             {
                 params: { match_id },
             }
@@ -133,7 +133,7 @@ function* handleValidateMyPick(action: PayloadAction<ValidateMyPickPayload | und
     try {
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/nfl/nfl-bet-validate`,
+            `${API_BASE_URL}/leagues/nfl/nfl-bet-validate`,
             action.payload
         );
         const payload = response.data as { data?: unknown };

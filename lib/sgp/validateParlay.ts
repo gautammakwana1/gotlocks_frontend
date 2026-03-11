@@ -24,6 +24,9 @@ const isPointSpreadMarket = (market: string) =>
 const isAnytimeTdMarket = (market: string) =>
     market.toLowerCase().includes("player touchdowns");
 
+const isPlayerOverUnderLeg = (leg: ParlayLeg) =>
+    Boolean(leg.playerId && (leg.side === "Over" || leg.side === "Under"));
+
 export const parseBookIdsFromLink = (link: string) => {
     try {
         const url = new URL(link);
@@ -77,6 +80,7 @@ export const validateAddLeg = (
     incoming: ParlayLeg
 ): ValidateLegResult => {
     const incomingIsAnytimeTd = isAnytimeTdMarket(incoming.market);
+    const incomingIsPlayerOverUnder = isPlayerOverUnderLeg(incoming);
     if (incomingIsAnytimeTd && incoming.playerId) {
         const duplicatePlayer = existing.find(
             (leg) =>
@@ -109,16 +113,31 @@ export const validateAddLeg = (
         };
     }
 
-    const sameMarket = existing.find((leg) => leg.marketKey === incoming.marketKey);
-    if (sameMarket) {
-        const bothAnytimeTd = incomingIsAnytimeTd && isAnytimeTdMarket(sameMarket.market);
-        if (!bothAnytimeTd) {
-            return {
-                ok: false,
-                reason: "Only one outcome can be added from that market.",
-                conflictLegId: sameMarket.id,
-            };
+    const sameMarket = existing.find((leg) => {
+        if (leg.marketKey !== incoming.marketKey) return false;
+
+        const bothAnytimeTd = incomingIsAnytimeTd && isAnytimeTdMarket(leg.market);
+        if (bothAnytimeTd) return false;
+
+        const legIsPlayerOverUnder = isPlayerOverUnderLeg(leg);
+        if (incomingIsPlayerOverUnder && legIsPlayerOverUnder) {
+            return leg.playerId === incoming.playerId;
         }
+
+        return true;
+    });
+    if (sameMarket) {
+        const samePlayerPropConflict =
+            incomingIsPlayerOverUnder &&
+            isPlayerOverUnderLeg(sameMarket) &&
+            sameMarket.playerId === incoming.playerId;
+        return {
+            ok: false,
+            reason: samePlayerPropConflict
+                ? "Pick a single line for that player market."
+                : "Only one outcome can be added from that market.",
+            conflictLegId: sameMarket.id,
+        };
     }
 
     const sameFamily = existing.find(
@@ -127,7 +146,10 @@ export const validateAddLeg = (
     if (sameFamily) {
         return {
             ok: false,
-            reason: "Pick a single line for that market.",
+            reason:
+                incomingIsPlayerOverUnder && isPlayerOverUnderLeg(sameFamily)
+                    ? "Pick a single line for that player market."
+                    : "Pick a single line for that market.",
             conflictLegId: sameFamily.id,
         };
     }

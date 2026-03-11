@@ -38,6 +38,54 @@ describe("validateAddLeg", () => {
         expect(result.ok).toBe(false);
     });
 
+    it("allows different player over/under props from the same marketId", () => {
+        const existing = makeLeg({
+            id: "player-a-over",
+            market: "Player Points",
+            displayName: "Player A Over 20.5",
+            bookSelectionId: "player-a-over",
+            playerId: "player-a",
+            familyKey: "event-1:Player Points:player:player-a",
+            line: 20.5,
+        });
+        const incoming = makeLeg({
+            id: "player-b-over",
+            market: "Player Points",
+            displayName: "Player B Over 18.5",
+            bookSelectionId: "player-b-over",
+            playerId: "player-b",
+            familyKey: "event-1:Player Points:player:player-b",
+            line: 18.5,
+        });
+
+        const result = validateAddLeg([existing], incoming);
+        expect(result.ok).toBe(true);
+    });
+
+    it("blocks multiple lines for the same player within the same marketId", () => {
+        const existing = makeLeg({
+            id: "player-a-over-20",
+            market: "Player Points",
+            displayName: "Player A Over 20.5",
+            bookSelectionId: "player-a-over-20",
+            playerId: "player-a",
+            familyKey: "event-1:Player Points:player:player-a",
+            line: 20.5,
+        });
+        const incoming = makeLeg({
+            id: "player-a-over-25",
+            market: "Player Points",
+            displayName: "Player A Over 25.5",
+            bookSelectionId: "player-a-over-25",
+            playerId: "player-a",
+            familyKey: "event-1:Player Points:player:player-a",
+            line: 25.5,
+        });
+
+        const result = validateAddLeg([existing], incoming);
+        expect(result.ok).toBe(false);
+    });
+
     it("blocks stacking alternate lines within the same family", () => {
         const existing = makeLeg({
             id: "over-51",

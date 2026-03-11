@@ -4,7 +4,6 @@ import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/inter
 import { formatDateTime } from "@/lib/utils/date";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useEffect, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
 
 type PostCardProps = {
     pick: Pick;
@@ -99,8 +98,7 @@ const extractMatchup = (description?: string | null) => {
     return match ? match[1].trim() : null;
 };
 
-const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: PostCardProps) => {
-    const dispatch = useDispatch();
+const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -189,14 +187,6 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: 
     const userReaction = pick.reaction ?? undefined;
     const upActive = userReaction === "up";
     const downActive = userReaction === "down";
-    // const displayLabel =
-    //     displayName.length > 12 ? `${displayName.slice(0, 12)}\u2026` : displayName;
-
-    // const handleReaction = (reaction: PickReaction) => {
-    //     if (reaction && pick.id) {
-    //         dispatch(createPickReactionRequest({ pick_id: pick.id, action: reaction === "up" ? "liked" : "dislike" }));
-    //     }
-    // };
 
     return (
         <div className="py-4">
@@ -210,7 +200,6 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: 
                         )}
                         <button
                             type="button"
-                            // onClick={() => handleReaction("up")}
                             onClick={() => onReaction("up", pick.id)}
                             aria-pressed={upActive}
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${upActive
@@ -292,11 +281,11 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: 
                             }`}
                     >
                         <div
-                            className={`order-2 flex w-full gap-2 sm:order-1 sm:w-[140px] sm:flex-col ${showComboLegs ? "sm:self-start" : "sm:self-stretch"
+                            className={`order-2 flex w-full h-full gap-2 sm:order-1 sm:w-[140px] sm:h-[140px] sm:flex-col ${showComboLegs ? "sm:self-start" : "sm:self-stretch"
                                 }`}
                         >
                             <div
-                                className={`w-full flex-1 rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
+                                className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
                                     } ${tierCardTone}`}
                                 style={tierCardStyle}
                             >
@@ -308,7 +297,7 @@ const PostCard = ({ pick, displayName, mode, canDelete, onDelete, onReaction }: 
                                 </span>
                             </div>
                             <div
-                                className={`w-full flex-1 rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
+                                className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
                                     }`}
                             >
                                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">

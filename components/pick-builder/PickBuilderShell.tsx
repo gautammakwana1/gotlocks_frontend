@@ -8,12 +8,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BuildMode, BuiltPickPayload, CurrentUser, DraftPick, Group, League, Members, ParlayLeg, Pick, Slip } from "@/lib/interfaces/interfaces";
+import { BuildMode, BuiltPickPayload, CurrentUser, DraftPick, Group, League, Members, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import NbaPickBuilder from "./NbaPickBuilder";
 import NflPickBuilder from "./NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import NcaabPickBuilder from "./NcaabPickBuilder";
 import NhlPickBuilder from "./NhlPickBuilder";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -205,16 +207,42 @@ const StubLeagueBuilder = ({
 
 export const PickBuilderShell = (props: PickBuilderShellProps) => {
     const { context, onDismiss } = props;
+    const dispatch = useDispatch();
+
+    // const buildMode = "ODDS";
+    const todayKey = useMemo(() => toDateKey(new Date().toISOString()), []);
+    const [activeDateKey, setActiveDateKey] = useState<string>(todayKey);
+    const [hasManualDateSelection, setHasManualDateSelection] = useState(false);
+    const [dateOptions, setDateOptions] = useState<Array<{ key: string; label: string }>>(
+        []
+    );
+    const [draftPick, setDraftPick] = useState<DraftPick | null>(null);
+    const [sharedParlayLegs, setSharedParlayLegs] = useState<ParlayLeg[]>([]);
+
+    const { leagueCounts } = useSelector((state: RootState) => state.league);
+
+    useEffect(() => {
+        if (activeDateKey) {
+            dispatch(fetchLeaguesCountsRequest({ date: activeDateKey }));
+        }
+    }, [dispatch, activeDateKey]);
+
     const leagues = props.leagues ?? ALL_LEAGUES;
 
+    const sortedLeagues = [...leagues].sort((a, b) => {
+        const countA = leagueCounts?.[a] ?? 0;
+        const countB = leagueCounts?.[b] ?? 0;
+        return countB - countA;
+    });
+
     const allowedLeagues = useMemo(() => {
-        if (context.mode !== "slip") return leagues;
-        const allowed = leagues.filter((league) => {
+        if (context.mode !== "slip") return sortedLeagues;
+        const allowed = sortedLeagues.filter((league) => {
             if (!Array.isArray(context.slip.sports)) return;
             return context.slip.sports.map((sport) => normalizeLeague(sport)).includes(league)
         });
-        return allowed.length > 0 ? allowed : leagues;
-    }, [context, leagues]);
+        return allowed.length > 0 ? allowed : sortedLeagues;
+    }, [context, sortedLeagues]);
 
     const initialLeague =
         normalizeLeague(props.initialLeague ?? (context.mode === "slip"
@@ -226,15 +254,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         allowedLeagues[0] ??
         "NFL"
     );
-    // const buildMode = "ODDS";
-    const todayKey = useMemo(() => toDateKey(new Date().toISOString()), []);
-    const [activeDateKey, setActiveDateKey] = useState<string>(todayKey);
-    const [hasManualDateSelection, setHasManualDateSelection] = useState(false);
-    const [dateOptions, setDateOptions] = useState<Array<{ key: string; label: string }>>(
-        []
-    );
-    const [draftPick, setDraftPick] = useState<DraftPick | null>(null);
-    const [sharedParlayLegs, setSharedParlayLegs] = useState<ParlayLeg[]>([]);
+
     const handleDateChange = useCallback(
         (key: string, source: "user" | "auto" = "user") => {
             setActiveDateKey(key);
