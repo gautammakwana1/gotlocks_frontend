@@ -1,151 +1,113 @@
 import { describe, expect, it } from "vitest";
-import { validateAddLeg } from "./validateParlay";
-import { ParlayLeg } from "../interfaces/interfaces";
+import { validateAddLeg, type ParlayLeg } from "./validateParlay";
 
 const makeLeg = (overrides: Partial<ParlayLeg> = {}): ParlayLeg => ({
-    id: "leg-1",
-    eventId: "event-1",
-    market: "Total Points",
-    displayName: "Total Over 51.5",
-    price: "-110",
-    sgp: "sgp-token",
-    bookMarketId: "market-1",
-    bookSelectionId: "selection-1",
-    line: 51.5,
-    side: "Over",
-    marketKey: "event-1:market-1",
-    familyKey: "event-1:Total Points",
-    periodKey: "Full Game",
-    ...overrides,
+    id: overrides.id ?? "leg-1",
+    eventId: overrides.eventId ?? "event-1",
+    sport: overrides.sport ?? "NBA",
+    marketType: overrides.marketType ?? "Player Points",
+    marketFamily: overrides.marketFamily ?? "Player Points",
+    entityType: overrides.entityType ?? "player",
+    entityId: overrides.entityId ?? "player-1",
+    teamId: overrides.teamId ?? "team-a",
+    opponentTeamId: overrides.opponentTeamId ?? "team-b",
+    playerId: overrides.playerId ?? "player-1",
+    statType: overrides.statType ?? "points",
+    timeScope: overrides.timeScope ?? "full_game",
+    side: overrides.side ?? "Over",
+    selection: overrides.selection ?? "Over",
+    line: overrides.line ?? 20.5,
+    altLine: overrides.altLine ?? null,
+    impliedBy: overrides.impliedBy,
+    containsComponents: overrides.containsComponents,
+    sameGameEligible: overrides.sameGameEligible ?? true,
+    matchup: overrides.matchup,
+    startTime: overrides.startTime,
+    market: overrides.market ?? overrides.marketType ?? "Player Points",
+    displayName: overrides.displayName ?? "Player Points Over 20.5",
+    price: overrides.price ?? "-110",
+    sgp: overrides.sgp ?? "sgp-token",
+    bookMarketId: overrides.bookMarketId ?? "market-1",
+    bookSelectionId: overrides.bookSelectionId ?? "selection-1",
+    marketKey: overrides.marketKey ?? "event-1:Player Points:market-1",
+    familyKey: overrides.familyKey ?? "event-1:player_points:player-1:full_game",
+    teamKey: overrides.teamKey ?? overrides.teamId ?? "team-a",
+    periodKey: overrides.periodKey ?? "Full Game",
 });
 
 describe("validateAddLeg", () => {
-    it("blocks opposing sides from the same marketId", () => {
+    it("allows same-player different stats in the same game", () => {
         const existing = makeLeg({
-            id: "over",
-            bookSelectionId: "over",
-            marketKey: "event-1:market-1",
+            id: "points",
+            marketType: "Player Points",
+            marketFamily: "Player Points",
+            statType: "points",
+            line: 25,
         });
         const incoming = makeLeg({
-            id: "under",
-            bookSelectionId: "under",
-            marketKey: "event-1:market-1",
-            side: "Under",
-            displayName: "Total Under 51.5",
-        });
-
-        const result = validateAddLeg([existing], incoming);
-        expect(result.ok).toBe(false);
-    });
-
-    it("allows different player over/under props from the same marketId", () => {
-        const existing = makeLeg({
-            id: "player-a-over",
-            market: "Player Points",
-            displayName: "Player A Over 20.5",
-            bookSelectionId: "player-a-over",
-            playerId: "player-a",
-            familyKey: "event-1:Player Points:player:player-a",
-            line: 20.5,
-        });
-        const incoming = makeLeg({
-            id: "player-b-over",
-            market: "Player Points",
-            displayName: "Player B Over 18.5",
-            bookSelectionId: "player-b-over",
-            playerId: "player-b",
-            familyKey: "event-1:Player Points:player:player-b",
-            line: 18.5,
+            id: "assists",
+            marketType: "Player Assists",
+            marketFamily: "Player Assists",
+            statType: "assists",
+            line: 5,
         });
 
         const result = validateAddLeg([existing], incoming);
         expect(result.ok).toBe(true);
     });
 
-    it("blocks multiple lines for the same player within the same marketId", () => {
+    it("blocks same-player opposite outcomes on the same stat", () => {
         const existing = makeLeg({
-            id: "player-a-over-20",
-            market: "Player Points",
-            displayName: "Player A Over 20.5",
-            bookSelectionId: "player-a-over-20",
-            playerId: "player-a",
-            familyKey: "event-1:Player Points:player:player-a",
-            line: 20.5,
+            id: "over",
+            side: "Over",
+            line: 24.5,
         });
         const incoming = makeLeg({
-            id: "player-a-over-25",
-            market: "Player Points",
-            displayName: "Player A Over 25.5",
-            bookSelectionId: "player-a-over-25",
-            playerId: "player-a",
-            familyKey: "event-1:Player Points:player:player-a",
-            line: 25.5,
+            id: "under",
+            side: "Under",
+            selection: "Under",
+            line: 24.5,
         });
 
         const result = validateAddLeg([existing], incoming);
         expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.reason).toContain("contradictory");
+        }
     });
 
-    it("blocks stacking alternate lines within the same family", () => {
+    it("allows same-game moneyline plus opposing spread with a live middle window", () => {
         const existing = makeLeg({
-            id: "over-51",
-            marketKey: "event-1:market-1",
-            familyKey: "event-1:Total Points",
-        });
-        const incoming = makeLeg({
-            id: "over-55",
-            marketKey: "event-1:market-2",
-            familyKey: "event-1:Total Points",
-            line: 55.5,
-            displayName: "Total Over 55.5",
-        });
-
-        const result = validateAddLeg([existing], incoming);
-        expect(result.ok).toBe(false);
-    });
-
-    it("blocks moneyline + spread for the same team and period", () => {
-        const existing = makeLeg({
-            id: "ml-bills",
+            id: "home-ml",
+            entityType: "team",
+            entityId: "team-a",
+            teamId: "team-a",
+            opponentTeamId: "team-b",
+            playerId: undefined,
+            marketType: "Moneyline",
+            marketFamily: "Moneyline",
             market: "Moneyline",
-            displayName: "Bills Moneyline",
-            marketKey: "event-1:ml",
-            bookMarketId: "ml",
-            bookSelectionId: "bills",
-            teamKey: "bills",
+            statType: "moneyline",
+            side: "home",
+            selection: "Team A",
+            line: undefined,
+            teamKey: "team-a",
         });
         const incoming = makeLeg({
-            id: "spread-bills",
+            id: "away-plus",
+            entityType: "team",
+            entityId: "team-b",
+            teamId: "team-b",
+            opponentTeamId: "team-a",
+            playerId: undefined,
+            marketType: "Point Spread",
+            marketFamily: "Point Spread",
             market: "Point Spread",
-            displayName: "Bills -1.5",
-            marketKey: "event-1:spread",
-            bookMarketId: "spread",
-            bookSelectionId: "bills",
-            teamKey: "bills",
-        });
-
-        const result = validateAddLeg([existing], incoming);
-        expect(result.ok).toBe(false);
-    });
-
-    it("allows unrelated markets like first TD scorer + total over", () => {
-        const existing = makeLeg({
-            id: "first-td",
-            market: "First Touchdown Scorer",
-            displayName: "Allen first TD",
-            marketKey: "event-1:first-td",
-            bookMarketId: "first-td",
-            bookSelectionId: "allen",
-            familyKey: "event-1:First Touchdown Scorer",
-        });
-        const incoming = makeLeg({
-            id: "total-over",
-            market: "Total Points",
-            displayName: "Total Over 51.5",
-            marketKey: "event-1:total",
-            bookMarketId: "total",
-            bookSelectionId: "over",
-            familyKey: "event-1:Total Points",
+            statType: "spread",
+            side: "away",
+            selection: "Team B +7.5",
+            line: 7.5,
+            teamKey: "team-b",
         });
 
         const result = validateAddLeg([existing], incoming);

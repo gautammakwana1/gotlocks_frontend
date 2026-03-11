@@ -13,7 +13,7 @@ import { clearValidateMyNFLPickMessage, fetchLiveNFLScheduleRequest, fetchLiveOd
 import { useDispatch, useSelector } from "react-redux";
 import ScoringModal from "../modals/ScoringModal";
 import { useToast } from "@/lib/state/ToastContext";
-import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
+import { normalizeOddToLeg, prepareSlipPricing, validateAddLeg } from "@/lib/sgp/validateParlay";
 import FootballAnimation from "../animations/FootballAnimation";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierForLabel, getTierMetaForPick, GROUP_CAP_POINTS, GROUP_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
@@ -1598,9 +1598,13 @@ export const NflPickBuilder = ({
     const selectedOdds =
         selectedOddsValue !== null ? formatOdds(selectedOddsValue) : pick?.odds_bracket ?? "—";
     const hasMultipick = isParlayMode && parlayLegs.length > 1;
+    const parlayPricing = useMemo(() => prepareSlipPricing(parlayLegs), [parlayLegs]);
     const comboOddsValue = useMemo(
-        () => (hasMultipick ? combineParlayOdds(parlayLegs) : null),
-        [hasMultipick, parlayLegs]
+        () =>
+            hasMultipick && parlayPricing.canUseStandardParlayPricing
+                ? combineParlayOdds(parlayPricing.pricingLegs as ParlayLeg[])
+                : null,
+        [hasMultipick, parlayPricing]
     );
     const comboTierMeta =
         comboOddsValue !== null ? resolveTierMetaForOdds(comboOddsValue) : null;

@@ -1710,7 +1710,7 @@ export type ParlayLeg = {
     bookSelectionId: string;
     playerId?: string;
     line?: number;
-    side?: "Over" | "Under";
+    side?: "Over" | "Under" | "home" | "away" | "yes" | "no";
     marketKey: string;
     familyKey: string;
     teamKey?: string;

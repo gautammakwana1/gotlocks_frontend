@@ -11,7 +11,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { AuthSelector, RegisterPayload } from "@/lib/interfaces/interfaces";
 import { EyeClosedIcon, EyeIcon } from "lucide-react";
 import CustomDatePicker from "@/components/ui/CustomDatePicker";
-import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 
 interface FormData {
   firstName?: string;
@@ -124,6 +124,11 @@ const AccountCreationPage = () => {
     const containsNameRestricted = checkAnyRestrictedWords(formData.username);
     if (containsNameRestricted) {
       nextErrors.username = "Username contains inappropriate language.";
+    }
+
+    const containsReserveWords = checkForReservedWords(formData.username);
+    if (containsReserveWords) {
+      nextErrors.username = "Username contains reserved words.";
     }
 
     setErrors(nextErrors);

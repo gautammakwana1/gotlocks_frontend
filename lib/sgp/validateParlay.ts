@@ -1,33 +1,105 @@
-import { OddsEvent, OddsOdd, ParlayLeg } from "../interfaces/interfaces";
+import {
+    DEFAULT_VALIDATION_CONFIG,
+    prepareSlipPricing,
+    validateSlip,
+    type PricingPrepResult,
+    type SlipEntityType,
+    type SlipLeg,
+    type SlipSide,
+    type SlipTimeScope,
+    type SlipValidationResult,
+    type ValidationConfig,
+} from "./slipValidation";
 
-export type ValidateLegResult =
-    | { ok: true }
-    | { ok: false; reason: string; conflictLegId?: string };
+export type {
+    PairDecision,
+    PricingPrepResult,
+    SlipEntityType,
+    SlipLeg,
+    SlipSide,
+    SlipTimeScope,
+    SlipValidationResult,
+    SlipValidationStatus,
+    ValidationConfig,
+} from "./slipValidation";
 
-const periodKeyFromMarket = (market: string): ParlayLeg["periodKey"] => {
-    const trimmed = market.trim();
-    if (trimmed.startsWith("1st Half")) return "1st Half";
-    if (trimmed.startsWith("2nd Half")) return "2nd Half";
-    if (trimmed.startsWith("1st Quarter")) return "1st Quarter";
-    if (trimmed.startsWith("2nd Quarter")) return "2nd Quarter";
-    if (trimmed.startsWith("3rd Quarter")) return "3rd Quarter";
-    if (trimmed.startsWith("4th Quarter")) return "4th Quarter";
-    return "Full Game";
+export { DEFAULT_VALIDATION_CONFIG, classifyLegPair, prepareSlipPricing, validateSlip } from "./slipValidation";
+
+export type OddsTeam = {
+    id: string;
+    name: string;
+    abbreviation?: string;
 };
 
-const isMoneylineMarket = (market: string) =>
-    market.toLowerCase().includes("moneyline");
+export type OddsPlayer = {
+    id: string;
+    name: string;
+    team: OddsTeam;
+};
 
-const isPointSpreadMarket = (market: string) =>
-    market.toLowerCase().includes("point spread");
+export type OddsSelection = {
+    name?: string;
+    side?: string;
+    line?: number;
+};
 
-const isAnytimeTdMarket = (market: string) =>
-    market.toLowerCase().includes("player touchdowns");
+export type OddsOdd = {
+    id: string;
+    market: string;
+    name: string;
+    price: string;
+    main: boolean;
+    sgp?: string;
+    links?: {
+        desktop?: string;
+        mobile?: string;
+    };
+    selection?: OddsSelection;
+    player?: OddsPlayer;
+    updated?: string;
+};
 
-const isPlayerOverUnderLeg = (leg: ParlayLeg) =>
-    Boolean(leg.playerId && (leg.side === "Over" || leg.side === "Under"));
+export type OddsEvent = {
+    id: string;
+    teams: {
+        home: OddsTeam;
+        away: OddsTeam;
+    };
+    date: string;
+    live: boolean;
+    odds: OddsOdd[];
+};
 
-export const parseBookIdsFromLink = (link: string) => {
+export type ParlayLeg = SlipLeg & {
+    matchup?: string;
+    startTime?: string;
+    market: string;
+    displayName: string;
+    price: string;
+    sgp: string;
+    bookMarketId: string;
+    bookSelectionId: string;
+    marketKey: string;
+    familyKey: string;
+    teamKey?: string;
+    periodKey:
+    | "1st Half"
+    | "2nd Half"
+    | "1st Quarter"
+    | "2nd Quarter"
+    | "3rd Quarter"
+    | "4th Quarter"
+    | "Full Game";
+};
+
+export type ValidateLegResult =
+    | { ok: true; validation: SlipValidationResult; pricing: PricingPrepResult }
+    | { ok: false; reason: string; conflictLegId?: string; validation: SlipValidationResult; pricing: PricingPrepResult };
+
+const normalizeText = (value?: string | null) =>
+    value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+
+const parseBookIdsFromLink = (link: string) => {
     try {
         const url = new URL(link);
         return {
@@ -39,148 +111,240 @@ export const parseBookIdsFromLink = (link: string) => {
     }
 };
 
+const timeScopeFromMarket = (market: string): SlipTimeScope => {
+    const trimmed = market.trim();
+    if (trimmed.startsWith("1st Half")) return "first_half";
+    if (trimmed.startsWith("2nd Half")) return "second_half";
+    if (trimmed.startsWith("1st Quarter")) return "first_quarter";
+    if (trimmed.startsWith("2nd Quarter")) return "second_quarter";
+    if (trimmed.startsWith("3rd Quarter")) return "third_quarter";
+    if (trimmed.startsWith("4th Quarter")) return "fourth_quarter";
+    return "full_game";
+};
+
+const periodKeyFromTimeScope = (timeScope: SlipTimeScope): ParlayLeg["periodKey"] => {
+    if (timeScope === "first_half") return "1st Half";
+    if (timeScope === "second_half") return "2nd Half";
+    if (timeScope === "first_quarter") return "1st Quarter";
+    if (timeScope === "second_quarter") return "2nd Quarter";
+    if (timeScope === "third_quarter") return "3rd Quarter";
+    if (timeScope === "fourth_quarter") return "4th Quarter";
+    return "Full Game";
+};
+
+const marketFamilyFromMarket = (market: string) =>
+    market
+        .replace(/^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter)\s+/i, "")
+        .replace(/^Alt\s+/i, "")
+        .trim();
+
+const statTypeFromMarket = (market: string) => {
+    const token = normalizeText(marketFamilyFromMarket(market));
+    if (token.includes("points + rebounds + assists")) return "points_rebounds_assists";
+    if (token.includes("points + rebounds")) return "points_rebounds";
+    if (token.includes("points + assists")) return "points_assists";
+    if (token.includes("rebounds + assists")) return "rebounds_assists";
+    if (token.includes("threes")) return "threes";
+    if (token.includes("points")) return "points";
+    if (token.includes("rebounds")) return "rebounds";
+    if (token.includes("assists")) return "assists";
+    if (token.includes("steals")) return "steals";
+    if (token.includes("blocks")) return "blocks";
+    if (token.includes("moneyline")) return "moneyline";
+    if (token.includes("spread")) return "spread";
+    if (token.includes("team total")) return "team_total";
+    if (token.includes("total")) return "total_points";
+    if (token.includes("touchdown")) return "touchdowns";
+    if (token.includes("hits")) return "hits";
+    if (token.includes("exact score")) return "exact_score";
+    if (token.includes("first basket")) return "first_basket";
+    return token;
+};
+
+const outcomeFamilyFromMarket = (market: string) => {
+    const token = normalizeText(marketFamilyFromMarket(market));
+    if (token.includes("moneyline")) return "moneyline";
+    if (token.includes("spread")) return "spread";
+    if (token.includes("team total")) return "team_total";
+    if (token.includes("total")) return "game_total";
+    if (token.includes("exact score")) return "exact_score";
+    if (token.includes("first basket")) return "first_basket";
+    if (token.includes("first field goal")) return "first_field_goal";
+    if (token.includes("first touchdown")) return "first_touchdown_scorer";
+    if (token.includes("combo")) return "combo";
+    return token;
+};
+
+const selectionMatchesTeam = (selectionName: string, team: OddsTeam) => {
+    const token = normalizeText(selectionName);
+    if (!token) return false;
+    const teamName = normalizeText(team.name);
+    const abbr = normalizeText(team.abbreviation);
+    return token === teamName || token.includes(teamName) || (abbr ? token.startsWith(abbr) : false);
+};
+
+const resolveTeamContext = (event: OddsEvent, odd: OddsOdd) => {
+    const selectionName = odd.selection?.name ?? odd.name;
+    if (selectionMatchesTeam(selectionName, event.teams.home)) {
+        return {
+            teamId: event.teams.home.id,
+            opponentTeamId: event.teams.away.id,
+            side: "home" as SlipSide,
+        };
+    }
+    if (selectionMatchesTeam(selectionName, event.teams.away)) {
+        return {
+            teamId: event.teams.away.id,
+            opponentTeamId: event.teams.home.id,
+            side: "away" as SlipSide,
+        };
+    }
+    return {
+        teamId: undefined,
+        opponentTeamId: undefined,
+        side: undefined,
+    };
+};
+
+const sideFromSelection = (event: OddsEvent, odd: OddsOdd, marketFamily: string): SlipSide | undefined => {
+    const rawSide = normalizeText(odd.selection?.side);
+    if (rawSide === "over" || rawSide === "under" || rawSide === "yes" || rawSide === "no") {
+        return rawSide as SlipSide;
+    }
+
+    if (
+        marketFamily.toLowerCase().includes("moneyline") ||
+        marketFamily.toLowerCase().includes("spread")
+    ) {
+        return resolveTeamContext(event, odd).side;
+    }
+
+    return undefined;
+};
+
+const entityTypeFromOdd = (event: OddsEvent, odd: OddsOdd, marketFamily: string): SlipEntityType => {
+    if (odd.player) return "player";
+    if (normalizeText(marketFamily).includes("combo")) return "combo";
+
+    const teamContext = resolveTeamContext(event, odd);
+    if (
+        teamContext.teamId &&
+        (marketFamily.toLowerCase().includes("moneyline") ||
+            marketFamily.toLowerCase().includes("spread") ||
+            marketFamily.toLowerCase().includes("team total"))
+    ) {
+        return "team";
+    }
+
+    return "game";
+};
+
 export const normalizeOddToLeg = (event: OddsEvent, odd: OddsOdd): ParlayLeg => {
     const { marketId, selectionId } = parseBookIdsFromLink(odd.links?.desktop ?? "");
     const bookMarketId = marketId ?? "";
     const bookSelectionId = selectionId ?? "";
-    const eventId = event.id;
-    const marketKey = `${eventId}:${bookMarketId}`;
-    const playerId = odd.player?.id;
-    const familyKey = playerId
-        ? `${eventId}:${odd.market}:player:${playerId}`
-        : `${eventId}:${odd.market}`;
-    const marketIsMoneyline = isMoneylineMarket(odd.market);
-    const marketIsSpread = isPointSpreadMarket(odd.market);
-    const teamKey = (marketIsMoneyline || marketIsSpread) && bookSelectionId
-        ? bookSelectionId
-        : undefined;
-    const periodKey = periodKeyFromMarket(odd.market);
+    const marketFamily = marketFamilyFromMarket(odd.market);
+    const statType = statTypeFromMarket(odd.market);
+    const timeScope = timeScopeFromMarket(odd.market);
+    const periodKey = periodKeyFromTimeScope(timeScope);
+    const teamContext = resolveTeamContext(event, odd);
+    const entityType = entityTypeFromOdd(event, odd, marketFamily);
+    const side = sideFromSelection(event, odd, marketFamily);
+    const entityId =
+        entityType === "player"
+            ? odd.player?.id
+            : entityType === "team"
+                ? teamContext.teamId
+                : entityType === "game"
+                    ? event.id
+                    : odd.id;
+    const familyEntityKey = odd.player?.id ?? teamContext.teamId ?? event.id;
+    const marketKey = `${event.id}:${marketFamily}:${bookMarketId || odd.market}`;
+    const familyKey = `${event.id}:${normalizeText(marketFamily)}:${familyEntityKey}:${timeScope}`;
 
     return {
         id: odd.id,
-        eventId,
+        eventId: event.id,
+        sport: "",
+        marketType: odd.market,
+        marketFamily,
+        outcomeFamily: outcomeFamilyFromMarket(odd.market),
+        entityType,
+        entityId,
+        teamId: entityType === "player" ? odd.player?.team.id : teamContext.teamId,
+        opponentTeamId: entityType === "player"
+            ? odd.player?.team.id === event.teams.home.id
+                ? event.teams.away.id
+                : event.teams.home.id
+            : teamContext.opponentTeamId,
+        playerId: odd.player?.id,
+        statType,
+        timeScope,
+        side,
+        selection: odd.selection?.name ?? odd.name,
+        line: odd.selection?.line ?? undefined,
+        altLine: odd.main ? null : odd.selection?.line ?? null,
+        impliedBy: [],
+        containsComponents: undefined,
+        sameGameEligible: Boolean(odd.sgp),
+        matchup: `${event.teams.away.name} @ ${event.teams.home.name}`,
+        startTime: event.date,
         market: odd.market,
         displayName: odd.name,
         price: odd.price,
         sgp: odd.sgp ?? "",
         bookMarketId,
         bookSelectionId,
-        playerId,
-        line: odd.selection?.line,
-        side: odd.selection?.side,
         marketKey,
         familyKey,
-        teamKey,
+        teamKey: teamContext.teamId,
         periodKey,
     };
 };
 
+const findBlockedDecisionForIncoming = (validation: SlipValidationResult, incomingLegId: string) =>
+    validation.pairDecisions.find(
+        (decision) =>
+            (decision.status === "blocked_conflict" || decision.status === "blocked_impossible") &&
+            (decision.legAId === incomingLegId || decision.legBId === incomingLegId)
+    );
+
 export const validateAddLeg = (
     existing: ParlayLeg[],
-    incoming: ParlayLeg
+    incoming: ParlayLeg,
+    config: ValidationConfig = DEFAULT_VALIDATION_CONFIG
 ): ValidateLegResult => {
-    const incomingIsAnytimeTd = isAnytimeTdMarket(incoming.market);
-    const incomingIsPlayerOverUnder = isPlayerOverUnderLeg(incoming);
-    if (incomingIsAnytimeTd && incoming.playerId) {
-        const duplicatePlayer = existing.find(
-            (leg) =>
-                isAnytimeTdMarket(leg.market) &&
-                leg.eventId === incoming.eventId &&
-                leg.playerId === incoming.playerId
-        );
-        if (duplicatePlayer) {
-            return {
-                ok: false,
-                reason: "You can only include one anytime TD line per player.",
-                conflictLegId: duplicatePlayer.id,
-            };
-        }
-    }
+    const pricing = prepareSlipPricing([...existing, incoming], config);
+    const blockedDecision = findBlockedDecisionForIncoming(pricing.validation, incoming.id);
 
-    const duplicate = existing.find(
-        (leg) =>
-            leg.id === incoming.id ||
-            (leg.marketKey === incoming.marketKey &&
-                leg.bookSelectionId &&
-                incoming.bookSelectionId &&
-                leg.bookSelectionId === incoming.bookSelectionId)
-    );
-    if (duplicate) {
+    if (blockedDecision) {
         return {
             ok: false,
-            reason: "That leg is already in your multipick.",
-            conflictLegId: duplicate.id,
+            reason: blockedDecision.reason,
+            conflictLegId:
+                blockedDecision.legAId === incoming.id ? blockedDecision.legBId : blockedDecision.legAId,
+            validation: pricing.validation,
+            pricing,
         };
     }
 
-    const sameMarket = existing.find((leg) => {
-        if (leg.marketKey !== incoming.marketKey) return false;
-
-        const bothAnytimeTd = incomingIsAnytimeTd && isAnytimeTdMarket(leg.market);
-        if (bothAnytimeTd) return false;
-
-        const legIsPlayerOverUnder = isPlayerOverUnderLeg(leg);
-        if (incomingIsPlayerOverUnder && legIsPlayerOverUnder) {
-            return leg.playerId === incoming.playerId;
-        }
-
-        return true;
-    });
-    if (sameMarket) {
-        const samePlayerPropConflict =
-            incomingIsPlayerOverUnder &&
-            isPlayerOverUnderLeg(sameMarket) &&
-            sameMarket.playerId === incoming.playerId;
-        return {
-            ok: false,
-            reason: samePlayerPropConflict
-                ? "Pick a single line for that player market."
-                : "Only one outcome can be added from that market.",
-            conflictLegId: sameMarket.id,
-        };
-    }
-
-    const sameFamily = existing.find(
-        (leg) => leg.familyKey === incoming.familyKey && leg.marketKey !== incoming.marketKey
-    );
-    if (sameFamily) {
-        return {
-            ok: false,
-            reason:
-                incomingIsPlayerOverUnder && isPlayerOverUnderLeg(sameFamily)
-                    ? "Pick a single line for that player market."
-                    : "Pick a single line for that market.",
-            conflictLegId: sameFamily.id,
-        };
-    }
-
-    const incomingIsMoneyline = isMoneylineMarket(incoming.market);
-    const incomingIsSpread = isPointSpreadMarket(incoming.market);
-    const correlationConflict = existing.find((leg) => {
-        const legIsMoneyline = isMoneylineMarket(leg.market);
-        const legIsSpread = isPointSpreadMarket(leg.market);
-        const isMix =
-            (incomingIsMoneyline && legIsSpread) || (incomingIsSpread && legIsMoneyline);
-        if (!isMix) return false;
-        if (leg.eventId !== incoming.eventId) return false;
-        if (leg.periodKey !== incoming.periodKey) return false;
-        if (!leg.teamKey || !incoming.teamKey) return false;
-        return leg.teamKey === incoming.teamKey;
-    });
-
-    if (correlationConflict) {
-        return {
-            ok: false,
-            reason: "Moneyline and spread for the same team in the same period cannot be combined.",
-            conflictLegId: correlationConflict.id,
-        };
-    }
-
-    return { ok: true };
+    return {
+        ok: true,
+        validation: pricing.validation,
+        pricing,
+    };
 };
 
 export const validateParlayWithApi = async (
-    _legs: ParlayLeg[]
-): Promise<{ ok: boolean; reason?: string }> => {
-    return { ok: true };
+    legs: ParlayLeg[]
+): Promise<{ ok: boolean; reason?: string; validation?: SlipValidationResult }> => {
+    const validation = validateSlip(legs);
+    if (validation.blockedLegIds.length > 0) {
+        return {
+            ok: false,
+            reason: validation.userMessages[0] ?? "These selections can’t be combined.",
+            validation,
+        };
+    }
+    return { ok: true, validation };
 };

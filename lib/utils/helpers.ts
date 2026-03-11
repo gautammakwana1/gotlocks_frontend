@@ -1,4 +1,4 @@
-import { RESTRICTED_WORDS } from "../constants";
+import { leetMap, RESTRICTED_WORDS, USERNAME_RESERVED_WORD } from "../constants";
 
 export const getShortTeamName = (teamName: string) => {
     const words = teamName.split(" ");
@@ -24,19 +24,6 @@ export const checkAnyRestrictedWords = (input: string) => {
 
     let normalized = input.toLowerCase();
 
-    // replace common leetspeak characters
-    const leetMap: Record<string, string> = {
-        "@": "a",
-        "4": "a",
-        "3": "e",
-        "1": "i",
-        "!": "i",
-        "0": "o",
-        "$": "s",
-        "5": "s",
-        "7": "t",
-    };
-
     normalized = normalized
         .split("")
         .map((c) => leetMap[c] || c)
@@ -47,6 +34,23 @@ export const checkAnyRestrictedWords = (input: string) => {
     normalized = normalized.replace(/(.)\1+/g, "$1");
 
     return RESTRICTED_WORDS.some((word) =>
+        normalized.includes(word)
+    );
+};
+
+export const checkForReservedWords = (input: string) => {
+    if (!input) return false;
+
+    let normalized = input.toLowerCase();
+
+    normalized = normalized
+        .split("")
+        .map((c) => leetMap[c] || c)
+        .join("");
+
+    normalized = normalized.replace(/(.)\1+/g, "$1");
+
+    return USERNAME_RESERVED_WORD.some((word) =>
         normalized.includes(word)
     );
 };

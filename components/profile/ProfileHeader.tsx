@@ -16,7 +16,7 @@ import { CurrentUser, Profile, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
-import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import { UserIcon } from "../layout/MainTabBar";
 
 interface FormErrors {
@@ -270,6 +270,11 @@ const ProfileHeader = ({
         const containsNameRestricted = checkAnyRestrictedWords(username);
         if (containsNameRestricted) {
             nextErrors.username = "Username contains inappropriate language.";
+        }
+
+        const containsReserveWords = checkForReservedWords(username);
+        if (containsReserveWords) {
+            nextErrors.username = "Username contains reserved words.";
         }
 
         setErrors(nextErrors);
