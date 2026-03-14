@@ -37,7 +37,7 @@ const VIEWPORT_PADDING = 12;
 
 type Props = {
     value: ConfidenceLevel | null;
-    onChange: (value: ConfidenceLevel) => void;
+    onChange: (value: ConfidenceLevel | null) => void;
     disabled?: boolean;
 };
 
@@ -108,7 +108,7 @@ const ConfidenceDropdown = ({ value, onChange, disabled = false }: Props) => {
     }, [open]);
 
     const handleSelect = (next: ConfidenceLevel) => {
-        onChange(next);
+        onChange(next === value ? null : next);
         setOpen(false);
     };
 

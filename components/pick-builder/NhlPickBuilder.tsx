@@ -9,7 +9,6 @@ import {
 } from "@/lib/utils/games";
 import {
     normalizeOddToLeg,
-    prepareSlipPricing,
     validateAddLeg,
 } from "@/lib/sgp/validateParlay";
 import {
@@ -28,7 +27,9 @@ import FootballAnimation from "../animations/FootballAnimation";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { getShortTeamName } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import ConfidenceDropdown from "../ui/ConfidenceDropdown";
+import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
+import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
+import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 
 type OddsBlazeTeam = {
     id: string;
@@ -103,16 +104,6 @@ type TotalLineEntry = {
     under?: OddsBlazeOdd;
 };
 
-type ReviewListItem = {
-    id: string;
-    description?: string;
-    odds?: string;
-    sourceTabLabel: string;
-    tierLine?: string;
-    onEdit?: () => void;
-    onDelete?: () => void;
-};
-
 type Props = {
     sport: League | string;
     group: Group;
@@ -139,6 +130,7 @@ type Props = {
     allowAutoDateAdvance?: boolean;
     hideDateControls?: boolean;
     onDateOptionsChange?: (options: Array<{ key: string; label: string }>) => void;
+    reviewSheetState?: ReviewSheetState;
 };
 
 const TAB_ORDER = [
@@ -436,37 +428,6 @@ const formatOdds = (american?: number | string | null) => {
 };
 
 const DASH_SEPARATOR = " \u2014 ";
-
-const extractPickLine = (description: string | undefined) => {
-    if (!description) return undefined;
-    const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-    const candidate = matchupSegment?.trim();
-    const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-    if (hasMatchup && lineSegments.length > 0) {
-        return lineSegments.join(DASH_SEPARATOR);
-    }
-    return description;
-};
-
-const toDecimalOdds = (american: number) =>
-    american > 0 ? 1 + american / 100 : 1 + 100 / Math.abs(american);
-
-const toAmericanOdds = (decimal: number) => {
-    if (!Number.isFinite(decimal) || decimal <= 1) return null;
-    if (decimal >= 2) return Math.round((decimal - 1) * 100);
-    return Math.round(-100 / (decimal - 1));
-};
-
-const combineParlayOdds = (legs: ParlayLeg[]) => {
-    if (legs.length === 0) return null;
-    let decimal = 1;
-    for (const leg of legs) {
-        const american = parseAmericanOdds(leg.price);
-        if (american === null) return null;
-        decimal *= toDecimalOdds(american);
-    }
-    return toAmericanOdds(decimal);
-};
 
 const playerTeamLabel = (player: OddsBlazePlayer, game?: GameOption) => {
     if (player.team?.abbreviation) return player.team.abbreviation;
@@ -887,6 +848,7 @@ export const NhlPickBuilder = ({
     allowAutoDateAdvance = false,
     hideDateControls = false,
     onDateOptionsChange,
+    reviewSheetState,
 }: Props) => {
     const isMobile = useIsMobile();
     const dispatch = useDispatch();
@@ -897,16 +859,43 @@ export const NhlPickBuilder = ({
     const [pointsSideByMarket, setPointsSideByMarket] = useState<
         Record<string, "Over" | "Under">
     >({});
-    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(
+    const [localCollapsedSections, setLocalCollapsedSections] = useState<
+        Record<string, boolean>
+    >(
         {}
     );
     const [selected, setSelected] = useState<SelectedOdd | null>(null);
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
     const [altTotalLine, setAltTotalLine] = useState<number | null>(null);
-    const [isReviewOpen, setIsReviewOpen] = useState(false);
-    const [selectedConfidence, setSelectedConfidence] =
+    const [localIsReviewOpen, setLocalIsReviewOpen] = useState(false);
+    const [localSelectedConfidence, setLocalSelectedConfidence] =
         useState<ConfidenceLevel | null>(null);
+    const [localSameGameComboConfidences, setLocalSameGameComboConfidences] =
+        useState<Record<string, ConfidenceLevel | null>>({});
+    const [localStraightConfidences, setLocalStraightConfidences] = useState<
+        Record<string, ConfidenceLevel | null>
+    >({});
     const [localParlayLegs, setLocalParlayLegs] = useState<ParlayLeg[]>([]);
+    const collapsedSections =
+        reviewSheetState?.collapsedSections ?? localCollapsedSections;
+    const setCollapsedSections =
+        reviewSheetState?.setCollapsedSections ?? setLocalCollapsedSections;
+    const isReviewOpen = reviewSheetState?.isOpen ?? localIsReviewOpen;
+    const setIsReviewOpen = reviewSheetState?.setIsOpen ?? setLocalIsReviewOpen;
+    const selectedConfidence =
+        reviewSheetState?.selectedConfidence ?? localSelectedConfidence;
+    const setSelectedConfidence =
+        reviewSheetState?.setSelectedConfidence ?? setLocalSelectedConfidence;
+    const sameGameComboConfidences =
+        reviewSheetState?.sameGameComboConfidences ??
+        localSameGameComboConfidences;
+    const setSameGameComboConfidences =
+        reviewSheetState?.setSameGameComboConfidences ??
+        setLocalSameGameComboConfidences;
+    const straightConfidences =
+        reviewSheetState?.straightConfidences ?? localStraightConfidences;
+    const setStraightConfidences =
+        reviewSheetState?.setStraightConfidences ?? setLocalStraightConfidences;
     const parlayLegs = externalParlayLegs ?? localParlayLegs;
     const setParlayLegs = onParlayLegsChange ?? setLocalParlayLegs;
     const isPostMode = builderMode === "post";
@@ -945,10 +934,13 @@ export const NhlPickBuilder = ({
         }
     }, [nhlSchedules, nhlOdds, activeGameId]);
 
-    const resolveTierMetaForOdds = (americanOdds: number) =>
-        useGroupScoring
-            ? getGroupTierForAmericanOdds(americanOdds)
-            : getTierForAmericanOdds(americanOdds);
+    const resolveTierMetaForOdds = useCallback(
+        (americanOdds: number) =>
+            useGroupScoring
+                ? getGroupTierForAmericanOdds(americanOdds)
+                : getTierForAmericanOdds(americanOdds),
+        [useGroupScoring]
+    );
 
     const games = useMemo<GameOption[]>(() => {
         if (!nhlMatchSchedules) return [];
@@ -1199,20 +1191,24 @@ export const NhlPickBuilder = ({
             };
         }, [sport, slip.isGraded]
     );
+    const cacheReviewFromDraft = useCallback(
+        (draft: DraftPick): CachedReviewData => ({
+            payload: draft,
+            summary: draft.summary,
+            odds: draft.odds_bracket ?? draft.odds,
+            sourceTabLabel: draft.sourceTab ?? "Pick",
+        }),
+        []
+    );
 
     const localDraft = useMemo(
         () => (selected ? buildDraftPick(selected.odd, selected.game) : null),
         [selected, buildDraftPick]
     );
     const hasMultipick = isParlayMode && parlayLegs.length > 1;
-    const parlayPricing = useMemo(() => prepareSlipPricing(parlayLegs), [parlayLegs]);
-    const comboOddsValue = useMemo(
-        () =>
-            hasMultipick && parlayPricing.canUseStandardParlayPricing
-                ? combineParlayOdds(parlayPricing.pricingLegs as ParlayLeg[])
-                : null,
-        [hasMultipick, parlayPricing]
-    );
+    const parlayQuote = useMemo(() => quoteSlipOdds(parlayLegs), [parlayLegs]);
+    const parlayPricing = parlayQuote.pricing;
+    const comboOddsValue = hasMultipick ? parlayQuote.americanOdds : null;
     const comboTierMeta =
         comboOddsValue !== null ? resolveTierMetaForOdds(comboOddsValue) : null;
     const comboLegs: PickLeg[] = useMemo(
@@ -1236,7 +1232,7 @@ export const NhlPickBuilder = ({
                         playerId: leg.playerId,
                         side: normalizeSide(leg.side),
                         scope: leg.marketKey,
-                        threshold: leg.line,
+                        threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
                         external_pick_key: leg.id,
                         away_team: game?.awayTeam,
@@ -1261,7 +1257,7 @@ export const NhlPickBuilder = ({
         if (uniqueSports.length > 1) return "Combo";
         return sport;
     }, [parlayLegs, sport]);
-    const comboDraft = useMemo(() => {
+    const comboDraft = useMemo<DraftPick | null>(() => {
         if (!hasMultipick) return null;
         const description = comboLegs.map((leg) => leg.description).join(" + ");
         const summaryLabel = description ? `Combo: ${description}` : "Combo pick";
@@ -1312,7 +1308,6 @@ export const NhlPickBuilder = ({
     const hasMultiSelection = hasMultipick;
     const multiSelectionCount = hasMultipick ? parlayLegs.length : reviewDrafts.length;
     const showReviewSheet = Boolean(activeDraft);
-    const postActionLabel = hasMultipick ? "post combo" : "post pick";
     const activeDraftKey = useMemo(() => {
         if (!activeDraft) return "";
         const payload = activeDraft;
@@ -1371,15 +1366,18 @@ export const NhlPickBuilder = ({
         return selected?.odd.id === odd.id;
     };
 
-    const findLegContext = (leg: ParlayLeg) => {
-        const targetGame =
-            visibleGames.find((game) => game.id === leg.eventId) ??
-            games.find((game) => game.id === leg.eventId);
-        if (!targetGame) return null;
-        const targetOdd = targetGame.odds.find((odd) => odd.id === leg.id);
-        if (!targetOdd) return null;
-        return { game: targetGame, odd: targetOdd };
-    };
+    const findLegContext = useCallback(
+        (leg: ParlayLeg) => {
+            const targetGame =
+                visibleGames.find((game) => game.id === leg.eventId) ??
+                games.find((game) => game.id === leg.eventId);
+            if (!targetGame) return null;
+            const targetOdd = targetGame.odds.find((odd) => odd.id === leg.id);
+            if (!targetOdd) return null;
+            return { game: targetGame, odd: targetOdd };
+        },
+        [games, visibleGames]
+    );
 
     const handleEditParlayLeg = (leg: ParlayLeg) => {
         const context = findLegContext(leg);
@@ -1427,51 +1425,251 @@ export const NhlPickBuilder = ({
         setSelected(null);
     };
 
+    const straightReviewItems = useMemo(
+        () =>
+            hasMultipick
+                ? parlayLegs
+                    .map((leg) => {
+                        const context = findLegContext(leg);
+                        const cachedReview = leg.cachedReview ?? null;
+                        if (!context && !cachedReview) return null;
+                        const draft = context ? buildDraftPick(context.odd, context.game) : null;
+                        const payload = draft ?? cachedReview?.payload;
+                        if (!payload) return null;
+                        const tierMeta = getTierMetaForPick({
+                            odds: payload.odds_bracket ?? draft?.odds ?? cachedReview?.odds,
+                            label: payload.difficulty_label,
+                            points: payload.points ?? draft?.points,
+                            mode: useGroupScoring ? "groupLeaderboard" : "global",
+                        });
+                        const tierPrimary = tierMeta
+                            ? formatTierPrimary(tierMeta.tier)
+                            : draft?.displayDifficulty ?? "Tier —";
+                        const tierPoints = useGroupScoring
+                            ? tierMeta?.points
+                            : payload.points ?? draft?.points ?? tierMeta?.points;
+                        const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
+                        const tierLine = `${tierPrimary}${typeof tierPoints === "number" ? ` · ${tierPoints} pts` : ""
+                            }${tierName && tierName !== "—" ? ` · ${tierName}` : ""}`;
+
+                        return {
+                            id: leg.id,
+                            description: draft?.summary ?? cachedReview?.summary ?? leg.displayName,
+                            odds:
+                                payload.odds_bracket ??
+                                draft?.odds ??
+                                cachedReview?.odds ??
+                                formatOdds(leg.price),
+                            sourceTabLabel:
+                                payload.sourceTab ?? cachedReview?.sourceTabLabel ?? "Pick",
+                            payload,
+                            tierLine,
+                            tierCard: resolveTierCardAppearance(tierMeta?.color),
+                        };
+                    })
+                    .filter(
+                        (
+                            item
+                        ): item is {
+                            id: string;
+                            description: string;
+                            odds: string;
+                            sourceTabLabel: string;
+                            payload: BuiltPickPayload;
+                            tierLine: string;
+                            tierCard: ReturnType<typeof resolveTierCardAppearance>;
+                        } => item !== null
+                    )
+                : [],
+        [buildDraftPick, findLegContext, hasMultipick, parlayLegs, useGroupScoring]
+    );
+
     const resetAfterPost = () => {
         setIsReviewOpen(false);
         setSelected(null);
         setParlayLegs([]);
         setSelectedConfidence(null);
+        setSameGameComboConfidences({});
+        setStraightConfidences({});
         onDraftPickChange?.(null);
     };
 
-    const reviewListItems: ReviewListItem[] = hasMultipick
-        ? parlayLegs.map((leg) => {
-            const legContext = findLegContext(leg);
-            const sourceTabLabel = legContext
-                ? TAB_LABELS[tabForOdd(legContext.odd)]
-                : "Pick";
-            const legTierMeta = getTierMetaForPick({
-                odds: leg.price,
-                mode: "global",
+    useEffect(() => {
+        if (!hasMultipick) {
+            setStraightConfidences({});
+            return;
+        }
+
+        setStraightConfidences((prev) => {
+            const next: Record<string, ConfidenceLevel | null> = {};
+            straightReviewItems.forEach((item) => {
+                next[item.id] = prev[item.id] ?? item.payload.confidence ?? null;
             });
-            const legTierPrimary = legTierMeta
-                ? formatTierPrimary(legTierMeta.tier)
-                : "Tier —";
-            const legPoints = legTierMeta?.points;
-            const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
-                }`;
-            return {
-                id: leg.id,
-                description: leg.displayName,
-                odds: leg.price,
-                sourceTabLabel,
-                tierLine: legTierLine,
-                onEdit: () => handleEditParlayLeg(leg),
-                onDelete: () => handleRemoveParlayLeg(leg.id),
-            };
-        })
-        : activeDraft
-            ? [
-                {
-                    id: activeDraft.summary ?? "selected-pick",
-                    description: activeDraft.summary,
-                    odds: activeDraft.odds_bracket ?? activeDraft.odds,
-                    sourceTabLabel: activeDraft.sourceTab ?? "Pick",
-                    onDelete: handleRemoveSinglePick,
-                },
-            ]
-            : [];
+            return next;
+        });
+    }, [hasMultipick, setStraightConfidences, straightReviewItems]);
+
+    const comboReviewItems = useMemo(
+        () =>
+            hasMultipick
+                ? parlayLegs.map((leg) => {
+                    const legContext = findLegContext(leg);
+                    const sourceTabLabel = legContext
+                        ? TAB_LABELS[tabForOdd(legContext.odd)]
+                        : leg.cachedReview?.sourceTabLabel ?? "Pick";
+                    const legTierMeta = getTierMetaForPick({
+                        odds: leg.price,
+                        mode: "global",
+                    });
+                    const legTierPrimary = legTierMeta
+                        ? formatTierPrimary(legTierMeta.tier)
+                        : "Tier —";
+                    const legPoints = legTierMeta?.points;
+                    const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
+                        }`;
+                    return {
+                        id: leg.id,
+                        description: leg.displayName,
+                        odds: leg.price,
+                        sourceTabLabel,
+                        tierLine: legTierLine,
+                        onEdit: () => handleEditParlayLeg(leg),
+                        onDelete: () => handleRemoveParlayLeg(leg.id),
+                    };
+                })
+                : activeDraft
+                    ? []
+                    : [],
+        [activeDraft, findLegContext, hasMultipick, parlayLegs]
+    );
+
+    const sameGameComboGroups = useMemo<
+        Array<SameGameComboReviewGroup & { payload: BuiltPickPayload }>
+    >(() => {
+        if (!hasMultipick) return [];
+
+        const entries = parlayLegs
+            .map((leg, index) => ({
+                leg,
+                comboLeg: comboLegs[index] ?? null,
+                reviewItem: comboReviewItems[index] ?? null,
+            }))
+            .filter(
+                (
+                    entry
+                ): entry is {
+                    leg: ParlayLeg;
+                    comboLeg: (typeof comboLegs)[number];
+                    reviewItem: (typeof comboReviewItems)[number];
+                } => entry.comboLeg !== null && entry.reviewItem !== null
+            );
+
+        const eventGroups = new Map<string, typeof entries>();
+        entries.forEach((entry) => {
+            const group = eventGroups.get(entry.leg.eventId) ?? [];
+            group.push(entry);
+            eventGroups.set(entry.leg.eventId, group);
+        });
+
+        const groups: Array<
+            SameGameComboReviewGroup & { payload: BuiltPickPayload }
+        > = [];
+
+        Array.from(eventGroups.values())
+            .filter((group) => group.length > 1)
+            .forEach((group) => {
+                const groupLegs = group.map((entry) => entry.leg);
+                const groupQuote = quoteSlipOdds(groupLegs);
+                const groupPricing = groupQuote.pricing;
+                if (!groupPricing.canBuildCombo) return;
+
+                const groupOddsValue = groupQuote.americanOdds;
+                const groupOddsLabel =
+                    groupOddsValue === null ? null : formatOdds(groupOddsValue);
+                const groupTierMeta =
+                    groupOddsValue !== null ? resolveTierMetaForOdds(groupOddsValue) : null;
+                const groupTierPrimary = groupTierMeta
+                    ? formatTierPrimary(groupTierMeta.tier)
+                    : "Tier —";
+                const groupPoints = useGroupScoring
+                    ? groupTierMeta?.points
+                    : groupTierMeta?.points;
+                const groupTierLine = `${groupTierPrimary}${typeof groupPoints === "number" ? ` · ${groupPoints} pts` : ""
+                    }`;
+                const description = group
+                    .map((entry) => entry.comboLeg.description)
+                    .join(" + ");
+                const summaryLabel = description
+                    ? `Same Game Combo: ${description}`
+                    : "Same game combo";
+                const difficultyLabel = slip.isGraded
+                    ? null
+                    : groupTierMeta
+                        ? tierLabelFromTier(groupTierMeta.tier)
+                        : null;
+
+                groups.push({
+                    id: `same-game-${group[0].leg.eventId}`,
+                    label: group[0].leg.matchup ?? "Same game combo",
+                    oddsLabel: groupOddsLabel,
+                    validationCopy: groupPricing.requiresCustomPricing && groupOddsValue === null
+                        ? "These picks require custom pricing."
+                        : null,
+                    items: group.map((entry) => entry.reviewItem),
+                    tierLine: groupTierLine,
+                    tierCard: resolveTierCardAppearance(groupTierMeta?.color),
+                    payload: {
+                        sport: groupLegs[0]?.sport ?? sport,
+                        description: summaryLabel,
+                        odds_bracket: groupOddsLabel,
+                        difficulty_label: difficultyLabel,
+                        buildMode: "ODDS",
+                        points: groupTierMeta?.points,
+                        isCombo: true,
+                        legs: group.map((entry) => entry.comboLeg),
+                        sourceTab: "Same Game Combo",
+                    } satisfies BuiltPickPayload,
+                });
+            });
+
+        return groups;
+    }, [
+        comboLegs,
+        comboReviewItems,
+        hasMultipick,
+        parlayLegs,
+        resolveTierMetaForOdds,
+        slip.isGraded,
+        sport,
+        useGroupScoring,
+    ]);
+
+    useEffect(() => {
+        if (!hasMultipick) {
+            setSameGameComboConfidences({});
+            return;
+        }
+
+        setSameGameComboConfidences((prev) => {
+            const next: Record<string, ConfidenceLevel | null> = {};
+            sameGameComboGroups.forEach((group) => {
+                next[group.id] = prev[group.id] ?? group.payload.confidence ?? null;
+            });
+            return next;
+        });
+    }, [hasMultipick, sameGameComboGroups, setSameGameComboConfidences]);
+
+    const reviewListItems = !hasMultipick && activeDraft
+        ? [
+            {
+                id: activeDraft.summary ?? "selected-pick",
+                description: activeDraft.summary,
+                odds: activeDraft.odds_bracket ?? activeDraft.odds,
+                sourceTabLabel: activeDraft.sourceTab ?? "Pick",
+                onDelete: handleRemoveSinglePick,
+            },
+        ]
+        : [];
 
     const handleSelectOdd = (
         odd: OddsBlazeOdd,
@@ -1501,6 +1699,7 @@ export const NhlPickBuilder = ({
                 odds: game.odds as OddsEvent["odds"],
             };
             const matchup = matchupLabel(game);
+            const legDraft = buildDraftPick(odd, game);
             const incomingLeg = {
                 ...normalizeOddToLeg(eventForLeg, {
                     ...odd,
@@ -1512,6 +1711,7 @@ export const NhlPickBuilder = ({
                         }
                         : undefined,
                 }),
+                cachedReview: cacheReviewFromDraft(legDraft),
                 sport,
                 matchup,
                 startTime: game.date,
@@ -1558,8 +1758,7 @@ export const NhlPickBuilder = ({
                 return;
             }
             setParlayLegs((prev) => [...prev, incomingLeg]);
-            const nextDraft = buildDraftPick(odd, game);
-            onDraftPickChange?.(nextDraft);
+            onDraftPickChange?.(legDraft);
             setSelected({ odd, game });
             return;
         }
@@ -1587,99 +1786,291 @@ export const NhlPickBuilder = ({
         });
     };
 
-    const buildParlayLegPayloads = () => {
-        const payloads: BuiltPickPayload[] = [];
-        for (const leg of parlayLegs) {
-            const context = findLegContext(leg);
-            if (!context) return null;
-            payloads.push(buildDraftPick(context.odd, context.game));
+    const straightSectionKey = "review-straight-picks";
+    const sameGameSectionKey = "review-same-game-combo-picks";
+    const isSameGameSectionCollapsed = hasMultiSelection
+        ? isSectionCollapsed(sameGameSectionKey, false)
+        : true;
+    const isStraightSectionCollapsed = hasMultiSelection
+        ? isSectionCollapsed(straightSectionKey, false)
+        : true;
+
+    const canSubmitPayloadCount = (payloadCount: number) => {
+        if (confirmationVariant !== "slip" || slip.pick_limit === "unlimited") {
+            return true;
         }
-        return payloads;
-    };
 
-    const submitPick = (action: "post" | "slip") => {
-        if (locked) return;
-
-        if (action === "post" && !selectedConfidence) {
+        const existingCount = picks.filter(
+            (entry) => entry.slip_id === slip.id && entry.user_id === currentUser?.userId
+        ).length;
+        const isEditing =
+            Boolean(
+                initialPick &&
+                initialPick.slip_id === slip.id &&
+                initialPick.user_id === currentUser?.userId
+            );
+        const adjustedCount = isEditing ? Math.max(0, existingCount - 1) : existingCount;
+        if (adjustedCount + payloadCount > slip.pick_limit) {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: "Select a confidence level to post.",
+                message: "Pick limit reached for this slip.",
                 duration: 3000
             });
-            return;
+            return false;
         }
+
+        return true;
+    };
+
+    const dispatchPayloads = (
+        payloads: BuiltPickPayload[],
+        action: "post" | "slip"
+    ) => {
+        if (locked || payloads.length === 0) return;
+        if (!canSubmitPayloadCount(payloads.length)) return;
 
         const handler = action === "post"
             ? onCreatePostPick ?? onSave
             : onPostToSlip ?? onSave;
 
-        if (hasMultipick) {
-            if (action === "post") {
-                if (!activeDraft) return;
-                handler({
-                    ...activeDraft,
-                    confidence: selectedConfidence ?? activeDraft.confidence ?? null,
-                });
-                resetAfterPost();
+        payloads.forEach((payload) => {
+            handler(payload);
+        });
+        resetAfterPost();
+    };
+
+    const buildComboSubmissionPayload = (action: "post" | "slip") => {
+        if (!comboDraft) return null;
+        if (!parlayPricing.canBuildCombo) {
+            setToast({ id: Date.now(), type: "error", message: "Selections cannot be combined.", duration: 3000 });
+            return null;
+        }
+        if (action === "post" && !selectedConfidence) {
+            setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
+            return null;
+        }
+
+        return {
+            ...comboDraft,
+            confidence: action === "post" ? selectedConfidence ?? null : null,
+        } satisfies BuiltPickPayload;
+    };
+
+    const buildStraightSubmissionPayload = (
+        legId: string,
+        action: "post" | "slip"
+    ) => {
+        const item = straightReviewItems.find((entry) => entry.id === legId);
+        if (!item) return null;
+        const confidence = straightConfidences[legId] ?? null;
+
+        if (action === "post" && !confidence) {
+            setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
+            return null;
+        }
+
+        return {
+            ...item.payload,
+            confidence: action === "post" ? confidence : null,
+        } satisfies BuiltPickPayload;
+    };
+
+    const buildSameGameComboSubmissionPayload = (
+        groupId: string,
+        action: "post" | "slip"
+    ) => {
+        const group = sameGameComboGroups.find((entry) => entry.id === groupId);
+        if (!group) return null;
+        const confidence = sameGameComboConfidences[groupId] ?? null;
+
+        if (action === "post" && !confidence) {
+            setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
+            return null;
+        }
+
+        return {
+            ...group.payload,
+            confidence: action === "post" ? confidence : null,
+        } satisfies BuiltPickPayload;
+    };
+
+    const submitCombo = (action: "post" | "slip") => {
+        const payload = buildComboSubmissionPayload(action);
+        if (!payload) return;
+        dispatchPayloads([payload], action);
+    };
+
+    const submitSameGameCombo = (groupId: string, action: "post" | "slip") => {
+        const payload = buildSameGameComboSubmissionPayload(groupId, action);
+        if (!payload) return;
+        dispatchPayloads([payload], action);
+    };
+
+    const submitStraight = (legId: string, action: "post" | "slip") => {
+        const payload = buildStraightSubmissionPayload(legId, action);
+        if (!payload) return;
+        dispatchPayloads([payload], action);
+    };
+
+    const submitSelectedPosts = ({
+        includeMainCombo,
+        includeSinglePick,
+        sameGameGroupIds,
+        straightIds,
+    }: ReviewSheetPostSelection) => {
+        const payloads: BuiltPickPayload[] = [];
+
+        if (includeMainCombo) {
+            const comboPayload = buildComboSubmissionPayload("post");
+            if (!comboPayload) return;
+            payloads.push(comboPayload);
+        }
+
+        for (const groupId of sameGameGroupIds) {
+            const sameGamePayload = buildSameGameComboSubmissionPayload(groupId, "post");
+            if (!sameGamePayload) return;
+            payloads.push(sameGamePayload);
+        }
+
+        for (const legId of straightIds) {
+            const straightPayload = buildStraightSubmissionPayload(legId, "post");
+            if (!straightPayload) return;
+            payloads.push(straightPayload);
+        }
+
+        if (includeSinglePick) {
+            if (!activeDraft || !selectedConfidence) {
+                setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
                 return;
             }
-
-            const payloads = buildParlayLegPayloads();
-            if (!payloads || payloads.length === 0) {
-                setToast({
-                    id: Date.now(),
-                    type: "error",
-                    message: "Couldn't build your picks. Please try again.",
-                    duration: 3000
-                });
-                return;
-            }
-
-            if (slip.pick_limit !== "unlimited") {
-                const existingCount = picks.filter(
-                    (entry) => entry.slip_id === slip.id && entry.user_id === currentUser.userId
-                ).length;
-                const isEditing =
-                    Boolean(
-                        initialPick &&
-                        initialPick.slip_id === slip.id &&
-                        initialPick.user_id === currentUser.userId
-                    );
-                const adjustedCount = isEditing
-                    ? Math.max(0, existingCount - 1)
-                    : existingCount;
-                if (adjustedCount + payloads.length > slip.pick_limit) {
-                    setToast({
-                        id: Date.now(),
-                        type: "error",
-                        message: "Pick limit reached for this slip.",
-                        duration: 3000
-                    });
-                    return;
-                }
-            }
-
-            payloads.forEach((payload) => {
-                handler({
-                    ...payload,
-                    confidence: selectedConfidence ?? payload.confidence ?? null,
-                });
+            payloads.push({
+                ...activeDraft,
+                confidence: selectedConfidence,
             });
-            resetAfterPost();
+        }
+
+        if (payloads.length === 0) {
+            setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
+            return;
+        }
+
+        dispatchPayloads(payloads, "post");
+    };
+
+    const submitPick = (action: "post" | "slip") => {
+        if (locked) return;
+
+        if (hasMultipick) {
+            submitCombo(action);
             return;
         }
 
         if (!activeDraft) return;
-        handler({
-            ...activeDraft,
-            confidence:
-                action === "post"
-                    ? selectedConfidence ?? activeDraft.confidence ?? null
-                    : null,
-        });
-        resetAfterPost();
+        dispatchPayloads(
+            [
+                {
+                    ...activeDraft,
+                    confidence: action === "post" ? selectedConfidence ?? null : null,
+                },
+            ],
+            action
+        );
     };
+
+    // const buildParlayLegPayloads = () => {
+    //     const payloads: BuiltPickPayload[] = [];
+    //     for (const leg of parlayLegs) {
+    //         const context = findLegContext(leg);
+    //         if (!context) return null;
+    //         payloads.push(buildDraftPick(context.odd, context.game));
+    //     }
+    //     return payloads;
+    // };
+
+    // const submitPick = (action: "post" | "slip") => {
+    //     if (locked) return;
+
+    //     if (action === "post" && !selectedConfidence) {
+    //         setToast({
+    //             id: Date.now(),
+    //             type: "error",
+    //             message: "Select a confidence level to post.",
+    //             duration: 3000
+    //         });
+    //         return;
+    //     }
+
+    //     const handler = action === "post"
+    //         ? onCreatePostPick ?? onSave
+    //         : onPostToSlip ?? onSave;
+
+    //     if (hasMultipick) {
+    //         if (action === "post") {
+    //             if (!activeDraft) return;
+    //             handler({
+    //                 ...activeDraft,
+    //                 confidence: selectedConfidence ?? activeDraft.confidence ?? null,
+    //             });
+    //             resetAfterPost();
+    //             return;
+    //         }
+
+    //         const payloads = buildParlayLegPayloads();
+    //         if (!payloads || payloads.length === 0) {
+    //             setToast({
+    //                 id: Date.now(),
+    //                 type: "error",
+    //                 message: "Couldn't build your picks. Please try again.",
+    //                 duration: 3000
+    //             });
+    //             return;
+    //         }
+
+    //         if (slip.pick_limit !== "unlimited") {
+    //             const existingCount = picks.filter(
+    //                 (entry) => entry.slip_id === slip.id && entry.user_id === currentUser.userId
+    //             ).length;
+    //             const isEditing =
+    //                 Boolean(
+    //                     initialPick &&
+    //                     initialPick.slip_id === slip.id &&
+    //                     initialPick.user_id === currentUser.userId
+    //                 );
+    //             const adjustedCount = isEditing
+    //                 ? Math.max(0, existingCount - 1)
+    //                 : existingCount;
+    //             if (adjustedCount + payloads.length > slip.pick_limit) {
+    //                 setToast({
+    //                     id: Date.now(),
+    //                     type: "error",
+    //                     message: "Pick limit reached for this slip.",
+    //                     duration: 3000
+    //                 });
+    //                 return;
+    //             }
+    //         }
+
+    //         payloads.forEach((payload) => {
+    //             handler({
+    //                 ...payload,
+    //                 confidence: selectedConfidence ?? payload.confidence ?? null,
+    //             });
+    //         });
+    //         resetAfterPost();
+    //         return;
+    //     }
+
+    //     if (!activeDraft) return;
+    //     handler({
+    //         ...activeDraft,
+    //         confidence:
+    //             action === "post"
+    //                 ? selectedConfidence ?? activeDraft.confidence ?? null
+    //                 : null,
+    //     });
+    //     resetAfterPost();
+    // };
 
     const buildOddsBoxClasses = (
         base: string,
@@ -1955,13 +2346,65 @@ export const NhlPickBuilder = ({
     const comboOddsLabel = hasMultiSelection
         ? activeDraft?.odds_bracket ?? activeDraft?.odds ?? null
         : null;
+    const comboHasInvalidSelections =
+        hasMultiSelection && parlayPricing.hasInvalidComboLegs;
+    const comboValidationCopy = comboHasInvalidSelections
+        ? "Selections cannot be combined"
+        : parlayPricing.requiresCustomPricing && comboOddsValue === null
+            ? "These picks require custom pricing."
+            : null;
+    const comboValidationReasons = comboHasInvalidSelections
+        ? parlayPricing.invalidComboReasons
+        : [];
     const sheetHeaderLabel = hasMultipick
         ? confirmationVariant === "post"
-            ? "combo pick post"
+            ? "Post Slip"
             : "combo pick"
         : confirmationVariant === "post"
-            ? "single pick post"
+            ? "Post Slip"
             : "selected pick";
+    const renderReviewSheet = () => (
+        <PickReviewSheet
+            show={showReviewSheet}
+            isOpen={isReviewOpen}
+            onOpenChange={setIsReviewOpen}
+            hasMultiSelection={hasMultiSelection}
+            multiSelectionCount={multiSelectionCount}
+            sheetHeaderLabel={sheetHeaderLabel}
+            sheetSummary={sheetSummary}
+            confirmationVariant={confirmationVariant}
+            locked={locked}
+            comboHasInvalidSelections={comboHasInvalidSelections}
+            comboValidationCopy={comboValidationCopy}
+            comboValidationReasons={comboValidationReasons}
+            comboOddsLabel={comboOddsLabel}
+            comboReviewItems={comboReviewItems}
+            sameGameComboGroups={sameGameComboGroups}
+            straightReviewItems={straightReviewItems}
+            reviewListItems={reviewListItems}
+            sheetTierCard={sheetTierCard}
+            sheetTierLine={sheetTierLine}
+            selectedConfidence={selectedConfidence}
+            onSelectedConfidenceChange={setSelectedConfidence}
+            sameGameComboConfidences={sameGameComboConfidences}
+            onSameGameComboConfidenceChange={(id, value) =>
+                setSameGameComboConfidences((prev) => ({ ...prev, [id]: value }))
+            }
+            straightConfidences={straightConfidences}
+            onStraightConfidenceChange={(id, value) =>
+                setStraightConfidences((prev) => ({ ...prev, [id]: value }))
+            }
+            isSameGameSectionCollapsed={isSameGameSectionCollapsed}
+            onToggleSameGameSection={() => toggleSection(sameGameSectionKey, false)}
+            isStraightSectionCollapsed={isStraightSectionCollapsed}
+            onToggleStraightSection={() => toggleSection(straightSectionKey, false)}
+            onSubmitCombo={submitCombo}
+            onSubmitSameGameCombo={submitSameGameCombo}
+            onSubmitStraight={submitStraight}
+            onSubmitSingle={submitPick}
+            onSubmitSelectedPosts={submitSelectedPosts}
+        />
+    );
 
     const mainLineOdds = useMemo(() => {
         if (!activeGame) return null;
@@ -2182,14 +2625,14 @@ export const NhlPickBuilder = ({
         >
             {!activeGame ? (
                 <div className="grid gap-6">
-                    <div className="space-y-3">
+                    <div className={`space-y-3 ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-10" : "mb-30" : showReviewSheet ? isMobile ? "mb-10" : "mb-30" : ""}`}>
                         <div className="flex items-center justify-between">
                             <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                             <span className="text-xs uppercase tracking-wide text-gray-400">
                                 game lines + props
                             </span>
                         </div>
-                        {showDateFilters && dateOptions.length > 0 && (
+                        {/* {showDateFilters && dateOptions.length > 0 && (
                             <div className="flex w-full items-center gap-3 overflow-x-auto pb-1">
                                 {dateOptions.map((option) => {
                                     const active = option.key === effectiveDateKey;
@@ -2208,7 +2651,7 @@ export const NhlPickBuilder = ({
                                     );
                                 })}
                             </div>
-                        )}
+                        )} */}
                         {filteredGames.length === 0 ? (
                             <div className="rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
                                 <p className="font-semibold text-white">
@@ -2291,7 +2734,7 @@ export const NhlPickBuilder = ({
                                                     handleSelectGame(game);
                                                 }
                                             }}
-                                            className="py-4 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
+                                            className="py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
                                         >
                                             <div
                                                 className="grid items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
@@ -2993,198 +3436,7 @@ export const NhlPickBuilder = ({
                 </>
             )}
 
-            {showReviewSheet && isReviewOpen && (
-                <div
-                    className="fixed inset-x-0 top-0 bottom-[calc(0.75rem+4.5rem)] z-30 bg-black/70 sm:bottom-[calc(0.75rem+4.875rem)] md:bottom-[calc(0.75rem+4.875rem*1.45)]"
-                    role="presentation"
-                    onClick={() => setIsReviewOpen(false)}
-                />
-            )}
-
-            {showReviewSheet && (
-                <div className="fixed inset-x-0 bottom-3 z-30 flex justify-center px-5 sm:px-6">
-                    <div className="w-[360px] sm:w-[390px] md:origin-bottom md:scale-[1.45]">
-                        <div
-                            className={`rounded-3xl sheet-rounded border border-b-0 border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] pb-[4.5rem] shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur sm:pb-[4.875rem] ${isReviewOpen
-                                ? "max-h-[calc(100dvh-6rem)] overflow-y-auto sheet-scroll md:max-h-[calc((100dvh-6rem)*0.689655)]"
-                                : "overflow-hidden"
-                                }`}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => setIsReviewOpen((prev) => !prev)}
-                                className={`flex w-full items-center justify-between gap-3 px-4 py-4 text-left ${isReviewOpen
-                                    ? "sticky top-0 z-10 bg-gradient-to-b from-black/80 via-black/60 to-black/20 backdrop-blur"
-                                    : ""
-                                    }`}
-                            >
-                                <div>
-                                    <p className="text-xs lowercase tracking-wide text-gray-400">
-                                        {sheetHeaderLabel}
-                                    </p>
-                                    {isReviewOpen &&
-                                        (hasMultiSelection ? (
-                                            <p className="mt-1 text-sm font-semibold text-white">
-                                                {multiSelectionCount} picks selected
-                                            </p>
-                                        ) : (
-                                            <p className="mt-1 text-sm font-semibold lowercase text-white">
-                                                {confirmationVariant === "post" ? "1 pick selected" : sheetSummary}
-                                            </p>
-                                        ))}
-                                </div>
-                                <span className="text-gray-400">
-                                    {isReviewOpen ? "v" : "^"}
-                                </span>
-                            </button>
-
-                            {isReviewOpen && (
-                                <div className="border-t border-white/10 px-4 pb-5 pt-4 max-h-[500px]">
-                                    <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="w-full space-y-1">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                        {hasMultiSelection ? "Your picks" : "Your pick"}
-                                                    </p>
-                                                    {hasMultiSelection && comboOddsLabel && (
-                                                        <div className="shrink-0 pt-3 pr-2 text-right">
-                                                            <span className="block text-[11px] font-semibold text-slate-100">
-                                                                {comboOddsLabel}
-                                                            </span>
-                                                            <span className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                                                combo odds
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <ul className="space-y-2 overflow-y-auto max-h-[250px] custom-scrollbar sm:max-h-[170px]">
-                                                    {reviewListItems.map((item) => {
-                                                        const oddsLabel = formatOdds(item.odds);
-                                                        const pickLine = extractPickLine(item.description);
-                                                        const canDelete = Boolean(item.onDelete);
-                                                        return (
-                                                            <li key={item.id} className="flex w-full items-start gap-3 pr-2">
-                                                                <div className="min-w-0 flex flex-1 items-center gap-2">
-                                                                    {canDelete ? (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={item.onDelete}
-                                                                            className="flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
-                                                                            aria-label="Remove pick"
-                                                                            title="Remove pick"
-                                                                        >
-                                                                            -
-                                                                        </button>
-                                                                    ) : (
-                                                                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
-                                                                    )}
-                                                                    <div className="min-w-0">
-                                                                        {item.sourceTabLabel && (
-                                                                            <span className="block text-[9px] font-semibold uppercase tracking-wide text-gray-400">
-                                                                                {item.sourceTabLabel}
-                                                                            </span>
-                                                                        )}
-                                                                        <p
-                                                                            className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200 md:text-[11px]"
-                                                                            title={item.description}
-                                                                        >
-                                                                            {pickLine}
-                                                                        </p>
-                                                                        {hasMultiSelection && item.tierLine && (
-                                                                            <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                                                                {item.tierLine}
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-start gap-2 pt-3 text-right">
-                                                                    <span className="text-[11px] font-semibold text-slate-100">
-                                                                        {oddsLabel}
-                                                                    </span>
-                                                                </div>
-                                                            </li>
-                                                        );
-                                                    })}
-                                                </ul>
-                                            </div>
-                                        </div>
-
-                                        <div
-                                            className={`grid gap-3 ${confirmationVariant === "post" ? "grid-cols-2" : "grid-cols-1"
-                                                }`}
-                                        >
-                                            <div
-                                                className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.24)] ${sheetTierCard.toneClass}`}
-                                                style={sheetTierCard.style}
-                                            >
-                                                <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
-                                                    tier
-                                                </p>
-                                                <p className="mt-1 text-[10px] font-semibold text-white">
-                                                    {sheetTierLine}
-                                                </p>
-                                            </div>
-                                            {confirmationVariant === "post" && (
-                                                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
-                                                    <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
-                                                        confidence
-                                                    </p>
-                                                    <ConfidenceDropdown
-                                                        value={selectedConfidence}
-                                                        onChange={setSelectedConfidence}
-                                                        disabled={locked}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                        {confirmationVariant === "post" && !selectedConfidence && (
-                                            <p className="text-[11px] text-rose-200">
-                                                Pick a confidence level to post.
-                                            </p>
-                                        )}
-
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            {confirmationVariant === "post" && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => submitPick("post")}
-                                                    disabled={locked || !selectedConfidence}
-                                                    className="rounded-2xl bg-emerald-500/25 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/35 disabled:cursor-not-allowed disabled:opacity-40"
-                                                >
-                                                    {postActionLabel}
-                                                </button>
-                                            )}
-                                            {confirmationVariant === "slip" && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => submitPick("slip")}
-                                                    disabled={locked}
-                                                    className="rounded-2xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-                                                >
-                                                    post to slip
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsReviewOpen(false)}
-                                                className="rounded-2xl border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/40"
-                                            >
-                                                edit pick
-                                            </button>
-                                        </div>
-
-                                        {locked && (
-                                            <p className="text-xs text-rose-200">Picks are locked.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            {renderReviewSheet()}
         </div>
     );
 };

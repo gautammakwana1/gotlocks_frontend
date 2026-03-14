@@ -18,6 +18,9 @@ export default function CustomDatePicker({
 }: CustomDatePickerProps) {
     const [isOpen, setIsOpen] = useState<boolean>(false);
     const [month, setMonth] = useState<Date>(value ?? new Date());
+    const [inputValue, setInputValue] = useState(
+        value ? value.toLocaleDateString() : ""
+    );
     const containerRef = useRef<HTMLLabelElement | null>(null);
 
     useEffect(() => {
@@ -38,9 +41,22 @@ export default function CustomDatePicker({
     // Sync month when value changes
     useEffect(() => {
         if (value) {
+            setInputValue(value.toLocaleDateString());
             setMonth(value);
         }
     }, [value]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const text = e.target.value;
+        setInputValue(text);
+
+        const parsed = new Date(text);
+
+        if (!isNaN(parsed.getTime())) {
+            onChange(parsed);
+            setMonth(parsed);
+        }
+    };
 
     return (
         <label
@@ -56,9 +72,9 @@ export default function CustomDatePicker({
             <div className="relative">
                 <input
                     type="text"
-                    readOnly
-                    value={value ? value.toLocaleDateString() : ""}
+                    value={inputValue}
                     placeholder={placeholder}
+                    onChange={handleInputChange}
                     onClick={() => setIsOpen((prev) => !prev)}
                     className="w-full cursor-pointer rounded-2xl border border-white/10 bg-black px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-emerald-400/70"
                 />
@@ -96,7 +112,17 @@ export default function CustomDatePicker({
                         mode="single"
                         selected={value}
                         month={month}
-                        onMonthChange={(newMonth: Date) => setMonth(newMonth)}
+                        onMonthChange={(newMonth: Date) => {
+                            setMonth(newMonth);
+
+                            if (value) {
+                                const updatedDate = new Date(value);
+                                updatedDate.setFullYear(newMonth.getFullYear());
+                                updatedDate.setMonth(newMonth.getMonth());
+
+                                onChange(updatedDate);
+                            }
+                        }}
                         onSelect={(date: Date | undefined) => {
                             onChange(date);
                             if (date) setMonth(date);

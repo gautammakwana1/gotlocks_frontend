@@ -1,3 +1,4 @@
+import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
 import {
     DEFAULT_VALIDATION_CONFIG,
     prepareSlipPricing,
@@ -82,6 +83,7 @@ export type ParlayLeg = SlipLeg & {
     marketKey: string;
     familyKey: string;
     teamKey?: string;
+    cachedReview?: CachedReviewData;
     periodKey:
     | "1st Half"
     | "2nd Half"
@@ -185,6 +187,7 @@ const selectionMatchesTeam = (selectionName: string, team: OddsTeam) => {
 
 const resolveTeamContext = (event: OddsEvent, odd: OddsOdd) => {
     const selectionName = odd.selection?.name ?? odd.name;
+    const marketName = normalizeText(odd.market);
     if (selectionMatchesTeam(selectionName, event.teams.home)) {
         return {
             teamId: event.teams.home.id,
@@ -193,6 +196,20 @@ const resolveTeamContext = (event: OddsEvent, odd: OddsOdd) => {
         };
     }
     if (selectionMatchesTeam(selectionName, event.teams.away)) {
+        return {
+            teamId: event.teams.away.id,
+            opponentTeamId: event.teams.home.id,
+            side: "away" as SlipSide,
+        };
+    }
+    if (marketName.includes("home team")) {
+        return {
+            teamId: event.teams.home.id,
+            opponentTeamId: event.teams.away.id,
+            side: "home" as SlipSide,
+        };
+    }
+    if (marketName.includes("away team")) {
         return {
             teamId: event.teams.away.id,
             opponentTeamId: event.teams.home.id,

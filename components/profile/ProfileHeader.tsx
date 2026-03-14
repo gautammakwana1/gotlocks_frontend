@@ -12,10 +12,9 @@ import {
     type MouseEvent as ReactMouseEvent,
 } from "react";
 import Image from "next/image";
-import { CurrentUser, Profile, RootState } from "@/lib/interfaces/interfaces";
+import { Profile, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
-import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import { UserIcon } from "../layout/MainTabBar";
 
@@ -295,8 +294,6 @@ const ProfileHeader = ({
         }
 
         dispatch(updateProfileRequest(formData));
-        const storedUser = getLocalStorage<CurrentUser>("currentUser");
-        setLocalStorage("currentUser", { ...storedUser, username: cleanUsername });
 
         setIsEditing(false);
     };

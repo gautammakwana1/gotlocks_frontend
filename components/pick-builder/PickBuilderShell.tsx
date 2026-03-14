@@ -3,12 +3,12 @@
 /**
  * PickBuilderShell is the shared frame for every pick-building surface.
  * - The shell owns the sticky league bar and pipes context (standalone vs slip) into league adapters.
- * - League adapters live in this folder (stub) and components/slips/PickBuilder (NFL).
+ * - League adapters live in this folder.
  * - Keep new leagues lightweight by plugging in an adapter component that calls `onSave` with a BuiltPickPayload.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BuildMode, BuiltPickPayload, CurrentUser, DraftPick, Group, League, Members, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, Members, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import NbaPickBuilder from "./NbaPickBuilder";
 import NflPickBuilder from "./NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
@@ -16,6 +16,7 @@ import NcaabPickBuilder from "./NcaabPickBuilder";
 import NhlPickBuilder from "./NhlPickBuilder";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
+import { ReviewSheetState } from "./reviewSheetState";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -218,6 +219,17 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     );
     const [draftPick, setDraftPick] = useState<DraftPick | null>(null);
     const [sharedParlayLegs, setSharedParlayLegs] = useState<ParlayLeg[]>([]);
+    const [sharedCollapsedSections, setSharedCollapsedSections] = useState<
+        Record<string, boolean>
+    >({});
+    const [sharedReviewOpen, setSharedReviewOpen] = useState(false);
+    const [sharedSelectedConfidence, setSharedSelectedConfidence] =
+        useState<ConfidenceLevel | null>(null);
+    const [sharedSameGameComboConfidences, setSharedSameGameComboConfidences] =
+        useState<Record<string, ConfidenceLevel | null>>({});
+    const [sharedStraightConfidences, setSharedStraightConfidences] = useState<
+        Record<string, ConfidenceLevel | null>
+    >({});
 
     const { leagueCounts } = useSelector((state: RootState) => state.league);
 
@@ -348,13 +360,32 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
 
     const showDateStrip = true;
     const hasDateOptions = showDateStrip && dateOptions.length > 0;
-    const sharedParlayProps =
-        context.mode === "standalone"
-            ? {
-                parlayLegs: sharedParlayLegs,
-                onParlayLegsChange: setSharedParlayLegs,
-            }
-            : {};
+    const reviewSheetState = useMemo<ReviewSheetState>(
+        () => ({
+            collapsedSections: sharedCollapsedSections,
+            setCollapsedSections: setSharedCollapsedSections,
+            isOpen: sharedReviewOpen,
+            setIsOpen: setSharedReviewOpen,
+            selectedConfidence: sharedSelectedConfidence,
+            setSelectedConfidence: setSharedSelectedConfidence,
+            sameGameComboConfidences: sharedSameGameComboConfidences,
+            setSameGameComboConfidences: setSharedSameGameComboConfidences,
+            straightConfidences: sharedStraightConfidences,
+            setStraightConfidences: setSharedStraightConfidences,
+        }),
+        [
+            sharedCollapsedSections,
+            sharedReviewOpen,
+            sharedSelectedConfidence,
+            sharedSameGameComboConfidences,
+            sharedStraightConfidences,
+        ]
+    );
+    const sharedParlayProps = {
+        parlayLegs: sharedParlayLegs,
+        onParlayLegsChange: setSharedParlayLegs,
+        reviewSheetState,
+    };
 
     const handleComplete = (payload: BuiltPickPayload) => {
         const normalized: BuiltPickPayload = {
@@ -403,7 +434,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onCancel={onDismiss}
                         isCommissioner={context.isCommissioner}
-                        enforceEligibilityWindow={false}
+                        enforceEligibilityWindow
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}
@@ -459,6 +490,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onCancel={onDismiss}
                         isCommissioner={context.isCommissioner}
                         showCurrentPick={context.showCurrentPick}
+                        enforceEligibilityWindow
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}
@@ -487,6 +519,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         isCommissioner
                         showCurrentPick
                         builderMode={context.intent}
+                        enforceEligibilityWindow={false}
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}

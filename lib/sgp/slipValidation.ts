@@ -84,8 +84,12 @@ export type PricingPrepResult = {
     validation: SlipValidationResult;
     pricingLegs: SlipLeg[];
     canUseStandardParlayPricing: boolean;
+    canBuildCombo: boolean;
     requiresCustomPricing: boolean;
     hasStraightOnlyLegs: boolean;
+    hasInvalidComboLegs: boolean;
+    invalidComboLegIds: string[];
+    invalidComboReasons: string[];
 };
 
 type NumericInterval = {
@@ -857,10 +861,27 @@ export const prepareSlipPricing = (
     config: ValidationConfig = DEFAULT_VALIDATION_CONFIG
 ): PricingPrepResult => {
     const validation = validateSlip(legs, config);
+    const invalidComboDecisions = validation.pairDecisions.filter(
+        (decision) =>
+            decision.status === "blocked_conflict" ||
+            decision.status === "blocked_impossible" ||
+            decision.status === "collapsed_into_other_leg" ||
+            decision.status === "redundant_non_incremental"
+    );
+    const invalidComboLegIds = Array.from(
+        new Set(
+            invalidComboDecisions.flatMap((decision) => [decision.legAId, decision.legBId])
+        ).values()
+    );
+    const invalidComboReasons = Array.from(
+        new Set(invalidComboDecisions.map((decision) => decision.reason)).values()
+    );
+    const hasInvalidComboLegs = invalidComboLegIds.length > 0;
     const requiresCustomPricing = validation.customPricingGroups.length > 0;
     const hasStraightOnlyLegs = validation.straightOnlyLegIds.length > 0;
+    const canBuildCombo = validation.blockedLegIds.length === 0 && !hasInvalidComboLegs;
     const canUseStandardParlayPricing =
-        validation.blockedLegIds.length === 0 && !requiresCustomPricing && !hasStraightOnlyLegs;
+        canBuildCombo && !requiresCustomPricing && !hasStraightOnlyLegs;
 
     return {
         validation,
@@ -868,7 +889,11 @@ export const prepareSlipPricing = (
         // `canUseStandardParlayPricing` is true. Otherwise route through custom SGP pricing.
         pricingLegs: canUseStandardParlayPricing ? validation.effectiveLegs : [],
         canUseStandardParlayPricing,
+        canBuildCombo,
         requiresCustomPricing,
         hasStraightOnlyLegs,
+        hasInvalidComboLegs,
+        invalidComboLegIds,
+        invalidComboReasons,
     };
 };

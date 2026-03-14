@@ -1557,7 +1557,7 @@ const SlipDetailsPage = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(-1)}
-                                                                                    disabled={headerPointsDisabled}
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Decrease points"
                                                                                 >
@@ -1580,15 +1580,15 @@ const SlipDetailsPage = () => {
                                                                                             event.currentTarget.blur();
                                                                                         }
                                                                                     }}
-                                                                                    disabled={headerPointsDisabled}
-                                                                                    className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-500 ${pointsTextTone(
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
+                                                                                    className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
                                                                                         headerResult
                                                                                     )}`}
                                                                                 />
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(1)}
-                                                                                    disabled={headerPointsDisabled}
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Increase points"
                                                                                 >
@@ -1759,7 +1759,7 @@ const SlipDetailsPage = () => {
             </section >
 
             {isReopenModalOpen && (
-                <ModalShell onClose={closeReopenModal} maxWidthClass="max-w-sm">
+                <ModalShell onClose={closeReopenModal} maxWidthClass="max-w-sm" contentClassName="pt-5">
                     <form onSubmit={handleReopenSubmit} className="space-y-4">
                         <div className="space-y-1 text-center">
                             <h3 className="text-base font-semibold text-white">Reopen slip</h3>
@@ -1798,7 +1798,7 @@ const SlipDetailsPage = () => {
             )}
 
             {isFinalizeModalOpen && (
-                <ModalShell onClose={closeFinalizeModal} maxWidthClass="max-w-sm">
+                <ModalShell onClose={closeFinalizeModal} maxWidthClass="max-w-sm" contentClassName="pt-5">
                     <form onSubmit={handleFinalizeSlip} className="space-y-4">
                         <div className="space-y-1 text-center">
                             <h3 className="text-base font-semibold text-white">Finalize slip</h3>
@@ -1833,6 +1833,7 @@ const SlipDetailsPage = () => {
                     maxWidthClass="max-w-sm"
                     maxHeightClass="max-h-none"
                     overflowClassName="overflow-visible"
+                    contentClassName="pt-5"
                 >
                     <form onSubmit={handleSecondaryAssignSave} className="space-y-4">
                         <div className="space-y-1 text-center">
@@ -2126,7 +2127,7 @@ const DeadlinesOverviewModal = ({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+                        className="rounded-full border border-white/15 px-2 py-2 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                         aria-label="Close deadlines and review overview"
                     >
                         <X size={14} />
@@ -2233,7 +2234,7 @@ const ModalShell = ({
         onClick={onClose}
     >
         <div
-            className={`relative w-full ${maxWidthClass} ${maxHeightClass} ${overflowClassName} ${contentClassName} rounded-3xl border border-white/10 bg-black p-5 shadow-2xl`}
+            className={`relative w-full ${maxWidthClass} ${maxHeightClass} ${overflowClassName} ${contentClassName} rounded-3xl border border-white/10 bg-black px-5 pb-5 shadow-2xl`}
             onClick={(event) => event.stopPropagation()}
         >
             {children}

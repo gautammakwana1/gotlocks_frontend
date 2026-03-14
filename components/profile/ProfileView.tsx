@@ -22,6 +22,7 @@ import ScoringModal from "../modals/ScoringModal";
 import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
+import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -137,6 +138,10 @@ const ProfileView = ({
     useEffect(() => {
         if (user?.profile && !authLoader) {
             setTargetUser(user?.profile)
+            if (user?.profile?.username) {
+                const storedUser = getLocalStorage<CurrentUser>("currentUser");
+                setLocalStorage("currentUser", { ...storedUser, username: user?.profile?.username });
+            }
         }
     }, [user?.profile, authLoader]);
 
@@ -187,6 +192,7 @@ const ProfileView = ({
             });
             dispatch(clearDeletePostPickMessage());
             if (targetUserId) {
+                dispatch(fetchProgressByUserIdRequest({ user_id: targetUserId }));
                 setPage(1);
                 fetchData(1);
             }

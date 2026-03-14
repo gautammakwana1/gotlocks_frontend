@@ -1,3 +1,5 @@
+import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
+
 export type Role = "member" | "commissioner";
 
 export type ContestStyle = "infinite" | "custom" | "monthly";
@@ -1047,6 +1049,7 @@ export type NFLSchedules = {
     date: string;
     live: boolean;
     odds: OddsObject[];
+    updated?: string;
 }
 
 export type NBASchedules = {
@@ -1121,7 +1124,7 @@ export type OddsData = {
 export type NFLOdds = {
     updated: string;
     league: LeagueObject;
-    sportsBook: SportsBookObject;
+    sportsbook: SportsBookObject;
     events: OddsData[];
 }
 
@@ -1714,6 +1717,7 @@ export type ParlayLeg = {
     marketKey: string;
     familyKey: string;
     teamKey?: string;
+    cachedReview?: CachedReviewData;
     periodKey:
     | "1st Half"
     | "2nd Half"

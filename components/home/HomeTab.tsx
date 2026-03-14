@@ -666,7 +666,7 @@ const HomeTab = () => {
                                                 >
                                                     {group.name}
                                                 </h3>
-                                                <p className="text-[10px] text-gray-300 line-clamp-2">
+                                                <p className="text-[10px] text-gray-300 break-words line-clamp-2">
                                                     {group.description ??
                                                         "Run slips, share picks, and climb the table together."}
                                                 </p>

@@ -450,7 +450,7 @@ const PickBuilderClientPage = () => {
     if (!currentUser) return null;
 
     return (
-        <div className="flex flex-col gap-6 text-white pb-16">
+        <div className="flex flex-col gap-6 text-white">
             {(() => {
                 switch (flowStage) {
                     case "groups":

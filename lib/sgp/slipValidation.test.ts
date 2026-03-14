@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     DEFAULT_VALIDATION_CONFIG,
+    prepareSlipPricing,
     validateSlip,
     type SlipLeg,
 } from "./slipValidation";
@@ -350,5 +351,86 @@ describe("validateSlip", () => {
         const result = validateSlip([underTwenty, underFifteen]);
         expect(result.nonIncrementalLegIds).toContain("under-20-5");
         expect(result.effectiveLegs.map((leg) => leg.id)).toEqual(["under-15-5"]);
+    });
+});
+
+describe("prepareSlipPricing", () => {
+    it("marks nested ladders as an invalid combo instead of pricing the stricter subset", () => {
+        const overThree = makePlayerLeg({
+            id: "threes-3-plus",
+            marketType: "Player Threes",
+            marketFamily: "Player Threes",
+            statType: "threes",
+            line: 3,
+            selection: "3+",
+        });
+        const overFour = makePlayerLeg({
+            id: "threes-4-plus",
+            marketType: "Player Threes",
+            marketFamily: "Player Threes",
+            statType: "threes",
+            line: 4,
+            selection: "4+",
+        });
+
+        const result = prepareSlipPricing([overThree, overFour]);
+        expect(result.canBuildCombo).toBe(false);
+        expect(result.hasInvalidComboLegs).toBe(true);
+        expect(result.canUseStandardParlayPricing).toBe(false);
+        expect(result.pricingLegs).toEqual([]);
+        expect(result.invalidComboLegIds).toEqual(
+            expect.arrayContaining(["threes-3-plus", "threes-4-plus"])
+        );
+    });
+
+    it("treats same-game correlated picks as a valid combo that still needs custom pricing", () => {
+        const points = makePlayerLeg({
+            id: "points",
+            statType: "points",
+            marketType: "Player Points",
+            marketFamily: "Player Points",
+            line: 25,
+            selection: "25+",
+        });
+        const assists = makePlayerLeg({
+            id: "assists",
+            statType: "assists",
+            marketType: "Player Assists",
+            marketFamily: "Player Assists",
+            line: 5,
+            selection: "5+",
+        });
+
+        const result = prepareSlipPricing([points, assists]);
+        expect(result.canBuildCombo).toBe(true);
+        expect(result.hasInvalidComboLegs).toBe(false);
+        expect(result.requiresCustomPricing).toBe(true);
+        expect(result.canUseStandardParlayPricing).toBe(false);
+    });
+
+    it("marks team-outcome nesting as an invalid combo attempt", () => {
+        const homeMl = makeTeamLeg({
+            id: "home-ml",
+            side: "home",
+            marketType: "Moneyline",
+            marketFamily: "Moneyline",
+            statType: "moneyline",
+            line: undefined,
+        });
+        const homeMinus = makeTeamLeg({
+            id: "home-minus-2-5",
+            side: "home",
+            marketType: "Point Spread",
+            marketFamily: "Point Spread",
+            statType: "spread",
+            line: -2.5,
+        });
+
+        const result = prepareSlipPricing([homeMl, homeMinus]);
+        expect(result.canBuildCombo).toBe(false);
+        expect(result.hasInvalidComboLegs).toBe(true);
+        expect(result.invalidComboLegIds).toEqual(
+            expect.arrayContaining(["home-ml", "home-minus-2-5"])
+        );
     });
 });

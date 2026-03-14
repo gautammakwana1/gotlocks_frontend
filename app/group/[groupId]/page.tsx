@@ -847,12 +847,22 @@ const GroupPage = () => {
 
     if (!validate()) return;
 
-    if (group?.id) {
-      dispatch(updateGroupRequest({
-        group_id: group?.id,
-        name: editGroupName,
-        description: editGroupDescription,
-      }));
+    const name = editGroupName.trim();
+    const description = editGroupDescription.trim();
+
+    if (group.name === name && (group.description || "") === description) {
+      setShowEditGroupModal(false);
+      return;
+    }
+
+    if (group.id) {
+      dispatch(
+        updateGroupRequest({
+          group_id: group.id,
+          name,
+          description,
+        })
+      );
     }
     setShowEditGroupModal(false);
   };
@@ -1007,13 +1017,16 @@ const GroupPage = () => {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-10 sm:flex-nowrap">
             <h1
-              className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
+              className={`allow-caps text-2xl min-[326px]:text-3xl font-extrabold text-transparent bg-clip-text`}
               style={displayNameGradientStyle}
             >
               {group?.name}
             </h1>
           </div>
-          {group?.description && <p className="text-sm text-gray-400">{group.description}</p>}
+          {group?.description &&
+            <p className="text-sm text-gray-400 break-words line-clamp-2">
+              {group.description}
+            </p>}
         </div>
       </header>
 
@@ -1701,7 +1714,7 @@ const GroupPage = () => {
                 <textarea
                   value={editGroupDescription}
                   onChange={(event) => setEditGroupDescription(event.target.value)}
-                  className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="min-h-[96px] resize-none rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="What's this group about?"
                 />
                 {errors.description && (
