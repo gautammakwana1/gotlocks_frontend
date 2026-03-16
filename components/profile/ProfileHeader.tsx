@@ -190,6 +190,7 @@ const ProfileHeader = ({
     const showNumericProgress = mode === "self";
     const showFollowSection = mode === "public" && showFollowControls && !isSelf;
     const showFollowerStats = showStats || showFollowSection;
+    const privacyStatusLabel = user.is_public ? "public profile" : "private profile";
     const recordItems = [
         { label: "W", value: record?.wins ?? 0, tone: "text-emerald-100" },
         { label: "L", value: record?.losses ?? 0, tone: "text-red-100" },
@@ -503,13 +504,18 @@ const ProfileHeader = ({
                                                 </div>
                                             )}
                                             <div className={`flex flex-col gap-2 ${showStats ? "mt-auto" : ""}`}>
-                                                <FollowerStats
-                                                    followers={stats.followers}
-                                                    following={stats.following}
-                                                    className="hidden sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
-                                                    onFollowersClick={onFollowersClick}
-                                                    onFollowingClick={onFollowingClick}
-                                                />
+                                                <div className="hidden sm:block">
+                                                    <FollowerStats
+                                                        followers={stats.followers}
+                                                        following={stats.following}
+                                                        className="sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
+                                                        onFollowersClick={onFollowersClick}
+                                                        onFollowingClick={onFollowingClick}
+                                                    />
+                                                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                                                        {privacyStatusLabel}
+                                                    </p>
+                                                </div>
                                                 {renderFollowControls("hidden sm:flex sm:mt-2")}
                                             </div>
                                         </div>
@@ -523,6 +529,9 @@ const ProfileHeader = ({
                                                 onFollowersClick={onFollowersClick}
                                                 onFollowingClick={onFollowingClick}
                                             />
+                                            <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
+                                                {privacyStatusLabel}
+                                            </p>
                                             {renderFollowControls("mt-3")}
                                         </div>
                                     )}

@@ -11,7 +11,7 @@ import { clearFetchAllGroupMessage } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { LogOutIcon, MessageSquareMoreIcon, Settings } from "lucide-react";
+import { CircleDollarSignIcon, LogOutIcon, MessageSquareMoreIcon, Settings } from "lucide-react";
 
 type AuthUserPayload = {
   data?: {
@@ -137,15 +137,6 @@ export const TopNav = () => {
               ◻︎
             </div>
           </div>
-
-          {/* <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-lg text-gray-200 transition hover:border-emerald-300/60 hover:bg-white/10 hover:text-white"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button> */}
         </div>
       </header>
 
@@ -193,11 +184,27 @@ export const TopNav = () => {
                   closeMenu();
                   router.push("/app-settings");
                 }}
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
+                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
               >
                 <span>account settings</span>
-                <Settings size={18} />
+                <Settings size={18} className="text-emerald-400 transition-transform duration-300 group-hover:rotate-90" />
               </button>
+              <Link
+                href="/global-points-shop"
+                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-amber-300/50 hover:bg-amber-400/10"
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>global points shop</span>
+                <CircleDollarSignIcon size={18} className="text-orange-400 transition-transform duration-300 group-hover:[transform:rotate(180deg)_scale(1.2)]" />
+              </Link>
+              <Link
+                href="/feedback"
+                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>feedback</span>
+                <MessageSquareMoreIcon size={18} className="text-white-400 transition-transform duration-300 group-hover:[transform:rotateY(180deg)]" />
+              </Link>
               {currentUser && (
                 <button
                   type="button"
@@ -205,20 +212,12 @@ export const TopNav = () => {
                     closeMenu();
                     handleLogOut();
                   }}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-red-400/60 hover:bg-red-500/10"
+                  className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-red-400/60 hover:bg-red-500/10"
                 >
                   <span>logout</span>
-                  <LogOutIcon size={18} />
+                  <LogOutIcon size={18} className="text-red-500 transition-transform duration-300 group-hover:[transform:rotateX(180deg)]" />
                 </button>
               )}
-              <Link
-                href="/feedback"
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
-                onClick={closeMenu}
-              >
-                <span>feedback</span>
-                <MessageSquareMoreIcon size={18} />
-              </Link>
             </div>
           </div>
         </div>

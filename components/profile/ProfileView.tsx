@@ -67,17 +67,6 @@ export type FollowPanelUser = {
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 
-// const buildInitials = (handle: string) => {
-//     const segments = handle.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-//     const source = segments.length ? segments : [handle];
-//     const initials = source
-//         .map((segment) => segment.charAt(0))
-//         .join("")
-//         .slice(0, 2)
-//         .toUpperCase();
-//     return initials || "GL";
-// };
-
 const normalizeResult = (result: PickResult): NonNullable<PickResult> =>
     (result ?? "pending") as NonNullable<PickResult>;
 

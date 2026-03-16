@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload } from "@/lib/interfaces/interfaces";
+import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload } from "@/lib/interfaces/interfaces";
+import { setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type AuthState = {
 	user: User | null;
@@ -354,6 +355,30 @@ const authSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		changePasswordRequest: (state, action: PayloadAction<ChangePasswordPayload>) => {
+			void action;
+			state.loading = true;
+			state.resetPasswordError = null;
+		},
+		changePasswordSuccess: (state, action) => {
+			state.loading = false;
+			if (action.payload?.data?.userData?.access_token) {
+				setLocalStorage("accessToken", action.payload?.data?.userData?.access_token);
+			}
+			if (action.payload?.data?.userData?.refresh_token) {
+				setLocalStorage("refresh_token", action.payload?.data?.userData?.refresh_token);
+			}
+			state.resetPasswordMessage = action.payload?.message;
+		},
+		changePasswordFailure: (state, action) => {
+			state.loading = false;
+			state.resetPasswordError = action.payload;
+		},
+		clearChangePasswordMessage(state) {
+			state.resetPasswordError = null;
+			state.resetPasswordMessage = null;
+		},
 	},
 });
 
@@ -422,6 +447,10 @@ export const {
 	fetchFollowingListByIdSuccess,
 	fetchFollowingListByIdFailure,
 	clearFetchFollowingsListByIdMessage,
+	changePasswordRequest,
+	changePasswordSuccess,
+	changePasswordFailure,
+	clearChangePasswordMessage,
 	logout,
 	completeIntro,
 } = authSlice.actions;

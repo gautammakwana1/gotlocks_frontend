@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/lib/state/ToastContext";
-import { greenGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import FootballAnimation from "@/components/animations/FootballAnimation";
+import Link from "next/link";
 
 const FeedbackPage = () => {
-    const router = useRouter();
     const currentUser = useCurrentUser();
     const [message, setMessage] = useState("");
     const { setToast } = useToast();
@@ -35,55 +33,41 @@ const FeedbackPage = () => {
     }
 
     return (
-        <div className="flex flex-col gap-6 text-white">
-            <div className={`${greenGradientBox} p-6`}>
-                <div className="flex flex-col gap-2">
-                    <span className="text-xs uppercase tracking-[0.16em] text-emerald-100/80">feedback</span>
-                    <h1 className="text-2xl font-extrabold text-white">Tell Lockie what to build next</h1>
-                    <p className="text-sm text-gray-200">
-                        Drop a quick note. We&apos;ll wire this into the feedback API shortly and start
-                        closing the loop with real updates.
-                    </p>
-                    {currentUser && (
-                        <span className="text-xs uppercase tracking-wide text-gray-400">
-                            Signed in as {currentUser.username}
-                        </span>
-                    )}
-                </div>
-            </div>
+        <div className="mx-auto w-full max-w-2xl space-y-6">
+            <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
+                <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
+                    Feedback
+                </h1>
+                <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                    Caught something we missed or want added? Let us know.
+                </p>
+            </header>
 
-            <form
-                onSubmit={handleSubmit}
-                className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-inner shadow-white/5"
-            >
-                <label className="text-xs uppercase tracking-wide text-gray-400">
-                    feedback message
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <label className="block">
+                    <textarea
+                        value={message}
+                        onChange={(event) => setMessage(event.target.value)}
+                        placeholder="Feature requests, bugs, or product ideas..."
+                        rows={6}
+                        className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20"
+                    />
                 </label>
-                <textarea
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                    placeholder="Feature requests, bugs, or product vibes…"
-                    rows={4}
-                    className="w-full rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-white outline-none transition focus:border-emerald-400/70"
-                />
-                <div className="flex flex-wrap items-center gap-3">
+
+                <div className="flex flex-wrap gap-3 pt-1">
                     <button
                         type="submit"
                         disabled={message.trim().length === 0}
-                        className="rounded-2xl bg-emerald-500/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-white/10 bg-[var(--app-text)] px-4 py-2 text-sm font-medium text-[var(--app-bg)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        send to lockie (stub)
+                        Send feedback
                     </button>
-                    <button
-                        type="button"
-                        onClick={() => router.push("/home")}
-                        className="rounded-2xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/30 hover:bg-white/10"
+                    <Link
+                        href="/home"
+                        className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
                     >
-                        back to home
-                    </button>
-                    <span className="text-xs text-gray-400">
-                        We&apos;ll store this locally until the feedback API is live.
-                    </span>
+                        Back
+                    </Link>
                 </div>
             </form>
         </div>

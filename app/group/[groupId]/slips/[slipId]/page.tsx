@@ -1557,7 +1557,7 @@ const SlipDetailsPage = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(-1)}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Decrease points"
                                                                                 >
@@ -1580,7 +1580,7 @@ const SlipDetailsPage = () => {
                                                                                             event.currentTarget.blur();
                                                                                         }
                                                                                     }}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
                                                                                     className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
                                                                                         headerResult
                                                                                     )}`}
@@ -1588,7 +1588,7 @@ const SlipDetailsPage = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(1)}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss" || true}
+                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Increase points"
                                                                                 >

@@ -1,11 +1,11 @@
 import { call, put, takeLatest } from "redux-saga/effects";
-import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure } from "../slices/authSlice";
+import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure, changePasswordSuccess, changePasswordFailure, changePasswordRequest } from "../slices/authSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios, { AxiosResponse } from "axios";
 import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
+import { ChangePasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
 
 type LoginPayload = {
 	email: string;
@@ -256,6 +256,20 @@ function* handleFetchFollowingsListById(action: PayloadAction<FetchFollowingUser
 	}
 }
 
+function* handleChangePassword(action: PayloadAction<ChangePasswordPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.put,
+			`${API_BASE_URL}/auth/change-password`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(changePasswordSuccess(payload));
+	} catch (error: unknown) {
+		yield put(changePasswordFailure(getErrorMessage(error, "Change Password Failed")));
+	}
+}
+
 export default function* authSaga() {
 	yield takeLatest(loginWithEmailRequest.type, handleLoginWithEmail);
 	yield takeLatest(registerUserRequest.type, handleRegister);
@@ -273,4 +287,5 @@ export default function* authSaga() {
 	yield takeLatest(resetPasswordRequest.type, handleResetPassword);
 	yield takeLatest(fetchFollowersListByIdRequest.type, handleFetchFollowersListById);
 	yield takeLatest(fetchFollowingListByIdRequest.type, handleFetchFollowingsListById);
+	yield takeLatest(changePasswordRequest.type, handleChangePassword);
 }

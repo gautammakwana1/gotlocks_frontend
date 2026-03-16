@@ -796,6 +796,12 @@ export type ResetPasswordPayload = {
     confirmPassword: string;
 }
 
+export type ChangePasswordPayload = {
+    oldPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+}
+
 export type PickScope = "GAME_LINE" | "PLAYER_PROP";
 
 export type PickMarket =
@@ -1103,7 +1109,7 @@ export type OddsObject = {
     name: string;
     price: string;
     main: boolean;
-    sgp: string;
+    sgp?: string;
     links: {
         desktop: string;
         mobile: string;
@@ -1145,7 +1151,7 @@ export type NCAABOdds = {
 export type NHLOdds = {
     updated: string;
     league: LeagueObject;
-    sportsBook: SportsBookObject;
+    sportsbook: SportsBookObject;
     events: OddsData[];
 }
 
