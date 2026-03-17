@@ -1,4 +1,21 @@
+import { useEffect, useState } from "react";
 import { leetMap, RESTRICTED_WORDS, USERNAME_RESERVED_WORD } from "../constants";
+
+export const useIsMobile = () => {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const mql = window.matchMedia("(max-width: 639px)");
+        const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+
+        setIsMobile(mql.matches);
+        mql.addEventListener("change", onChange);
+
+        return () => mql.removeEventListener("change", onChange);
+    }, []);
+
+    return isMobile;
+};
 
 export const getShortTeamName = (teamName: string) => {
     const words = teamName.split(" ");

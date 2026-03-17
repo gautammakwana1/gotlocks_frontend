@@ -3,6 +3,7 @@
 import { ConfidenceLevel } from "@/lib/interfaces/interfaces";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import ConfidenceDropdown from "../ui/ConfidenceDropdown";
+import { useEffect } from "react";
 
 export type ReviewSheetItem = {
   id: string;
@@ -165,8 +166,21 @@ export function PickReviewSheet({
   onSubmitSingle,
   onSubmitSelectedPosts,
 }: Props) {
-  if (!show) return null;
 
+  // For Stop Overlay Scrollbar
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [isOpen]);
+
+  if (!show) return null;
   const isPostMode = confirmationVariant === "post";
   const includeMainCombo =
     hasMultiSelection && !comboHasInvalidSelections && selectedConfidence !== null;

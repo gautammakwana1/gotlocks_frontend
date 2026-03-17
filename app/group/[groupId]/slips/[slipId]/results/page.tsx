@@ -415,7 +415,7 @@ const SlipResultsPage = () => {
                                                     const profileImg = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : "";
                                                     // const initials = getMemberInitials(displayName);
                                                     const displayPick = pick.description ?? "No pick was submitted";
-                                                    const [matchupSegment, ...lineSegments] = displayPick.split(
+                                                    const [...lineSegments] = displayPick.split(
                                                         DASH_SEPARATOR
                                                     );
                                                     const matchupCandidate = pick.matchup;

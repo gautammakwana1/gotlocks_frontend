@@ -53,6 +53,8 @@ const AccountInformationPage = () => {
     const [errors, setErrors] = useState<FormErrors>({});
     const [isPublicDraft, setIsPublicDraft] = useState(true);
     const { user, loading, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
+    const [showGoogleMsg, setShowGoogleMsg] = useState(false);
+    const isGoogleUser = user?.profile?.provider === "google";
 
     useEffect(() => {
         if (currentUser?.userId) {
@@ -242,19 +244,28 @@ const AccountInformationPage = () => {
                     <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
                         Email
                     </span>
-                    <input
-                        type="email"
-                        value={form.email}
-                        disabled={user?.profile?.provider === "google"}
-                        onChange={handleInputChange("email")}
-                        className={`${inputClassName} disabled:cursor-not-allowed`}
-                        autoComplete="email"
-                    />
-                    {errors.email && (
+                    <div className="relative" onClick={() => isGoogleUser && setShowGoogleMsg(true)}>
+                        <input
+                            type="email"
+                            value={form.email}
+                            disabled={user?.profile?.provider === "google"}
+                            onChange={handleInputChange("email")}
+                            className={`${inputClassName} disabled:cursor-not-allowed`}
+                            autoComplete="email"
+                        />
+                        {isGoogleUser && (
+                            <div className="absolute inset-0 cursor-pointer" />
+                        )}
+                    </div>
+                    {isGoogleUser && showGoogleMsg ? (
+                        <span className="text-xs font-medium text-amber-400">
+                            You signed in with Google, so your email can&apos;t be updated here.
+                        </span>
+                    ) : errors.email ? (
                         <span className="text-xs font-medium text-red-400">
                             {errors.email}
                         </span>
-                    )}
+                    ) : null}
                 </label>
 
                 <div className="space-y-2">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateAddLeg, type ParlayLeg } from "./validateParlay";
+import { normalizeOddToLeg, validateAddLeg, type ParlayLeg } from "./validateParlay";
+import { OddsEvent, OddsOdd } from "../interfaces/interfaces";
 
 const makeLeg = (overrides: Partial<ParlayLeg> = {}): ParlayLeg => ({
     id: overrides.id ?? "leg-1",
@@ -33,6 +34,30 @@ const makeLeg = (overrides: Partial<ParlayLeg> = {}): ParlayLeg => ({
     familyKey: overrides.familyKey ?? "event-1:player_points:player-1:full_game",
     teamKey: overrides.teamKey ?? overrides.teamId ?? "team-a",
     periodKey: overrides.periodKey ?? "Full Game",
+});
+
+const makeEvent = (): OddsEvent => ({
+    id: "event-1",
+    teams: {
+        away: { id: "team-a", name: "Los Angeles Lakers", abbreviation: "LAL" },
+        home: { id: "team-b", name: "Houston Rockets", abbreviation: "HOU" },
+    },
+    date: "2026-03-16T19:30:00.000Z",
+    live: false,
+    odds: [],
+});
+
+const makeOdd = (overrides: Partial<OddsOdd> = {}): OddsOdd => ({
+    id: overrides.id ?? "odd-1",
+    market: overrides.market ?? "Moneyline",
+    name: overrides.name ?? "Los Angeles Lakers",
+    price: overrides.price ?? "-110",
+    main: overrides.main ?? true,
+    sgp: overrides.sgp ?? "sgp-token",
+    links: overrides.links,
+    selection: overrides.selection,
+    player: overrides.player,
+    updated: overrides.updated,
 });
 
 describe("validateAddLeg", () => {
@@ -112,5 +137,45 @@ describe("validateAddLeg", () => {
 
         const result = validateAddLeg([existing], incoming);
         expect(result.ok).toBe(true);
+    });
+});
+describe("normalizeOddToLeg", () => {
+    it("spells out moneyline team legs for combo display", () => {
+        const leg = normalizeOddToLeg(
+            makeEvent(),
+            makeOdd({
+                market: "Moneyline",
+                name: "Los Angeles Lakers",
+                selection: { name: "Los Angeles Lakers" },
+            })
+        );
+
+        expect(leg.displayName).toBe("Los Angeles Lakers Moneyline");
+    });
+
+    it("spells out spread team legs with the signed line for combo display", () => {
+        const leg = normalizeOddToLeg(
+            makeEvent(),
+            makeOdd({
+                market: "Point Spread",
+                name: "Houston Rockets +6.5",
+                selection: { name: "Houston Rockets", line: 6.5 },
+            })
+        );
+
+        expect(leg.displayName).toBe("Houston Rockets +6.5 Spread");
+    });
+
+    it("preserves half and quarter scope in team game-line labels", () => {
+        const leg = normalizeOddToLeg(
+            makeEvent(),
+            makeOdd({
+                market: "1st Half Point Spread",
+                name: "Houston Rockets +3.5",
+                selection: { name: "Houston Rockets", line: 3.5 },
+            })
+        );
+
+        expect(leg.displayName).toBe("Houston Rockets +3.5 1st Half Spread");
     });
 });

@@ -1717,8 +1717,11 @@ export const NflPickBuilder = ({
         () =>
             parlayLegs.map((leg) => {
                 const game = findGame(gameOptions, leg.eventId);
-                const matchup = game ? `${game.away_team} @ ${game.home_team}` : leg.matchup ?? null;
+                const matchup = game ? `${game.away_team} @ ${game.home_team}` : leg.matchup ?? undefined;
                 const startTime = game?.date ?? leg.startTime;
+                const americanOdds = parseAmericanOdds(leg.price);
+                const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
+                const difficultyLabel = tierMeta ? tierLabelFromTier(tierMeta.tier) : undefined;
                 return {
                     description: matchup
                         ? `${matchup}${DASH_SEPARATOR}${leg.displayName}`
@@ -1729,9 +1732,19 @@ export const NflPickBuilder = ({
                         market: leg.market,
                         playerId: leg.playerId,
                         side: leg.side ? (leg.side.toUpperCase() as PickSide) : undefined,
+                        scope: leg.marketKey,
                         threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
+                        external_pick_key: leg.id,
+                        away_team: game?.away_team,
+                        home_team: game?.home_team,
                     },
+                    difficulty_label: difficultyLabel,
+                    difficulty_tier: tierMeta?.tier,
+                    result: "pending",
+                    points: 0,
+                    matchup: matchup,
+                    match_time: startTime,
                 };
             }),
         [gameOptions, parlayLegs]

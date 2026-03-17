@@ -11,6 +11,7 @@ import {
     type SlipValidationResult,
     type ValidationConfig,
 } from "./slipValidation";
+import { OddsEvent, OddsOdd, OddsTeam } from "../interfaces/interfaces";
 
 export type {
     PairDecision,
@@ -25,51 +26,6 @@ export type {
 } from "./slipValidation";
 
 export { DEFAULT_VALIDATION_CONFIG, classifyLegPair, prepareSlipPricing, validateSlip } from "./slipValidation";
-
-export type OddsTeam = {
-    id: string;
-    name: string;
-    abbreviation?: string;
-};
-
-export type OddsPlayer = {
-    id: string;
-    name: string;
-    team: OddsTeam;
-};
-
-export type OddsSelection = {
-    name?: string;
-    side?: string;
-    line?: number;
-};
-
-export type OddsOdd = {
-    id: string;
-    market: string;
-    name: string;
-    price: string;
-    main: boolean;
-    sgp?: string;
-    links?: {
-        desktop?: string;
-        mobile?: string;
-    };
-    selection?: OddsSelection;
-    player?: OddsPlayer;
-    updated?: string;
-};
-
-export type OddsEvent = {
-    id: string;
-    teams: {
-        home: OddsTeam;
-        away: OddsTeam;
-    };
-    date: string;
-    live: boolean;
-    odds: OddsOdd[];
-};
 
 export type ParlayLeg = SlipLeg & {
     matchup?: string;
@@ -136,9 +92,76 @@ const periodKeyFromTimeScope = (timeScope: SlipTimeScope): ParlayLeg["periodKey"
 
 const marketFamilyFromMarket = (market: string) =>
     market
-        .replace(/^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter)\s+/i, "")
+        .replace(
+            /^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\s+/i,
+            ""
+        )
         .replace(/^Alt\s+/i, "")
         .trim();
+
+const marketScopePrefixFromMarket = (market: string) => {
+    const match = market
+        .trim()
+        .match(
+            /^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\b/i
+        );
+    return match?.[1] ?? "";
+};
+
+const normalizeDisplayMarketFamily = (marketFamily: string) =>
+    marketFamily.replace(/\bPoint Spread\b/i, "Spread").trim();
+
+const formatSignedLine = (line?: number | null) => {
+    if (typeof line !== "number" || !Number.isFinite(line)) return "";
+    return line > 0 ? `+${line}` : `${line}`;
+};
+
+const buildTeamOutcomeDisplayName = ({
+    baseName,
+    lineLabel,
+    suffix,
+}: {
+    baseName: string;
+    lineLabel?: string;
+    suffix: string;
+}) => {
+    const trimmedBaseName = baseName.trim();
+    const trimmedSuffix = suffix.trim();
+
+    if (!trimmedBaseName) return trimmedSuffix;
+    if (trimmedBaseName.toLowerCase().endsWith(trimmedSuffix.toLowerCase())) {
+        return trimmedBaseName;
+    }
+    if (lineLabel && trimmedBaseName.includes(lineLabel)) {
+        return `${trimmedBaseName} ${trimmedSuffix}`.trim();
+    }
+    return `${trimmedBaseName}${lineLabel ? ` ${lineLabel}` : ""} ${trimmedSuffix}`.trim();
+};
+
+const buildLegDisplayName = (odd: OddsOdd) => {
+    const marketFamily = marketFamilyFromMarket(odd.market);
+    const scopePrefix = marketScopePrefixFromMarket(odd.market);
+    const baseLabel = (odd.selection?.name ?? odd.name).trim();
+    const lineLabel = formatSignedLine(odd.selection?.line);
+
+    if (/moneyline/i.test(marketFamily)) {
+        const suffix = scopePrefix ? `${scopePrefix} ${marketFamily}` : marketFamily;
+        return buildTeamOutcomeDisplayName({ baseName: baseLabel, suffix });
+    }
+
+    if (/point spread/i.test(marketFamily)) {
+        const spreadLabel = normalizeDisplayMarketFamily(marketFamily);
+        const suffix = scopePrefix ? `${scopePrefix} ${spreadLabel}` : spreadLabel;
+        return buildTeamOutcomeDisplayName({ baseName: baseLabel, lineLabel, suffix });
+    }
+
+    if (/puck line/i.test(marketFamily) || /run line/i.test(marketFamily)) {
+        const suffix = scopePrefix ? `${scopePrefix} ${marketFamily}` : marketFamily;
+        return buildTeamOutcomeDisplayName({ baseName: baseLabel, lineLabel, suffix });
+    }
+
+    return odd.name;
+};
 
 const statTypeFromMarket = (market: string) => {
     const token = normalizeText(marketFamilyFromMarket(market));
@@ -307,7 +330,7 @@ export const normalizeOddToLeg = (event: OddsEvent, odd: OddsOdd): ParlayLeg => 
         matchup: `${event.teams.away.name} @ ${event.teams.home.name}`,
         startTime: event.date,
         market: odd.market,
-        displayName: odd.name,
+        displayName: buildLegDisplayName(odd),
         price: odd.price,
         sgp: odd.sgp ?? "",
         bookMarketId,

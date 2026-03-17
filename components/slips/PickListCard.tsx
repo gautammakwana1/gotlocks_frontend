@@ -1,5 +1,6 @@
 import { Pick, Picks, SlipStatus } from "@/lib/interfaces/interfaces";
 import { formatDateTime } from "@/lib/utils/date";
+import { useIsMobile } from "@/lib/utils/helpers";
 import { parseAmericanOdds } from "@/lib/utils/scoring";
 
 type Props = {
@@ -75,6 +76,7 @@ export const PickListCard = ({
     highlightResults = false,
     showComboPickCount = true,
 }: Props) => {
+    const isMobile = useIsMobile();
     const listItems = (items ?? picks.map((pick) => ({
         id: pick.id,
         description: pick.description,
@@ -169,22 +171,24 @@ export const PickListCard = ({
                     const metaLabel = metaParts.join(META_SEPARATOR);
                     const sourceTabLabel = item.sourceTab?.toLowerCase();
                     const canDelete = allowDelete && Boolean(item.pick);
+                    const isWin = item.pick?.result ?? "pending";
+                    const isComboPick = item.pick?.is_combo;
 
                     return (
                         <li key={item.id} className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex items-start gap-2">
+                            <div className="min-w-0 flex items-center gap-2">
                                 {canDelete ? (
                                     <button
                                         type="button"
                                         onClick={() => item.pick && onDeletePick?.(item.pick)}
-                                        className="mt-1 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
+                                        className="mt-1 flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
                                         aria-label="Delete pick"
                                         title="Delete pick"
                                     >
                                         -
                                     </button>
                                 ) : (
-                                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                    <span className={`flex-shrink-0 h-1.5 w-1.5 rounded-full ${isWin === "win" ? "bg-emerald-400" : isWin === "loss" ? "bg-red-400" : isWin === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
                                 )}
                                 <div className="min-w-0">
                                     {sourceTabLabel && (
@@ -193,18 +197,50 @@ export const PickListCard = ({
                                         </span>
                                     )}
                                     <p
-                                        className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                        className={`min-w-0 text-[12px] font-semibold leading-snug ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"}`}
                                         title={item.description}
                                     >
                                         {pickLine}
                                     </p>
+                                    {isComboPick && item.pick?.legs && (
+                                        <div className="space-y-1 mt-2 border border-gray-600 p-2 rounded-xl">
+                                            {item.pick.legs.map((combo, index) => {
+                                                const comboLine = extractPickLine(combo.description);
+                                                const comboOdds = formatOdds(combo.odds_bracket);
+                                                const pickTime = formatDateTime(combo.match_time);
+                                                const legMatchup = combo.matchup ?? "-"
+                                                const matchupTeams = `${combo.selection?.away_team} at ${combo.selection?.home_team}`;
+
+                                                return (
+                                                    <div key={index}>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <p className="text-[10px] font-semibold text-cyan-200 truncate min-w-0 flex-1">
+                                                                {comboLine}
+                                                            </p>
+                                                            <span className="text-[10px] text-cyan-300 flex-shrink-0 whitespace-nowrap">
+                                                                {comboOdds}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-start gap-2 min-w-0">
+                                                            <p className="text-[9px] text-slate-200 truncate flex-1 min-w-0">
+                                                                {isMobile ? legMatchup : matchupTeams}
+                                                            </p>
+                                                            <p className="text-[9px] text-slate-200 truncate flex-shrink-0 whitespace-nowrap">
+                                                                {pickTime}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                     {metaLabel && (
-                                        <p className="mt-1 text-[10px] text-slate-400">{metaLabel}</p>
+                                        <p className="text-[10px] text-slate-400">{metaLabel}</p>
                                     )}
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 pt-3">
-                                <span className="text-[11px] font-semibold text-slate-100">
+                                <span className={`text-[11px] font-semibold ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-slate-200"}`}>
                                     {oddsLabel}
                                 </span>
                             </div>

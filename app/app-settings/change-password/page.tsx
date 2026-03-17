@@ -40,6 +40,8 @@ const ChangePasswordPage = () => {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const authProvider = getLocalStorage("provider");
+    const [showGoogleMsg, setShowGoogleMsg] = useState(false);
+    const isGoogleUser = authProvider === "google";
 
     const { loading, resetPasswordMessage, resetPasswordError } = useSelector((state: RootState) => state.user);
 
@@ -77,7 +79,7 @@ const ChangePasswordPage = () => {
             nextErrors.nextPassword = "Password must be at least 6 characters.";
         }
 
-        if (form.currentPassword === form.nextPassword) {
+        if (form.currentPassword.trim() === form.nextPassword.trim()) {
             nextErrors.nextPassword = "Current & New Password must be different.";
         }
 
@@ -85,7 +87,7 @@ const ChangePasswordPage = () => {
             nextErrors.confirmPassword = "Confirm Password is required.";
         }
 
-        if (form.nextPassword !== form.confirmPassword) {
+        if (form.nextPassword.trim() !== form.confirmPassword.trim()) {
             nextErrors.confirmPassword = "New & Confirm Password do not match.";
         }
 
@@ -98,11 +100,7 @@ const ChangePasswordPage = () => {
         if (!validate()) return;
 
         if (form.currentPassword && form.nextPassword && form.confirmPassword) {
-            if (form.nextPassword !== form.confirmPassword) {
-                setToast({ id: Date.now(), type: "error", message: "New passwords do not match.", duration: 3000 });
-                return;
-            }
-            dispatch(changePasswordRequest({ oldPassword: form.currentPassword, newPassword: form.nextPassword, confirmPassword: form.confirmPassword }));
+            dispatch(changePasswordRequest({ oldPassword: form.currentPassword?.trim(), newPassword: form.nextPassword?.trim(), confirmPassword: form.confirmPassword?.trim() }));
         }
 
         setForm({
@@ -170,21 +168,21 @@ const ChangePasswordPage = () => {
                     <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
                         Current password
                     </span>
-                    <div className="relative">
+                    <div className="relative" onClick={() => isGoogleUser && setShowGoogleMsg(true)}>
                         <input
                             type={showCurrentPassword ? "text" : "password"}
                             value={form.currentPassword}
                             onChange={handleInputChange("currentPassword")}
                             className={`${inputClassName} disabled:cursor-not-allowed`}
                             autoComplete="current-password"
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         />
                         <button
                             type="button"
                             className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
                             onClick={() => togglePasswordVisibility("current")}
                             aria-label={showCurrentPassword ? "Hide password" : "Show password"}
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         >
                             {showCurrentPassword ? (
                                 <EyeIcon size={20} />
@@ -192,6 +190,9 @@ const ChangePasswordPage = () => {
                                 <EyeClosedIcon size={20} />
                             )}
                         </button>
+                        {isGoogleUser && (
+                            <div className="absolute inset-0 cursor-pointer" />
+                        )}
                     </div>
                     {errors.currentPassword && (
                         <span className="text-xs font-medium text-red-400">
@@ -211,14 +212,14 @@ const ChangePasswordPage = () => {
                             onChange={handleInputChange("nextPassword")}
                             className={`${inputClassName} disabled:cursor-not-allowed`}
                             autoComplete="new-password"
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         />
                         <button
                             type="button"
                             className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
                             onClick={() => togglePasswordVisibility("new")}
                             aria-label={showNewPassword ? "Hide password" : "Show password"}
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         >
                             {showNewPassword ? (
                                 <EyeIcon size={20} />
@@ -245,14 +246,14 @@ const ChangePasswordPage = () => {
                             onChange={handleInputChange("confirmPassword")}
                             className={`${inputClassName} disabled:cursor-not-allowed`}
                             autoComplete="new-password"
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         />
                         <button
                             type="button"
                             className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
                             onClick={() => togglePasswordVisibility("confirm")}
                             aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                            disabled={authProvider === "google"}
+                            disabled={isGoogleUser}
                         >
                             {showConfirmPassword ? (
                                 <EyeIcon size={20} />
@@ -267,12 +268,17 @@ const ChangePasswordPage = () => {
                         </span>
                     )}
                 </label>
+                {isGoogleUser && showGoogleMsg && (
+                    <span className="text-xs font-medium text-amber-400">
+                        Your account is linked with Google sign-in, so you don’t have a password to update.
+                    </span>
+                )}
 
                 <div className="flex flex-wrap gap-3 pt-2">
                     <button
                         type="submit"
                         className="rounded-full border border-white/10 bg-[var(--app-text)] px-4 py-2 text-sm font-medium text-[var(--app-bg)] transition hover:opacity-90 disabled:bg-white/50 disabled:cursor-not-allowed"
-                        disabled={!form.currentPassword || !form.nextPassword || !form.confirmPassword || (authProvider === "google")}
+                        disabled={!form.currentPassword || !form.nextPassword || !form.confirmPassword || isGoogleUser}
                     >
                         Save password
                     </button>

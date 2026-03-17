@@ -31,6 +31,24 @@ const resultTone = (result: PickResult) => {
     }
 };
 
+const PICK_RESULT_ACCENTS = {
+    win: {
+        text: "text-emerald-200",
+    },
+    loss: {
+        text: "text-rose-200",
+    },
+    void: {
+        text: "text-amber-100",
+    },
+    not_found: {
+        text: "text-amber-100",
+    },
+    pending: {
+        text: "text-slate-200",
+    },
+} as const;
+
 const EM_DASH = "\u2014";
 const DASH_SEPARATOR = ` ${EM_DASH} `;
 const PLACEHOLDER = EM_DASH;
@@ -187,6 +205,8 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const userReaction = pick.reaction ?? undefined;
     const upActive = userReaction === "up";
     const downActive = userReaction === "down";
+    const pickResult = pick?.result ?? "pending"
+    const accent = PICK_RESULT_ACCENTS[pickResult] ?? PICK_RESULT_ACCENTS.pending;
 
     return (
         <div className="py-4">
@@ -320,12 +340,12 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                             <div className="mt-2 h-px w-full bg-white/10" />
                                             <div className="mt-2 flex min-w-0 items-baseline justify-between gap-3">
                                                 <p
-                                                    className="min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold leading-snug text-cyan-100"
+                                                    className={`min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold leading-snug ${accent.text}`}
                                                     title={displayPick}
                                                 >
                                                     {pickLine}
                                                 </p>
-                                                <span className="shrink-0 text-[12px] font-semibold text-slate-100">
+                                                <span className={`shrink-0 text-[12px] font-semibold ${accent.text}`}>
                                                     {oddsCopy}
                                                 </span>
                                             </div>
@@ -352,20 +372,22 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                                 .filter(Boolean)
                                                 .join(META_SEPARATOR);
                                             const legCategory = resolveLegCategoryLabel(leg.selection?.market);
+                                            const legResult = leg.result ?? "pending";
+                                            const legAccent = PICK_RESULT_ACCENTS[legResult] ?? PICK_RESULT_ACCENTS.pending;
                                             return (
                                                 <li
                                                     key={`${leg.description}-${index}`}
                                                     className="flex items-start justify-between gap-3"
                                                 >
-                                                    <div className="min-w-0 flex items-start gap-2">
-                                                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                    <div className="min-w-0 flex items-center gap-2">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
                                                         <div className="min-w-0">
                                                             {legCategory && (
                                                                 <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
                                                                     {legCategory}
                                                                 </span>
                                                             )}
-                                                            <p className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200">
+                                                            <p className={`min-w-0 text-[12px] font-semibold leading-snug ${legAccent.text}`}>
                                                                 {legPickLine}
                                                             </p>
                                                             {legMeta && (
@@ -374,7 +396,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-1 pt-2">
-                                                        <span className="text-[11px] font-semibold text-slate-100">
+                                                        <span className={`text-[11px] font-semibold ${legAccent.text}`}>
                                                             {leg.odds_bracket ?? PLACEHOLDER}
                                                         </span>
                                                     </div>

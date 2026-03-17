@@ -153,7 +153,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                         return (
                                             <li key={pick.id} className="relative pl-5" >
                                                 <span className="absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-slate-500" />
-                                                <div className="flex items-start gap-4 md:gap-5">
+                                                <div className="flex items-center gap-4 md:gap-5">
                                                     <div className="flex flex-col items-center gap-1.5">
                                                         <div className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-100">
                                                             {profileImg ? (

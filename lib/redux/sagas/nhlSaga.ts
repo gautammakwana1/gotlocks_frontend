@@ -27,7 +27,7 @@ function* handleFetchNHLSchedule(action: PayloadAction<FetchNHLSchedulePayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nhl/nhl-schedules-with-odds`,
+            `${API_BASE_URL}/leagues/nhl/schedules-with-odds`,
             {
                 params: { is_pick_of_day, date },
             }
@@ -45,7 +45,7 @@ function* handleFetchNHLOdds(action: PayloadAction<FetchNHLOddsPayload | undefin
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nhl/nhl-odds`,
+            `${API_BASE_URL}/leagues/nhl/odds`,
             {
                 params: { match_id, is_live },
             }
@@ -63,7 +63,7 @@ function* handleValidateNHLPick(action: PayloadAction<ValidateMyNHLPickPayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/leagues/nhl/nhl-bet-validate`,
+            `${API_BASE_URL}/leagues/nhl/bet-validate`,
             { match_id, external_pick_key, is_live }
         );
         const payload = response.data as { data?: unknown };

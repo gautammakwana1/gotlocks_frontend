@@ -1417,7 +1417,7 @@ export type PickLeg = {
     external_pick_key?: string;
     selection?: PickSelectionMeta;
     points?: number;
-    result?: string;
+    result?: PickResult;
     matchup?: string;
     match_time?: string;
 };
@@ -1684,7 +1684,7 @@ export type OddsOdd = {
     name: string;
     price: string;
     main: boolean;
-    sgp: string;
+    sgp?: string;
     links?: {
         desktop?: string;
         mobile?: string;

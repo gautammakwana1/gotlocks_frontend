@@ -27,7 +27,7 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nba/nba-schedules-with-odds-fanduel`,
+            `${API_BASE_URL}/leagues/nba/schedules-with-odds-fanduel`,
             {
                 params: { pick_deadline, result_deadline, is_pick_of_day, date },
             }
@@ -45,7 +45,7 @@ function* handleFetchFanduelNBAOdds(action: PayloadAction<FetchNBAOddsPayload | 
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nba/nba-odds-fanduel`,
+            `${API_BASE_URL}/leagues/nba/odds-fanduel`,
             {
                 params: { match_id, is_live },
             }
@@ -63,7 +63,7 @@ function* handleFetchDraftkingsNBAOdds(action: PayloadAction<FetchNBAOddsPayload
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nba/nba-odds-draftkings`,
+            `${API_BASE_URL}/leagues/nba/odds-draftkings`,
             {
                 params: { match_id, is_live },
             }
@@ -81,7 +81,7 @@ function* handleValidateNBAPick(action: PayloadAction<ValidateMyNBAPickPayload |
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/leagues/nba/nba-bet-validate`,
+            `${API_BASE_URL}/leagues/nba/bet-validate`,
             { match_id, external_pick_key }
         );
         const payload = response.data as { data?: unknown };

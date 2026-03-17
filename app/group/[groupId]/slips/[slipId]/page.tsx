@@ -634,6 +634,8 @@ const SlipDetailsPage = () => {
             confidence: payload.confidence,
             sourceTab: payload.sourceTab,
             selection: payload.selection,
+            legs: payload?.legs ?? undefined,
+            isCombo: payload.isCombo,
             sport: payload.sport,
             matchup: payload.matchup,
             match_date: payload.match_date ? new Date(payload.match_date) : undefined,
