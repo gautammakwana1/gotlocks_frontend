@@ -668,7 +668,10 @@ const buildSlipWindowDateOptions = (
     return buildDateOptionsFromStart(start, Math.max(1, windowDays + 1));
 };
 
-const matchupLabel = (game: GameOption) => `${game?.awayAbbr} @ ${game?.homeAbbr}`;
+const matchupLabel = (game: GameOption) => {
+    if (!game?.awayAbbr && !game?.homeAbbr) return undefined;
+    return `${game?.awayAbbr} @ ${game?.homeAbbr}`
+};
 
 const formatOdds = (american?: number | string | null) => {
     const value = parseAmericanOdds(american);
@@ -3367,7 +3370,7 @@ export const NhlPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? getShortTeamName(game.awayTeam) : game.awayTeam}
+                                                            {isMobile ? game.awayAbbr : game.awayTeam}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -3421,7 +3424,7 @@ export const NhlPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? getShortTeamName(game.homeTeam) : game.homeTeam}
+                                                            {isMobile ? game.homeAbbr : game.homeTeam}
                                                         </p>
                                                     </div>
                                                 </div>

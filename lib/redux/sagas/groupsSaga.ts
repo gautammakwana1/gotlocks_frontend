@@ -1,7 +1,7 @@
 import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardFailure, fetchArchivedLeaderboardRequest, fetchArchivedLeaderboardSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
@@ -22,6 +22,8 @@ import type {
 	LeaveGroupPayload,
 	UpdateLeaderboardToArchivedPayload,
 	EnableSecondaryLeaderboardPayload,
+	FetchArchivedLeaderBoardsPayload,
+	FetchArchivedLeaderBoardListPayload,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -180,7 +182,7 @@ function* handleFetchLeaderboard(action: PayloadAction<LeaderboardPayload | unde
 	}
 }
 
-function* handleFetchArchivedLeaderboard(action: PayloadAction<FetchGroupByIdPayload | undefined>): SagaIterator {
+function* handleFetchArchivedLeaderboardList(action: PayloadAction<FetchArchivedLeaderBoardListPayload | undefined>): SagaIterator {
 	try {
 		const { groupId = "" } = action.payload || {};
 
@@ -192,9 +194,27 @@ function* handleFetchArchivedLeaderboard(action: PayloadAction<FetchGroupByIdPay
 			}
 		);
 		const payload = response.data as { data?: unknown };
-		yield put(fetchArchivedLeaderboardSuccess(payload.data));
+		yield put(fetchArchivedLeaderboardListSuccess(payload.data));
 	} catch (error: unknown) {
-		yield put(fetchArchivedLeaderboardFailure(getErrorMessage(error, "Archived Leaderboard Fetching Failed")));
+		yield put(fetchArchivedLeaderboardListFailure(getErrorMessage(error, "Archived Leaderboard Fetching Failed")));
+	}
+}
+
+function* handleFetchArchivedLeaderboardById(action: PayloadAction<FetchArchivedLeaderBoardsPayload | undefined>): SagaIterator {
+	try {
+		const { groupId = "", archivedLeaderboard_id = "" } = action.payload || {};
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/archived-leaderboard-by-id`,
+			{
+				params: { groupId, archivedLeaderboard_id }
+			}
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchArchivedLeaderboardByIdSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchArchivedLeaderboardByIdFailure(getErrorMessage(error, "Archived Leaderboard Fetching Failed")));
 	}
 }
 
@@ -330,7 +350,8 @@ export default function* groupSaga() {
 	yield takeLatest(initialGroupDeleteRequest.type, handleInitialGroupDelete);
 	yield takeLatest(confirmDeleteGroupRequest.type, handleConfirmDeleteGroup);
 	yield takeLatest(fetchLeaderboardRequest.type, handleFetchLeaderboard);
-	yield takeLatest(fetchArchivedLeaderboardRequest.type, handleFetchArchivedLeaderboard);
+	yield takeLatest(fetchArchivedLeaderboardListRequest.type, handleFetchArchivedLeaderboardList);
+	yield takeLatest(fetchArchivedLeaderboardByIdRequest.type, handleFetchArchivedLeaderboardById);
 	yield takeLatest(updateGroupRequest.type, handleUpdateGroup);
 	yield takeLatest(fetchGroupSummaryRequest.type, handleFetchGroupSummary);
 	yield takeLatest(fetchAllLeaderboardsRequest.type, handleFetchAllLeaderboards);

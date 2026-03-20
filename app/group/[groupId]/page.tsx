@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { Group, GroupSelector, Leaderboard, LeaderboardList, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
@@ -73,6 +73,39 @@ const BASE_TABS = [
     label: "Group Settings",
   },
 ] as const;
+
+const archivedLeaderboardDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+const MAX_LEADERBOARD_NAME_LENGTH = 16;
+
+type PendingLeaderboardAction =
+  | {
+    kind: "archive-secondary";
+    leaderboardId: string;
+    leaderboardName: string;
+  }
+  | {
+    kind: "restart-main";
+    leaderboardId: string;
+    leaderboardName: string;
+  };
+
+const formatArchivedLeaderboardMeta = (board: {
+  isDefault: boolean;
+  archived_at?: string;
+  created_at: string;
+}) => {
+  const archiveTimestamp = board?.archived_at ?? board.created_at;
+  const archiveDate = new Date(archiveTimestamp);
+  const archiveLabel = Number.isNaN(archiveDate.getTime())
+    ? null
+    : archivedLeaderboardDateFormatter.format(archiveDate);
+  const typeLabel = board.isDefault ? "main" : "secondary";
+  return archiveLabel ? `${typeLabel} / ${archiveLabel}` : typeLabel;
+};
 
 const GroupPage = () => {
   const dispatch = useDispatch();
@@ -196,9 +229,15 @@ const GroupPage = () => {
   const [archivedLeaderboardId, setArchivedLeaderboardId] = useState<string | null>(null);
   const [editingLeaderboardId, setEditingLeaderboardId] = useState<string | null>(null);
   const [leaderboardNameDraft, setLeaderboardNameDraft] = useState("");
+  const [pendingLeaderboardAction, setPendingLeaderboardAction] =
+    useState<PendingLeaderboardAction | null>(null);
   const [showSecondaryInfo, setShowSecondaryInfo] = useState(false);
+  const [mainLeaderboardDetailsOpen, setMainLeaderboardDetailsOpen] = useState(false);
   const [secondaryLeaderboardsDetailsOpen, setSecondaryLeaderboardsDetailsOpen] = useState(true);
-  const [showArchivedLeaderboards, setShowArchivedLeaderboards] = useState(false);
+  const [showSettingsArchivedLeaderboards, setShowSettingsArchivedLeaderboards] =
+    useState(false);
+  const [showLeaderboardArchivedLeaderboards, setShowLeaderboardArchivedLeaderboards] =
+    useState(false);
   const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
@@ -221,6 +260,7 @@ const GroupPage = () => {
     deleteMessage,
     leaveMessage,
     leaveLoading,
+    ArchiveLeaderboardList,
   } = useSelector((state: GroupSelector) => state.group);
   const { slip: slipState } = useSelector((state: SlipSelector) => state.slip);
   const { pick: pickState, loading: pickLoader, message: pickMessage } = useSelector((state: PickSelector) => state.pick);
@@ -234,6 +274,7 @@ const GroupPage = () => {
 
     dispatch(fetchGroupByIdRequest({ groupId }));
     dispatch(fetchAllLeaderboardsRequest({ group_id: groupId }));
+    dispatch(fetchArchivedLeaderboardListRequest({ groupId: groupId }));
   }, [groupId, currentUser, dispatch])
 
   const isCommissioner =
@@ -368,6 +409,17 @@ const GroupPage = () => {
     () => activeLeaderboards.filter((board) => !board.isDefault),
     [activeLeaderboards]
   );
+  const activeMainLeaderboard = useMemo(
+    () => activeLeaderboards.find((board) => board.isDefault) ?? null,
+    [activeLeaderboards]
+  );
+  const activeSecondaryLeaderboards = useMemo(
+    () =>
+      [...activeLeaderboards]
+        .filter((board) => !board.isDefault)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    [activeLeaderboards]
+  );
   const sortedActiveLeaderboards = useMemo(() => {
     const defaultBoard = activeLeaderboards.find((board) => board.isDefault);
     const sides = activeLeaderboards
@@ -384,7 +436,12 @@ const GroupPage = () => {
   }, [visibleActiveLeaderboards]);
   const sortedArchivedLeaderboards = useMemo(
     () =>
-      [...archivedLeaderboards].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      [...archivedLeaderboards].sort((a, b) => {
+        const dateA = a?.archived_at ?? a.created_at;
+        const dateB = b?.archived_at ?? b.created_at;
+
+        return dateB.localeCompare(dateA);
+      }),
     [archivedLeaderboards]
   );
   const selectedLeaderboard = useMemo(
@@ -398,6 +455,11 @@ const GroupPage = () => {
     () =>
       groupLeaderboards.find((board) => board.id === archivedLeaderboardId) ?? null,
     [archivedLeaderboardId, groupLeaderboards]
+  );
+  const editingLeaderboard = useMemo(
+    () =>
+      groupLeaderboards.find((board) => board.id === editingLeaderboardId) ?? null,
+    [editingLeaderboardId, groupLeaderboards]
   );
   const selectedLeaderboardSlips = useMemo(() => {
     if (!selectedLeaderboard?.id || !Array.isArray(slips) || slips.length === 0) {
@@ -447,7 +509,7 @@ const GroupPage = () => {
     setActiveLeaderboardId(boardId)
   }
 
-  const sideLimitReached = activeSideLeaderboards.length >= 2;
+  const sideLimitReached = activeSecondaryLeaderboards.length >= 2;
 
   const membersWithRoles: MemberWithRole[] = useMemo(
     () =>
@@ -470,24 +532,29 @@ const GroupPage = () => {
 
   const handleArchiveSide = (leaderboardId: string) => {
     if (!currentUser) return;
-    const confirmed = window.confirm(
-      "Archive this secondary leaderboard? No new slips will count toward it."
-    );
-    if (!confirmed) return;
     if (group?.id && leaderboardId) {
       dispatch(updateLeaderboardToArchivedRequest({ group_id: group.id, leaderboard_id: leaderboardId }));
-    }
+    };
+    setPendingLeaderboardAction(null);
   };
 
   const handleRestartDefault = () => {
     if (!currentUser) return;
-    const confirmed = window.confirm(
-      "Archive the main leaderboard and restart? This will also archive secondary leaderboard."
-    );
-    if (!confirmed) return;
     if (group?.id) {
       dispatch(startNewContestRequest({ group_id: group.id }));
+    };
+    setPendingLeaderboardAction(null);
+  };
+
+  const closeLeaderboardActionModal = () => setPendingLeaderboardAction(null);
+
+  const confirmPendingLeaderboardAction = () => {
+    if (!pendingLeaderboardAction) return;
+    if (pendingLeaderboardAction.kind === "archive-secondary") {
+      handleArchiveSide(pendingLeaderboardAction.leaderboardId);
+      return;
     }
+    handleRestartDefault();
   };
 
   const startLeaderboardNameEdit = (leaderboardId: string, currentName: string) => {
@@ -566,13 +633,13 @@ const GroupPage = () => {
   };
 
   useEffect(() => {
-    if (activeTab === "leaderboard") {
+    if (activeTab === "leaderboard" && !archivedLeaderboardId) {
       const defaultLeaderboard = groupLeaderboards.find((l) => l.isDefault && l.status === "ACTIVE")
       if (defaultLeaderboard?.id) {
         setActiveLeaderboardId(defaultLeaderboard?.id)
       }
     }
-  }, [groupLeaderboards, activeTab]);
+  }, [groupLeaderboards, activeTab, archivedLeaderboardId]);
 
   useEffect(() => {
     if (activeTab !== "settings") {
@@ -590,12 +657,12 @@ const GroupPage = () => {
       return;
     }
     setShowCreateSideModal(false);
-    setArchivedLeaderboardId(null);
-    setEditingLeaderboardId(null);
-    setLeaderboardNameDraft("");
     setSecondaryLeaderboardsDetailsOpen(false);
-    setShowArchivedLeaderboards(false);
-  }, [secondaryLeaderboardsEnabled]);
+    if (editingLeaderboard && !editingLeaderboard.isDefault) {
+      setEditingLeaderboardId(null);
+      setLeaderboardNameDraft("");
+    }
+  }, [editingLeaderboard, secondaryLeaderboardsEnabled]);
 
   useEffect(() => {
     if (!visibleLeaderboards.length) return;
@@ -606,7 +673,7 @@ const GroupPage = () => {
       return;
     }
     const fallback =
-      visibleLeaderboards.find((board) => board.isDefault)?.id ??
+      visibleLeaderboards.find((board) => board.isDefault && board.status === "ACTIVE")?.id ??
       visibleLeaderboards[0]?.id ??
       null;
     if (fallback && fallback !== activeLeaderboardId) {
@@ -967,6 +1034,48 @@ const GroupPage = () => {
     }
   };
 
+  const archivedLeaderboardsContent = sortedArchivedLeaderboards.length ? (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+      {sortedArchivedLeaderboards.map((board, index) => (
+        <button
+          key={board.id}
+          type="button"
+          onClick={() => handleSelectArchivedLeaderboard(board.id)}
+          className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] ${index > 0 ? "border-t border-white/10" : ""
+            }`}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <p className="truncate text-sm font-semibold text-white">{board.name}</p>
+              <p className="flex-none text-[10px] uppercase tracking-wide text-gray-500">
+                {formatArchivedLeaderboardMeta(board)}
+              </p>
+            </div>
+            {board.sport_scope && (
+              <p className="mt-1 text-[11px] text-gray-500">Scope: {board.sport_scope}</p>
+            )}
+          </div>
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4 flex-none text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+      ))}
+    </div>
+  ) : (
+    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
+      No archived leaderboards yet.
+    </div>
+  );
+
   if (loading || loadingLeaderboard || !currentUser) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -1031,7 +1140,7 @@ const GroupPage = () => {
       </header>
 
       <section className="space-y-4">
-        <div className="flex w-full flex-wrap gap-1 overflow-y-hidden border-b border-white/10 sm:flex-nowrap sm:gap-2 sm:overflow-x-auto lg:gap-3">
+        <div className="-mx-5 flex w-auto flex-wrap gap-1 overflow-y-hidden border-b border-white/10 px-5 sm:mx-0 sm:w-full sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-0 lg:gap-3">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -1169,6 +1278,33 @@ const GroupPage = () => {
                 No leaderboard found yet.
               </div>
             )}
+
+            <section id="leaderboard-archived-leaderboards-panel" className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowLeaderboardArchivedLeaderboards((prev) => !prev)}
+                aria-expanded={showLeaderboardArchivedLeaderboards}
+                aria-controls="leaderboard-archived-leaderboards-details"
+                className="flex w-full items-start justify-between gap-4 text-left"
+              >
+                <div className="space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-300">
+                    Archived leaderboards
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    View past main and secondary boards.
+                  </p>
+                </div>
+                <span className="text-gray-400">
+                  {showLeaderboardArchivedLeaderboards ? "▴" : "▾"}
+                </span>
+              </button>
+              {showLeaderboardArchivedLeaderboards && (
+                <div id="leaderboard-archived-leaderboards-details">
+                  {archivedLeaderboardsContent}
+                </div>
+              )}
+            </section>
 
             <button
               type="button"
@@ -1345,8 +1481,150 @@ const GroupPage = () => {
         {activeTab === "settings" && isCommissioner && (
           <div className="pt-2">
             <section
-              id="leaderboards-panel"
-              className={secondaryLeaderboardsEnabled ? "pb-6" : "pb-3"}
+              id="main-leaderboard-panel"
+              className={mainLeaderboardDetailsOpen ? "pb-6" : "pb-4"}
+            >
+              <button
+                type="button"
+                onClick={() => setMainLeaderboardDetailsOpen((prev) => !prev)}
+                aria-expanded={mainLeaderboardDetailsOpen}
+                aria-controls="main-leaderboard-details"
+                className="flex w-full items-start justify-between gap-4 text-left"
+              >
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                    Main leaderboard
+                  </p>
+                </div>
+                <span className="text-gray-400">
+                  {mainLeaderboardDetailsOpen ? "▴" : "▾"}
+                </span>
+              </button>
+              <p className="mt-1 text-xs text-gray-500">
+                This board is always on. Restarting it archives the current main leaderboard and
+                every active secondary leaderboard.
+              </p>
+
+              {mainLeaderboardDetailsOpen && (
+                <div id="main-leaderboard-details" className="space-y-4 pt-4">
+                  {activeMainLeaderboard ? (
+                    <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-white">
+                              {activeMainLeaderboard.name}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                editingLeaderboardId === activeMainLeaderboard.id
+                                  ? cancelLeaderboardNameEdit()
+                                  : startLeaderboardNameEdit(
+                                    activeMainLeaderboard.id,
+                                    activeMainLeaderboard.name
+                                  )
+                              }
+                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
+                              aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              // activeMainLeaderboard.isDefault
+                              //   ? handleRestartDefault()
+                              //   : handleArchiveSide(activeMainLeaderboard.id)
+                              setPendingLeaderboardAction({
+                                kind: "restart-main",
+                                leaderboardId: activeMainLeaderboard.id,
+                                leaderboardName: activeMainLeaderboard.name,
+                              })
+                            }
+                            disabled={hasOpenSlipOnActiveBoards}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Archive & restart
+                          </button>
+                        </div>
+                      </div>
+                      {editingLeaderboardId === activeMainLeaderboard.id && (
+                        <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
+                              <span className="block pb-2">Leaderboard name</span>
+                              <input
+                                value={leaderboardNameDraft}
+                                onChange={(event) => setLeaderboardNameDraft(event.target.value)}
+                                maxLength={MAX_LEADERBOARD_NAME_LENGTH}
+                                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                              />
+                            </label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => saveLeaderboardName(activeMainLeaderboard.id)}
+                                disabled={
+                                  !leaderboardNameDraft.trim() ||
+                                  leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
+                                }
+                                className="rounded-2xl bg-emerald-500/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelLeaderboardNameEdit}
+                                className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {hasOpenSlipOnActiveBoards && (
+                        <p className="mt-3 text-xs text-amber-200">
+                          Finalize or delete any open slips in order to archive and restart
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
+                      No active main leaderboard found.
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <div
+              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${mainLeaderboardDetailsOpen ? "my-6" : "my-4"}`}
+            />
+
+            <section
+              id="secondary-leaderboards-panel"
+              className={
+                secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
+                  ? "pb-6"
+                  : "pb-4"
+              }
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -1390,66 +1668,60 @@ const GroupPage = () => {
                 </div>
               </div>
 
+              {!secondaryLeaderboardsEnabled && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Turn this on to track separate side standings. Any archived leaderboards stay
+                  viewable below.
+                </p>
+              )}
+
               {secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen && (
-                <>
-                  <div id="secondary-leaderboards-details" className="mt-4 space-y-4">
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateSideModal(true)}
-                        disabled={sideLimitReached}
-                        className={`${primaryActionButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
-                      >
-                        <span className="text-sm font-semibold text-white">
-                          Create a secondary leaderboard
-                        </span>
-                        <span className={primaryActionIconClass} aria-hidden>
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M12 5v14M5 12h14" />
-                          </svg>
-                        </span>
-                      </button>
-                    </div>
+                <div id="secondary-leaderboards-details" className="mt-4 space-y-4">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateSideModal(true)}
+                      disabled={sideLimitReached}
+                      className={`${primaryActionButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      <span className="text-sm font-semibold text-white">
+                        Create a secondary leaderboard
+                      </span>
+                      <span className={primaryActionIconClass} aria-hidden>
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
 
-                    {sideLimitReached && (
-                      <p className="text-xs text-amber-200">
-                        You already have two active secondary leaderboards. Archive one to start
-                        another.
-                      </p>
-                    )}
+                  {sideLimitReached && (
+                    <p className="text-xs text-amber-200">
+                      You already have two active secondary leaderboards. Archive one to start
+                      another.
+                    </p>
+                  )}
 
+                  {activeSecondaryLeaderboards.length ? (
                     <div className="grid grid-cols-1 gap-3">
-                      {sortedActiveLeaderboards.map((board) => {
-                        // const isSelected = selectedLeaderboard?.id === board.id;
-                        const blockedReason = board.isDefault
-                          ? hasOpenSlipOnActiveBoards
-                            ? "You have open slips still running in this leaderboard."
-                            : null
-                          : hasOpenSlipForLeaderboard(board.id)
-                            ? "You have open slips still running in this leaderboard."
-                            : null;
+                      {activeSecondaryLeaderboards.map((board) => {
+                        const blockedReason = hasOpenSlipForLeaderboard(board.id)
+                          ? "You have open slips still running in this leaderboard."
+                          : null;
                         return (
-                          <div
-                            key={board.id}
-                            className={secondaryLeaderboardCardClass}
-                          >
+                          <div key={board.id} className={secondaryLeaderboardCardClass}>
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div className="space-y-1">
-                                <p className="text-xs uppercase tracking-wide text-gray-400">
-                                  {board.isDefault
-                                    ? "Main leaderboard"
-                                    : "Secondary leaderboard"}
-                                </p>
                                 <div className="flex items-center gap-2">
-                                  <p className="text-lg font-semibold text-white">{board.name}</p>
+                                  <p className="text-sm font-semibold text-white">{board.name}</p>
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1475,9 +1747,9 @@ const GroupPage = () => {
                                     </svg>
                                   </button>
                                 </div>
-                                {board?.sport_scope && (
+                                {board.sport_scope && (
                                   <p className="text-[11px] uppercase tracking-wide text-gray-400">
-                                    {board?.sport_scope}
+                                    {board.sport_scope}
                                   </p>
                                 )}
                               </div>
@@ -1485,14 +1757,17 @@ const GroupPage = () => {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    board.isDefault
-                                      ? handleRestartDefault()
-                                      : handleArchiveSide(board.id)
+                                    // handleArchiveSide(board.id)
+                                    setPendingLeaderboardAction({
+                                      kind: "archive-secondary",
+                                      leaderboardId: board.id,
+                                      leaderboardName: board.name,
+                                    })
                                   }
                                   disabled={Boolean(blockedReason)}
                                   className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {board.isDefault ? "Archive & restart" : "Archive"}
+                                  Archive
                                 </button>
                               </div>
                             </div>
@@ -1506,6 +1781,7 @@ const GroupPage = () => {
                                       onChange={(event) =>
                                         setLeaderboardNameDraft(event.target.value)
                                       }
+                                      maxLength={MAX_LEADERBOARD_NAME_LENGTH}
                                       className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
                                     />
                                   </label>
@@ -1513,7 +1789,10 @@ const GroupPage = () => {
                                     <button
                                       type="button"
                                       onClick={() => saveLeaderboardName(board.id)}
-                                      disabled={!leaderboardNameDraft.trim()}
+                                      disabled={
+                                        !leaderboardNameDraft.trim() ||
+                                        leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
+                                      }
                                       className="rounded-2xl bg-emerald-500/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       Save
@@ -1536,64 +1815,54 @@ const GroupPage = () => {
                         );
                       })}
                     </div>
-
-                    {sortedArchivedLeaderboards.length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowArchivedLeaderboards((prev) => !prev)}
-                          aria-expanded={showArchivedLeaderboards}
-                          className="flex items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 transition hover:text-gray-200"
-                        >
-                          <span>Archived leaderboards</span>
-                          <span className="text-gray-500">
-                            {showArchivedLeaderboards ? "▴" : "▾"}
-                          </span>
-                        </button>
-                        {showArchivedLeaderboards && (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {sortedArchivedLeaderboards.map((board) => {
-                              return (
-                                <button
-                                  key={board.id}
-                                  type="button"
-                                  onClick={() => handleSelectArchivedLeaderboard(board.id)}
-                                  className={`${secondaryLeaderboardCardClass} w-full text-left`}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="space-y-1">
-                                      <p className="text-[10px] uppercase tracking-wide text-gray-500">
-                                        {board.isDefault
-                                          ? "Main season"
-                                          : "Secondary leaderboard"}
-                                      </p>
-                                      <p className="text-sm font-semibold text-white">
-                                        {board.name}
-                                      </p>
-                                      {board?.sport_scope && (
-                                        <p className="text-[11px] text-gray-400">
-                                          Scope: {board?.sport_scope}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <span className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
-                                      View archived
-                                    </span>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </>
+                  ) : (
+                    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
+                      No active secondary leaderboards yet.
+                    </div>
+                  )}
+                </div>
               )}
             </section>
 
             <div
-              className={`h-px w-full bg-white/10 ${secondaryLeaderboardsEnabled ? "my-6" : "my-3"
+              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
+                ? "my-6"
+                : "my-4"
+                }`}
+            />
+
+            <section
+              id="archived-leaderboards-panel"
+              className={showSettingsArchivedLeaderboards ? "pb-6" : "pb-4"}
+            >
+              <button
+                type="button"
+                onClick={() => setShowSettingsArchivedLeaderboards((prev) => !prev)}
+                aria-expanded={showSettingsArchivedLeaderboards}
+                aria-controls="archived-leaderboards-details"
+                className="flex w-full items-start justify-between gap-4 text-left"
+              >
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                    Archived leaderboards
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Main leaderboard restarts and archived secondary boards are organized here.
+                  </p>
+                </div>
+                <span className="text-gray-400">
+                  {showSettingsArchivedLeaderboards ? "▴" : "▾"}
+                </span>
+              </button>
+              {showSettingsArchivedLeaderboards && (
+                <div id="archived-leaderboards-details" className="mt-4">
+                  {archivedLeaderboardsContent}
+                </div>
+              )}
+            </section>
+
+            <div
+              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${showSettingsArchivedLeaderboards ? "my-6" : "my-4"
                 }`}
             />
 
@@ -1661,6 +1930,53 @@ const GroupPage = () => {
           onClose={() => setShowScoringModal(false)}
           variant="group"
         />
+      )}
+
+      {pendingLeaderboardAction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeLeaderboardActionModal}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="space-y-4">
+              <div className="space-y-1 text-center">
+                <h3 className="text-base font-semibold text-white">
+                  {pendingLeaderboardAction.kind === "archive-secondary"
+                    ? "Archive leaderboard"
+                    : "Archive & restart"}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  {pendingLeaderboardAction.kind === "archive-secondary"
+                    ? `Archive ${pendingLeaderboardAction.leaderboardName}? No new slips will count toward it.`
+                    : `Archive ${pendingLeaderboardAction.leaderboardName} and restart? This will also archive the secondary leaderboards.`}
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={closeLeaderboardActionModal}
+                  className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmPendingLeaderboardAction}
+                  className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                >
+                  {pendingLeaderboardAction.kind === "archive-secondary"
+                    ? "Archive leaderboard"
+                    : "Archive & restart"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {showEditGroupModal && (
@@ -1781,6 +2097,7 @@ const GroupPage = () => {
                 <input
                   value={sideContestName}
                   onChange={(event) => setSideContestName(event.target.value)}
+                  maxLength={MAX_LEADERBOARD_NAME_LENGTH}
                   className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="NBA playoff slips"
                 />
@@ -1797,7 +2114,11 @@ const GroupPage = () => {
                 <button
                   type="button"
                   onClick={handleCreateSideContest}
-                  disabled={!sideContestName.trim() || sideLimitReached}
+                  disabled={
+                    !sideContestName.trim() ||
+                    sideContestName.trim().length > MAX_LEADERBOARD_NAME_LENGTH ||
+                    sideLimitReached
+                  }
                   className="rounded-lg bg-sky-500/25 px-5 py-2 text-xs font-semibold tracking-wide text-sky-100 transition hover:bg-sky-500/35 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   create
@@ -1808,7 +2129,7 @@ const GroupPage = () => {
         </div>
       )}
 
-      {secondaryLeaderboardsEnabled && archivedLeaderboardId && archivedLeaderboard && (
+      {archivedLeaderboardId && archivedLeaderboard && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
           role="dialog"

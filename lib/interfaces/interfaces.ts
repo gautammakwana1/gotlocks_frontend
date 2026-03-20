@@ -1,3 +1,4 @@
+import { LeaderboardStatus } from "@/app/group/[groupId]/leaderboard/page";
 import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
 
 export type Role = "member" | "commissioner";
@@ -322,7 +323,8 @@ export interface GroupState {
     loadingLeaderboard: boolean;
     leaderboard?: Record<string, unknown>;
     leaderboardList: LeaderboardList | null;
-    archivedLeaderboard?: Record<string, unknown>;
+    archivedLeaderboard: ArchivedLeaderboard | null;
+    ArchiveLeaderboardList: ArchiveLeaderboardList | null;
     deleteMessage: string | null;
     deleteLoading: boolean;
     leaveLoading: boolean;
@@ -388,6 +390,15 @@ export type FetchGroupByIdPayload = {
 
 export type FetchLeaderBoardsPayload = {
     group_id: string;
+};
+
+export type FetchArchivedLeaderBoardListPayload = {
+    groupId: string;
+};
+
+export type FetchArchivedLeaderBoardsPayload = {
+    groupId: string;
+    archivedLeaderboard_id: string;
 };
 
 export type CreateNewLeaderboardPayload = {
@@ -714,6 +725,48 @@ export interface Leaderboard {
     username?: string;
     profile_image?: string;
     slips?: leaderboardSlip[];
+}
+
+export interface ArchiveLeaderboardSlip {
+    id: string;
+    group_id: string;
+    name: string;
+    status: SlipStatus;
+    archived: boolean;
+    index: number;
+    created_at: string;
+}
+
+export interface ArchivedLeaderboard {
+    leaderboard?: Leaderboard[];
+    slips?: ArchiveLeaderboardSlip[];
+    label: string;
+    archived_at: string;
+    archived_slip_ids: string[];
+    total_participants: number;
+    leaderboard_id: string;
+    id: string;
+}
+
+export interface archiveLeaderBoardObject {
+    id: string;
+    leaderboard_id: string;
+    group_id: string;
+    label: string;
+    archived_slip_ids: string[];
+    total_participants: number;
+    created_at: string;
+    leaderboards: {
+        id: string;
+        name: string;
+        status: LeaderboardStatus;
+        isDefault: boolean;
+        archived_at: string;
+    }
+}
+
+export interface ArchiveLeaderboardList {
+    archivedLeaderboards: archiveLeaderBoardObject[];
 }
 
 export type LeaderboardPayload = {
@@ -1144,7 +1197,7 @@ export type NBAOdds = {
 export type NCAABOdds = {
     updated: string;
     league: LeagueObject;
-    sportsBook: SportsBookObject;
+    sportsbook: SportsBookObject;
     events: OddsData[];
 }
 
@@ -1363,6 +1416,8 @@ export type NCAABState = {
         events: NCAABSchedules[];
     } | null,
     ncaabOdds: NCAABOdds | null;
+    fanduelNcaabOdds: NCAABOdds | null;
+    draftkingNcaabOdds: NCAABOdds | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -1597,6 +1652,7 @@ export type LeaderboardList = {
     status: "ACTIVE" | "INACTIVE" | "ARCHIVED";
     isDefault: boolean;
     created_at: string;
+    archived_at?: string;
 };
 
 export type ReactionKey =

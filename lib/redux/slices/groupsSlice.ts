@@ -21,6 +21,10 @@ import type {
 	LeaveGroupPayload,
 	UpdateLeaderboardToArchivedPayload,
 	EnableSecondaryLeaderboardPayload,
+	FetchArchivedLeaderBoardsPayload,
+	ArchivedLeaderboard,
+	FetchArchivedLeaderBoardListPayload,
+	ArchiveLeaderboardList,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -28,7 +32,8 @@ type GroupState = {
 	leaderboard: Leaderboard | null;
 	leaderboardList: LeaderboardList | null;
 	summary: GroupSummary | null;
-	archivedLeaderboard: Leaderboard | null;
+	archivedLeaderboard: ArchivedLeaderboard | null;
+	ArchiveLeaderboardList: ArchiveLeaderboardList | null;
 	session: SessionState | null;
 	hasSeenIntro: boolean;
 	loading: boolean;
@@ -49,6 +54,7 @@ const initialState: GroupState = {
 	leaderboardList: null,
 	summary: null,
 	archivedLeaderboard: null,
+	ArchiveLeaderboardList: null,
 	session: null,
 	hasSeenIntro: false,
 	loading: false,
@@ -235,20 +241,38 @@ const groupSlice = createSlice({
 		},
 
 		// Archived Leaderboard
-		fetchArchivedLeaderboardRequest: (state, action: PayloadAction<LeaderboardPayload | undefined>) => {
+		fetchArchivedLeaderboardListRequest: (state, action: PayloadAction<FetchArchivedLeaderBoardListPayload | undefined>) => {
 			void action;
 			state.loadingArchivedLeaderboard = true;
 			state.error = null;
 		},
-		fetchArchivedLeaderboardSuccess: (state, action) => {
+		fetchArchivedLeaderboardListSuccess: (state, action) => {
 			state.loadingArchivedLeaderboard = false;
-			state.archivedLeaderboard = action.payload;
+			state.ArchiveLeaderboardList = action.payload;
 		},
-		fetchArchivedLeaderboardFailure: (state, action) => {
+		fetchArchivedLeaderboardListFailure: (state, action) => {
 			state.loadingArchivedLeaderboard = false;
 			state.error = action.payload;
 		},
-		clearFetchArchivedLeaderboardMessage(state) {
+		clearFetchArchivedLeaderboardListMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchArchivedLeaderboardByIdRequest: (state, action: PayloadAction<FetchArchivedLeaderBoardsPayload | undefined>) => {
+			void action;
+			state.loadingArchivedLeaderboard = true;
+			state.error = null;
+		},
+		fetchArchivedLeaderboardByIdSuccess: (state, action) => {
+			state.loadingArchivedLeaderboard = false;
+			state.archivedLeaderboard = action.payload;
+		},
+		fetchArchivedLeaderboardByIdFailure: (state, action) => {
+			state.loadingArchivedLeaderboard = false;
+			state.error = action.payload;
+		},
+		clearFetchArchivedLeaderboardByIdMessage(state) {
 			state.error = null;
 			state.message = null;
 		},
@@ -314,6 +338,7 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
 		createNewLeaderboardRequest: (state, action: PayloadAction<CreateNewLeaderboardPayload | undefined>) => {
 			void action;
 			state.loading = true;
@@ -332,6 +357,7 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
 		updateLeaderboardRequest: (state, action: PayloadAction<UpdateLeaderboardPayload | undefined>) => {
 			void action;
 			state.loading = true;
@@ -350,6 +376,7 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
 		updateLeaderboardToArchivedRequest: (state, action: PayloadAction<UpdateLeaderboardToArchivedPayload | undefined>) => {
 			void action;
 			state.loading = true;
@@ -444,10 +471,14 @@ export const {
 	fetchLeaderboardSuccess,
 	fetchLeaderboardFailure,
 	clearFetchLeaderboardMessage,
-	fetchArchivedLeaderboardRequest,
-	fetchArchivedLeaderboardSuccess,
-	fetchArchivedLeaderboardFailure,
-	clearFetchArchivedLeaderboardMessage,
+	fetchArchivedLeaderboardListRequest,
+	fetchArchivedLeaderboardListSuccess,
+	fetchArchivedLeaderboardListFailure,
+	clearFetchArchivedLeaderboardListMessage,
+	fetchArchivedLeaderboardByIdRequest,
+	fetchArchivedLeaderboardByIdSuccess,
+	fetchArchivedLeaderboardByIdFailure,
+	clearFetchArchivedLeaderboardByIdMessage,
 	updateGroupRequest,
 	updateGroupSuccess,
 	updateGroupFailure,

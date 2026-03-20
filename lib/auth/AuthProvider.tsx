@@ -8,7 +8,7 @@ import { AuthSync } from "../utils/useAuthSync";
 
 export const AuthContext = createContext<CurrentUser | null>(null);
 
-const PUBLIC_ROUTES = ["/landing-page", "/account-creation"];
+const PUBLIC_ROUTES = ["/landing-page", "/account-creation", "/auth/callback", "/auth/set-username"];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();

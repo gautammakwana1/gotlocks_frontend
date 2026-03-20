@@ -277,7 +277,9 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             type="text"
                             value={joinCode}
                             onChange={(event) => {
-                                setJoinCode(event.target.value);
+                                let value = event.target.value;
+                                value = value.replace(/\D/g, "").slice(0, 5);
+                                setJoinCode(value);
                                 setJoinError(null);
                             }}
                             maxLength={5}
@@ -297,7 +299,8 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white"
+                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={!joinCode || joinCode.length !== 5}
                             >
                                 Join
                             </button>

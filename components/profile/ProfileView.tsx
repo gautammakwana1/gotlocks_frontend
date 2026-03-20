@@ -93,6 +93,7 @@ const ProfileView = ({
     const [followPanelTab, setFollowPanelTab] = useState<"followers" | "following">(
         "followers"
     );
+    const [pendingDeletePickId, setPendingDeletePickId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const observer = useRef<IntersectionObserver | null>(null);
     const followPanelRef = useRef<HTMLDivElement | null>(null);
@@ -392,11 +393,22 @@ const ProfileView = ({
     const handleDeletePick = useCallback(
         (pickId: string) => {
             if (!currentUser) return;
-            const confirmed = window.confirm("Delete this post? This can't be undone.");
-            if (!confirmed) return;
-            dispatch(deletePostPickRequest({ pick_id: pickId }));
+            setPendingDeletePickId(pickId);
         },
-        [currentUser, dispatch]
+        [currentUser]
+    );
+
+    const closeDeletePickModal = useCallback(() => {
+        setPendingDeletePickId(null);
+    }, []);
+
+    const confirmDeletePick = useCallback(
+        () => {
+            if (!currentUser || !pendingDeletePickId) return;
+            dispatch(deletePostPickRequest({ pick_id: pendingDeletePickId }));
+            setPendingDeletePickId(null);
+        },
+        [currentUser, dispatch, pendingDeletePickId]
     );
 
     const canDeletePick = useCallback(
@@ -585,7 +597,6 @@ const ProfileView = ({
                                 {followPanelUsers.map((user) => {
                                     const label = user.user.username ?? "Member";
                                     const handle = (user.user.username ?? "member").toLowerCase();
-                                    // const initials = buildInitials(label);
                                     const profilePicture = user.user?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.user?.profile_image}` : undefined;
                                     return (
                                         <li
@@ -684,6 +695,45 @@ const ProfileView = ({
                         variant="global"
                     />
                 </>
+            )}
+
+            {pendingDeletePickId && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={closeDeletePickModal}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="space-y-4">
+                            <div className="space-y-1 text-center">
+                                <h3 className="text-base font-semibold text-white">Delete post</h3>
+                                <p className="text-xs text-gray-400">
+                                    Delete this post? This can&apos;t be undone.
+                                </p>
+                            </div>
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeDeletePickModal}
+                                    className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmDeletePick}
+                                    className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                                >
+                                    Delete post
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

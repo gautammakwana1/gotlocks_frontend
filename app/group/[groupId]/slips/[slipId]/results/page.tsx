@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { GroupDataShape } from "../../../page";
@@ -124,6 +124,7 @@ const SlipResultsPage = () => {
 
     const [activeTab, setActiveTab] = useState<SlipResultsTab>("group");
     const [isDeleteSlipOpen, setIsDeleteSlipOpen] = useState(false);
+    const [isDeleteSlipModalOpen, setIsDeleteSlipModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -167,6 +168,9 @@ const SlipResultsPage = () => {
     // useEffect(() => {
     //     if (currentUser && (!group || !activeSlip)) {
     //         router.replace("/home");
+    //     }
+    //     if (!activeSlip && group?.id) {
+    //         router.replace(`/group/${group?.id}?tab=slips`);
     //     }
     // }, [group, router, activeSlip, currentUser]);
 
@@ -272,6 +276,7 @@ const SlipResultsPage = () => {
     }
 
     const isFinalized = isSlipFinal(activeSlip);
+    const slipsTabPath = `/group/${group.id}?tab=slips`;
     const fallbackPath = fallbackFromQuery ?? `/group/${group.id}?tab=slips${activeSlip.slip_type === "vibe" ? "&mode=vibe" : ""}`;
     const isCommissioner = group.created_by === currentUser.userId;
     const isCreator = activeSlip.created_by === currentUser.userId;
@@ -319,15 +324,17 @@ const SlipResultsPage = () => {
         </div>
     );
 
-    const handleDeleteSlip = () => {
-        const confirmed = window.confirm(
-            "Delete this slip and remove all picks tied to it? This cannot be undone."
-        );
-        if (!confirmed) return;
+    const openDeleteSlipModal = () => setIsDeleteSlipModalOpen(true);
+
+    const closeDeleteSlipModal = () => setIsDeleteSlipModalOpen(false);
+
+    const handleDeleteSlip = (event?: FormEvent) => {
+        event?.preventDefault();
         if (activeSlip.id) {
             dispatch(deleteSlipRequest({ slip_id: activeSlip.id }));
         }
-        router.replace(fallbackPath);
+        setIsDeleteSlipModalOpen(false);
+        router.replace(slipsTabPath);
     };
 
     return (
@@ -478,7 +485,7 @@ const SlipResultsPage = () => {
                                                                                     {sourceTabLabel}
                                                                                 </span>
                                                                                 <p
-                                                                                    className="mt-1 min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug text-cyan-200 drop-shadow-[0_1px_8px_rgba(30,58,138,0.75)] md:text-base"
+                                                                                    className={`mt-1 min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug drop-shadow-[0_1px_8px_rgba(30,58,138,0.75)] md:text-base ${accent.text}`}
                                                                                     title={displayPick}
                                                                                 >
                                                                                     {pickLineDisplay}
@@ -588,7 +595,7 @@ const SlipResultsPage = () => {
                                                     <div className="flex justify-end">
                                                         <button
                                                             type="button"
-                                                            onClick={handleDeleteSlip}
+                                                            onClick={openDeleteSlipModal}
                                                             className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50"
                                                         >
                                                             Delete slip
@@ -635,13 +642,51 @@ const SlipResultsPage = () => {
                     <div className="flex justify-end">
                         <button
                             type="button"
-                            onClick={handleDeleteSlip}
+                            onClick={openDeleteSlipModal}
                             className="rounded-2xl bg-red-600/80 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-red-600"
                         >
                             Delete slip
                         </button>
                     </div>
                 </section>
+            )}
+
+            {isDeleteSlipModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={closeDeleteSlipModal}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <form onSubmit={handleDeleteSlip} className="space-y-4">
+                            <div className="space-y-1 text-center">
+                                <h3 className="text-base font-semibold text-white">Delete slip</h3>
+                                <p className="text-xs text-gray-400">
+                                    Delete this slip and remove all picks tied to it? This cannot be undone.
+                                </p>
+                            </div>
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeDeleteSlipModal}
+                                    className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                                >
+                                    Delete slip
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
 
             <SlipShareModal

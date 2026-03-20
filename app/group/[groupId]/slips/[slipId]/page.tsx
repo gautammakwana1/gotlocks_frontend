@@ -117,6 +117,24 @@ const extractGroup = (data: GroupDataShape): Group | null => {
     return data;
 };
 
+const PICK_RESULT_ACCENTS = {
+    win: {
+        text: "text-emerald-200",
+    },
+    loss: {
+        text: "text-rose-200",
+    },
+    void: {
+        text: "text-amber-100",
+    },
+    not_found: {
+        text: "text-amber-100",
+    },
+    pending: {
+        text: "text-slate-200",
+    },
+} as const;
+
 const SlipDetailsPage = () => {
     const dispatch = useDispatch();
     const params = useParams<{ groupId: string; slipId: string }>();
@@ -225,6 +243,7 @@ const SlipDetailsPage = () => {
         null
     );
     const [isDeleteSlipOpen, setIsDeleteSlipOpen] = useState(false);
+    const [isDeleteSlipModalOpen, setIsDeleteSlipModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
     const slipPicks = useMemo<Pick[]>(() => {
@@ -316,6 +335,7 @@ const SlipDetailsPage = () => {
         setReopenDeadlineDraft("");
         setIsFinalizeModalOpen(false);
         setIsSecondaryAssignOpen(false);
+        setIsDeleteSlipModalOpen(false);
         setIsSlateWindowDropdownOpen(false);
     }, [slip]);
 
@@ -398,8 +418,13 @@ const SlipDetailsPage = () => {
     }, [scoringMode, slipPicks]);
 
     useEffect(() => {
-        if (!group || !slip || !isSlipFinal(slip)) return;
-        router.replace(`/group/${group.id}/slips/${slip.id}/results`);
+        if (!group || !isSlipFinal(slip)) return;
+        if (!slip) {
+            router.replace(`/group/${group.id}?tab=slips`);
+        }
+        if (group.id && slip?.id) {
+            router.replace(`/group/${group.id}/slips/${slip.id}/results`);
+        }
     }, [group, slip, router]);
 
     // const memberPicks = useMemo(
@@ -679,6 +704,10 @@ const SlipDetailsPage = () => {
         setIsReopenModalOpen(true);
     };
 
+    const openDeleteSlipModal = () => setIsDeleteSlipModalOpen(true);
+
+    const closeDeleteSlipModal = () => setIsDeleteSlipModalOpen(false);
+
     // const handleStatusChange = (status: typeof slip.status) => {
     //     if (!slip.id) return;
 
@@ -703,15 +732,13 @@ const SlipDetailsPage = () => {
     //     }
     // };
 
-    const handleDeleteSlip = () => {
+    const handleDeleteSlip = (event?: FormEvent) => {
         if (!group || !currentUser) return;
-        const confirmed = window.confirm(
-            "Delete this slip and all picks tied to it? This cannot be undone."
-        );
-        if (!confirmed) return;
+        event?.preventDefault();
         if (slip.id) {
             dispatch(deleteSlipRequest({ slip_id: slip.id }));
         }
+        setIsDeleteSlipModalOpen(false);
         router.replace(`/group/${group.id}?tab=slips`);
     };
 
@@ -1408,7 +1435,7 @@ const SlipDetailsPage = () => {
                                                         <div className="flex justify-end">
                                                             <button
                                                                 type="button"
-                                                                onClick={handleDeleteSlip}
+                                                                onClick={openDeleteSlipModal}
                                                                 className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50"
                                                             >
                                                                 Delete slip
@@ -1559,7 +1586,7 @@ const SlipDetailsPage = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(-1)}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
+                                                                                    disabled={headerPointsDisabled}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Decrease points"
                                                                                 >
@@ -1582,7 +1609,7 @@ const SlipDetailsPage = () => {
                                                                                             event.currentTarget.blur();
                                                                                         }
                                                                                     }}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
+                                                                                    disabled={headerPointsDisabled}
                                                                                     className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
                                                                                         headerResult
                                                                                     )}`}
@@ -1590,7 +1617,7 @@ const SlipDetailsPage = () => {
                                                                                 <button
                                                                                     type="button"
                                                                                     onClick={() => adjustHeaderPoints(1)}
-                                                                                    disabled={headerPointsDisabled || headerResult === "loss"}
+                                                                                    disabled={headerPointsDisabled}
                                                                                     className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                                                                     aria-label="Increase points"
                                                                                 >
@@ -1619,6 +1646,7 @@ const SlipDetailsPage = () => {
                                                                                 (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
                                                                             ).toLowerCase();
                                                                             const oddsCopy = pick.odds_bracket ?? "—";
+                                                                            const accent = PICK_RESULT_ACCENTS[normalizedResult] ?? PICK_RESULT_ACCENTS.pending;
                                                                             return (
                                                                                 <div key={pick.id} className="px-3 py-3 sm:px-4 sm:py-4">
                                                                                     <div className="sm:hidden">
@@ -1662,7 +1690,7 @@ const SlipDetailsPage = () => {
                                                                                                             </span>
                                                                                                         )}
                                                                                                         <p
-                                                                                                            className="min-w-0 text-[13px] font-semibold leading-snug text-cyan-200 line-clamp-2"
+                                                                                                            className={`min-w-0 text-[13px] font-semibold leading-snug line-clamp-2 ${accent.text}`}
                                                                                                             title={displayPick}
                                                                                                         >
                                                                                                             {pickLine}
@@ -1720,7 +1748,7 @@ const SlipDetailsPage = () => {
                                                                                                         </span>
                                                                                                     )}
                                                                                                     <p
-                                                                                                        className="min-w-0 text-[16px] font-semibold leading-snug text-cyan-200"
+                                                                                                        className={`min-w-0 text-[16px] font-semibold leading-snug ${accent.text}`}
                                                                                                         title={displayPick}
                                                                                                     >
                                                                                                         {pickLine}
@@ -1823,6 +1851,34 @@ const SlipDetailsPage = () => {
                                 className="rounded-xl border border-sky-400/60 bg-sky-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-sky-100 transition hover:border-sky-300/80 hover:text-white"
                             >
                                 Finalize slip
+                            </button>
+                        </div>
+                    </form>
+                </ModalShell>
+            )}
+
+            {isDeleteSlipModalOpen && (
+                <ModalShell onClose={closeDeleteSlipModal} maxWidthClass="max-w-sm" contentClassName="pt-5">
+                    <form onSubmit={handleDeleteSlip} className="space-y-4">
+                        <div className="space-y-1 text-center">
+                            <h3 className="text-base font-semibold text-white">Delete slip</h3>
+                            <p className="text-xs text-gray-400">
+                                Delete this slip and all picks tied to it? This cannot be undone.
+                            </p>
+                        </div>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                type="button"
+                                onClick={closeDeleteSlipModal}
+                                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                            >
+                                Delete slip
                             </button>
                         </div>
                     </form>

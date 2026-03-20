@@ -913,7 +913,7 @@ const buildSummary = (
 ): string => {
     const game = findGame(gameOptions, selection.gameId);
     const player = findPlayer(playerLookup, selection.playerId);
-    const matchupLabel = game ? `${game.away_team} @ ${game.home_team}` : null;
+    const matchupLabel = game?.away_team && game?.home_team ? `${game.away_team} @ ${game.home_team}` : null;
     const withMatchup = (detail: string) =>
         matchupLabel ? `${matchupLabel}${DASH_SEPARATOR}${detail}` : detail;
 
@@ -2677,8 +2677,8 @@ export const NflPickBuilder = ({
                         >
                             <div className="min-w-0 self-start pt-8">
                                 <p className="text-xs font-semibold leading-snug text-white">
-                                    <span className="block">{game.away_team} @</span>
-                                    <span className="block">{game.home_team}</span>
+                                    <span className="block">{isMobile ? game.away_abbr : game.away_team} @</span>
+                                    <span className="block">{isMobile ? game.home_abbr : game.home_team}</span>
                                 </p>
                                 <p className="mt-3 text-[11px] text-gray-400">
                                     {formatDateTime(game.date)}

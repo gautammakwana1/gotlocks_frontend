@@ -33,7 +33,7 @@ type RootState = {
     slip: SlipSliceState;
 };
 
-type FlowStage = "choose" | "groups" | "badges" | "builder";
+type FlowStage = "choose" | "groups" | "builder";
 type BuilderIntent = "post";
 
 const normalizeSport = (sport?: string) => (sport ? sport.toUpperCase() : "NFL");
@@ -130,16 +130,19 @@ const PickBuilderClientPage = () => {
             })
     }, [completedPick?.sport, sortedGroups, slips]);
 
-    const buildDestinations = (sportKey: string) =>
-        sortedGroups
-            .map((group) => {
-                const slip = slips.filter((slip) =>
-                    slip.group_id === group.id &&
-                    canUserEditSlipPicks(slip) &&
-                    slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
-                );
-                return { group, slips: slip };
-            });
+    const buildDestinations = useCallback(
+        (sportKey: string) =>
+            sortedGroups
+                .map((group) => {
+                    const slip = slips.filter((slip) =>
+                        slip.group_id === group.id &&
+                        canUserEditSlipPicks(slip) &&
+                        slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
+                    );
+                    return { group, slips: slip };
+                }),
+        [sortedGroups, slips]
+    );
 
     const openDestinationSheet = (payload: BuiltPickPayload) => {
         const nextDestinations = buildDestinations(normalizeSport(payload.sport));
@@ -235,6 +238,8 @@ const PickBuilderClientPage = () => {
     const renderChooseGrid = () => {
         const pickCardClasses =
             "flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6";
+        const disabledPickCardClasses =
+            "flex h-full cursor-not-allowed flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left opacity-60 shadow-lg shadow-black/30 sm:p-6";
 
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -268,8 +273,9 @@ const PickBuilderClientPage = () => {
 
                 <button
                     type="button"
-                    onClick={() => setFlowStage("badges")}
-                    className={pickCardClasses}
+                    disabled
+                    aria-disabled="true"
+                    className={disabledPickCardClasses}
                 >
                     <div className="space-y-2">
                         <p className="text-xs uppercase tracking-wide text-emerald-200">
@@ -285,19 +291,16 @@ const PickBuilderClientPage = () => {
     };
 
     const renderGroupsFlow = () => (
-        <div className="space-y-3 rounded-3xl border border-white/10 bg-black/70 p-4 shadow-xl shadow-emerald-500/5">
+        <div className="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none">
             <div className="flex items-center justify-between gap-2">
-                <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Make picks for groups</p>
-                    <p className="text-sm text-gray-300">Pick a group to jump to its slips tab.</p>
-                </div>
                 <button
                     type="button"
                     onClick={resetFlow}
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs uppercase tracking-wide text-gray-200 transition hover:border-white/35"
+                    className="text-xs font-semibold text-gray-200 transition hover:text-white"
                 >
-                    Back to options
+                    &larr; back to other pick options
                 </button>
+                <p className="text-xs tracking-wide text-gray-400">group picks</p>
             </div>
 
             {sortedGroups.length === 0 ? (
@@ -322,27 +325,6 @@ const PickBuilderClientPage = () => {
                     ))}
                 </div>
             )}
-        </div>
-    );
-
-    const renderBadgesFlow = () => (
-        <div className="space-y-3 rounded-3xl border border-white/10 bg-black/70 p-4 shadow-xl shadow-emerald-500/5">
-            <div className="flex items-center justify-between gap-2">
-                <div>
-                    <p className="text-xs uppercase tracking-wide text-gray-400">Make picks for badges</p>
-                    <p className="text-sm text-gray-300">We&apos;ll plug in badge paths here soon.</p>
-                </div>
-                <button
-                    type="button"
-                    onClick={resetFlow}
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs uppercase tracking-wide text-gray-200 transition hover:border-white/35"
-                >
-                    Back to options
-                </button>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-gray-300">
-                Badge-specific pick quests will live here. For now, post a pick or route one to a slip.
-            </div>
         </div>
     );
 
@@ -455,8 +437,6 @@ const PickBuilderClientPage = () => {
                 switch (flowStage) {
                     case "groups":
                         return renderGroupsFlow();
-                    case "badges":
-                        return renderBadgesFlow();
                     case "builder":
                         return renderBuilderStage();
                     case "choose":

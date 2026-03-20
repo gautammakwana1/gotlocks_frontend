@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import { FetchNCAABOddsPayload, FetchNCAABSchedulePayload, ValidateMyNCAABPickPayload } from "@/lib/interfaces/interfaces";
-import { fetchNCAABOddsFailure, fetchNCAABOddsRequest, fetchNCAABOddsSuccess, fetchNCAABScheduleFailure, fetchNCAABScheduleRequest, fetchNCAABScheduleSuccess, ncaabPickValidateFailure, ncaabPickValidateRequest, ncaabPickValidateSuccess } from "../slices/ncaabSlice";
+import { fetchDraftkingsNCAABOddsFailure, fetchDraftkingsNCAABOddsRequest, fetchDraftkingsNCAABOddsSuccess, fetchFanduelNCAABOddsFailure, fetchFanduelNCAABOddsRequest, fetchFanduelNCAABOddsSuccess, fetchNCAABOddsFailure, fetchNCAABOddsRequest, fetchNCAABOddsSuccess, fetchNCAABScheduleFailure, fetchNCAABScheduleRequest, fetchNCAABScheduleSuccess, ncaabPickValidateFailure, ncaabPickValidateRequest, ncaabPickValidateSuccess } from "../slices/ncaabSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -57,6 +57,42 @@ function* handleFetchNCAABOdds(action: PayloadAction<FetchNCAABOddsPayload | und
     }
 };
 
+function* handleFetchFanduelNCAABOdds(action: PayloadAction<FetchNCAABOddsPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, is_live } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/ncaab/odds-fanduel`,
+            {
+                params: { match_id, is_live },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchFanduelNCAABOddsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchFanduelNCAABOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+    }
+};
+
+function* handleFetchDraftkingsNCAABOdds(action: PayloadAction<FetchNCAABOddsPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, is_live } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/ncaab/odds-draftkings`,
+            {
+                params: { match_id, is_live },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchDraftkingsNCAABOddsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchDraftkingsNCAABOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+    }
+};
+
 function* handleValidateNCAABPick(action: PayloadAction<ValidateMyNCAABPickPayload | undefined>): SagaIterator {
     try {
         const { match_id, external_pick_key, is_live = false } = action.payload || {};
@@ -77,4 +113,6 @@ export default function* nflSaga() {
     yield takeLatest(fetchNCAABScheduleRequest.type, handleFetchNCAABSchedule);
     yield takeLatest(fetchNCAABOddsRequest.type, handleFetchNCAABOdds);
     yield takeLatest(ncaabPickValidateRequest.type, handleValidateNCAABPick);
+    yield takeLatest(fetchFanduelNCAABOddsRequest.type, handleFetchFanduelNCAABOdds);
+    yield takeLatest(fetchDraftkingsNCAABOddsRequest.type, handleFetchDraftkingsNCAABOdds);
 };

@@ -7,6 +7,8 @@ const initialState: NCAABState = {
     message: null,
     ncaabSchedules: null,
     ncaabOdds: null,
+    fanduelNcaabOdds: null,
+    draftkingNcaabOdds: null,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -30,6 +32,46 @@ const ncaabSlice = createSlice({
             state.error = action.payload;
         },
         clearFetchNCAABScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchFanduelNCAABOddsRequest: (state, action: PayloadAction<FetchNCAABOddsPayload & { silent?: boolean } | undefined>) => {
+            void action;
+            if (!action.payload?.silent) {
+                state.loading = true;
+            }
+            state.error = null;
+        },
+        fetchFanduelNCAABOddsSuccess: (state, action) => {
+            state.loading = false;
+            state.fanduelNcaabOdds = action.payload.odds;
+        },
+        fetchFanduelNCAABOddsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchFanduelNCAABOddsMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchDraftkingsNCAABOddsRequest: (state, action: PayloadAction<FetchNCAABOddsPayload & { silent?: boolean } | undefined>) => {
+            void action;
+            if (!action.payload?.silent) {
+                state.loading = true;
+            }
+            state.error = null;
+        },
+        fetchDraftkingsNCAABOddsSuccess: (state, action) => {
+            state.loading = false;
+            state.draftkingNcaabOdds = action.payload.odds;
+        },
+        fetchDraftkingsNCAABOddsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchDraftkingsNCAABOddsMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -87,6 +129,14 @@ export const {
     ncaabPickValidateSuccess,
     ncaabPickValidateFailure,
     clearNcaabPickValidateMessage,
+    fetchFanduelNCAABOddsRequest,
+    fetchFanduelNCAABOddsSuccess,
+    fetchFanduelNCAABOddsFailure,
+    clearFetchFanduelNCAABOddsMessage,
+    fetchDraftkingsNCAABOddsRequest,
+    fetchDraftkingsNCAABOddsSuccess,
+    fetchDraftkingsNCAABOddsFailure,
+    clearFetchDraftkingsNCAABOddsMessage,
 } = ncaabSlice.actions;
 
 export default ncaabSlice.reducer;
