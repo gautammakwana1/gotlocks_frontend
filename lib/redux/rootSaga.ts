@@ -10,6 +10,7 @@ import progressSaga from "./sagas/progressSaga";
 import ncaabSaga from "./sagas/ncaabSaga";
 import nhlSaga from "./sagas/nhlSaga";
 import leagueSaga from "./sagas/leagueSaga";
+import feedbackSaga from "./sagas/feedbackSaga";
 
 export default function* rootSaga() {
 	yield all([
@@ -24,6 +25,7 @@ export default function* rootSaga() {
 		fork(nhlSaga),
 		fork(progressSaga),
 		fork(leagueSaga),
+		fork(feedbackSaga),
 	]);
 }
 

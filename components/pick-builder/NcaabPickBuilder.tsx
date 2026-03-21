@@ -30,6 +30,8 @@ import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
+import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
+import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 
 type OddsBlazeTeam = {
     id: string;
@@ -573,18 +575,18 @@ const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
         return `${team} ${spread} ${halfPrefix}Spread`.trim();
     }
     if (odd.market === "Total Points Odd/Even") {
-        return `${matchup} - ${odd.name} total points`;
+        return `${matchup}${DASH_SEPARATOR}${odd.name} total points`;
     }
     if (odd.market.includes("Total Points")) {
         const totalLabel = isFirstHalf ? "1st Half Total Points" : odd.market;
         if (side && line !== undefined) {
-            return `${matchup} - ${side} ${line} ${totalLabel}`;
+            return `${matchup}${DASH_SEPARATOR}${side} ${line} ${totalLabel}`;
         }
-        return `${matchup} - ${odd.name} ${totalLabel}`;
+        return `${matchup}${DASH_SEPARATOR}${odd.name} ${totalLabel}`;
     }
     if (odd.market === "Overtime?") {
         const label = odd.selection?.side ?? odd.name;
-        return `${matchup} - ${label} overtime`;
+        return `${matchup}${DASH_SEPARATOR}${label} overtime`;
     }
 
     return `${odd.market} - ${odd.name}`;
@@ -599,6 +601,13 @@ const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionM
     playerId: odd.player?.id,
     side: normalizeSide(odd.selection?.side),
     threshold: odd.selection?.line,
+    home_team: game.homeTeam,
+    home_abbr: game.homeAbbr,
+    away_team: game.awayTeam,
+    away_abbr: game.awayAbbr,
+    external_pick_key: odd.id,
+    matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
+    match_date: game.date,
 });
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
@@ -1052,6 +1061,13 @@ export const NcaabPickBuilder = ({
     const isParlayMode = !slip.isGraded;
     const useGroupScoring = false;
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
+    const reviewTierScoringMode =
+        confirmationVariant === "slip" && slip.isGraded
+            ? "groupLeaderboard"
+            : "global";
+    const reviewTierDisplayMode =
+        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+    const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const [ncaabMatchSchedules, setNCAABMatchSchedules] = useState<NCAABSchedules[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
@@ -1100,6 +1116,14 @@ export const NcaabPickBuilder = ({
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [useGroupScoring]
+    );
+
+    const resolveReviewTierMetaForOdds = useCallback(
+        (americanOdds: number) =>
+            reviewTierScoringMode === "groupLeaderboard"
+                ? getGroupTierForAmericanOdds(americanOdds)
+                : getTierForAmericanOdds(americanOdds),
+        [reviewTierScoringMode]
     );
 
     const games = useMemo<GameOption[]>(() => {
@@ -1400,13 +1424,17 @@ export const NcaabPickBuilder = ({
                         gameStartTime: startTime,
                         external_pick_key: leg.id,
                         away_team: game?.awayTeam,
+                        away_abbr: game?.awayAbbr,
                         home_team: game?.homeTeam,
+                        home_abbr: game?.homeAbbr,
+                        matchup: matchup ?? undefined,
+                        match_time: startTime,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
                     result: "pending",
                     points: 0,
-                    matchup: matchup,
+                    matchup: matchup ?? undefined,
                     match_time: startTime,
                 };
             }),
@@ -1602,17 +1630,23 @@ export const NcaabPickBuilder = ({
                             odds: payload.odds_bracket ?? draft?.odds ?? cachedReview?.odds,
                             label: payload.difficulty_label,
                             points: payload.points ?? draft?.points,
-                            mode: useGroupScoring ? "groupLeaderboard" : "global",
+                            mode: reviewTierScoringMode,
                         });
                         const tierPrimary = tierMeta
                             ? formatTierPrimary(tierMeta.tier)
                             : draft?.displayDifficulty ?? "Tier —";
-                        const tierPoints = useGroupScoring
+                        const tierPoints = reviewTierScoringMode === "groupLeaderboard"
                             ? tierMeta?.points
                             : payload.points ?? draft?.points ?? tierMeta?.points;
                         const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
-                        const tierLine = `${tierPrimary}${typeof tierPoints === "number" ? ` · ${tierPoints} pts` : ""
-                            }${tierName && tierName !== "—" ? ` · ${tierName}` : ""}`;
+                        const tierLine = formatReviewSheetTierLine({
+                            tierMeta,
+                            fallbackPrimary: tierPrimary,
+                            fallbackName: tierName,
+                            points: tierPoints,
+                            includeName: true,
+                            mode: reviewTierDisplayMode,
+                        });
 
                         return {
                             id: leg.id,
@@ -1625,8 +1659,16 @@ export const NcaabPickBuilder = ({
                             sourceTabLabel:
                                 payload.sourceTab ?? cachedReview?.sourceTabLabel ?? "Pick",
                             payload,
+                            metaLine: formatPickMetaLine({
+                                description: draft?.summary ?? cachedReview?.summary ?? leg.displayName,
+                                matchup: draft?.matchup ?? payload.selection?.matchup ?? null,
+                                gameStartTime: payload.selection?.gameStartTime ?? null,
+                            }),
                             tierLine,
-                            tierCard: resolveTierCardAppearance(tierMeta?.color),
+                            tierCard: resolveReviewSheetTierCardAppearance(
+                                tierMeta,
+                                reviewTierDisplayMode
+                            ),
                         };
                     })
                     .filter(
@@ -1638,12 +1680,21 @@ export const NcaabPickBuilder = ({
                             odds: string;
                             sourceTabLabel: string;
                             payload: BuiltPickPayload;
+                            metaLine: string | null,
                             tierLine: string;
                             tierCard: ReturnType<typeof resolveTierCardAppearance>;
                         } => item !== null
                     )
                 : [],
-        [buildDraftPick, findLegContext, hasMultipick, parlayLegs, useGroupScoring]
+        [
+            buildDraftPick,
+            findLegContext,
+            hasMultipick,
+            parlayLegs,
+            useGroupScoring,
+            reviewTierDisplayMode,
+            reviewTierScoringMode,
+        ]
     );
 
     const resetAfterPost = () => {
@@ -1681,19 +1732,25 @@ export const NcaabPickBuilder = ({
                         : leg.cachedReview?.sourceTabLabel ?? "Pick";
                     const legTierMeta = getTierMetaForPick({
                         odds: leg.price,
-                        mode: "global",
+                        mode: reviewTierScoringMode,
                     });
-                    const legTierPrimary = legTierMeta
-                        ? formatTierPrimary(legTierMeta.tier)
-                        : "Tier —";
                     const legPoints = legTierMeta?.points;
-                    const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
-                        }`;
+                    const legTierLine = formatReviewSheetTierLine({
+                        tierMeta: legTierMeta,
+                        points: legPoints,
+                        includeName: reviewTierDisplayMode === "group",
+                        mode: reviewTierDisplayMode,
+                    });
                     return {
                         id: leg.id,
                         description: leg.displayName,
                         odds: leg.price,
                         sourceTabLabel,
+                        metaLine: formatPickMetaLine({
+                            description: leg.displayName,
+                            matchup: leg.matchup ?? null,
+                            gameStartTime: leg.startTime ?? null,
+                        }),
                         tierLine: legTierLine,
                         onEdit: () => handleEditParlayLeg(leg),
                         onDelete: () => handleRemoveParlayLeg(leg.id),
@@ -1702,7 +1759,14 @@ export const NcaabPickBuilder = ({
                 : activeDraft
                     ? []
                     : [],
-        [activeDraft, findLegContext, hasMultipick, parlayLegs]
+        [
+            activeDraft,
+            findLegContext,
+            hasMultipick,
+            parlayLegs,
+            reviewTierDisplayMode,
+            reviewTierScoringMode,
+        ]
     );
 
     const sameGameComboGroups = useMemo<
@@ -1748,16 +1812,18 @@ export const NcaabPickBuilder = ({
                 const groupOddsValue = groupQuote.americanOdds;
                 const groupOddsLabel =
                     groupOddsValue === null ? null : formatOdds(groupOddsValue);
-                const groupTierMeta =
+                const payloadGroupTierMeta =
                     groupOddsValue !== null ? resolveTierMetaForOdds(groupOddsValue) : null;
-                const groupTierPrimary = groupTierMeta
-                    ? formatTierPrimary(groupTierMeta.tier)
-                    : "Tier —";
-                const groupPoints = useGroupScoring
-                    ? groupTierMeta?.points
-                    : groupTierMeta?.points;
-                const groupTierLine = `${groupTierPrimary}${typeof groupPoints === "number" ? ` · ${groupPoints} pts` : ""
-                    }`;
+                const reviewGroupTierMeta =
+                    groupOddsValue !== null
+                        ? resolveReviewTierMetaForOdds(groupOddsValue)
+                        : null;
+                const groupTierLine = formatReviewSheetTierLine({
+                    tierMeta: reviewGroupTierMeta,
+                    points: reviewGroupTierMeta?.points,
+                    includeName: reviewTierDisplayMode === "group",
+                    mode: reviewTierDisplayMode,
+                });
                 const description = group
                     .map((entry) => entry.comboLeg.description)
                     .join(" + ");
@@ -1766,8 +1832,8 @@ export const NcaabPickBuilder = ({
                     : "Same game combo";
                 const difficultyLabel = slip.isGraded
                     ? null
-                    : groupTierMeta
-                        ? tierLabelFromTier(groupTierMeta.tier)
+                    : payloadGroupTierMeta
+                        ? tierLabelFromTier(payloadGroupTierMeta.tier)
                         : null;
 
                 groups.push({
@@ -1779,14 +1845,17 @@ export const NcaabPickBuilder = ({
                         : null,
                     items: group.map((entry) => entry.reviewItem),
                     tierLine: groupTierLine,
-                    tierCard: resolveTierCardAppearance(groupTierMeta?.color),
+                    tierCard: resolveReviewSheetTierCardAppearance(
+                        reviewGroupTierMeta,
+                        reviewTierDisplayMode
+                    ),
                     payload: {
                         sport: groupLegs[0]?.sport ?? sport,
                         description: summaryLabel,
                         odds_bracket: groupOddsLabel,
                         difficulty_label: difficultyLabel,
                         buildMode: "ODDS",
-                        points: groupTierMeta?.points,
+                        points: payloadGroupTierMeta?.points,
                         isCombo: true,
                         legs: group.map((entry) => entry.comboLeg),
                         sourceTab: "Same Game Combo",
@@ -1800,10 +1869,11 @@ export const NcaabPickBuilder = ({
         comboReviewItems,
         hasMultipick,
         parlayLegs,
+        resolveReviewTierMetaForOdds,
         resolveTierMetaForOdds,
+        reviewTierDisplayMode,
         slip.isGraded,
         sport,
-        useGroupScoring,
     ]);
 
     useEffect(() => {
@@ -1828,6 +1898,11 @@ export const NcaabPickBuilder = ({
                 description: activeDraft.summary,
                 odds: activeDraft.odds_bracket ?? activeDraft.odds,
                 sourceTabLabel: activeDraft.sourceTab ?? "Pick",
+                metaLine: formatPickMetaLine({
+                    description: activeDraft.summary,
+                    matchup: activeDraft.matchup ?? activeDraft.selection?.matchup ?? null,
+                    gameStartTime: activeDraft.selection?.gameStartTime ?? null,
+                }),
                 onDelete: handleRemoveSinglePick,
             },
         ]
@@ -2075,17 +2150,17 @@ export const NcaabPickBuilder = ({
         dispatchPayloads([payload], action);
     };
 
-    const submitSameGameCombo = (groupId: string, action: "post" | "slip") => {
-        const payload = buildSameGameComboSubmissionPayload(groupId, action);
-        if (!payload) return;
-        dispatchPayloads([payload], action);
-    };
+    // const submitSameGameCombo = (groupId: string, action: "post" | "slip") => {
+    //     const payload = buildSameGameComboSubmissionPayload(groupId, action);
+    //     if (!payload) return;
+    //     dispatchPayloads([payload], action);
+    // };
 
-    const submitStraight = (legId: string, action: "post" | "slip") => {
-        const payload = buildStraightSubmissionPayload(legId, action);
-        if (!payload) return;
-        dispatchPayloads([payload], action);
-    };
+    // const submitStraight = (legId: string, action: "post" | "slip") => {
+    //     const payload = buildStraightSubmissionPayload(legId, action);
+    //     if (!payload) return;
+    //     dispatchPayloads([payload], action);
+    // };
 
     const submitSelectedPosts = ({
         includeMainCombo,
@@ -2920,18 +2995,26 @@ export const NcaabPickBuilder = ({
             odds: activeDraft.odds,
             label: activeDraft.difficulty_label,
             points: activeDraft.points,
-            mode: useGroupScoring ? "groupLeaderboard" : "global",
+            mode: reviewTierScoringMode,
         })
         : null;
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetPoints = useGroupScoring
+    const sheetPoints = reviewTierScoringMode === "groupLeaderboard"
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
-    const sheetTierCard = resolveTierCardAppearance(sheetTierMeta?.color);
-    const sheetTierLine = `${sheetTierPrimary}${typeof sheetPoints === "number" ? ` · ${sheetPoints} pts` : ""
-        }`;
+    const sheetTierCard = resolveReviewSheetTierCardAppearance(
+        sheetTierMeta,
+        reviewTierDisplayMode
+    );
+    const sheetTierLine = formatReviewSheetTierLine({
+        tierMeta: sheetTierMeta,
+        fallbackPrimary: sheetTierPrimary,
+        points: sheetPoints,
+        includeName: reviewTierDisplayMode === "group",
+        mode: reviewTierDisplayMode,
+    });
     const comboOddsLabel = hasMultiSelection
         ? activeDraft?.odds_bracket ?? activeDraft?.odds ?? null
         : null;
@@ -2973,6 +3056,7 @@ export const NcaabPickBuilder = ({
             reviewListItems={reviewListItems}
             sheetTierCard={sheetTierCard}
             sheetTierLine={sheetTierLine}
+            showTierCards={showReviewTierCards}
             selectedConfidence={selectedConfidence}
             onSelectedConfidenceChange={setSelectedConfidence}
             sameGameComboConfidences={sameGameComboConfidences}
@@ -2988,8 +3072,6 @@ export const NcaabPickBuilder = ({
             isStraightSectionCollapsed={isStraightSectionCollapsed}
             onToggleStraightSection={() => toggleSection(straightSectionKey, false)}
             onSubmitCombo={submitCombo}
-            onSubmitSameGameCombo={submitSameGameCombo}
-            onSubmitStraight={submitStraight}
             onSubmitSingle={submitPick}
             onSubmitSelectedPosts={submitSelectedPosts}
         />

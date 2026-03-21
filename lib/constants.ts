@@ -568,3 +568,6 @@ export const USERNAME_RESERVED_WORD = [
   "bet365",
   "1xbet",
 ];
+
+export const MINIMUM_PICK_POINTS = -100;
+export const MAXIMUM_PICK_POINTS = 100;

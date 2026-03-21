@@ -2,6 +2,7 @@
 
 import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/interfaces";
 import { formatDateTime } from "@/lib/utils/date";
+import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useEffect, useRef, useState } from "react";
 
@@ -49,8 +50,6 @@ const PICK_RESULT_ACCENTS = {
     },
 } as const;
 
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
 const PLACEHOLDER = EM_DASH;
 const META_SEPARATOR = " \u00b7 ";
 const UP_TRIANGLE = "\u25B2";
@@ -93,30 +92,7 @@ const resolveLegCategoryLabel = (market?: string) => {
     return market.replace(/Player\s+/i, "Player ").toLowerCase();
 };
 
-const extractPickLine = (description: string) => {
-    const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-    const candidate = matchupSegment?.trim();
-    const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-    if (hasMatchup && lineSegments.length > 0) {
-        return lineSegments.join(DASH_SEPARATOR);
-    }
-    return description;
-};
-
-const extractMatchup = (description?: string | null) => {
-    if (!description) return null;
-    const [lead] = description.split(DASH_SEPARATOR);
-    const candidate = lead?.trim();
-    if (candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate)) {
-        return candidate;
-    }
-    const match = description.match(
-        new RegExp(`([^${EM_DASH}]*?(@|\\bvs\\.?\\b|\\bv\\.?\\b)[^${EM_DASH}]*)`, "i")
-    );
-    return match ? match[1].trim() : null;
-};
-
-const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
+const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCardProps) => {
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
@@ -140,8 +116,6 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
             document.removeEventListener("keydown", handleKeyDown);
         };
     }, [menuOpen]);
-
-    if (pick.pick_type !== PickType.POST) return null;
 
     const tierMeta = getTierMetaForPick({
         odds: pick.odds_bracket,
@@ -181,7 +155,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const sportLabel = pick.sport?.toString().toUpperCase() || "SPORT";
     const displayPick = pick.description ?? "No pick was submitted";
     const pickLine = extractPickLine(displayPick);
-    const matchupCopy = pick.matchup ?? extractMatchup(displayPick) ?? PLACEHOLDER;
+    const matchupCopy = pick?.matchup ?? extractMatchup(displayPick, pick?.matchup) ?? PLACEHOLDER;
     const gameTimeCopy = formatDateTime(pick.selection?.gameStartTime);
     const showMatchup = matchupCopy !== PLACEHOLDER;
     const showGameTime = gameTimeCopy !== PLACEHOLDER;
@@ -192,12 +166,20 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const isComboPost = Boolean(pick.is_combo || (pick.legs?.length ?? 0) > 0);
     const baseSourceTabLabel = pick.source_tab ?? (isComboPost ? "Combo" : "Pick");
     const normalizedSourceTabLabel = baseSourceTabLabel.toLowerCase();
-    const sourceTabLabel = isComboPost
+    const singleCategoryLabel =
+        normalizedSourceTabLabel === "pick"
+            ? resolveLegCategoryLabel(pick.selection?.market) ?? normalizedSourceTabLabel
+            : normalizedSourceTabLabel;
+    const postHeaderLabel = isComboPost
         ? normalizedSourceTabLabel === "combo"
             ? "combo pick post"
             : normalizedSourceTabLabel
         : "single pick post";
+    const detailCategoryLabel = isComboPost ? null : singleCategoryLabel;
     const showComboLegs = Boolean(pick.is_combo && pick.legs && pick.legs.length > 0);
+    const metaLabel = [showMatchup ? matchupCopy : null, showGameTime ? gameTimeCopy : null]
+        .filter(Boolean)
+        .join(META_SEPARATOR);
     // const isSelfProfile = mode === "self";
     // const profilePicture = pick.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${pick.profiles?.profile_image}` : undefined;
     const up = pick.up ?? 0;
@@ -207,6 +189,8 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const downActive = userReaction === "down";
     const pickResult = pick?.result ?? "pending"
     const accent = PICK_RESULT_ACCENTS[pickResult] ?? PICK_RESULT_ACCENTS.pending;
+
+    if (pick.pick_type !== PickType.POST) return null;
 
     return (
         <div className="py-4">
@@ -333,21 +317,38 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
                                     <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                        {sourceTabLabel}
+                                        {postHeaderLabel}
                                     </span>
                                     {!showComboLegs && (
                                         <>
-                                            <div className="mt-2 h-px w-full bg-white/10" />
-                                            <div className="mt-2 flex min-w-0 items-baseline justify-between gap-3">
-                                                <p
-                                                    className={`min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold leading-snug ${accent.text}`}
-                                                    title={displayPick}
-                                                >
-                                                    {pickLine}
-                                                </p>
-                                                <span className={`shrink-0 text-[12px] font-semibold ${accent.text}`}>
-                                                    {oddsCopy}
-                                                </span>
+                                            <div className="mt-3 h-px w-full bg-white/10" />
+                                            <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
+                                                <div className="min-w-0 flex flex-1 items-center gap-2">
+                                                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                    <div className="min-w-0 flex-1">
+                                                        {detailCategoryLabel && (
+                                                            <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                                                {detailCategoryLabel}
+                                                            </span>
+                                                        )}
+                                                        <p
+                                                            className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${accent.text}`}
+                                                            title={displayPick}
+                                                        >
+                                                            {pickLine}
+                                                        </p>
+                                                        {metaLabel && (
+                                                            <p className="mt-1 truncate text-[10px] text-slate-400">
+                                                                {metaLabel}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 pt-2">
+                                                    <span className={`text-[11px] font-semibold ${accent.text}`}>
+                                                        {oddsCopy}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </>
                                     )}
@@ -366,7 +367,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                     <ul className="mt-3 space-y-2">
                                         {pick.legs?.map((leg, index) => {
                                             const legPickLine = extractPickLine(leg.description);
-                                            const legMatchup = leg.matchup ?? extractMatchup(leg.description);
+                                            const legMatchup = extractMatchup(leg.description, leg.matchup) ?? leg?.matchup;
                                             const legTime = formatDateTime(leg.selection?.gameStartTime);
                                             const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
                                                 .filter(Boolean)
@@ -405,32 +406,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                         })}
                                     </ul>
                                 </>
-                            ) : (
-                                <div className="mt-2 text-[11px] text-slate-300">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                        matchup
-                                    </span>
-                                    {showMatchup ? (
-                                        <span className="mt-0.5 block truncate text-[11px] text-slate-200">
-                                            {matchupCopy}
-                                        </span>
-                                    ) : (
-                                        <span className="mt-0.5 block text-[11px] text-slate-500">
-                                            {PLACEHOLDER}
-                                        </span>
-                                    )}
-                                    {showGameTime && (
-                                        <span className="mt-0.5 block truncate text-[11px] text-slate-200">
-                                            {gameTimeCopy}
-                                        </span>
-                                    )}
-                                    {legsCopy && (
-                                        <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                            {legsCopy}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
+                            ) : null}
                         </div>
                     </div>
 

@@ -30,6 +30,8 @@ import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
+import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
+import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 
 type OddsBlazeTeam = {
     id: string;
@@ -758,21 +760,22 @@ const buildPickDescription = (odd: OddsObject, game: GameOption) => {
             .replace("Home Team ", "")
             .replace("Away Team ", "");
         const subject = teamLabel ?? matchup;
+        const separator = subject === matchup ? DASH_SEPARATOR : " - ";
         if (side && line !== undefined) {
-            return `${subject} - ${side} ${line} ${totalLabel}`;
+            return `${subject}${separator}${side} ${line} ${totalLabel}`;
         }
         if (side) {
-            return `${subject} - ${side} ${totalLabel}`;
+            return `${subject}${separator}${side} ${totalLabel}`;
         }
-        return `${subject} - ${odd.name} ${totalLabel}`;
+        return `${subject}${separator}${odd.name} ${totalLabel}`;
     }
     if (odd.market.includes("First Team To Score")) {
         const label = odd.selection?.name ?? odd.name;
-        return `${matchup} - ${label} ${odd.market}`;
+        return `${matchup}${DASH_SEPARATOR}${label} ${odd.market}`;
     }
     if (odd.market.includes("Both Teams To Score")) {
         const label = odd.selection?.side ?? odd.name;
-        return `${matchup} - ${label} ${odd.market}`;
+        return `${matchup}${DASH_SEPARATOR}${label} ${odd.market}`;
     }
 
     return `${odd.market} - ${odd.name}`;
@@ -787,6 +790,13 @@ const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMet
     playerId: odd.player?.id,
     side: normalizeSide(odd.selection?.side),
     threshold: odd.selection?.line,
+    home_team: game.homeTeam,
+    home_abbr: game.homeAbbr,
+    away_team: game.awayTeam,
+    away_abbr: game.awayAbbr,
+    external_pick_key: odd.id,
+    matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
+    match_date: game.date,
 });
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
@@ -1194,6 +1204,13 @@ export const NhlPickBuilder = ({
     const isParlayMode = !slip.isGraded;
     const useGroupScoring = false;
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
+    const reviewTierScoringMode =
+        confirmationVariant === "slip" && slip.isGraded
+            ? "groupLeaderboard"
+            : "global";
+    const reviewTierDisplayMode =
+        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+    const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const [nhlMatchSchedules, setNHLMatchSchedules] = useState<NHLSchedules[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
@@ -1232,6 +1249,14 @@ export const NhlPickBuilder = ({
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [useGroupScoring]
+    );
+
+    const resolveReviewTierMetaForOdds = useCallback(
+        (americanOdds: number) =>
+            reviewTierScoringMode === "groupLeaderboard"
+                ? getGroupTierForAmericanOdds(americanOdds)
+                : getTierForAmericanOdds(americanOdds),
+        [reviewTierScoringMode]
     );
 
     const games = useMemo<GameOption[]>(() => {
@@ -1525,15 +1550,18 @@ export const NhlPickBuilder = ({
                         scope: leg.marketKey,
                         threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
+                        matchup: matchup ?? undefined,
                         external_pick_key: leg.id,
                         away_team: game?.awayTeam,
+                        away_abbr: game?.awayAbbr,
                         home_team: game?.homeTeam,
+                        home_abbr: game?.homeAbbr,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
                     result: "pending",
                     points: 0,
-                    matchup: matchup,
+                    matchup: matchup ?? undefined,
                     match_time: startTime,
                 };
             }),
@@ -1731,17 +1759,23 @@ export const NhlPickBuilder = ({
                             odds: payload.odds_bracket ?? draft?.odds ?? cachedReview?.odds,
                             label: payload.difficulty_label,
                             points: payload.points ?? draft?.points,
-                            mode: useGroupScoring ? "groupLeaderboard" : "global",
+                            mode: reviewTierScoringMode,
                         });
                         const tierPrimary = tierMeta
                             ? formatTierPrimary(tierMeta.tier)
                             : draft?.displayDifficulty ?? "Tier —";
-                        const tierPoints = useGroupScoring
+                        const tierPoints = reviewTierScoringMode === "groupLeaderboard"
                             ? tierMeta?.points
                             : payload.points ?? draft?.points ?? tierMeta?.points;
                         const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
-                        const tierLine = `${tierPrimary}${typeof tierPoints === "number" ? ` · ${tierPoints} pts` : ""
-                            }${tierName && tierName !== "—" ? ` · ${tierName}` : ""}`;
+                        const tierLine = formatReviewSheetTierLine({
+                            tierMeta,
+                            fallbackPrimary: tierPrimary,
+                            fallbackName: tierName,
+                            points: tierPoints,
+                            includeName: true,
+                            mode: reviewTierDisplayMode,
+                        });
 
                         return {
                             id: leg.id,
@@ -1754,8 +1788,16 @@ export const NhlPickBuilder = ({
                             sourceTabLabel:
                                 payload.sourceTab ?? cachedReview?.sourceTabLabel ?? "Pick",
                             payload,
+                            metaLine: formatPickMetaLine({
+                                description: draft?.summary ?? cachedReview?.summary ?? leg.displayName,
+                                matchup: draft?.matchup ?? payload.selection?.matchup ?? null,
+                                gameStartTime: payload.selection?.gameStartTime ?? null,
+                            }),
                             tierLine,
-                            tierCard: resolveTierCardAppearance(tierMeta?.color),
+                            tierCard: resolveReviewSheetTierCardAppearance(
+                                tierMeta,
+                                reviewTierDisplayMode
+                            ),
                         };
                     })
                     .filter(
@@ -1767,12 +1809,21 @@ export const NhlPickBuilder = ({
                             odds: string;
                             sourceTabLabel: string;
                             payload: BuiltPickPayload;
+                            metaLine: string | null;
                             tierLine: string;
                             tierCard: ReturnType<typeof resolveTierCardAppearance>;
                         } => item !== null
                     )
                 : [],
-        [buildDraftPick, findLegContext, hasMultipick, parlayLegs, useGroupScoring]
+        [
+            buildDraftPick,
+            findLegContext,
+            hasMultipick,
+            parlayLegs,
+            useGroupScoring,
+            reviewTierDisplayMode,
+            reviewTierScoringMode,
+        ]
     );
 
     const resetAfterPost = () => {
@@ -1810,19 +1861,25 @@ export const NhlPickBuilder = ({
                         : leg.cachedReview?.sourceTabLabel ?? "Pick";
                     const legTierMeta = getTierMetaForPick({
                         odds: leg.price,
-                        mode: "global",
+                        mode: reviewTierScoringMode,
                     });
-                    const legTierPrimary = legTierMeta
-                        ? formatTierPrimary(legTierMeta.tier)
-                        : "Tier —";
                     const legPoints = legTierMeta?.points;
-                    const legTierLine = `${legTierPrimary}${typeof legPoints === "number" ? ` · ${legPoints} pts` : ""
-                        }`;
+                    const legTierLine = formatReviewSheetTierLine({
+                        tierMeta: legTierMeta,
+                        points: legPoints,
+                        includeName: reviewTierDisplayMode === "group",
+                        mode: reviewTierDisplayMode,
+                    });
                     return {
                         id: leg.id,
                         description: leg.displayName,
                         odds: leg.price,
                         sourceTabLabel,
+                        metaLine: formatPickMetaLine({
+                            description: leg.displayName,
+                            matchup: leg.matchup ?? null,
+                            gameStartTime: leg.startTime ?? null,
+                        }),
                         tierLine: legTierLine,
                         onEdit: () => handleEditParlayLeg(leg),
                         onDelete: () => handleRemoveParlayLeg(leg.id),
@@ -1831,7 +1888,14 @@ export const NhlPickBuilder = ({
                 : activeDraft
                     ? []
                     : [],
-        [activeDraft, findLegContext, hasMultipick, parlayLegs]
+        [
+            activeDraft,
+            findLegContext,
+            hasMultipick,
+            parlayLegs,
+            reviewTierDisplayMode,
+            reviewTierScoringMode,
+        ]
     );
 
     const sameGameComboGroups = useMemo<
@@ -1877,16 +1941,18 @@ export const NhlPickBuilder = ({
                 const groupOddsValue = groupQuote.americanOdds;
                 const groupOddsLabel =
                     groupOddsValue === null ? null : formatOdds(groupOddsValue);
-                const groupTierMeta =
+                const payloadGroupTierMeta =
                     groupOddsValue !== null ? resolveTierMetaForOdds(groupOddsValue) : null;
-                const groupTierPrimary = groupTierMeta
-                    ? formatTierPrimary(groupTierMeta.tier)
-                    : "Tier —";
-                const groupPoints = useGroupScoring
-                    ? groupTierMeta?.points
-                    : groupTierMeta?.points;
-                const groupTierLine = `${groupTierPrimary}${typeof groupPoints === "number" ? ` · ${groupPoints} pts` : ""
-                    }`;
+                const reviewGroupTierMeta =
+                    groupOddsValue !== null
+                        ? resolveReviewTierMetaForOdds(groupOddsValue)
+                        : null;
+                const groupTierLine = formatReviewSheetTierLine({
+                    tierMeta: reviewGroupTierMeta,
+                    points: reviewGroupTierMeta?.points,
+                    includeName: reviewTierDisplayMode === "group",
+                    mode: reviewTierDisplayMode,
+                });
                 const description = group
                     .map((entry) => entry.comboLeg.description)
                     .join(" + ");
@@ -1895,8 +1961,8 @@ export const NhlPickBuilder = ({
                     : "Same game combo";
                 const difficultyLabel = slip.isGraded
                     ? null
-                    : groupTierMeta
-                        ? tierLabelFromTier(groupTierMeta.tier)
+                    : payloadGroupTierMeta
+                        ? tierLabelFromTier(payloadGroupTierMeta.tier)
                         : null;
 
                 groups.push({
@@ -1908,14 +1974,17 @@ export const NhlPickBuilder = ({
                         : null,
                     items: group.map((entry) => entry.reviewItem),
                     tierLine: groupTierLine,
-                    tierCard: resolveTierCardAppearance(groupTierMeta?.color),
+                    tierCard: resolveReviewSheetTierCardAppearance(
+                        reviewGroupTierMeta,
+                        reviewTierDisplayMode
+                    ),
                     payload: {
                         sport: groupLegs[0]?.sport ?? sport,
                         description: summaryLabel,
                         odds_bracket: groupOddsLabel,
                         difficulty_label: difficultyLabel,
                         buildMode: "ODDS",
-                        points: groupTierMeta?.points,
+                        points: payloadGroupTierMeta?.points,
                         isCombo: true,
                         legs: group.map((entry) => entry.comboLeg),
                         sourceTab: "Same Game Combo",
@@ -1929,10 +1998,11 @@ export const NhlPickBuilder = ({
         comboReviewItems,
         hasMultipick,
         parlayLegs,
+        resolveReviewTierMetaForOdds,
         resolveTierMetaForOdds,
+        reviewTierDisplayMode,
         slip.isGraded,
         sport,
-        useGroupScoring,
     ]);
 
     useEffect(() => {
@@ -1957,6 +2027,11 @@ export const NhlPickBuilder = ({
                 description: activeDraft.summary,
                 odds: activeDraft.odds_bracket ?? activeDraft.odds,
                 sourceTabLabel: activeDraft.sourceTab ?? "Pick",
+                metaLine: formatPickMetaLine({
+                    description: activeDraft.summary,
+                    matchup: activeDraft.matchup ?? activeDraft.selection?.matchup ?? null,
+                    gameStartTime: activeDraft.selection?.gameStartTime ?? null,
+                }),
                 onDelete: handleRemoveSinglePick,
             },
         ]
@@ -2188,18 +2263,6 @@ export const NhlPickBuilder = ({
 
     const submitCombo = (action: "post" | "slip") => {
         const payload = buildComboSubmissionPayload(action);
-        if (!payload) return;
-        dispatchPayloads([payload], action);
-    };
-
-    const submitSameGameCombo = (groupId: string, action: "post" | "slip") => {
-        const payload = buildSameGameComboSubmissionPayload(groupId, action);
-        if (!payload) return;
-        dispatchPayloads([payload], action);
-    };
-
-    const submitStraight = (legId: string, action: "post" | "slip") => {
-        const payload = buildStraightSubmissionPayload(legId, action);
         if (!payload) return;
         dispatchPayloads([payload], action);
     };
@@ -2942,18 +3005,26 @@ export const NhlPickBuilder = ({
             odds: activeDraft.odds_bracket,
             label: activeDraft.difficulty_label,
             points: activeDraft.points,
-            mode: useGroupScoring ? "groupLeaderboard" : "global",
+            mode: reviewTierScoringMode,
         })
         : null;
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetPoints = useGroupScoring
+    const sheetPoints = reviewTierScoringMode === "groupLeaderboard"
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
-    const sheetTierCard = resolveTierCardAppearance(sheetTierMeta?.color);
-    const sheetTierLine = `${sheetTierPrimary}${typeof sheetPoints === "number" ? ` · ${sheetPoints} pts` : ""
-        }`;
+    const sheetTierCard = resolveReviewSheetTierCardAppearance(
+        sheetTierMeta,
+        reviewTierDisplayMode
+    );
+    const sheetTierLine = formatReviewSheetTierLine({
+        tierMeta: sheetTierMeta,
+        fallbackPrimary: sheetTierPrimary,
+        points: sheetPoints,
+        includeName: reviewTierDisplayMode === "group",
+        mode: reviewTierDisplayMode,
+    });
     const comboOddsLabel = hasMultiSelection
         ? activeDraft?.odds_bracket ?? activeDraft?.odds ?? null
         : null;
@@ -2995,6 +3066,7 @@ export const NhlPickBuilder = ({
             reviewListItems={reviewListItems}
             sheetTierCard={sheetTierCard}
             sheetTierLine={sheetTierLine}
+            showTierCards={showReviewTierCards}
             selectedConfidence={selectedConfidence}
             onSelectedConfidenceChange={setSelectedConfidence}
             sameGameComboConfidences={sameGameComboConfidences}
@@ -3010,8 +3082,6 @@ export const NhlPickBuilder = ({
             isStraightSectionCollapsed={isStraightSectionCollapsed}
             onToggleStraightSection={() => toggleSection(straightSectionKey, false)}
             onSubmitCombo={submitCombo}
-            onSubmitSameGameCombo={submitSameGameCombo}
-            onSubmitStraight={submitStraight}
             onSubmitSingle={submitPick}
             onSubmitSelectedPosts={submitSelectedPosts}
         />

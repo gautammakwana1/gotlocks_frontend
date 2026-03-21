@@ -17,6 +17,7 @@ import Image from "next/image";
 import { isSlipFinal } from "@/lib/slips/state";
 import SlipShareModal from "@/components/slips/SlipShareModal";
 import { UserIcon } from "@/components/layout/MainTabBar";
+import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -67,22 +68,7 @@ const RESULTS_TABS: Array<{ id: SlipResultsTab; label: string }> = [
     { id: "actions", label: "slip actions" },
 ];
 
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
 const PLACEHOLDER = EM_DASH;
-
-const extractMatchup = (description?: string | null) => {
-    if (!description) return null;
-    const [lead] = description.split(DASH_SEPARATOR);
-    const candidate = lead?.trim();
-    if (candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate)) {
-        return candidate;
-    }
-    const match = description.match(
-        new RegExp(`([^${EM_DASH}]*?(@|\\bvs\\.?\\b|\\bv\\.?\\b)[^${EM_DASH}]*)`, "i")
-    );
-    return match ? match[1].trim() : null;
-};
 
 const preventOrphanWord = (value: string) => {
     const trimmed = value.trim();
@@ -231,6 +217,28 @@ const SlipResultsPage = () => {
         });
         return list;
     }, [memberLookup, slipPicks]);
+
+    const matchupByGameId = useMemo(() => {
+        const map = new Map<string, string>();
+
+        slipPicks.forEach((pick) => {
+            const gameId = pick.selection?.gameId;
+            const matchup = extractMatchup(pick.description, pick.selection?.matchup);
+            if (gameId && matchup && !map.has(gameId)) {
+                map.set(gameId, matchup);
+            }
+
+            pick.legs?.forEach((leg) => {
+                const legGameId = leg.selection?.gameId;
+                const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+                if (legGameId && legMatchup && !map.has(legGameId)) {
+                    map.set(legGameId, legMatchup);
+                }
+            });
+        });
+
+        return map;
+    }, [slipPicks]);
 
     const membersWithoutPicks = useMemo(() => {
         const pickedIds = new Set(
@@ -417,19 +425,18 @@ const SlipResultsPage = () => {
                                                     const resultLabel =
                                                         resolvedResult === "not_found" ? "n/a" : resolvedResult;
                                                     const accent = PICK_RESULT_ACCENTS[resolvedResult];
-                                                    // const displayName =
-                                                    //     member.profiles?.username ?? "Member";
                                                     const profileImg = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : "";
-                                                    // const initials = getMemberInitials(displayName);
                                                     const displayPick = pick.description ?? "No pick was submitted";
-                                                    const [...lineSegments] = displayPick.split(
-                                                        DASH_SEPARATOR
+                                                    const {
+                                                        matchup: matchupCandidate,
+                                                        pickLine,
+                                                    } = parsePickDescription(
+                                                        displayPick,
+                                                        pick?.matchup ??
+                                                        (pick.selection?.gameId
+                                                            ? matchupByGameId.get(pick.selection.gameId)
+                                                            : null)
                                                     );
-                                                    const matchupCandidate = pick.matchup;
-                                                    const pickLine =
-                                                        matchupCandidate && lineSegments.length > 0
-                                                            ? lineSegments.join(DASH_SEPARATOR)
-                                                            : displayPick;
                                                     const pickLineDisplay = preventOrphanWord(pickLine);
                                                     const oddsCopy = pick.odds_bracket ?? PLACEHOLDER;
                                                     const legsCount = pick.legs?.length ?? 0;
@@ -439,8 +446,7 @@ const SlipResultsPage = () => {
                                                             : pick.is_combo
                                                                 ? "combo"
                                                                 : null;
-                                                    const matchupCopy =
-                                                        matchupCandidate ?? extractMatchup(displayPick) ?? PLACEHOLDER;
+                                                    const matchupCopy = matchupCandidate ?? PLACEHOLDER;
                                                     const gameTimeCopy = formatDateTime(pick.match_date);
                                                     const showMatchup = matchupCopy !== PLACEHOLDER;
                                                     const showGameTime = gameTimeCopy !== PLACEHOLDER;

@@ -15,6 +15,7 @@ import { formatDateTime } from "@/lib/utils/date";
 import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
 import { UserIcon } from "../layout/MainTabBar";
+import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
 
 type Props = {
     group: Group | null;
@@ -91,7 +92,7 @@ const resultMeta = (pick_result?: PickResult) => {
 };
 
 const formatPointsValue = (value: number | null) => {
-    if (value === null || Number.isNaN(value)) return "—";
+    if (value === null || Number.isNaN(value)) return EM_DASH;
     return value > 0 ? `+${value}` : `${value}`;
 };
 
@@ -184,6 +185,28 @@ const computeResultPoints = (pick_difficulty_label?: DifficultyLabel | null, res
         }
     }
     return 0;
+};
+
+const buildMatchupByGameId = (picks: Pick[]) => {
+    const map = new Map<string, string>();
+
+    picks.forEach((pick) => {
+        const gameId = pick.selection?.gameId;
+        const matchup = extractMatchup(pick.description, pick.selection?.matchup);
+        if (gameId && matchup && !map.has(gameId)) {
+            map.set(gameId, matchup);
+        }
+
+        pick.legs?.forEach((leg) => {
+            const legGameId = leg.selection?.gameId;
+            const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+            if (legGameId && legMatchup && !map.has(legGameId)) {
+                map.set(legGameId, legMatchup);
+            }
+        });
+    });
+
+    return map;
 };
 
 const RankCell = ({
@@ -293,6 +316,7 @@ const SlipCellCard = ({
     groupId,
     isMobile,
     isCurrectSlip,
+    fallbackMatchup,
 }: {
     pick?: leaderboardSlip;
     slip: Slip;
@@ -300,6 +324,7 @@ const SlipCellCard = ({
     groupId?: string;
     isMobile: boolean;
     isCurrectSlip: boolean;
+    fallbackMatchup?: string | null;
 }) => {
     const hasPick = Boolean(pick?.odds_bracket);
     const isFinal = isSlipFinal(slip);
@@ -349,22 +374,23 @@ const SlipCellCard = ({
     }
 
     const displayPick = pick?.pick_description ?? "No pick was submitted";
-    const [matchupSegment, ...lineSegments] = displayPick.split(" — ");
-    const matchupCandidate = pick?.selection?.away_team && pick?.selection.home_team ? `${pick?.selection.home_team} @ ${pick?.selection?.away_team}` : null;
-    const pickLine = matchupCandidate && lineSegments.length > 0
-        ? lineSegments.join(" — ")
-        : displayPick;
+    const { matchup: matchupCandidate, pickLine } = parsePickDescription(
+        displayPick,
+        pick?.selection?.matchup ?? fallbackMatchup ?? null
+    );
     const tierMeta = pickTierMeta(pick);
-    const tierName = tierMeta?.name ?? "—";
-    const tierRange = tierMeta?.rangeLabel ?? "—";
-    const oddsCopy = pick?.odds_bracket ?? "—";
+    const tierName = tierMeta?.name ?? EM_DASH;
+    const tierRange = tierMeta?.rangeLabel ?? EM_DASH;
+    const oddsCopy = pick?.odds_bracket ?? EM_DASH;
     const legsCount = 0;
     const legsCopy =
         legsCount > 0 ? `${legsCount} legs` : null;
-    const matchupCopy = matchupCandidate ?? pick?.selection?.matchup ?? "—";
+    const matchupCopy = isMobile && pick?.selection?.away_abbr && pick?.selection?.home_abbr ? `${pick?.selection?.away_abbr} @ ${pick?.selection?.home_abbr}` : pick?.selection?.matchup ?? matchupCandidate ?? EM_DASH;
     const gameTimeCopy = formatDateTime(pick?.selection?.gameStartTime);
-    const showMatchup = matchupCopy !== "—";
-    const showGameTime = gameTimeCopy !== "—";
+    const showGameTime = gameTimeCopy !== EM_DASH;
+    const metaLabel = [matchupCopy !== EM_DASH ? matchupCopy : null, showGameTime ? gameTimeCopy : null]
+        .filter(Boolean)
+        .join(" · ");
     const result = resultMeta(pick?.pick_result);
     const resultPoints =
         pick?.pick_result === "pending" || pick?.pick_result === null
@@ -428,20 +454,12 @@ const SlipCellCard = ({
                         <span className="text-[7px] font-semibold uppercase tracking-wide text-slate-400 md:text-xs">
                             matchup
                         </span>
-                        {showMatchup ? (
+                        {metaLabel ? (
                             <span className="mt-0.5 block truncate text-[7px] text-slate-200 md:text-xs">
-                                {matchupCopy}
+                                {metaLabel}
                             </span>
                         ) : (
                             <span className="mt-0.5 block text-[7px] text-slate-500 md:text-xs">—</span>
-                        )}
-                        {showGameTime && !isMobile && (
-                            <span
-                                className="mt-0.5 block truncate text-[11px] text-slate-200 md:text-xs"
-                                suppressHydrationWarning
-                            >
-                                {gameTimeCopy}
-                            </span>
                         )}
                         {legsCopy && (
                             <span className="mt-1 block text-[7px] font-semibold uppercase tracking-wide text-slate-500 md:text-[10px]">
@@ -540,6 +558,7 @@ export const LeaderboardGrid = ({
 
         return Math.max(Math.min(raw, max), min);
     }, [effectiveWidth, isMobile]);
+
     const STICKY_WIDTH = Math.max(PLAYER_CARD_W, RANK_COL_W);
 
     const gradedSlips = useMemo(
@@ -760,8 +779,13 @@ export const LeaderboardGrid = ({
                                                                 slip={slip}
                                                                 isOwnerCell={isOwnerCell}
                                                                 groupId={slip?.group_id}
-                                                                isMobile={isMobile}
                                                                 isCurrectSlip={isCurrectSlip}
+                                                                fallbackMatchup={
+                                                                    data?.selection?.gameId
+                                                                        ? data.selection.matchup
+                                                                        : null
+                                                                }
+                                                                isMobile={isMobile}
                                                             />
                                                         </div>
                                                     );

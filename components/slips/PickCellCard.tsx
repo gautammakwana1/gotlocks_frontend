@@ -1,5 +1,6 @@
 import { Pick, SlipStatus } from "@/lib/interfaces/interfaces";
 import { formatDateTime } from "@/lib/utils/date";
+import { EM_DASH, parsePickDescription } from "@/lib/utils/pickDescription";
 import { formatTierPrimary, getBasePointsForPick, getPickPoints, getTierMetaForPick } from "@/lib/utils/scoring";
 
 type Props = {
@@ -9,8 +10,6 @@ type Props = {
     showMeta?: boolean;
 };
 
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
 const PLACEHOLDER = EM_DASH;
 
 const resultMeta = (pick?: Pick) => {
@@ -36,19 +35,6 @@ const resultMeta = (pick?: Pick) => {
                         : "loss";
 
     return { label, tone };
-};
-
-const extractMatchup = (description?: string | null) => {
-    if (!description) return null;
-    const [lead] = description.split(DASH_SEPARATOR);
-    const candidate = lead?.trim();
-    if (candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate)) {
-        return candidate;
-    }
-    const match = description.match(
-        new RegExp(`([^${EM_DASH}]*?(@|\\bvs\\.?\\b|\\bv\\.?\\b)[^${EM_DASH}]*)`, "i")
-    );
-    return match ? match[1].trim() : null;
 };
 
 const formatPointsValue = (value: number | null) => {
@@ -83,19 +69,17 @@ export const PickCellCard = ({
     showMeta = true,
 }: Props) => {
     const displayPick = pick?.description ?? "No pick was submitted";
-    const [matchupSegment, ...lineSegments] = displayPick.split(DASH_SEPARATOR);
-    const matchupCandidate = extractMatchup(matchupSegment);
-    const pickLine =
-        matchupCandidate && lineSegments.length > 0
-            ? lineSegments.join(DASH_SEPARATOR)
-            : displayPick;
+    const { matchup: matchupCandidate, pickLine } = parsePickDescription(
+        displayPick,
+        pick?.matchup
+    );
     const tierMeta = pickTierMeta(pick);
     const tierPrimary = tierMeta?.primary ?? PLACEHOLDER;
     const tierName = tierMeta?.name ?? PLACEHOLDER;
     const oddsCopy = pick?.odds_bracket ?? PLACEHOLDER;
     const legsCount = pick?.legs?.length ?? 0;
     const legsCopy = legsCount > 0 ? `${legsCount} legs` : pick?.is_combo ? "combo" : null;
-    const matchupCopy = matchupCandidate ?? extractMatchup(displayPick) ?? PLACEHOLDER;
+    const matchupCopy = matchupCandidate ?? PLACEHOLDER;
     const gameTimeCopy = formatDateTime(pick?.selection?.gameStartTime);
     const showMatchup = matchupCopy !== PLACEHOLDER;
     const showGameTime = gameTimeCopy !== PLACEHOLDER;

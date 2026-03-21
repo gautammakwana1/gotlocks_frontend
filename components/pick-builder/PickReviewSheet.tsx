@@ -4,6 +4,7 @@ import { ConfidenceLevel } from "@/lib/interfaces/interfaces";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import ConfidenceDropdown from "../ui/ConfidenceDropdown";
 import { useEffect } from "react";
+import { extractPickLine } from "@/lib/utils/pickDescription";
 
 export type ReviewSheetItem = {
   id: string;
@@ -11,6 +12,7 @@ export type ReviewSheetItem = {
   odds?: string;
   sourceTabLabel?: string;
   tierLine?: string;
+  metaLine?: string | null;
   onDelete?: () => void;
 };
 
@@ -20,6 +22,7 @@ export type StraightReviewSheetItem = {
   odds: string;
   sourceTabLabel: string;
   tierLine: string;
+  metaLine?: string | null;
   tierCard: ReturnType<typeof resolveTierCardAppearance>;
 };
 
@@ -60,6 +63,7 @@ type Props = {
   reviewListItems: ReviewSheetItem[];
   sheetTierCard: ReturnType<typeof resolveTierCardAppearance>;
   sheetTierLine: string;
+  showTierCards?: boolean;
   selectedConfidence: ConfidenceLevel | null;
   onSelectedConfidenceChange: (value: ConfidenceLevel | null) => void;
   sameGameComboConfidences: Record<string, ConfidenceLevel | null>;
@@ -77,26 +81,11 @@ type Props = {
   isStraightSectionCollapsed: boolean;
   onToggleStraightSection: () => void;
   onSubmitCombo: (action: "post" | "slip") => void;
-  onSubmitSameGameCombo: (groupId: string, action: "post" | "slip") => void;
-  onSubmitStraight: (legId: string, action: "post" | "slip") => void;
   onSubmitSingle: (action: "post" | "slip") => void;
   onSubmitSelectedPosts: (selection: ReviewSheetPostSelection) => void;
 };
 
-const DASH_SEPARATOR = " \u2014 ";
-
 const formatOdds = (odds?: string | null) => odds?.trim() || "—";
-
-const extractPickLine = (description: string | undefined) => {
-  if (!description) return undefined;
-  const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-  const candidate = matchupSegment?.trim();
-  const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-  if (hasMatchup && lineSegments.length > 0) {
-    return lineSegments.join(DASH_SEPARATOR);
-  }
-  return description;
-};
 
 const ChevronIcon = ({ direction }: { direction: "up" | "down" }) => (
   <svg
@@ -130,6 +119,27 @@ const joinLabelParts = (parts: string[]) => {
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 };
 
+const ReviewMetaLine = ({
+  metaLine,
+  tierLine,
+  includeTierLine = false,
+}: {
+  metaLine?: string | null;
+  tierLine?: string;
+  includeTierLine?: boolean;
+}) => {
+  const showTierLine = includeTierLine && Boolean(tierLine);
+  if (!metaLine && !showTierLine) return null;
+
+  return (
+    <span className="mt-1 text-[10px] text-slate-400">
+      {metaLine}
+      {metaLine && showTierLine ? " · " : null}
+      {showTierLine ? <span className="uppercase tracking-wide">{tierLine}</span> : null}
+    </span>
+  );
+};
+
 export function PickReviewSheet({
   show,
   isOpen,
@@ -137,7 +147,6 @@ export function PickReviewSheet({
   hasMultiSelection,
   multiSelectionCount,
   sheetHeaderLabel,
-  sheetSummary,
   confirmationVariant,
   locked,
   comboHasInvalidSelections,
@@ -150,6 +159,7 @@ export function PickReviewSheet({
   reviewListItems,
   sheetTierCard,
   sheetTierLine,
+  showTierCards = true,
   selectedConfidence,
   onSelectedConfidenceChange,
   sameGameComboConfidences,
@@ -161,8 +171,6 @@ export function PickReviewSheet({
   isStraightSectionCollapsed,
   onToggleStraightSection,
   onSubmitCombo,
-  onSubmitSameGameCombo,
-  onSubmitStraight,
   onSubmitSingle,
   onSubmitSelectedPosts,
 }: Props) {
@@ -198,6 +206,7 @@ export function PickReviewSheet({
     selectedSameGameGroupIds.length > 0 ||
     selectedStraightIds.length > 0;
   const singleReviewItem = !hasMultiSelection ? reviewListItems[0] ?? null : null;
+  const singleSelectionSummary = "1 pick selected";
   const resolvedSheetHeaderLabel = isPostMode
     ? sheetHeaderLabel
     : hasMultiSelection
@@ -230,6 +239,10 @@ export function PickReviewSheet({
 
     return parts.length > 0 ? `Post ${joinLabelParts(parts)}` : "Post Pick";
   })();
+
+  const shouldRenderTierGrid = showTierCards || confirmationVariant === "post";
+  const detailGridClassName = `grid gap-3 ${showTierCards && confirmationVariant === "post" ? "grid-cols-2" : "grid-cols-1"
+    }`;
 
   return (
     <>
@@ -275,7 +288,7 @@ export function PickReviewSheet({
                     </p>
                   ) : (
                     <p className="mt-1 text-sm font-semibold text-white" >
-                      {sheetSummary}
+                      {singleSelectionSummary}
                     </p>
                   ))
                 }
@@ -330,7 +343,7 @@ export function PickReviewSheet({
 
                       <ul className="mt-4 divide-y divide-white/10">
                         {comboReviewItems.map((item) => {
-                          const pickLine = extractPickLine(item?.description);
+                          const pickLine = item?.description ? extractPickLine(item?.description) : "-";
                           return (
                             <li
                               key={item.id}
@@ -358,11 +371,11 @@ export function PickReviewSheet({
                                   >
                                     {pickLine}
                                   </p>
-                                  {item.tierLine && (
-                                    <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                      {item.tierLine}
-                                    </p>
-                                  )}
+                                  <ReviewMetaLine
+                                    metaLine={item.metaLine}
+                                    tierLine={item.tierLine}
+                                    includeTierLine={showTierCards}
+                                  />
                                 </div>
                               </div>
                               <div className="flex items-start gap-2 pt-3 text-right">
@@ -377,43 +390,42 @@ export function PickReviewSheet({
 
                       {!comboHasInvalidSelections && (
                         <>
-                          <div
-                            className={`mt-4 grid gap-3 ${confirmationVariant === "post"
-                              ? "grid-cols-2"
-                              : "grid-cols-1"
-                              }`}
-                          >
-                            <div
-                              className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
-                              style={sheetTierCard.style}
-                            >
-                              <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
-                                tier
-                              </p>
-                              <p className="mt-1 text-[10px] font-semibold text-white">
-                                {sheetTierLine}
-                              </p>
+                          {shouldRenderTierGrid && (
+                            <div className={`mt-4 ${detailGridClassName}`}>
+                              {showTierCards && (
+                                <div
+                                  className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
+                                  style={sheetTierCard.style}
+                                >
+                                  <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                    tier
+                                  </p>
+                                  <p className="mt-1 text-[10px] font-semibold text-white">
+                                    {sheetTierLine}
+                                  </p>
+                                </div>
+                              )}
+                              {confirmationVariant === "post" && (
+                                <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                                  <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                    confidence
+                                  </p>
+                                  <ConfidenceDropdown
+                                    value={selectedConfidence}
+                                    onChange={onSelectedConfidenceChange}
+                                    disabled={locked}
+                                  />
+                                </div>
+                              )}
                             </div>
-                            {confirmationVariant === "post" && (
-                              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
-                                <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
-                                  confidence
-                                </p>
-                                <ConfidenceDropdown
-                                  value={selectedConfidence}
-                                  onChange={onSelectedConfidenceChange}
-                                  disabled={locked}
-                                />
-                              </div>
-                            )}
-                          </div>
+                          )}
                           {confirmationVariant === "post" && !selectedConfidence && (
                             <p className="mt-3 text-[11px] text-rose-200">
                               Pick a confidence level to post.
                             </p>
                           )}
 
-                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
                             {confirmationVariant === "slip" && (
                               <button
                                 type="button"
@@ -485,9 +497,9 @@ export function PickReviewSheet({
 
                                   <ul className="divide-y divide-white/10">
                                     {group.items.map((item) => {
-                                      const pickLine = extractPickLine(
+                                      const pickLine = item.description ? extractPickLine(
                                         item.description
-                                      );
+                                      ) : "-";
                                       return (
                                         <li
                                           key={item.id}
@@ -515,11 +527,11 @@ export function PickReviewSheet({
                                               >
                                                 {pickLine}
                                               </p>
-                                              {item.tierLine && (
-                                                <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                                  {item.tierLine}
-                                                </p>
-                                              )}
+                                              <ReviewMetaLine
+                                                metaLine={item.metaLine}
+                                                tierLine={item.tierLine}
+                                                includeTierLine={showTierCards}
+                                              />
                                             </div>
                                           </div>
                                           <div className="flex items-start gap-2 pt-3 text-right">
@@ -532,62 +544,46 @@ export function PickReviewSheet({
                                     })}
                                   </ul>
 
-                                  <div
-                                    className={`grid gap-3 ${confirmationVariant === "post"
-                                      ? "grid-cols-2"
-                                      : "grid-cols-1"
-                                      } `}
-                                  >
-                                    <div
-                                      className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${group.tierCard.toneClass}`}
-                                      style={group.tierCard.style}
-                                    >
-                                      <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
-                                        tier
-                                      </p>
-                                      <p className="mt-1 text-[10px] font-semibold text-white">
-                                        {group.tierLine}
-                                      </p>
+                                  {shouldRenderTierGrid && (
+                                    <div className={detailGridClassName}>
+                                      {showTierCards && (
+                                        <div
+                                          className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${group.tierCard.toneClass}`}
+                                          style={group.tierCard.style}
+                                        >
+                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                            tier
+                                          </p>
+                                          <p className="mt-1 text-[10px] font-semibold text-white">
+                                            {group.tierLine}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {confirmationVariant === "post" && (
+                                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                                          <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                            confidence
+                                          </p>
+                                          <ConfidenceDropdown
+                                            value={confidence}
+                                            onChange={(value) =>
+                                              onSameGameComboConfidenceChange(
+                                                group.id,
+                                                value
+                                              )
+                                            }
+                                            disabled={locked}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
-                                    {confirmationVariant === "post" && (
-                                      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
-                                        <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
-                                          confidence
-                                        </p>
-                                        <ConfidenceDropdown
-                                          value={confidence}
-                                          onChange={(value) =>
-                                            onSameGameComboConfidenceChange(
-                                              group.id,
-                                              value
-                                            )
-                                          }
-                                          disabled={locked}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
+                                  )}
 
                                   {confirmationVariant === "post" && !confidence && (
                                     <p className="text-[11px] text-rose-200">
                                       Pick a confidence level to post.
                                     </p>
                                   )}
-
-                                  {/* <div className="flex flex-wrap items-center gap-3">
-                                    {confirmationVariant === "slip" && (
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          onSubmitSameGameCombo(group.id, "slip")
-                                        }
-                                        disabled={locked}
-                                        className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        post same game combo to slip
-                                      </button>
-                                    )}
-                                  </div> */}
                                 </div>
                               );
                             })}
@@ -650,6 +646,7 @@ export function PickReviewSheet({
                                           >
                                             {pickLine}
                                           </p>
+                                          <ReviewMetaLine metaLine={item.metaLine} />
                                         </div>
                                         <span className="shrink-0 text-[11px] font-semibold text-slate-100">
                                           {formatOdds(item.odds)}
@@ -658,57 +655,43 @@ export function PickReviewSheet({
                                     </div>
                                   </div>
 
-                                  <div
-                                    className={`grid gap-3 ${confirmationVariant === "post"
-                                      ? "grid-cols-2"
-                                      : "grid-cols-1"
-                                      } `}
-                                  >
-                                    <div
-                                      className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${item.tierCard.toneClass}`}
-                                      style={item.tierCard.style}
-                                    >
-                                      <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
-                                        tier
-                                      </p>
-                                      <p className="mt-1 text-[10px] font-semibold text-white">
-                                        {item.tierLine}
-                                      </p>
+                                  {shouldRenderTierGrid && (
+                                    <div className={detailGridClassName}>
+                                      {showTierCards && (
+                                        <div
+                                          className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${item.tierCard.toneClass}`}
+                                          style={item.tierCard.style}
+                                        >
+                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                            tier
+                                          </p>
+                                          <p className="mt-1 text-[10px] font-semibold text-white">
+                                            {item.tierLine}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {confirmationVariant === "post" && (
+                                        <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                                          <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                            confidence
+                                          </p>
+                                          <ConfidenceDropdown
+                                            value={confidence}
+                                            onChange={(value) =>
+                                              onStraightConfidenceChange(item.id, value)
+                                            }
+                                            disabled={locked}
+                                          />
+                                        </div>
+                                      )}
                                     </div>
-                                    {confirmationVariant === "post" && (
-                                      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
-                                        <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
-                                          confidence
-                                        </p>
-                                        <ConfidenceDropdown
-                                          value={confidence}
-                                          onChange={(value) =>
-                                            onStraightConfidenceChange(item.id, value)
-                                          }
-                                          disabled={locked}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
+                                  )}
 
                                   {confirmationVariant === "post" && !confidence && (
                                     <p className="text-[11px] text-rose-200">
                                       Pick a confidence level to post.
                                     </p>
                                   )}
-
-                                  {/* <div className="flex flex-wrap items-center gap-3">
-                                    {confirmationVariant === "slip" && (
-                                      <button
-                                        type="button"
-                                        onClick={() => onSubmitStraight(item.id, "slip")}
-                                        disabled={locked}
-                                        className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        post to slip
-                                      </button>
-                                    )}
-                                  </div> */}
                                 </div>
                               );
                             })}
@@ -750,7 +733,8 @@ export function PickReviewSheet({
                                 className="mt-1 text-[13px] font-semibold leading-snug text-cyan-200"
                                 title={singleReviewItem.description}
                               >
-                                {extractPickLine(singleReviewItem.description)}
+                                {singleReviewItem.description ? extractPickLine(singleReviewItem.description) : "-"}
+                                <ReviewMetaLine metaLine={singleReviewItem.metaLine} />
                               </p>
                             </div>
                             <span className="shrink-0 text-[11px] font-semibold text-slate-100">
@@ -760,43 +744,42 @@ export function PickReviewSheet({
                         </div>
                       </div>
 
-                      <div
-                        className={`grid gap-3 ${confirmationVariant === "post"
-                          ? "grid-cols-2"
-                          : "grid-cols-1"
-                          } `}
-                      >
-                        <div
-                          className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
-                          style={sheetTierCard.style}
-                        >
-                          <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
-                            tier
-                          </p>
-                          <p className="mt-1 text-[10px] font-semibold text-white">
-                            {sheetTierLine}
-                          </p>
+                      {shouldRenderTierGrid && (
+                        <div className={detailGridClassName}>
+                          {showTierCards && (
+                            <div
+                              className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
+                              style={sheetTierCard.style}
+                            >
+                              <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                tier
+                              </p>
+                              <p className="mt-1 text-[10px] font-semibold text-white">
+                                {sheetTierLine}
+                              </p>
+                            </div>
+                          )}
+                          {confirmationVariant === "post" && (
+                            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
+                              <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
+                                confidence
+                              </p>
+                              <ConfidenceDropdown
+                                value={selectedConfidence}
+                                onChange={onSelectedConfidenceChange}
+                                disabled={locked}
+                              />
+                            </div>
+                          )}
                         </div>
-                        {confirmationVariant === "post" && (
-                          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]">
-                            <p className="block text-[10px] font-semibold lowercase tracking-wide text-slate-400">
-                              confidence
-                            </p>
-                            <ConfidenceDropdown
-                              value={selectedConfidence}
-                              onChange={onSelectedConfidenceChange}
-                              disabled={locked}
-                            />
-                          </div>
-                        )}
-                      </div>
+                      )}
                       {confirmationVariant === "post" && !selectedConfidence && (
                         <p className="text-[11px] text-rose-200">
                           Pick a confidence level to post.
                         </p>
                       )}
 
-                      <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-end gap-3">
                         {confirmationVariant === "slip" && (
                           <button
                             type="button"

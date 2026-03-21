@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
@@ -11,6 +11,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { formatDateTime } from "@/lib/utils/date";
 import { UserIcon } from "@/components/layout/MainTabBar";
+import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -37,8 +38,6 @@ const isPendingResult = (result: PickResult | null | undefined) =>
 const postedAtLabel = (iso: string | undefined) =>
     `posted at: ${formatDateTime(iso)}`;
 
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
 const PLACEHOLDER = EM_DASH;
 const META_SEPARATOR = " \u00b7 ";
 const UP_TRIANGLE = "\u25B2";
@@ -81,31 +80,11 @@ const resolveLegCategoryLabel = (market?: string) => {
     return market.replace(/Player\s+/i, "Player ").toLowerCase();
 };
 
-const extractPickLine = (description: string) => {
-    const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-    const candidate = matchupSegment?.trim();
-    const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-    if (hasMatchup && lineSegments.length > 0) {
-        return lineSegments.join(DASH_SEPARATOR);
-    }
-    return description;
-};
-
-const extractMatchup = (description?: string | null) => {
-    if (!description) return null;
-    const [lead] = description.split(DASH_SEPARATOR);
-    const candidate = lead?.trim();
-    if (candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate)) {
-        return candidate;
-    }
-    const match = description.match(
-        new RegExp(`([^${EM_DASH}]*?(@|\\bvs\\.?\\b|\\bv\\.?\\b)[^${EM_DASH}]*)`, "i")
-    );
-    return match ? match[1].trim() : null;
-};
-
-// const FEED_MAX_VISIBLE = 7;
-// const FEED_CARD_EST_HEIGHT = 220;
+const FEED_MAX_VISIBLE = 7;
+const FEED_CARD_EST_HEIGHT = 220;
+const feedScrollStyle = {
+    "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
+} as CSSProperties;
 
 const SocialPage = () => {
     const router = useRouter();
@@ -245,10 +224,9 @@ const SocialPage = () => {
         showResult = true,
     ) => (
         <div
-            className={`-mx-5 divide-y divide-white/10 overflow-y-auto sm:mx-0 
-                ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
+            className={`-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:max-h-[var(--feed-max-height)] sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
                 }`}
-        // style={{ maxHeight: `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px` }}
+            style={feedScrollStyle}
         >
             {items.map((item, index) => {
                 if (!currentUser?.userId) return;
@@ -291,7 +269,7 @@ const SocialPage = () => {
                     : null;
                 const displayPick = item.description ?? "No pick was submitted";
                 const pickLine = extractPickLine(displayPick);
-                const matchupCopy = item.matchup ?? extractMatchup(displayPick) ?? PLACEHOLDER;
+                const matchupCopy = extractMatchup(displayPick, item.matchup) ?? PLACEHOLDER;
                 const gameTimeCopy = formatDateTime(item.selection?.gameStartTime);
                 const showMatchup = matchupCopy !== PLACEHOLDER;
                 const showGameTime = gameTimeCopy !== PLACEHOLDER;
@@ -304,13 +282,20 @@ const SocialPage = () => {
                 const baseSourceTabLabel =
                     item.source_tab ?? (item.is_combo || item.legs?.length ? "Combo" : "Pick");
                 const normalizedSourceTabLabel = baseSourceTabLabel.toLowerCase();
-                const sourceTabLabel =
-                    normalizedSourceTabLabel === "pick"
-                        ? "single pick post"
-                        : normalizedSourceTabLabel === "combo"
-                            ? "combo pick post"
-                            : normalizedSourceTabLabel;
                 const showComboLegs = Boolean(item.is_combo && item.legs && item.legs.length > 0);
+                const singleCategoryLabel =
+                    normalizedSourceTabLabel === "pick"
+                        ? resolveLegCategoryLabel(item.selection?.market) ?? normalizedSourceTabLabel
+                        : normalizedSourceTabLabel;
+                const postHeaderLabel = showComboLegs
+                    ? normalizedSourceTabLabel === "combo"
+                        ? "combo pick post"
+                        : normalizedSourceTabLabel
+                    : "single pick post";
+                const detailCategoryLabel = showComboLegs ? null : singleCategoryLabel;
+                const metaLabel = [showMatchup ? matchupCopy : null, showGameTime ? gameTimeCopy : null]
+                    .filter(Boolean)
+                    .join(META_SEPARATOR);
                 const up = item.up ?? 0;
                 const down = item.down ?? 0;
                 const userReaction = item.reaction ?? undefined;
@@ -452,21 +437,38 @@ const SocialPage = () => {
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1">
                                                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                    {sourceTabLabel}
+                                                    {postHeaderLabel}
                                                 </span>
                                                 {!showComboLegs && (
                                                     <>
-                                                        <div className="mt-2 h-px w-full bg-white/10" />
-                                                        <div className="mt-2 flex min-w-0 items-baseline justify-between gap-3">
-                                                            <p
-                                                                className="min-w-0 flex-1 whitespace-normal break-words text-sm font-semibold leading-snug text-cyan-100"
-                                                                title={displayPick}
-                                                            >
-                                                                {pickLine}
-                                                            </p>
-                                                            <span className="shrink-0 text-[12px] font-semibold text-slate-100">
-                                                                {oddsCopy}
-                                                            </span>
+                                                        <div className="mt-3 h-px w-full bg-white/10" />
+                                                        <div className="mt-3 flex min-w-0 items-start justify-between gap-3">
+                                                            <div className="min-w-0 flex flex-1 items-start gap-2">
+                                                                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                                <div className="min-w-0 flex-1">
+                                                                    {detailCategoryLabel && (
+                                                                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                                                            {detailCategoryLabel}
+                                                                        </span>
+                                                                    )}
+                                                                    <p
+                                                                        className="mt-1 min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                                                        title={displayPick}
+                                                                    >
+                                                                        {pickLine}
+                                                                    </p>
+                                                                    {metaLabel && (
+                                                                        <p className="mt-1 truncate text-[10px] text-slate-400">
+                                                                            {metaLabel}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col items-end gap-1 pt-2">
+                                                                <span className="text-[11px] font-semibold text-slate-100">
+                                                                    {oddsCopy}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </>
                                                 )}
@@ -485,7 +487,7 @@ const SocialPage = () => {
                                                 <ul className="mt-3 space-y-2">
                                                     {item.legs?.map((leg, index) => {
                                                         const legPickLine = extractPickLine(leg.description);
-                                                        const legMatchup = leg.matchup ?? extractMatchup(leg.description);
+                                                        const legMatchup = extractMatchup(leg.description, leg.matchup);
                                                         const legTime = formatDateTime(leg.selection?.gameStartTime);
                                                         const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
                                                             .filter(Boolean)
@@ -522,32 +524,7 @@ const SocialPage = () => {
                                                     })}
                                                 </ul>
                                             </>
-                                        ) : (
-                                            <div className="mt-2 text-[11px] text-slate-300">
-                                                <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                    matchup
-                                                </span>
-                                                {showMatchup ? (
-                                                    <span className="mt-0.5 block truncate text-[11px] text-slate-200">
-                                                        {matchupCopy}
-                                                    </span>
-                                                ) : (
-                                                    <span className="mt-0.5 block text-[11px] text-slate-500">
-                                                        {PLACEHOLDER}
-                                                    </span>
-                                                )}
-                                                {showGameTime && (
-                                                    <span className="mt-0.5 block truncate text-[11px] text-slate-200">
-                                                        {gameTimeCopy}
-                                                    </span>
-                                                )}
-                                                {legsCopy && (
-                                                    <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                                                        {legsCopy}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 </div>
 

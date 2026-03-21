@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { Group, GroupSelector, Leaderboard, LeaderboardList, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
 import ModifyMembers, { MemberWithRole } from "@/components/group/ModifyMembers";
@@ -93,17 +93,13 @@ type PendingLeaderboardAction =
     leaderboardName: string;
   };
 
-const formatArchivedLeaderboardMeta = (board: {
-  isDefault: boolean;
-  archived_at?: string;
-  created_at: string;
-}) => {
-  const archiveTimestamp = board?.archived_at ?? board.created_at;
+const formatArchivedLeaderboardMeta = (board: archiveLeaderBoardObject) => {
+  const archiveTimestamp = board?.leaderboards.archived_at ?? board.created_at;
   const archiveDate = new Date(archiveTimestamp);
   const archiveLabel = Number.isNaN(archiveDate.getTime())
     ? null
     : archivedLeaderboardDateFormatter.format(archiveDate);
-  const typeLabel = board.isDefault ? "main" : "secondary";
+  const typeLabel = board.leaderboards.isDefault ? "main" : "secondary";
   return archiveLabel ? `${typeLabel} / ${archiveLabel}` : typeLabel;
 };
 
@@ -243,6 +239,7 @@ const GroupPage = () => {
   const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
     searchParams.get("mode") === "vibe" ? "vibe" : "leaderboard"
   );
+  const [archiveLeaderboardData, setArchiveLeaderboardData] = useState<Leaderboard[]>([]);
   // const [showFootballOverlay, setShowFootballOverlay] = useState(false);
   // const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -261,6 +258,7 @@ const GroupPage = () => {
     leaveMessage,
     leaveLoading,
     ArchiveLeaderboardList,
+    archivedLeaderboard: ArchivedLeaderboardObject
   } = useSelector((state: GroupSelector) => state.group);
   const { slip: slipState } = useSelector((state: SlipSelector) => state.slip);
   const { pick: pickState, loading: pickLoader, message: pickMessage } = useSelector((state: PickSelector) => state.pick);
@@ -276,6 +274,12 @@ const GroupPage = () => {
     dispatch(fetchAllLeaderboardsRequest({ group_id: groupId }));
     dispatch(fetchArchivedLeaderboardListRequest({ groupId: groupId }));
   }, [groupId, currentUser, dispatch])
+
+  useEffect(() => {
+    if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.leaderboard)) {
+      setArchiveLeaderboardData(ArchivedLeaderboardObject.leaderboard)
+    }
+  }, [ArchivedLeaderboardObject])
 
   const isCommissioner =
     !!group && !!currentUser && group.created_by === currentUser.userId;
@@ -504,9 +508,12 @@ const GroupPage = () => {
     [slips]
   );
 
-  const handleSelectArchivedLeaderboard = (boardId: string) => {
+  const handleSelectArchivedLeaderboard = (boardId: string, archivedId: string) => {
     setArchivedLeaderboardId(boardId)
     setActiveLeaderboardId(boardId)
+    if (archivedId && group?.id) {
+      dispatch(fetchArchivedLeaderboardByIdRequest({ groupId: group?.id, archivedLeaderboard_id: archivedId }))
+    }
   }
 
   const sideLimitReached = activeSecondaryLeaderboards.length >= 2;
@@ -767,10 +774,10 @@ const GroupPage = () => {
   }, [loading, groupData, router, currentUser]);
 
   useEffect(() => {
-    if (group?.id && selectedLeaderboard?.id && (activeTab === "leaderboard" || activeTab === "settings")) {
+    if (group?.id && selectedLeaderboard?.id && (activeTab === "leaderboard" || activeTab === "settings") && !archivedLeaderboardId) {
       dispatch(fetchLeaderboardRequest({ groupId: group?.id, leaderboard_id: selectedLeaderboard?.id }));
     }
-  }, [selectedLeaderboard?.id, dispatch, group?.id, activeTab]);
+  }, [selectedLeaderboard?.id, dispatch, group?.id, activeTab, archivedLeaderboardId]);
 
   useEffect(() => {
     if (activeTab === "leaderboard" && group?.id) {
@@ -1034,25 +1041,25 @@ const GroupPage = () => {
     }
   };
 
-  const archivedLeaderboardsContent = sortedArchivedLeaderboards.length ? (
+  const archivedLeaderboardsContent = ArchiveLeaderboardList && ArchiveLeaderboardList?.archivedLeaderboards?.length ? (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-      {sortedArchivedLeaderboards.map((board, index) => (
+      {ArchiveLeaderboardList.archivedLeaderboards.map((board, index) => (
         <button
           key={board.id}
           type="button"
-          onClick={() => handleSelectArchivedLeaderboard(board.id)}
+          onClick={() => handleSelectArchivedLeaderboard(board.leaderboard_id, board.id)}
           className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] ${index > 0 ? "border-t border-white/10" : ""
             }`}
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm font-semibold text-white">{board.name}</p>
+              <p className="truncate text-sm font-semibold text-white">{board.label}</p>
               <p className="flex-none text-[10px] uppercase tracking-wide text-gray-500">
                 {formatArchivedLeaderboardMeta(board)}
               </p>
             </div>
-            {board.sport_scope && (
-              <p className="mt-1 text-[11px] text-gray-500">Scope: {board.sport_scope}</p>
+            {board.leaderboards.sport_scope && (
+              <p className="mt-1 text-[11px] text-gray-500">Scope: {board.leaderboards.sport_scope}</p>
             )}
           </div>
           <svg
@@ -2129,7 +2136,7 @@ const GroupPage = () => {
         </div>
       )}
 
-      {archivedLeaderboardId && archivedLeaderboard && (
+      {archivedLeaderboardId && ArchivedLeaderboardObject && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
           role="dialog"
@@ -2146,7 +2153,7 @@ const GroupPage = () => {
                   Archived leaderboard
                 </p>
                 <h2 className="text-lg font-semibold text-white">
-                  {archivedLeaderboard.name}
+                  {ArchivedLeaderboardObject.label}
                 </h2>
               </div>
               <button
@@ -2164,10 +2171,10 @@ const GroupPage = () => {
                 slips={selectedLeaderboardSlips}
                 users={members}
                 picks={gradedPicks}
-                leaderboardId={archivedLeaderboard.id}
-                leaderboardName={archivedLeaderboard.name}
+                leaderboardId={ArchivedLeaderboardObject.leaderboard_id}
+                leaderboardName={ArchivedLeaderboardObject.label}
                 currentUserId={currentUser?.userId}
-                leaderboard={leaderboardList}
+                leaderboard={archiveLeaderboardData}
               />
             </div>
           </div>

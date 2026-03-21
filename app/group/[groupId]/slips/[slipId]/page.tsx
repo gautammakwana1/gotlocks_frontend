@@ -14,7 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
 import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
 import BackButton from "@/components/ui/BackButton";
-import { JAGGED_CLIP_PATH } from "@/lib/constants";
+import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
 import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
 import { BuiltPickPayload, GradingPayload, Group, GroupSelector, LeaderboardList, League, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
@@ -34,8 +34,9 @@ import { canCommissionerReview, canFinalize, canUserEditSlipPicks, isSlipFinal, 
 import { createPortal } from "react-dom";
 import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
-import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, useIsMobile } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
+import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 
 type BuilderState = {
     mode: "create" | "edit";
@@ -76,19 +77,6 @@ const sortPicksByOdds = (picks: Pick[]) => {
         return aValue - bValue;
     });
     return sorted;
-};
-
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
-
-const extractPickLine = (description: string) => {
-    const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-    const candidate = matchupSegment?.trim();
-    const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-    if (hasMatchup && lineSegments.length > 0) {
-        return lineSegments.join(DASH_SEPARATOR);
-    }
-    return description;
 };
 
 const DEFAULT_SPORT = "NFL";
@@ -137,11 +125,13 @@ const PICK_RESULT_ACCENTS = {
 
 const SlipDetailsPage = () => {
     const dispatch = useDispatch();
+    const isMobile = useIsMobile();
     const params = useParams<{ groupId: string; slipId: string }>();
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
     const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
+    const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -427,18 +417,14 @@ const SlipDetailsPage = () => {
         }
     }, [group, slip, router]);
 
-    // const memberPicks = useMemo(
-    //     () =>
-    //         slipPicks
-    //             .map((pick: Pick) => ({
-    //                 pick,
-    //                 user: members.find((candidate) => candidate.user_id === pick.user_id),
-    //             }))
-    //             .filter(
-    //                 (entry): entry is { pick: Pick; user: Member } => Boolean(entry.user)
-    //             ),
-    //     [slipPicks, members]
-    // );
+    useEffect(() => {
+        return () => {
+            if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+            }
+        };
+    }, []);
+
     const picksByMember = useMemo(() => {
         const map = new Map<string, Pick[]>();
         slipPicks.forEach((pick) => {
@@ -455,31 +441,27 @@ const SlipDetailsPage = () => {
         return map;
     }, [slipPicks]);
 
-    // const gradingDirty = useMemo(
-    //     () => {
-    //         if (!slip?.isGraded) {
-    //             return memberPicks.some(({ pick }) => {
-    //                 const draft = pointsDraft[pick.id];
-    //                 if (!draft) return false;
-    //                 const currentResult = normalizeResult(pick.result);
-    //                 return draft.result !== currentResult;
-    //             });
-    //         }
+    const matchupByGameId = useMemo(() => {
+        const map = new Map<string, string>();
 
-    //         return memberPicks.some(({ pick }) => {
-    //             const draft = pointsDraft[pick.id];
-    //             if (!draft) return false;
-    //             const draftPoints = Number.isFinite(Number(draft.points))
-    //                 ? Number(draft.points)
-    //                 : 0;
-    //             const currentResult = normalizeResult(pick.result);
-    //             const currentPoints =
-    //                 typeof pick.points === "number" ? pick.points : scoreForResult(currentResult, pick);
-    //             return draft.result !== currentResult || currentPoints !== draftPoints;
-    //         });
-    //     },
-    //     [pointsDraft, memberPicks, slip?.isGraded]
-    // );
+        slipPicks.forEach((pick) => {
+            const gameId = pick.selection?.gameId;
+            const matchup = extractMatchup(pick.description, pick.selection?.matchup);
+            if (gameId && matchup && !map.has(gameId)) {
+                map.set(gameId, matchup);
+            }
+
+            pick.legs?.forEach((leg) => {
+                const legGameId = leg.selection?.gameId;
+                const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+                if (legGameId && legMatchup && !map.has(legGameId)) {
+                    map.set(legGameId, legMatchup);
+                }
+            });
+        });
+
+        return map;
+    }, [slipPicks]);
 
     const preflightIsCommissioner = group?.created_by === currentUser?.userId;
     const preflightIsCreator = slip?.created_by === currentUser?.userId;
@@ -612,8 +594,6 @@ const SlipDetailsPage = () => {
         : totalPossibleLabel;
     const deadlineLabel = pickDeadlinePassed ? "Locked at" : "Pick deadline";
     const deadlineVariant = pickDeadlinePassed ? "alert" : "default";
-    // const userDisplayName = currentUser.username ?? "You";
-    // const userInitials = getMemberInitials(userDisplayName);
     const userMember = members.find(
         m => m.user_id === currentUser.userId
     );
@@ -685,12 +665,6 @@ const SlipDetailsPage = () => {
     const handleFinalizeSlip = (event?: FormEvent) => {
         event?.preventDefault();
         if (!canFinalizeSlip) return;
-        // const confirmed = window.confirm(
-        //     slip.isGraded
-        //         ? "Finalize results and post them to the leaderboard?"
-        //         : "Finalize results and close out this slip?"
-        // );
-        // if (!confirmed) return;
         if (slip.id && group.id) {
             dispatch(markFinalizeSlipRequest({ slip_id: slip.id, group_id: group.id }));
         }
@@ -707,30 +681,6 @@ const SlipDetailsPage = () => {
     const openDeleteSlipModal = () => setIsDeleteSlipModalOpen(true);
 
     const closeDeleteSlipModal = () => setIsDeleteSlipModalOpen(false);
-
-    // const handleStatusChange = (status: typeof slip.status) => {
-    //     if (!slip.id) return;
-
-    //     if (status === "locked") {
-    //         dispatch(markLockSlipRequest({
-    //             slip_id: slip.id
-    //         }));
-    //     } else if (status === "open") {
-    //         dispatch(markedUnlockSlipRequest({
-    //             slip_id: slip.id
-    //         }));
-    //     } else if (status === "grading") {
-    //         dispatch(markGradedSlipRequest({
-    //             slip_id: slip.id
-    //         }));
-    //     } else if (status === "final") {
-    //         dispatch(markFinalizeSlipRequest({ slip_id: slip.id, group_id: group.id }));
-    //     }
-    //     // dispatch(fetchAllPicksRequest({ slip_id: slip.id }));
-    //     if (status === "final" && group) {
-    //         router.replace(`/group/${group.id}/slips/${slip.id}/results`);
-    //     }
-    // };
 
     const handleDeleteSlip = (event?: FormEvent) => {
         if (!group || !currentUser) return;
@@ -804,6 +754,33 @@ const SlipDetailsPage = () => {
 
     const handlePointsDraftChange = (pickId: string, value: string) => {
         setPointsDraft((prev) => ({ ...prev, [pickId]: value }));
+    };
+
+    const debouncedUpdatePoints = (pickId: string, value: number, pick: Pick) => {
+        if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+        }
+
+        debounceRef.current = setTimeout(() => {
+            const gradingPayload: GradingPayload = [
+                {
+                    id: pickId,
+                    points: value,
+                    bonus: 0,
+                    result: pick.result,
+                },
+            ];
+
+            if (group?.id && slip.id) {
+                dispatch(
+                    updatePicksRequest({
+                        grading: gradingPayload,
+                        group_id: group.id,
+                        slip_id: slip.id,
+                    })
+                );
+            }
+        }, 500);
     };
 
     const persistAwardedPoints = (pickId: string, pick: Pick) => {
@@ -1113,6 +1090,7 @@ const SlipDetailsPage = () => {
                                                     picks={orderedUserPicks}
                                                     slipStatus={slip.status}
                                                     showComboPickCount={slip.isGraded}
+                                                    expandComboLegs={!slip.isGraded}
                                                     canManage={canManagePicks}
                                                     onDeletePick={handleDeletePick}
                                                     highlightResults={isTimeLocked}
@@ -1217,6 +1195,7 @@ const SlipDetailsPage = () => {
                                                                         picks={picks}
                                                                         slipStatus={slip.status}
                                                                         showComboPickCount={slip.isGraded}
+                                                                        expandComboLegs={!slip.isGraded}
                                                                         highlightResults={isTimeLocked}
                                                                     />
                                                                 )}
@@ -1516,7 +1495,6 @@ const SlipDetailsPage = () => {
                                                 <div className="space-y-4">
                                                     {reviewMembers.map(({ member, picks }) => {
                                                         const displayName = member.profiles?.username ?? "Member";
-                                                        // const initials = getMemberInitials(displayName);
                                                         const headerPick = picks[0];
                                                         const headerResult = headerPick
                                                             ? normalizePickResult(headerPick.result)
@@ -1537,15 +1515,16 @@ const SlipDetailsPage = () => {
                                                         const showPointsAdjuster = slip.isGraded && Boolean(headerPick);
                                                         const adjustHeaderPoints = (delta: number) => {
                                                             if (!headerPick || headerPointsDisabled) return;
+
                                                             const nextValue = headerCurrentPoints + delta;
-                                                            handlePointsDraftChange(headerPick.id, String(nextValue));
-                                                            const gradingPayload: GradingPayload = [{
-                                                                id: headerPick.id,
-                                                                points: nextValue,
-                                                                bonus: 0,
-                                                                result: headerPick.result,
-                                                            }]
-                                                            if (group?.id && slip.id) dispatch(updatePicksRequest({ grading: gradingPayload, group_id: group?.id, slip_id: slip.id }));
+                                                            const validValue = Math.max(
+                                                                MINIMUM_PICK_POINTS,
+                                                                Math.min(MAXIMUM_PICK_POINTS, nextValue)
+                                                            );
+
+                                                            handlePointsDraftChange(headerPick.id, String(validValue));
+
+                                                            debouncedUpdatePoints(headerPick.id, validValue, headerPick);
                                                         };
                                                         const memberProfilePicture = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
                                                         return (
@@ -1597,12 +1576,19 @@ const SlipDetailsPage = () => {
                                                                                     step="1"
                                                                                     value={headerPointsValue}
                                                                                     placeholder={headerIsPending ? "—" : undefined}
-                                                                                    onChange={(event) =>
-                                                                                        handlePointsDraftChange(
-                                                                                            headerPick.id,
-                                                                                            event.target.value
-                                                                                        )
-                                                                                    }
+                                                                                    onChange={(event) => {
+                                                                                        const nextValue = Number(event.target.value);
+                                                                                        const validValue = Math.max(
+                                                                                            MINIMUM_PICK_POINTS,
+                                                                                            Math.min(MAXIMUM_PICK_POINTS, nextValue)
+                                                                                        );
+
+                                                                                        handlePointsDraftChange(headerPick.id, String(validValue));
+
+                                                                                        debouncedUpdatePoints(headerPick.id, validValue, headerPick);
+                                                                                    }}
+                                                                                    max={100}
+                                                                                    min={-100}
                                                                                     onBlur={() => persistAwardedPoints(headerPick.id, headerPick)}
                                                                                     onKeyDown={(event) => {
                                                                                         if (event.key === "Enter") {
@@ -1637,10 +1623,18 @@ const SlipDetailsPage = () => {
                                                                             const normalizedResult = normalizePickResult(pick.result);
                                                                             const displayPick = pick.description ?? "No pick was submitted";
                                                                             const pickLine = extractPickLine(displayPick);
-                                                                            const matchupLabel = pick.matchup;
+                                                                            const matchupLabel = extractMatchup(
+                                                                                displayPick,
+                                                                                pick?.matchup ??
+                                                                                (pick.selection?.gameId
+                                                                                    ? matchupByGameId.get(pick.selection.gameId)
+                                                                                    : null)
+                                                                            );
+                                                                            const matchupTag = isMobile && pick?.selection?.away_abbr && pick?.selection?.home_abbr
+                                                                                ? `${pick?.selection?.away_abbr} @ ${pick?.selection?.home_abbr}` : `${pick?.selection?.matchup ?? ""}`
                                                                             const timeLabel = formatDateTime(pick.match_date);
                                                                             const showTime = timeLabel !== "—";
-                                                                            const showMatchup = Boolean(matchupLabel);
+                                                                            const showMatchup = Boolean(matchupTag);
                                                                             const sourceTabLabel = (
                                                                                 pick.source_tab ??
                                                                                 (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
@@ -1698,7 +1692,7 @@ const SlipDetailsPage = () => {
                                                                                                     </div>
                                                                                                     {(showMatchup || showTime) && (
                                                                                                         <div className="mt-auto min-w-0 space-y-0.5 text-[10px] text-slate-400">
-                                                                                                            {showMatchup && <p className="truncate">{matchupLabel}</p>}
+                                                                                                            {showMatchup && <p className="truncate">{matchupTag}</p>}
                                                                                                             {showTime && (
                                                                                                                 <p className="truncate text-slate-500">{timeLabel}</p>
                                                                                                             )}
@@ -1756,7 +1750,7 @@ const SlipDetailsPage = () => {
                                                                                                 </div>
                                                                                                 {(showMatchup || showTime) && (
                                                                                                     <div className="mt-auto space-y-0.5 text-[10px] text-slate-400">
-                                                                                                        {showMatchup && <p>{matchupLabel}</p>}
+                                                                                                        {showMatchup && <p>{matchupTag}</p>}
                                                                                                         {showTime && (
                                                                                                             <p className="text-slate-500">{timeLabel}</p>
                                                                                                         )}

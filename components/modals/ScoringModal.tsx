@@ -25,13 +25,13 @@ export const ScoringModal = ({ open, onClose, variant = "all" }: Props) => {
     variant === "global"
       ? "profile scoring rules"
       : variant === "group"
-        ? "group scoring rules"
+        ? "Group scoring rules"
         : "scoring rules & tier table";
   const modalSubtitle =
     variant === "global"
       ? "Global points and XP tiers used on profiles."
       : variant === "group"
-        ? `Group leaderboard scoring capped at ${groupCapName}.`
+        ? null
         : "Two scoring modes: profile XP/global points and group leaderboards.";
   const modalWidthClassName = isSingleMode ? "max-w-[640px]" : "max-w-3xl";
   const modalHeaderClassName = isSingleMode ? "px-7 py-5" : "px-6 py-4";
@@ -245,7 +245,9 @@ export const ScoringModal = ({ open, onClose, variant = "all" }: Props) => {
             <h2 id="scoring-modal-title" className={`${modalTitleClassName} font-semibold text-white`}>
               {modalTitle}
             </h2>
-            <p className={`${modalSubtitleClassName} text-gray-400`}>{modalSubtitle}</p>
+            {modalSubtitle ? (
+              <p className={`${modalSubtitleClassName} text-gray-400`}>{modalSubtitle}</p>
+            ) : null}
           </div>
           <button
             type="button"
@@ -332,7 +334,7 @@ export const ScoringModal = ({ open, onClose, variant = "all" }: Props) => {
               Legal note
             </h3>
             <p className={legalTextClassName}>
-              gotLocks does not handle money or wagers. All scoring is strictly for
+              Gotlocks does not handle money or wagers. All scoring is strictly for
               entertainment, leaderboard ranking, and personal bragging rights.
             </p>
           </section>

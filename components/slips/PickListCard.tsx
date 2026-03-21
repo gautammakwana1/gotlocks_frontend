@@ -1,6 +1,7 @@
-import { Pick, Picks, SlipStatus } from "@/lib/interfaces/interfaces";
+import { Pick, PickLeg, Picks, SlipStatus } from "@/lib/interfaces/interfaces";
 import { formatDateTime } from "@/lib/utils/date";
 import { useIsMobile } from "@/lib/utils/helpers";
+import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { parseAmericanOdds } from "@/lib/utils/scoring";
 
 type Props = {
@@ -18,6 +19,21 @@ type Props = {
     onDeletePick?: (pick: Pick) => void;
     highlightResults?: boolean;
     showComboPickCount?: boolean;
+    expandComboLegs?: boolean;
+};
+
+type ListItem = {
+    id: string;
+    description: string;
+    odds: string | null;
+    sourceTab?: string | null;
+    pick?: Pick;
+};
+
+type DisplayLeg = {
+    description: string;
+    odds: string | null;
+    selection?: PickLeg["selection"];
 };
 
 const formatOdds = (american?: number | string | null) => {
@@ -29,18 +45,29 @@ const formatOdds = (american?: number | string | null) => {
     return value > 0 ? `+${value}` : `${value}`;
 };
 
-const EM_DASH = "\u2014";
-const DASH_SEPARATOR = ` ${EM_DASH} `;
 const META_SEPARATOR = " \u00b7 ";
+const COMBO_PREFIX_PATTERN = /^combo:\s*/i;
+const COMBO_LEG_SPLIT_PATTERN =
+    /\s\+\s(?=[^+]*?(?:@|\bvs\.?\b|\bv\.?\b)[^+]*?(?:\s—\s|\s-\s))/i;
 
-const extractPickLine = (description: string) => {
-    const [matchupSegment, ...lineSegments] = description.split(DASH_SEPARATOR);
-    const candidate = matchupSegment?.trim();
-    const hasMatchup = candidate && /@|\bvs\.?\b|\bv\.?\b/i.test(candidate);
-    if (hasMatchup && lineSegments.length > 0) {
-        return lineSegments.join(DASH_SEPARATOR);
+const resolveLegCategoryLabel = (market?: string) => {
+    if (!market) return null;
+    const upper = market.toUpperCase();
+    if (
+        upper.includes("MONEYLINE") ||
+        upper.includes("POINT SPREAD") ||
+        upper.includes("SPREAD") ||
+        upper.includes("TOTAL")
+    ) {
+        return "game lines";
     }
-    return description;
+    if (upper.includes("PASSING")) return "passing props";
+    if (upper.includes("RECEIVING") || upper.includes("RECEPTION")) {
+        return "receiving props";
+    }
+    if (upper.includes("RUSHING")) return "rushing props";
+    if (upper.includes("TD")) return "td scorer props";
+    return market.replace(/Player\s+/i, "Player ").toLowerCase();
 };
 
 const toDecimalOdds = (american: number) =>
@@ -65,6 +92,41 @@ const combineParlayOdds = (
     return toAmericanOdds(decimal);
 };
 
+const inferComboLegsFromDescription = (
+    description: string,
+    sourceTab?: string | null
+): DisplayLeg[] => {
+    const looksLikeCombo =
+        sourceTab?.toLowerCase() === "combo" || COMBO_PREFIX_PATTERN.test(description);
+    if (!looksLikeCombo) return [];
+
+    const normalized = description.replace(COMBO_PREFIX_PATTERN, "").trim();
+    if (!normalized) return [];
+
+    const legs = normalized
+        .split(COMBO_LEG_SPLIT_PATTERN)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+    if (legs.length < 2) return [];
+
+    return legs.map((leg) => ({
+        description: leg,
+        odds: null,
+    }));
+};
+
+const resolveDisplayComboLegs = (item: ListItem): DisplayLeg[] => {
+    if (item.pick?.legs?.length) {
+        return item.pick.legs.map((leg) => ({
+            description: leg.description,
+            odds: leg.odds_bracket ?? null,
+            selection: leg.selection,
+        }));
+    }
+    return inferComboLegsFromDescription(item.description, item.sourceTab);
+};
+
 export const PickListCard = ({
     picks = [],
     items,
@@ -75,6 +137,7 @@ export const PickListCard = ({
     onDeletePick,
     highlightResults = false,
     showComboPickCount = true,
+    expandComboLegs = false,
 }: Props) => {
     const isMobile = useIsMobile();
     const listItems = (items ?? picks.map((pick) => ({
@@ -83,13 +146,7 @@ export const PickListCard = ({
         odds: pick.odds_bracket ?? null,
         sourceTab: pick.source_tab ?? (pick.is_combo || pick.legs?.length ? "Combo" : "Pick"),
         pick,
-    }))) as Array<{
-        id: string;
-        description: string;
-        odds: string | null;
-        sourceTab?: string | null;
-        pick?: Pick;
-    }>;
+    }))) as ListItem[];
     const comboOddsValue = comboOdds !== undefined
         ? parseAmericanOdds(comboOdds) ?? comboOdds
         : listItems.length === 1
@@ -99,7 +156,6 @@ export const PickListCard = ({
         comboOddsValue === null || comboOddsValue === undefined
             ? "—"
             : formatOdds(comboOddsValue);
-    const showHeader = listItems.length > 1;
     const baseCardTone =
         slipStatus === "final"
             ? "border-slate-800/80 bg-gradient-to-br from-slate-950/85 via-slate-900/70 to-blue-900/40"
@@ -133,9 +189,34 @@ export const PickListCard = ({
             : null;
     const cardTone = resultCardTone ?? baseCardTone;
 
+    const comboLegsById = new Map(
+        listItems.map((item) => [
+            item.id,
+            expandComboLegs ? resolveDisplayComboLegs(item) : [],
+        ])
+    );
+    const matchupByGameId = new Map<string, string>();
+    listItems.forEach((item) => {
+        const itemGameId = item.pick?.selection?.gameId;
+        const itemMatchup = extractMatchup(item.description, item.pick?.selection?.matchup);
+        if (itemGameId && itemMatchup && !matchupByGameId.has(itemGameId)) {
+            matchupByGameId.set(itemGameId, itemMatchup);
+        }
+
+        const comboLegs = comboLegsById.get(item.id) ?? [];
+        comboLegs.forEach((leg) => {
+            const legGameId = leg.selection?.gameId;
+            const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+            if (legGameId && legMatchup && !matchupByGameId.has(legGameId)) {
+                matchupByGameId.set(legGameId, legMatchup);
+            }
+        });
+    });
+    const showSummaryHeader = listItems.length > 1 && !expandComboLegs;
+
     return (
         <div className={`rounded-2xl border p-3 md:p-4 ${cardTone} ${className}`}>
-            {showHeader && (
+            {showSummaryHeader && (
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     {showComboPickCount ? (
                         <>
@@ -160,90 +241,175 @@ export const PickListCard = ({
                 </div>
             )}
 
-            <ul className={`${showHeader ? "mt-3" : "mt-1"} space-y-2`}>
+            <ul className={`${showSummaryHeader ? "mt-3" : "mt-1"} divide-y divide-white/10`}>
                 {listItems.map((item) => {
                     const oddsLabel = formatOdds(item.odds);
                     const pickLine = extractPickLine(item.description);
-                    const matchupLabel = item.pick?.matchup ?? null;
+                    const matchupLabel = extractMatchup(
+                        item.description,
+                        item.pick?.matchup ??
+                        (item.pick?.selection?.gameId
+                            ? matchupByGameId.get(item.pick.selection.gameId)
+                            : null)
+                    );
+                    const matchupTag = isMobile && item.pick?.selection?.away_abbr && item.pick?.selection?.home_abbr
+                        ? `${item.pick?.selection?.away_abbr} @ ${item.pick?.selection?.home_abbr}` : `${item.pick?.selection?.matchup}`
                     const timeLabel = formatDateTime(item.pick?.match_date);
                     const showTime = timeLabel !== "—";
-                    const metaParts = [matchupLabel, showTime ? timeLabel : null].filter(Boolean);
+                    const metaParts = [matchupTag, showTime ? timeLabel : null].filter(Boolean);
                     const metaLabel = metaParts.join(META_SEPARATOR);
                     const sourceTabLabel = item.sourceTab?.toLowerCase();
                     const canDelete = allowDelete && Boolean(item.pick);
                     const isWin = item.pick?.result ?? "pending";
-                    const isComboPick = item.pick?.is_combo;
+                    const comboLegs = comboLegsById.get(item.id) ?? [];
+                    const isComboItem =
+                        Boolean(item.pick?.is_combo || item.pick?.legs?.length) || sourceTabLabel === "combo";
+                    const showExpandedSingleItem =
+                        expandComboLegs && !isComboItem && comboLegs.length === 0;
+                    const expandedLegs = showExpandedSingleItem
+                        ? [
+                            {
+                                description: item.description,
+                                odds: item.odds,
+                                selection: item.pick?.selection,
+                            },
+                        ]
+                        : comboLegs;
+                    const showExpandedComboItem = expandedLegs.length > 0;
+                    const comboHeaderLabel =
+                        showExpandedSingleItem
+                            ? "single pick"
+                            : sourceTabLabel === "combo"
+                                ? "combo pick"
+                                : (sourceTabLabel ?? "combo");
 
                     return (
-                        <li key={item.id} className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex items-center gap-2">
-                                {canDelete ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => item.pick && onDeletePick?.(item.pick)}
-                                        className="mt-1 flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
-                                        aria-label="Delete pick"
-                                        title="Delete pick"
-                                    >
-                                        -
-                                    </button>
-                                ) : (
-                                    <span className={`flex-shrink-0 h-1.5 w-1.5 rounded-full ${isWin === "win" ? "bg-emerald-400" : isWin === "loss" ? "bg-red-400" : isWin === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
-                                )}
-                                <div className="min-w-0">
-                                    {sourceTabLabel && (
-                                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                            {sourceTabLabel}
-                                        </span>
-                                    )}
-                                    <p
-                                        className={`min-w-0 text-[12px] font-semibold leading-snug ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"}`}
-                                        title={item.description}
-                                    >
-                                        {pickLine}
-                                    </p>
-                                    {isComboPick && item.pick?.legs && (
-                                        <div className="space-y-1 mt-2 border border-gray-600 p-2 rounded-xl">
-                                            {item.pick.legs.map((combo, index) => {
-                                                const comboLine = extractPickLine(combo.description);
-                                                const comboOdds = formatOdds(combo.odds_bracket);
-                                                const pickTime = formatDateTime(combo.match_time);
-                                                const legMatchup = combo.matchup ?? "-"
-                                                const matchupTeams = `${combo.selection?.away_team} at ${combo.selection?.home_team}`;
+                        <li
+                            key={item.id}
+                            className={
+                                showExpandedComboItem
+                                    ? "w-full space-y-3 py-3 first:pt-0 last:pb-0"
+                                    : "flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                            }
+                        >
+                            {showExpandedComboItem ? (
+                                <>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex min-w-0 items-start gap-2">
+                                            {canDelete && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => item.pick && onDeletePick?.(item.pick)}
+                                                    className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
+                                                    aria-label="Delete pick"
+                                                    title="Delete pick"
+                                                >
+                                                    -
+                                                </button>
+                                            )}
+                                            <div className="min-w-0">
+                                                <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                                    {comboHeaderLabel}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {!showExpandedSingleItem && (
+                                            <span className="shrink-0 text-[11px] font-semibold text-slate-100">
+                                                {oddsLabel}
+                                            </span>
+                                        )}
+                                    </div>
 
-                                                return (
-                                                    <div key={index}>
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <p className="text-[10px] font-semibold text-cyan-200 truncate min-w-0 flex-1">
-                                                                {comboLine}
+                                    <ul className="space-y-3">
+                                        {expandedLegs.map((leg, index) => {
+                                            const legPickLine = extractPickLine(leg.description);
+                                            const legMatchup = extractMatchup(
+                                                leg.description,
+                                                leg.selection?.matchup ??
+                                                (leg.selection?.gameId
+                                                    ? matchupByGameId.get(leg.selection.gameId)
+                                                    : null)
+                                            );
+                                            const legTime = formatDateTime(leg.selection?.gameStartTime);
+                                            const legMeta = [legMatchup, legTime !== "—" ? legTime : null]
+                                                .filter(Boolean)
+                                                .join(META_SEPARATOR);
+                                            const legCategory = resolveLegCategoryLabel(leg.selection?.market);
+                                            const legOddsLabel = leg.odds ? formatOdds(leg.odds) : null;
+
+                                            return (
+                                                <li
+                                                    key={`${item.id}-leg-${index}`}
+                                                    className="flex items-start justify-between gap-3"
+                                                >
+                                                    <div className="min-w-0 flex items-start gap-2">
+                                                        <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                        <div className="min-w-0">
+                                                            {legCategory && (
+                                                                <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                                                    {legCategory}
+                                                                </span>
+                                                            )}
+                                                            <p className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200">
+                                                                {legPickLine}
                                                             </p>
-                                                            <span className="text-[10px] text-cyan-300 flex-shrink-0 whitespace-nowrap">
-                                                                {comboOdds}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex items-start gap-2 min-w-0">
-                                                            <p className="text-[9px] text-slate-200 truncate flex-1 min-w-0">
-                                                                {isMobile ? legMatchup : matchupTeams}
-                                                            </p>
-                                                            <p className="text-[9px] text-slate-200 truncate flex-shrink-0 whitespace-nowrap">
-                                                                {pickTime}
-                                                            </p>
+                                                            {legMeta && (
+                                                                <p className="mt-1 text-[10px] text-slate-400">{legMeta}</p>
+                                                            )}
                                                         </div>
                                                     </div>
-                                                );
-                                            })}
+                                                    {legOddsLabel && (
+                                                        <div className="flex flex-col items-end gap-1 pt-2">
+                                                            <span className="text-[11px] font-semibold text-slate-100">
+                                                                {legOddsLabel}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="min-w-0 flex items-center gap-2">
+                                        {canDelete ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => item.pick && onDeletePick?.(item.pick)}
+                                                className="mt-1 flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
+                                                aria-label="Delete pick"
+                                                title="Delete pick"
+                                            >
+                                                -
+                                            </button>
+                                        ) : (
+                                            <span className={`flex-shrink-0 h-1.5 w-1.5 rounded-full ${isWin === "win" ? "bg-emerald-400" : isWin === "loss" ? "bg-red-400" : isWin === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
+                                        )}
+                                        <div className="min-w-0">
+                                            {sourceTabLabel && (
+                                                <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
+                                                    {sourceTabLabel}
+                                                </span>
+                                            )}
+                                            <p
+                                                className={`min-w-0 text-[12px] font-semibold leading-snug ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"}`}
+                                                title={item.description}
+                                            >
+                                                {pickLine}
+                                            </p>
+                                            {metaLabel && (
+                                                <p className="text-[10px] text-slate-400">{metaLabel}</p>
+                                            )}
                                         </div>
-                                    )}
-                                    {metaLabel && (
-                                        <p className="text-[10px] text-slate-400">{metaLabel}</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-1 pt-3">
-                                <span className={`text-[11px] font-semibold ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-slate-200"}`}>
-                                    {oddsLabel}
-                                </span>
-                            </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 pt-3">
+                                        <span className={`text-[11px] font-semibold ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-slate-200"}`}>
+                                            {oddsLabel}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </li>
                     );
                 })}

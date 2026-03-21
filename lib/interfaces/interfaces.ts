@@ -672,6 +672,10 @@ export interface FetchActivityPayload {
     limit?: number;
 }
 
+export interface CreateFeedbackPayload {
+    description: string;
+}
+
 export interface FetchProgressByUserIdPayload {
     user_id: string;
 }
@@ -738,8 +742,8 @@ export interface ArchiveLeaderboardSlip {
 }
 
 export interface ArchivedLeaderboard {
-    leaderboard?: Leaderboard[];
-    slips?: ArchiveLeaderboardSlip[];
+    leaderboard: Leaderboard[];
+    slips: ArchiveLeaderboardSlip[];
     label: string;
     archived_at: string;
     archived_slip_ids: string[];
@@ -762,6 +766,7 @@ export interface archiveLeaderBoardObject {
         status: LeaderboardStatus;
         isDefault: boolean;
         archived_at: string;
+        sport_scope?: string;
     }
 }
 
@@ -794,6 +799,15 @@ export type SlipSliceState = {
     loading: boolean;
 }
 
+export type FeedbackState = {
+    feedback: Feed | null;
+    session: SessionState | null;
+    hasSeenIntro: boolean;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+};
+
 export type PickSliceState = {
     pick: unknown;
     pickOfDay: BuiltPickPayload;
@@ -817,6 +831,7 @@ export type RootState = {
     nhl: NHLState;
     progress: ProgressState;
     league: LeagueState;
+    feedback: FeedbackState;
 };
 
 export type UpdateGroupPayload = {
@@ -1458,7 +1473,9 @@ export type PickSelectionMeta = {
     side?: string;
     threshold?: number;
     home_team?: string;
+    home_abbr?: string;
     away_team?: string;
+    away_abbr?: string;
     matchup?: string;
     match_date?: string;
     external_pick_key?: string;
