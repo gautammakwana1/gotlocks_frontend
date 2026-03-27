@@ -12,6 +12,7 @@ import FootballAnimation from "@/components/animations/FootballAnimation";
 import { formatDateTime } from "@/lib/utils/date";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -190,7 +191,7 @@ const SocialPage = () => {
 
     const handleViewProfile = (userId: string | undefined) => {
         if (userId) {
-            router.push(`/user/${userId}`);
+            router.push(getProfilePath(userId, currentUser?.userId));
         }
     };
 

@@ -11,6 +11,7 @@ import ncaabReducer from "./slices/ncaabSlice";
 import nhlReducer from "./slices/nhlSlice";
 import leaguesReducer from "./slices/leagueSlice";
 import feedbackReducer from "./slices/feedbackSlice";
+import notificationReducer from "./slices/notificationSlice";
 
 export const rootReducer = combineReducers({
 	user: authReducer,
@@ -25,6 +26,7 @@ export const rootReducer = combineReducers({
 	progress: progressReducer,
 	league: leaguesReducer,
 	feedback: feedbackReducer,
+	notifications: notificationReducer,
 });
 
 export type RootReducer = ReturnType<typeof rootReducer>;

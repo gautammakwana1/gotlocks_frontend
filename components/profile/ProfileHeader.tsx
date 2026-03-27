@@ -52,9 +52,11 @@ type ProfileHeaderProps = {
     user: Profile;
     mode: "self" | "public";
     profileVisible: boolean | undefined;
+    showLockedPrivateSummary?: boolean;
     isSelf: boolean;
     showFollowControls: boolean;
     isFollowing: boolean;
+    isFollowRequested?: boolean;
     record: ProfileHeaderRecord;
     stats: ProfileHeaderStats;
     progress: ProfileHeaderProgress;
@@ -161,9 +163,11 @@ const ProfileHeader = ({
     user,
     mode,
     profileVisible = false,
+    showLockedPrivateSummary = false,
     isSelf,
     showFollowControls,
     isFollowing,
+    isFollowRequested = false,
     record,
     stats,
     progress,
@@ -182,11 +186,12 @@ const ProfileHeader = ({
     const [errors, setErrors] = useState<FormErrors>({});
     const [isAvatarOpen, setIsAvatarOpen] = useState(false);
     const avatarMenuRef = useRef<HTMLDetailsElement | null>(null);
-    const settingsMenuRef = useRef<HTMLDetailsElement | null>(null);
+    const optionsMenuRef = useRef<HTMLDetailsElement | null>(null);
     const displayName = user.username ?? user.full_name ?? "Member";
     const initials = useMemo(() => buildInitials(displayName), [displayName]);
     const avatarUrl = user.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.profile_image}` : "";
     const showStats = mode === "self" || profileVisible;
+    const showRightSummary = showStats || showLockedPrivateSummary;
     const showNumericProgress = mode === "self";
     const showFollowSection = mode === "public" && showFollowControls && !isSelf;
     const showFollowerStats = showStats || showFollowSection;
@@ -206,6 +211,65 @@ const ProfileHeader = ({
         }
     };
 
+    const renderOptionsMenu = () => {
+        return (
+            <details ref={optionsMenuRef} className="relative z-20">
+                <summary
+                    aria-label="Profile options"
+                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
+                >
+                    <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        className="h-4 w-4"
+                    >
+                        <path
+                            d="M4 20h4l10-10-4-4L4 16v4Z"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                        <path
+                            d="M13.5 6.5l4 4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        />
+                    </svg>
+                </summary>
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            handleEdit();
+                            closeDetailsMenu(event);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition hover:bg-white/10"
+                    >
+                        edit name
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(event) => {
+                            onPrivacyToggle();
+                            closeDetailsMenu(event);
+                        }}
+                        className={`mt-1 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-[11px] uppercase tracking-wide transition ${user.is_public
+                            ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
+                            : "border-white/20 bg-white/10 text-white"
+                            }`}
+                    >
+                        {user.is_public ? "Public profile" : "Private profile"}
+                        <span className="text-[10px] text-white/60">
+                            {user.is_public ? "visible" : "hidden"}
+                        </span>
+                    </button>
+                </div>
+            </details>
+        );
+    };
+
     useEffect(() => {
         if (!user?.username) return;
 
@@ -214,7 +278,7 @@ const ProfileHeader = ({
 
     useEffect(() => {
         const handleClick = (event: globalThis.MouseEvent) => {
-            const menus = [avatarMenuRef.current, settingsMenuRef.current].filter(
+            const menus = [avatarMenuRef.current, optionsMenuRef.current].filter(
                 Boolean
             ) as HTMLDetailsElement[];
 
@@ -223,9 +287,11 @@ const ProfileHeader = ({
             const openMenus = menus.filter((menu) => menu.open);
             if (!openMenus.length) return;
 
-            const target = event.target;
+            const target = event.target instanceof Node ? event.target : null;
 
-            if (!(target instanceof Node)) return;
+            if (target && openMenus.some((menu) => menu.contains(target))) {
+                return;
+            }
 
             if (openMenus.some((menu) => menu.contains(target))) {
                 return;
@@ -238,7 +304,7 @@ const ProfileHeader = ({
 
         const handleEscape = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
-            const menus = [avatarMenuRef.current, settingsMenuRef.current].filter(
+            const menus = [avatarMenuRef.current, optionsMenuRef.current].filter(
                 Boolean
             ) as HTMLDetailsElement[];
             const openMenus = menus.filter((menu) => menu.open);
@@ -330,6 +396,14 @@ const ProfileHeader = ({
                             </button>
                         </div>
                     </details>
+                ) : isFollowRequested ? (
+                    <button
+                        type="button"
+                        disabled
+                        className="cursor-default rounded-lg border border-amber-300/45 bg-amber-500/10 px-2.5 py-1 text-[10px] tracking-[0.14em] text-amber-100"
+                    >
+                        requested
+                    </button>
                 ) : (
                     <button
                         type="button"
@@ -345,7 +419,7 @@ const ProfileHeader = ({
 
     return (
         <header className="relative overflow-visible -mx-5 bg-black sm:-mx-6">
-            <div className="relative px-5 py-5 sm:px-6 sm:py-6">
+            <div className="relative px-5 pt-2 pb-5 sm:px-6 sm:pt-3 sm:pb-6">
                 <div className="relative">
                     <div className="pointer-events-none absolute -inset-y-2 inset-x-0 rounded-3xl bg-gradient-to-br from-slate-950/80 via-slate-900/65 to-blue-900/35 ring-1 ring-white/10 sm:-inset-y-3">
                         <div className="absolute inset-[1px] rounded-3xl bg-gradient-to-b from-white/10 via-white/5 to-black/70" />
@@ -425,7 +499,8 @@ const ProfileHeader = ({
                                                     <div className="truncate text-xl font-semibold leading-tight text-white sm:text-2xl">
                                                         {displayName}
                                                     </div>
-                                                    {mode === "self" && (
+                                                    {mode === "self" ? renderOptionsMenu() : null}
+                                                    {/* {mode === "self" && (
                                                         <details ref={settingsMenuRef} className="relative z-20">
                                                             <summary
                                                                 aria-label="Profile options"
@@ -480,7 +555,7 @@ const ProfileHeader = ({
                                                                 </button>
                                                             </div>
                                                         </details>
-                                                    )}
+                                                    )} */}
                                                 </div>
                                             </div>
                                         </div>
@@ -538,7 +613,7 @@ const ProfileHeader = ({
                                 </div>
                             </div>
                             <div className="flex h-full flex-col gap-4 border-l border-white/10 pl-4 sm:gap-5 sm:pl-5 lg:pl-6">
-                                {showStats && (
+                                {showRightSummary && (
                                     <div className="space-y-3 pt-2">
                                         <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.2em]">
                                             {stats.globalPoints} global points
@@ -568,7 +643,7 @@ const ProfileHeader = ({
                                     </div>
                                 )}
                                 <div
-                                    className={`space-y-3 ${showStats
+                                    className={`space-y-3 ${showRightSummary
                                         ? "border-t border-white/10 pt-4 pb-1 mt-auto sm:mt-0"
                                         : ""
                                         }`}

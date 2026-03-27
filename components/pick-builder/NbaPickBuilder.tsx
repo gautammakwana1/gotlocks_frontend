@@ -13,7 +13,7 @@ import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierMetaForPick, parseAmericanOdds, TierIndex } from "@/lib/utils/scoring";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
-import { getShortTeamName } from "@/lib/utils/helpers";
+import { getMobileTeamName } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
@@ -3684,7 +3684,7 @@ export const NbaPickBuilder = ({
             </div>
         )
     }
-
+    
     return (
         <div
             className={`space-y-4 ${activeGame ? "matchup-detail" : ""}`}
@@ -3805,7 +3805,7 @@ export const NbaPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? game.awayAbbr : game.awayTeam}
+                                                            {isMobile ? getMobileTeamName(game.awayAbbr, game.awayTeam) : game.awayTeam}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -3859,7 +3859,7 @@ export const NbaPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? game.homeAbbr : game.homeTeam}
+                                                            {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}
                                                         </p>
                                                     </div>
                                                 </div>

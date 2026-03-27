@@ -14,7 +14,7 @@ export function AuthSync() {
 
         // Listen to all changes
         const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+            if (event === "INITIAL_SESSION") {
                 if (session) {
                     saveCleanUser(session);
                 }

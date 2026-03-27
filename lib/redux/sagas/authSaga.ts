@@ -1,11 +1,11 @@
 import { call, put, takeLatest } from "redux-saga/effects";
-import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure, changePasswordSuccess, changePasswordFailure, changePasswordRequest } from "../slices/authSlice";
+import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure, changePasswordSuccess, changePasswordFailure, changePasswordRequest, fetchFollowRequestListRequest, fetchFollowRequestListSuccess, fetchFollowRequestListFailure, accpetFollowSuccess, accpetFollowFailure, accpetFollowRequest, declineFollowSuccess, declineFollowFailure, declineFollowRequest, fetchSentFollowRequestListSuccess, fetchSentFollowRequestListFailure, fetchSentFollowRequestListRequest, blockUserSuccess, blockUserFailure, unblockUserSuccess, unblockUserFailure, blockUserRequest, unblockUserRequest, fetchBlockedUsersSuccess, fetchBlockedUsersFailure, fetchBlockedUsersRequest, enablePostAlertSuccess, enablePostAlertFailure, disablePostAlertSuccess, disablePostAlertFailure, enablePostAlertRequest, disablePostAlertRequest, fetchPostAlertsSuccess, fetchPostAlertsFailure, fetchPostAlertsRequest } from "../slices/authSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios, { AxiosResponse } from "axios";
 import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { ChangePasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
+import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
 
 type LoginPayload = {
 	email: string;
@@ -270,6 +270,146 @@ function* handleChangePassword(action: PayloadAction<ChangePasswordPayload>): Sa
 	}
 }
 
+function* handleFetchFollowRequestList(action: PayloadAction): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/auth/follow-requests`,
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchFollowRequestListSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchFollowRequestListFailure(getErrorMessage(error, "Fetch follow request list failed")));
+	}
+};
+
+function* handleFetchSentFollowRequestList(action: PayloadAction): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/auth/sent-follow-requests`,
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchSentFollowRequestListSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchSentFollowRequestListFailure(getErrorMessage(error, "Fetch sent follow request list failed")));
+	}
+};
+
+function* handleAcceptFollowRequest(action: PayloadAction<AcceptDeclineFollowRequestPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/accept-follow-request`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(accpetFollowSuccess(payload));
+	} catch (error: unknown) {
+		yield put(accpetFollowFailure(getErrorMessage(error, "Failed to accpet request")));
+	}
+};
+
+function* handleDeclineFollowRequest(action: PayloadAction<AcceptDeclineFollowRequestPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/decline-follow-request`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(declineFollowSuccess(payload));
+	} catch (error: unknown) {
+		yield put(declineFollowFailure(getErrorMessage(error, "Failed to decline request")));
+	}
+};
+
+function* handleBlockUserRequest(action: PayloadAction<BlockUserPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/block-user`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(blockUserSuccess(payload));
+		yield put(fetchBlockedUsersRequest({}));
+	} catch (error: unknown) {
+		yield put(blockUserFailure(getErrorMessage(error, "Failed to block user.")));
+	}
+};
+
+function* handleUnblockUserRequest(action: PayloadAction<UnblockUserPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/unblock-user`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(unblockUserSuccess(payload));
+		yield put(fetchBlockedUsersRequest({}));
+	} catch (error: unknown) {
+		yield put(unblockUserFailure(getErrorMessage(error, "Failed to unblock user.")));
+	}
+};
+
+function* handleFetchBlockedUsersList(action: PayloadAction): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/auth/blocked-users`,
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchBlockedUsersSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchBlockedUsersFailure(getErrorMessage(error, "Fetch blocked users list failed")));
+	}
+};
+
+function* handleEnablePostAlertRequest(action: PayloadAction<EnablePostAlertPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/enable-post-alert`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(enablePostAlertSuccess(payload));
+		yield put(fetchPostAlertsRequest({}));
+	} catch (error: unknown) {
+		yield put(enablePostAlertFailure(getErrorMessage(error, "Failed to enable post alert.")));
+	}
+};
+
+function* handleDisablePostAlertRequest(action: PayloadAction<DisablePostAlertPayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/auth/disable-post-alert`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(disablePostAlertSuccess(payload));
+		yield put(fetchPostAlertsRequest({}));
+	} catch (error: unknown) {
+		yield put(disablePostAlertFailure(getErrorMessage(error, "Failed to disable post alert.")));
+	}
+};
+
+function* handleFetchPostAlertsList(action: PayloadAction): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/auth/post-alerts`,
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchPostAlertsSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchPostAlertsFailure(getErrorMessage(error, "Fetch post alerts list failed")));
+	}
+};
+
 export default function* authSaga() {
 	yield takeLatest(loginWithEmailRequest.type, handleLoginWithEmail);
 	yield takeLatest(registerUserRequest.type, handleRegister);
@@ -287,5 +427,15 @@ export default function* authSaga() {
 	yield takeLatest(resetPasswordRequest.type, handleResetPassword);
 	yield takeLatest(fetchFollowersListByIdRequest.type, handleFetchFollowersListById);
 	yield takeLatest(fetchFollowingListByIdRequest.type, handleFetchFollowingsListById);
+	yield takeLatest(fetchFollowRequestListRequest.type, handleFetchFollowRequestList);
 	yield takeLatest(changePasswordRequest.type, handleChangePassword);
+	yield takeLatest(accpetFollowRequest.type, handleAcceptFollowRequest);
+	yield takeLatest(declineFollowRequest.type, handleDeclineFollowRequest);
+	yield takeLatest(fetchSentFollowRequestListRequest.type, handleFetchSentFollowRequestList);
+	yield takeLatest(blockUserRequest.type, handleBlockUserRequest);
+	yield takeLatest(unblockUserRequest.type, handleUnblockUserRequest);
+	yield takeLatest(fetchBlockedUsersRequest.type, handleFetchBlockedUsersList);
+	yield takeLatest(enablePostAlertRequest.type, handleEnablePostAlertRequest);
+	yield takeLatest(disablePostAlertRequest.type, handleDisablePostAlertRequest);
+	yield takeLatest(fetchPostAlertsRequest.type, handleFetchPostAlertsList);
 }

@@ -23,6 +23,7 @@ import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
+import { getMobileTeamName } from "@/lib/utils/helpers";
 
 type BookOdds = {
     book?: string;
@@ -2760,8 +2761,8 @@ export const NflPickBuilder = ({
                         >
                             <div className="min-w-0 self-start pt-8">
                                 <p className="text-xs font-semibold leading-snug text-white">
-                                    <span className="block">{isMobile ? game.away_abbr : game.away_team} @</span>
-                                    <span className="block">{isMobile ? game.home_abbr : game.home_team}</span>
+                                    <span className="block">{isMobile ? getMobileTeamName(game.away_abbr, game.away_team) : game.away_team} @</span>
+                                    <span className="block">{isMobile ? getMobileTeamName(game.home_abbr, game.home_team) : game.home_team}</span>
                                 </p>
                                 <p className="mt-3 text-[11px] text-gray-400">
                                     {formatDateTime(game.date)}

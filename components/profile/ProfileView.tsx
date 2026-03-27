@@ -10,9 +10,9 @@ import ProfileControls, {
     type TypeFilter,
 } from "./ProfileControls";
 import ProfileHeader from "./ProfileHeader";
-import { CurrentUser, FollowersList, FollowingsList, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
+import { CurrentUser, FollowersList, FollowingsList, FollowRequest, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowersListRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchMemberProfileRequest, followUnfollowUserRequest, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
+import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowersListRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchFollowRequestListRequest, fetchMemberProfileRequest, fetchSentFollowRequestListRequest, followUnfollowUserRequest, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
@@ -23,6 +23,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -40,6 +41,8 @@ type AuthSliceState = {
     followings: FollowingsList[] | null;
     followersById: FollowersList[] | null;
     followingsById: FollowingsList[] | null;
+    followReuests: FollowRequest[] | null;
+    sentFollowReuests: FollowRequest[] | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -94,13 +97,15 @@ const ProfileView = ({
         "followers"
     );
     const [pendingDeletePickId, setPendingDeletePickId] = useState<string | null>(null);
+    const [pendingFollowRequests, setPendingFollowRequests] = useState<FollowRequest[]>([]);
+    const [pendingUnfollowUserId, setPendingUnfollowUserId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const observer = useRef<IntersectionObserver | null>(null);
     const followPanelRef = useRef<HTMLDivElement | null>(null);
     const limit = 10;
 
     const { postPicks, deleteMessage, loading: postLoader, message, hasMore } = useSelector((state: RootState) => state.pick);
-    const { followings, followers, followersById, followingsById, loading: authLoader, message: authMessage, user, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
+    const { followings, followers, followersById, followingsById, loading: authLoader, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests } = useSelector((state: RootState) => state.user);
     const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
@@ -113,11 +118,12 @@ const ProfileView = ({
         if (!targetUserId) return;
         dispatch(fetchMemberProfileRequest({ userId: targetUserId }));
         dispatch(fetchFollowingListRequest());
-        dispatch(fetchFollowersListRequest());
-        if (mode === "public") {
-            dispatch(fetchFollowersListByIdRequest({ user_id: targetUserId }));
-            dispatch(fetchFollowingListByIdRequest({ user_id: targetUserId }));
-        }
+        dispatch(fetchFollowRequestListRequest({}));
+        dispatch(fetchSentFollowRequestListRequest({}));
+        // if (mode === "public") {
+        //     dispatch(fetchFollowersListByIdRequest({ user_id: targetUserId }));
+        //     dispatch(fetchFollowingListByIdRequest({ user_id: targetUserId }));
+        // }
         dispatch(fetchProgressByUserIdRequest({ user_id: targetUserId }));
 
         // Reset pagination and fetch page 1
@@ -128,12 +134,18 @@ const ProfileView = ({
     useEffect(() => {
         if (user?.profile && !authLoader) {
             setTargetUser(user?.profile)
-            if (user?.profile?.username) {
+            if (user?.profile?.username && mode === "self") {
                 const storedUser = getLocalStorage<CurrentUser>("currentUser");
                 setLocalStorage("currentUser", { ...storedUser, username: user?.profile?.username });
             }
         }
     }, [user?.profile, authLoader]);
+
+    useEffect(() => {
+        if (Array.isArray(followReuests)) {
+            setPendingFollowRequests(followReuests)
+        }
+    }, [followReuests]);
 
     useEffect(() => {
         if (!authLoader && profileUpdateMessage) {
@@ -235,14 +247,44 @@ const ProfileView = ({
         }, []
     );
 
+    const hasPendingFollowRequest = useCallback(
+        (requesterId: string, targetUserId: string) =>
+            sentFollowReuests?.some(
+                (request) =>
+                    request.requester_id === requesterId &&
+                    request.receiver_id === targetUserId
+            ) ?? false,
+        [sentFollowReuests]
+    );
+
     const viewerId = currentUser?.userId ?? "";
     const isSelf = viewerId === targetUserId;
+    // const viewerBlockedTarget = targetUser ? isUserBlocked(viewerId, targetUser.id) : false;
+    // const targetBlockedViewer = targetUser ? isUserBlocked(targetUser.id, viewerId) : false;
+    const viewerBlockedTarget = false;
+    const targetBlockedViewer = false;
+    const followRequested = targetUser
+        ? hasPendingFollowRequest(viewerId, targetUser.id)
+        : false;
     const computedProfileVisible =
-        mode === "self" ? true : targetUser ? canViewProfile(viewerId, targetUser) : false;
+        mode === "self"
+            ? true
+            : targetUser
+                ? !targetBlockedViewer &&
+                (targetUser.is_public || isFollowing(viewerId, targetUser.id))
+                : false;
     const profileVisible =
         typeof profileVisibleOverride === "boolean"
             ? profileVisibleOverride
             : computedProfileVisible;
+    const postsVisible = profileVisible && !viewerBlockedTarget && !targetBlockedViewer;
+    const showLockedPrivateHeaderSummary =
+        mode === "public" &&
+        Boolean(targetUser) &&
+        !profileVisible &&
+        !viewerBlockedTarget &&
+        !targetBlockedViewer &&
+        !targetUser?.is_public;
 
     const postPicksList: Picks = useMemo(() => {
         if (!Array.isArray(postPicks) || !postPicks?.length) return [];
@@ -288,6 +330,13 @@ const ProfileView = ({
         [profileVisible, sortedPicks]
     );
 
+    const statsPicks = useMemo(
+        () => (profileVisible ? sortedPicks : []),
+        [profileVisible, sortedPicks]
+    );
+
+    const headerSummaryPicks = showLockedPrivateHeaderSummary ? postPicks : statsPicks;
+
     const postWins = useMemo(
         () => postPicksList.filter((pick) => normalizeResult(pick.result) === "win").length,
         [postPicksList]
@@ -297,8 +346,34 @@ const ProfileView = ({
         [postPicksList]
     );
 
+    const performUnfollowUser = useCallback(
+        (userId: string) => {
+            if (!currentUser) return false;
+            dispatch(followUnfollowUserRequest({ user_id: userId }));
+            return true;
+        },
+        [currentUser]
+    );
+
+    const requestUnfollowUser = useCallback(
+        (userId: string) => {
+            if (!currentUser) return;
+            if (!user?.profile?.is_public && isFollowing(currentUser.userId, userId)) {
+                setPendingUnfollowUserId(userId);
+                return;
+            }
+            performUnfollowUser(userId);
+        },
+        [currentUser, isFollowing, performUnfollowUser]
+    );
+
     const handleFollowToggle = () => {
         if (!currentUser?.userId || !targetUser?.id) return;
+        const alreadyFollowing = isFollowing(currentUser.userId, targetUser.id);
+        if (alreadyFollowing) {
+            requestUnfollowUser(targetUser.id);
+            return;
+        }
         dispatch(followUnfollowUserRequest({ user_id: targetUser?.id }));
     };
 
@@ -306,6 +381,17 @@ const ProfileView = ({
         if (!currentUser?.userId || !targetUserId) return;
         dispatch(followUnfollowUserRequest({ user_id: targetUserId }));
     };
+
+    const closeUnfollowWarning = useCallback(() => {
+        setPendingUnfollowUserId(null);
+    }, []);
+
+    const confirmUnfollowUser = useCallback(() => {
+        if (!pendingUnfollowUserId) return;
+        if (performUnfollowUser(pendingUnfollowUserId)) {
+            setPendingUnfollowUserId(null);
+        }
+    }, [pendingUnfollowUserId, performUnfollowUser]);
 
     const openFollowersPanel = useCallback(() => {
         setFollowPanelTab("followers");
@@ -440,6 +526,13 @@ const ProfileView = ({
     const xpToday = progress?.xp_today ?? 0;
     const levelProgressPercent = xpToNext > 0 ? Math.min(100, (xpIntoLevel / xpToNext) * 100) : 0;
     const displayName = targetUser?.username ?? targetUser?.full_name ?? "Member";
+    const resolvedShowFollowControls =
+        showFollowControls && !viewerBlockedTarget && !targetBlockedViewer;
+    const pendingUnfollowUser = pendingUnfollowUserId
+        ? pendingFollowRequests.find((candidate) => candidate.receiver_id === pendingUnfollowUserId) ?? null
+        : null;
+    const pendingUnfollowLabel =
+        pendingUnfollowUser?.receiver.username ?? pendingUnfollowUser?.receiver.full_name ?? "this member";
     const isFollowersTab = followPanelTab === "followers";
     const isSelfMode = mode === "self";
 
@@ -495,8 +588,10 @@ const ProfileView = ({
                 user={targetUser}
                 mode={mode}
                 profileVisible={profileVisible}
+                showLockedPrivateSummary={showLockedPrivateHeaderSummary}
                 isSelf={isSelf}
                 showFollowControls={showFollowControls}
+                isFollowRequested={followRequested}
                 isFollowing={
                     !!targetUser && !!currentUser && isFollowing(currentUser.userId, targetUser.id)
                 }
@@ -512,7 +607,7 @@ const ProfileView = ({
                     followers: isSelfMode ? followers?.length ?? 0 : followersById?.length ?? 0,
                     following: isSelfMode ? followings?.length ?? 0 : followingsById?.length ?? 0,
                     groups: targetUser?.groups ?? 0,
-                    globalPoints: showStats ? progress?.lifetime_xp ?? 0 : 0,
+                    globalPoints: showStats || showLockedPrivateHeaderSummary ? progress?.lifetime_xp ?? 0 : 0,
                     joinedAt: targetUser.created_at,
                 }}
                 progress={{
@@ -604,7 +699,7 @@ const ProfileView = ({
                                             className="flex items-center justify-between gap-3"
                                         >
                                             <Link
-                                                href={`/user/${user.user.id}`}
+                                                href={getProfilePath(user.user.id, currentUser?.userId)}
                                                 className="flex min-w-0 items-center gap-3 rounded-xl border border-transparent px-2 py-1 transition hover:border-white/10 hover:bg-white/5"
                                             >
                                                 <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 text-xs font-semibold uppercase text-white">
@@ -652,9 +747,19 @@ const ProfileView = ({
                 </div>
             </div>
 
-            {!profileVisible && mode === "public" ? (
+            {mode === "public" && targetBlockedViewer ? (
                 <section className="rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-1)] p-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
-                    This profile is private. Follow to see their posts and progress.
+                    This profile is unavailable.
+                </section>
+            ) : mode === "public" && viewerBlockedTarget ? (
+                <section className="rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-1)] p-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+                    You blocked this member. Unblock them to view posts again.
+                </section>
+            ) : !profileVisible && mode === "public" ? (
+                <section className="rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-1)] p-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+                    {followRequested
+                        ? "Follow request sent. You’ll be able to see their posts once they accept."
+                        : "This profile is private. Follow to see their posts and progress."}
                 </section>
             ) : (
                 <>
@@ -695,6 +800,46 @@ const ProfileView = ({
                         variant="global"
                     />
                 </>
+            )}
+
+            {pendingUnfollowUserId && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={closeUnfollowWarning}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="space-y-4">
+                            <div className="space-y-1 text-center">
+                                <h3 className="text-base font-semibold text-white">Unfollow private profile?</h3>
+                                <p className="text-xs text-gray-400">
+                                    Unfollowing {displayName} means you&apos;ll need to request to
+                                    follow again if you want to see their private posts later.
+                                </p>
+                            </div>
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeUnfollowWarning}
+                                    className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmUnfollowUser}
+                                    className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                                >
+                                    Unfollow
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {pendingDeletePickId && (

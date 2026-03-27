@@ -25,7 +25,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { clearNcaabPickValidateMessage, fetchDraftkingsNCAABOddsRequest, fetchFanduelNCAABOddsRequest, fetchNCAABScheduleRequest, ncaabPickValidateRequest } from "@/lib/redux/slices/ncaabSlice";
 import FootballAnimation from "../animations/FootballAnimation";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
-import { getShortTeamName } from "@/lib/utils/helpers";
+import { getMobileTeamName } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
@@ -3531,7 +3531,7 @@ export const NcaabPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? game.awayAbbr : game.awayTeam}
+                                                            {isMobile ? getMobileTeamName(game.awayAbbr, game.awayTeam) : game.awayTeam}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -3585,7 +3585,7 @@ export const NcaabPickBuilder = ({
                                                 <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? game.homeAbbr : game.homeTeam}
+                                                            {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}
                                                         </p>
                                                     </div>
                                                 </div>

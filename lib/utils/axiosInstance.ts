@@ -11,6 +11,25 @@ interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean;
 }
 
+let isRefreshing = false;
+
+let failedQueue: {
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+}[] = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else if (token) {
+            prom.resolve(token);
+        }
+    });
+
+    failedQueue = [];
+};
+
 axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = getLocalStorage<string>("accessToken");
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -36,6 +55,22 @@ axiosInstance.interceptors.response.use(
         if (error.response.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({
+                        resolve: (token: string) => {
+                            originalRequest.headers.Authorization =
+                                `Bearer ${token}`;
+
+                            resolve(axiosInstance(originalRequest));
+                        },
+                        reject,
+                    });
+                });
+            }
+
+            isRefreshing = true;
+
             try {
                 const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
                     refreshToken: refresh_token,
@@ -48,6 +83,11 @@ axiosInstance.interceptors.response.use(
 
                 axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${newTokenData.accessToken}`;
 
+                processQueue(
+                    null,
+                    newTokenData.accessToken
+                );
+
                 if (originalRequest.headers && typeof originalRequest.headers.set === "function") {
                     originalRequest.headers.set("Authorization", `Bearer ${newTokenData.accessToken}`);
                 } else {
@@ -57,6 +97,7 @@ axiosInstance.interceptors.response.use(
 
                 return axiosInstance(originalRequest);
             } catch (refreshError) {
+                processQueue(refreshError, null);
                 console.error("Refresh token failed:", refreshError);
                 removeLocalStorage("accessToken");
                 removeLocalStorage(`sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF}-auth-token`);
@@ -65,6 +106,8 @@ axiosInstance.interceptors.response.use(
                 removeLocalStorage("userId");
                 removeLocalStorage("provider");
                 return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
             }
         }
 

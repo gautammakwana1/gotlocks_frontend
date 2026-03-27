@@ -76,7 +76,6 @@ export interface Toast {
 
 export interface CurrentUser {
     username: string;
-    age: number;
     email: string;
     email_verified: boolean;
     phone_verified: boolean;
@@ -108,7 +107,6 @@ export interface Profile {
     id: string;
     email: string;
     username: string;
-    age?: number;
     provider?: string;
     created_at?: string;
     profile_image?: string;
@@ -340,7 +338,6 @@ export interface RegisterPayload {
     username: string;
     email: string;
     password: string;
-    age?: number;
     dob: string;
 }
 
@@ -820,6 +817,13 @@ export type PickSliceState = {
     hasMore: boolean;
 }
 
+export type NotificationsState = {
+    notification: AppNotification[];
+    error: string | null;
+    message: string | null;
+    loading: boolean;
+}
+
 export type RootState = {
     group: GroupSliceState;
     slip: SlipSliceState;
@@ -832,6 +836,7 @@ export type RootState = {
     progress: ProgressState;
     league: LeagueState;
     feedback: FeedbackState;
+    notifications: NotificationsState;
 };
 
 export type UpdateGroupPayload = {
@@ -842,6 +847,26 @@ export type UpdateGroupPayload = {
 
 export type InitialPasswordOTPPayload = {
     email: string;
+};
+
+export type AcceptDeclineFollowRequestPayload = {
+    requestId: string;
+};
+
+export type BlockUserPayload = {
+    blockedUserId: string;
+};
+
+export type UnblockUserPayload = {
+    blockedUserId: string;
+};
+
+export type EnablePostAlertPayload = {
+    targetUserId: string;
+};
+
+export type DisablePostAlertPayload = {
+    targetUserId: string;
 };
 
 export type FetchFollowingUsersListByIdPayload = {
@@ -1828,4 +1853,121 @@ export type PickReactionSummary = {
     down: number;
     total: number;
     userReaction: PickReaction | null;
+};
+
+export type NotificationType =
+    | "post_created"
+    | "post_reaction"
+    | "post_points"
+    | "slip_points"
+    | "group_join"
+    | "group_leave"
+    | "group_removed"
+    | "follow"
+    | "follow_request"
+    | "follow_request_accepted"
+    | "commissioner_transfer";
+
+export type FollowRequestStatus = "pending" | "accepted" | "declined";
+
+export type FollowRequest = {
+    id: string;
+    status: string;
+    message: string;
+    requester_id: string;
+    receiver_id: string;
+    created_at: string;
+    responded_at: string;
+    requester: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    };
+    receiver: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    }
+};
+
+export type BlockedUsers = {
+    id: string;
+    blocker_id: string;
+    blocked_id: string;
+    blocked_user?: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    }
+}
+
+export type PostAlerts = {
+    id: string;
+    subscriber_id: string;
+    target_user_id: string;
+    target_user?: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    }
+}
+
+export type AppNotification = {
+    id: string;
+    receiver_id: string;
+    sender_id?: string | null;
+    type: NotificationType;
+    title?: string;
+    message: string;
+    pick_id?: string | null;
+    group_id?: string | null;
+    slip_id?: string | null;
+    follow_request_id?: string | null;
+    metadata?: Record<string, unknown>;
+    is_read: boolean;
+    read_at?: string | null;
+    created_at: string;
+    receiver?: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    };
+    sender: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image: string;
+    };
+    follow_request?: {
+        id: string;
+        status: string;
+        requester: {
+            id: string;
+            username: string;
+            full_name: string;
+            profile_image: string;
+        }
+    };
+    pick?: {
+        id: string;
+        description: string;
+        result: PickResult;
+        points: number;
+    };
+    group?: {
+        id: string;
+        name: string;
+    };
+    slip?: {
+        id: string;
+        name: string;
+    }
+    // requestStatus?: FollowRequestStatus | null;
+    // reaction?: PickReaction | null;
+    // pointsDelta?: number | null;
 };

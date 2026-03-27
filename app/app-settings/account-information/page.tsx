@@ -8,7 +8,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { clearUpdateProfileMessage, fetchMemberProfileRequest, updateProfilePublicOrPrivateRequest, updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { Profile } from "@/lib/interfaces/interfaces";
-import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
+import { calculateAge, checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 
 type AuthSliceState = {
@@ -29,6 +29,7 @@ interface FormData {
     fullName?: string;
     username?: string;
     email?: string;
+    age?: number;
 }
 
 interface FormErrors {
@@ -49,6 +50,7 @@ const AccountInformationPage = () => {
         fullName: "",
         username: "",
         email: "",
+        age: 0,
     });
     const [errors, setErrors] = useState<FormErrors>({});
     const [isPublicDraft, setIsPublicDraft] = useState(true);
@@ -69,6 +71,7 @@ const AccountInformationPage = () => {
             fullName: user?.profile?.full_name ?? "",
             username: user?.profile?.username,
             email: user?.profile?.email,
+            age: calculateAge(user?.profile?.dob) ?? 0
         });
         setIsPublicDraft(user?.profile?.is_public);
     }, [user?.profile, router]);
@@ -266,6 +269,17 @@ const AccountInformationPage = () => {
                             {errors.email}
                         </span>
                     ) : null}
+                </label>
+                <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        Age
+                    </span>
+                    <input
+                        value={calculateAge(user?.profile?.dob)}
+                        onChange={handleInputChange("age")}
+                        className={inputClassName}
+                        disabled
+                    />
                 </label>
 
                 <div className="space-y-2">

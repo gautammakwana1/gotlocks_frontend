@@ -8,6 +8,7 @@ import { Pick, PickReaction, PickResult, Picks } from "@/lib/interfaces/interfac
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
 
 type FeedListProps = {
     items: Picks | null;
@@ -93,6 +94,7 @@ const feedScrollStyle = {
 const FeedList = ({
     items,
     emptyCopy,
+    currentUserId,
     showReactions = true,
     showTopBorder = true,
     onReaction,
@@ -110,9 +112,10 @@ const FeedList = ({
                 onViewProfile(userId);
                 return;
             }
-            router.push(`/user/${userId}`);
+            router.push(getProfilePath(userId, currentUserId));
+            // router.push(`/user/${userId}`);
         },
-        [onViewProfile, router]
+        [currentUserId, onViewProfile, router]
     );
 
     const handleReaction = useCallback(

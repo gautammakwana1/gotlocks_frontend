@@ -180,7 +180,7 @@ export const MainTabBar = () => {
                 label: "social",
                 href: "/social",
                 icon: GlobeIcon,
-                matchers: ["/social", "/users"],
+                matchers: ["/social", "/user"],
             },
             {
                 id: "builder",

@@ -5,6 +5,7 @@ import { CurrentUser, Member } from "@/lib/interfaces/interfaces";
 import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -91,6 +92,7 @@ const MemberActions = ({
 
 const MemberCard = ({
     member,
+    currentUserId,
     isCommissioner,
     state,
     onRemove,
@@ -104,6 +106,7 @@ const MemberCard = ({
     leavingGroup,
 }: {
     member: MemberWithRole;
+    currentUserId: string | undefined;
     isCommissioner: boolean;
     state?: ActionState;
     onRemove: () => void;
@@ -144,7 +147,11 @@ const MemberCard = ({
             )}
             <div className="flex flex-1 flex-col items-center gap-3 pt-3">
                 <Link
-                    href={`/user/${member.user_id}`}
+                    href={
+                        member.user_id && currentUserId
+                            ? getProfilePath(member.user_id, currentUserId)
+                            : "#"
+                    }
                     className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-gray-200 transition hover:border-emerald-300/60 hover:text-white hover:shadow-[0_0_16px_rgba(16,185,129,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
                     aria-label={`View ${displayName || "member"} profile`}
                 >
@@ -329,6 +336,7 @@ export const ModifyMembers = ({
                         <MemberCard
                             key={member.id}
                             member={member}
+                            currentUserId={currentUser?.userId}
                             isCommissioner={isCommissioner}
                             state={state}
                             onRemove={requestRemove}

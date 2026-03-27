@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload } from "@/lib/interfaces/interfaces";
+import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts } from "@/lib/interfaces/interfaces";
 import { setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type AuthState = {
@@ -8,6 +8,10 @@ type AuthState = {
 	followings: [] | null;
 	followersById: [] | null;
 	followingsById: [] | null;
+	followReuests: FollowRequest[] | null;
+	sentFollowReuests: FollowRequest[] | null;
+	blockedUsers: BlockedUsers[] | null;
+	postAlerts: PostAlerts[] | null;
 	session: SessionState | null;
 	hasSeenIntro: boolean;
 	loading: boolean;
@@ -30,6 +34,10 @@ const initialState: AuthState = {
 	followings: null,
 	followersById: null,
 	followingsById: null,
+	followReuests: null,
+	blockedUsers: null,
+	postAlerts: null,
+	sentFollowReuests: null,
 	session: null,
 	hasSeenIntro: false,
 	loading: false,
@@ -379,6 +387,186 @@ const authSlice = createSlice({
 			state.resetPasswordError = null;
 			state.resetPasswordMessage = null;
 		},
+
+		fetchFollowRequestListRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchFollowRequestListSuccess: (state, action) => {
+			state.loading = false;
+			state.followReuests = action.payload?.requests;
+		},
+		fetchFollowRequestListFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchFollowRequestListMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchSentFollowRequestListRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchSentFollowRequestListSuccess: (state, action) => {
+			state.loading = false;
+			state.sentFollowReuests = action.payload?.requests;
+		},
+		fetchSentFollowRequestListFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchSentFollowRequestListMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		accpetFollowRequest: (state, action: PayloadAction<AcceptDeclineFollowRequestPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		accpetFollowSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		accpetFollowFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearAccpetFollowMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		declineFollowRequest: (state, action: PayloadAction<AcceptDeclineFollowRequestPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		declineFollowSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		declineFollowFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearDeclineFollowMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		blockUserRequest: (state, action: PayloadAction<BlockUserPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		blockUserSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		blockUserFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearBlockUserMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		unblockUserRequest: (state, action: PayloadAction<UnblockUserPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		unblockUserSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		unblockUserFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearUnblockUserMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchBlockedUsersRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchBlockedUsersSuccess: (state, action) => {
+			state.loading = false;
+			state.blockedUsers = action.payload.blockedUsers;
+		},
+		fetchBlockedUsersFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearfetchBlockedUsersMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		enablePostAlertRequest: (state, action: PayloadAction<EnablePostAlertPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		enablePostAlertSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		enablePostAlertFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearEnablePostAlertMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		disablePostAlertRequest: (state, action: PayloadAction<DisablePostAlertPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		disablePostAlertSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload?.message;
+		},
+		disablePostAlertFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearDisablePostAlertMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchPostAlertsRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchPostAlertsSuccess: (state, action) => {
+			state.loading = false;
+			state.postAlerts = action.payload.postAlerts;
+		},
+		fetchPostAlertsFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearfetchPostAlertsMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -451,6 +639,46 @@ export const {
 	changePasswordSuccess,
 	changePasswordFailure,
 	clearChangePasswordMessage,
+	fetchFollowRequestListRequest,
+	fetchFollowRequestListSuccess,
+	fetchFollowRequestListFailure,
+	clearFetchFollowRequestListMessage,
+	accpetFollowRequest,
+	accpetFollowSuccess,
+	accpetFollowFailure,
+	clearAccpetFollowMessage,
+	declineFollowRequest,
+	declineFollowSuccess,
+	declineFollowFailure,
+	clearDeclineFollowMessage,
+	fetchSentFollowRequestListRequest,
+	fetchSentFollowRequestListSuccess,
+	fetchSentFollowRequestListFailure,
+	clearFetchSentFollowRequestListMessage,
+	blockUserRequest,
+	blockUserSuccess,
+	blockUserFailure,
+	clearBlockUserMessage,
+	unblockUserRequest,
+	unblockUserSuccess,
+	unblockUserFailure,
+	clearUnblockUserMessage,
+	fetchBlockedUsersRequest,
+	fetchBlockedUsersSuccess,
+	fetchBlockedUsersFailure,
+	clearfetchBlockedUsersMessage,
+	enablePostAlertRequest,
+	enablePostAlertSuccess,
+	enablePostAlertFailure,
+	clearEnablePostAlertMessage,
+	disablePostAlertRequest,
+	disablePostAlertSuccess,
+	disablePostAlertFailure,
+	clearDisablePostAlertMessage,
+	fetchPostAlertsRequest,
+	fetchPostAlertsSuccess,
+	fetchPostAlertsFailure,
+	clearfetchPostAlertsMessage,
 	logout,
 	completeIntro,
 } = authSlice.actions;

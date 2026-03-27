@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { getLevelProgress } from "@/lib/utils/progression";
-import { Group, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
+import { AppNotification, Group, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -13,6 +13,9 @@ import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroup
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
+import { fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
+import NotificationsFeed from "./NotificationFeed";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
 
 type GroupSliceState = {
     group: {
@@ -37,10 +40,12 @@ type ActionDefinition = {
     label: ReactNode;
     description: string;
     href: string;
-    icon: JSX.Element;
+    icon: ReactNode;
     featured?: boolean;
     onClick: () => void;
 };
+
+type ActivityTab = "posts" | "notifications";
 
 type StatDefinition = {
     label: string;
@@ -104,13 +109,16 @@ const HomeTab = () => {
     const resumeTimeoutRef = useRef<number | null>(null);
     const isCarouselPausedRef = useRef(false);
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
+    const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
     const [page, setPage] = useState(1);
+    const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
     const { group, joinLoading, message, error } = useSelector((state: GroupRootState) => state.group);
     const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
     const { progress, picksCount } = useSelector((state: RootState) => state.progress);
+    const { notification, loading: notificationLoader, error: notificaitonErr, message: notificaitonMsg } = useSelector((state: RootState) => state.notifications);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -119,6 +127,7 @@ const HomeTab = () => {
 
     useEffect(() => {
         dispatch(fetchAllGroupsRequest({}));
+        dispatch(fetchNotificationListRequest({}));
         fetchData(1);
         if (currentUserId) {
             dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
@@ -131,6 +140,12 @@ const HomeTab = () => {
         dispatch(clearFetchAllGlobalPostPicksMessage());
         fetchData(1, page * limit);
     }, [pickLoader, pickMessage, dispatch, page, limit, fetchData]);
+
+    useEffect(() => {
+        if (Array.isArray(notification)) {
+            setNotificaitons(notification)
+        };
+    }, [notification]);
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (pickLoader) return;
@@ -460,10 +475,27 @@ const HomeTab = () => {
 
     const handleViewProfile = useCallback(
         (userId: string) => {
-            router.push(`/user/${userId}`);
+            router.push(getProfilePath(userId, currentUserId));
+        },
+        [currentUserId, router]
+    );
+
+    const handleOpenGroup = useCallback(
+        (groupId: string) => {
+            router.push(`/group/${groupId}`);
         },
         [router]
     );
+
+    const unreadNotifications = useMemo(
+        () => notifications.filter((notification) => !notification.is_read).length,
+        [notifications]
+    );
+
+    useEffect(() => {
+        if (activityTab !== "notifications" || !currentUserId || unreadNotifications === 0) return;
+        dispatch(markNotificationReadRequest({}));
+    }, [activityTab, currentUserId]);
 
     const stats: StatDefinition[] = [
         {
@@ -758,22 +790,54 @@ const HomeTab = () => {
                     <div className="-mx-5 sm:mx-0">
                         <div className="h-px w-full bg-white/10" />
                         <div className="px-5 sm:px-0">
-                            <p className="mt-2 text-[11px] tracking-[0.24em] text-gray-400">
-                                recent posts
-                            </p>
+                            <div className="mt-2 flex items-center gap-5">
+                                <button
+                                    type="button"
+                                    onClick={() => setActivityTab("posts")}
+                                    className={`text-[11px] tracking-[0.24em] transition ${activityTab === "posts"
+                                        ? "text-white"
+                                        : "text-gray-400 hover:text-white"
+                                        }`}
+                                >
+                                    recent posts
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActivityTab("notifications")}
+                                    className={`inline-flex items-center gap-2 text-[11px] tracking-[0.24em] transition ${activityTab === "notifications"
+                                        ? "text-white"
+                                        : "text-gray-400 hover:text-white"
+                                        }`}
+                                >
+                                    <span>notifications</span>
+                                    {unreadNotifications > 0 ? (
+                                        <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-emerald-100">
+                                            {unreadNotifications}
+                                        </span>
+                                    ) : null}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <FeedList
-                        items={postPicks}
-                        emptyCopy="No pending public posts yet. Share a pick from the builder to light this up."
-                        currentUserId={currentUserId}
-                        onReaction={handleReaction}
-                        onViewProfile={handleViewProfile}
-                        showReactions={true}
-                        showTopBorder={true}
-                        loading={pickLoader}
-                        lastItemRef={lastItemRef}
-                    />
+
+                    {activityTab === "posts" ? (
+                        <FeedList
+                            items={postPicks}
+                            emptyCopy="No pending public posts yet. Share a pick from the builder to light this up."
+                            currentUserId={currentUserId}
+                            onReaction={handleReaction}
+                            onViewProfile={handleViewProfile}
+                            showReactions={true}
+                            showTopBorder={true}
+                            loading={pickLoader}
+                            lastItemRef={lastItemRef}
+                        />
+                    ) : (
+                        <NotificationsFeed
+                            onOpenProfile={handleViewProfile}
+                            onOpenGroup={handleOpenGroup}
+                        />
+                    )}
                 </div>
             </section>
             {joinOpen && (

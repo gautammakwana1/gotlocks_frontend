@@ -80,3 +80,34 @@ export const getMemberInitials = (name?: string | null) => {
         parts.length > 1 ? parts[parts.length - 1][0] : parts[0]?.[1] ?? "";
     return `${first}${second}`.toUpperCase() || "??";
 };
+
+export const getMobileTeamName = (abbr: string, fullName: string) => {
+    if (!fullName) return abbr;
+
+    const shortName = fullName.split(" ").slice(-1)[0]; // last word
+    return `${abbr} ${shortName}`;
+};
+
+export const calculateAge = (
+    dob?: string | null
+): number => {
+    if (!dob) return 0;
+
+    const birthDate = new Date(dob);
+    const today = new Date();
+
+    let age = today.getFullYear() - birthDate.getFullYear();
+
+    const monthDiff =
+        today.getMonth() - birthDate.getMonth();
+
+    if (
+        monthDiff < 0 ||
+        (monthDiff === 0 &&
+            today.getDate() < birthDate.getDate())
+    ) {
+        age--;
+    }
+
+    return age;
+};

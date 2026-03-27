@@ -18,7 +18,6 @@ interface FormData {
   lastName?: string;
   email: string;
   password: string;
-  age: string;
   dob: Date | undefined;
   username: string;
 }
@@ -41,7 +40,6 @@ const AccountCreationPage = () => {
     lastName: "",
     email: "",
     password: "",
-    age: "",
     dob: undefined,
     username: "",
   });
@@ -161,13 +159,6 @@ const AccountCreationPage = () => {
           password: formData.password.trim(),
           dob: formData.dob ? formData.dob.toISOString().split("T")[0] : "",
         };
-
-        if (formData.age) {
-          const parsedAge = Number(formData.age);
-          if (!isNaN(parsedAge) && parsedAge > 0) {
-            payload.age = parsedAge;
-          }
-        }
 
         dispatch(registerUserRequest(payload as RegisterPayload));
       } catch (err) {
