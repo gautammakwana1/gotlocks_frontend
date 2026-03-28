@@ -349,6 +349,9 @@ const pickSlice = createSlice({
             void action;
             state.loading = true;
             state.error = null;
+            if (action.payload?.page === 1) {
+                state.postPicks = null;
+            }
         },
         fetchPostPicksByUserIdSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
             state.loading = false;

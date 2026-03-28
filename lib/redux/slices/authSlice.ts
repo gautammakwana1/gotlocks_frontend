@@ -15,6 +15,7 @@ type AuthState = {
 	session: SessionState | null;
 	hasSeenIntro: boolean;
 	loading: boolean;
+	isProfileLoading: boolean;
 	error: string | null;
 	message: string | null;
 	profileUpdateMessage: string | null;
@@ -41,6 +42,7 @@ const initialState: AuthState = {
 	session: null,
 	hasSeenIntro: false,
 	loading: false,
+	isProfileLoading: false,
 	error: null,
 	message: null,
 	profileUpdateMessage: null,
@@ -68,6 +70,9 @@ const authSlice = createSlice({
 		},
 		completeIntro: (state) => {
 			state.hasSeenIntro = true;
+		},
+		resetProfile: (state) => {
+			state.user = null;
 		},
 
 		//login
@@ -187,14 +192,17 @@ const authSlice = createSlice({
 		fetchMemberProfileRequest: (state, action: PayloadAction<FetchMemberProfilePayload>) => {
 			void action
 			state.loading = true;
+			state.isProfileLoading = true;
 			state.error = null;
 		},
 		fetchMemberProfileSuccess: (state, action) => {
 			state.loading = false;
+			state.isProfileLoading = false;
 			state.user = action.payload?.data;
 		},
 		fetchMemberProfileFailure: (state, action) => {
 			state.loading = false;
+			state.isProfileLoading = false;
 			state.error = action.payload;
 		},
 		clearFetchMemberProfileMessage(state) {
@@ -681,6 +689,7 @@ export const {
 	clearfetchPostAlertsMessage,
 	logout,
 	completeIntro,
+	resetProfile,
 } = authSlice.actions;
 
 export default authSlice.reducer;

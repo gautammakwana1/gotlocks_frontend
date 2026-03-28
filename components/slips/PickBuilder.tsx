@@ -3,10 +3,9 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { ODDS_BRACKETS } from "../../lib/constants";
 import { formatDateTime, isPast } from "../../lib/utils/date";
-import { ScoringModal } from "../modals/ScoringModal";
 import { BuildMode, BuiltPickPayload, CurrentUser, Group, League, NFLOdds, NFLPlayer, NFLSchedules, PassingPropsObject, Pick, PickMarket, PickScope, PickSide, ReceivingPropsObject, RootState, RushingPropsObject, Slip, TouchDownPropsObject, ValidatePickRequest, ValidatePickResponse } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchLiveNFLScheduleRequest, fetchLiveOddsRequest, fetchPassingPropsPlayersRequest, fetchReceivingPropsPlayersRequest, fetchRushingPropsPlayersRequest, fetchTouchDownPropsPlayersRequest } from "@/lib/redux/slices/nflSlice";
+import { fetchLiveNFLScheduleRequest, fetchPassingPropsPlayersRequest, fetchReceivingPropsPlayersRequest, fetchRushingPropsPlayersRequest, fetchTouchDownPropsPlayersRequest } from "@/lib/redux/slices/nflSlice";
 import { eligibleWindowEnd, filterEligibleGames } from "@/lib/utils/games";
 import FootballAnimation from "../animations/FootballAnimation";
 import { useIsMobile } from "../leaderboard/LeaderboardGrid";
@@ -278,7 +277,6 @@ export const NflPickBuilder = ({
     const dispatch = useDispatch();
     const isMobile = useIsMobile();
     const { setToast } = useToast();
-    const [showModal, setShowModal] = useState(false);
     const [showTipsModal, setShowTipsModal] = useState(false);
 
     const [showTierModal, setShowTierModal] = useState(false);
@@ -3117,7 +3115,6 @@ export const NflPickBuilder = ({
             </div>
 
             <TipsModal open={showTipsModal} onClose={() => setShowTipsModal(false)} />
-            <ScoringModal open={showModal} onClose={() => setShowModal(false)} />
             <TierInfoModal open={showTierModal} onClose={() => setShowTierModal(false)} />
         </>
     );

@@ -677,6 +677,10 @@ export interface FetchProgressByUserIdPayload {
     user_id: string;
 }
 
+export interface RedeemGlobalPointsPayload {
+    points: number;
+}
+
 export interface ActivityState {
     error: string | null;
     feed: FeedResponse | null;

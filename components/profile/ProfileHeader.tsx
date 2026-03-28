@@ -500,62 +500,6 @@ const ProfileHeader = ({
                                                         {displayName}
                                                     </div>
                                                     {mode === "self" ? renderOptionsMenu() : null}
-                                                    {/* {mode === "self" && (
-                                                        <details ref={settingsMenuRef} className="relative z-20">
-                                                            <summary
-                                                                aria-label="Profile options"
-                                                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
-                                                            >
-                                                                <svg
-                                                                    aria-hidden
-                                                                    viewBox="0 0 24 24"
-                                                                    fill="none"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth="1.7"
-                                                                    className="h-4 w-4"
-                                                                >
-                                                                    <path
-                                                                        d="M4 20h4l10-10-4-4L4 16v4Z"
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                    />
-                                                                    <path
-                                                                        d="M13.5 6.5l4 4"
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                    />
-                                                                </svg>
-                                                            </summary>
-                                                            <div className="absolute left-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(event) => {
-                                                                        handleEdit();
-                                                                        closeDetailsMenu(event);
-                                                                    }}
-                                                                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition hover:bg-white/10"
-                                                                >
-                                                                    edit name
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(event) => {
-                                                                        onPrivacyToggle();
-                                                                        closeDetailsMenu(event);
-                                                                    }}
-                                                                    className={`mt-1 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-[11px] uppercase tracking-wide transition ${user.is_public
-                                                                        ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
-                                                                        : "border-white/20 bg-white/10 text-white"
-                                                                        }`}
-                                                                >
-                                                                    {user.is_public ? "Public profile" : "Private profile"}
-                                                                    <span className="text-[10px] text-white/60">
-                                                                        {user.is_public ? "visible" : "hidden"}
-                                                                    </span>
-                                                                </button>
-                                                            </div>
-                                                        </details>
-                                                    )} */}
                                                 </div>
                                             </div>
                                         </div>

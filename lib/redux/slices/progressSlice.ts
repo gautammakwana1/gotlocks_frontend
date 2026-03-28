@@ -1,4 +1,4 @@
-import { FetchProgressByUserIdPayload, ProgressState } from "@/lib/interfaces/interfaces";
+import { FetchProgressByUserIdPayload, ProgressState, RedeemGlobalPointsPayload } from "@/lib/interfaces/interfaces";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: ProgressState = {
@@ -48,6 +48,25 @@ const progressSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        redeemGlobalPointsRequest: (state, action: PayloadAction<RedeemGlobalPointsPayload>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        redeemGlobalPointsSuccess: (state, action) => {
+            state.loading = false;
+            state.progress = action.payload.data.updated_progress;
+            state.message = action.payload.message;
+        },
+        redeemGlobalPointsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearRedeemGlobalPointsMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -60,6 +79,10 @@ export const {
     fetchProgressByUserIdSuccess,
     fetchProgressByUserIdFailure,
     clearFetchProgressByUserIdMessage,
+    redeemGlobalPointsRequest,
+    redeemGlobalPointsSuccess,
+    redeemGlobalPointsFailure,
+    clearRedeemGlobalPointsMessage,
 } = progressSlice.actions;
 
 export default progressSlice.reducer;

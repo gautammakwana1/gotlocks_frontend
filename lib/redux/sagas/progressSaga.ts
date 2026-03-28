@@ -3,9 +3,9 @@ import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { SagaIterator } from "redux-saga";
-import { fetchMyProgressFailure, fetchMyProgressRequest, fetchMyProgressSuccess, fetchProgressByUserIdFailure, fetchProgressByUserIdRequest, fetchProgressByUserIdSuccess } from "../slices/progressSlice";
+import { fetchMyProgressFailure, fetchMyProgressRequest, fetchMyProgressSuccess, fetchProgressByUserIdFailure, fetchProgressByUserIdRequest, fetchProgressByUserIdSuccess, redeemGlobalPointsFailure, redeemGlobalPointsRequest, redeemGlobalPointsSuccess } from "../slices/progressSlice";
 import { PayloadAction } from "@reduxjs/toolkit";
-import { FetchProgressByUserIdPayload } from "@/lib/interfaces/interfaces";
+import { FetchProgressByUserIdPayload, RedeemGlobalPointsPayload } from "@/lib/interfaces/interfaces";
 type ApiErrorResponse = {
     message?: string;
 };
@@ -51,7 +51,22 @@ function* handleFetchProgressByUserId(action: PayloadAction<FetchProgressByUserI
     }
 };
 
+function* handleRedeemGlobalPoints(action: PayloadAction<RedeemGlobalPointsPayload>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/progress/redeem-points`,
+            action.payload
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(redeemGlobalPointsSuccess(payload));
+    } catch (error: unknown) {
+        yield put(redeemGlobalPointsFailure(getErrorMessage(error, "Redemption points failed")));
+    }
+};
+
 export default function* nflSaga() {
     yield takeLatest(fetchMyProgressRequest.type, handleFetchMyProgress);
     yield takeLatest(fetchProgressByUserIdRequest.type, handleFetchProgressByUserId);
+    yield takeLatest(redeemGlobalPointsRequest.type, handleRedeemGlobalPoints);
 };

@@ -28,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-[var(--app-bg)]">
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} bg-[var(--app-bg)] text-[var(--app-text)] antialiased`}
       >
         <AppProviders>

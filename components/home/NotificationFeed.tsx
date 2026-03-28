@@ -6,7 +6,7 @@ import { AppNotification, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNotificationListRequest } from "@/lib/redux/slices/notificationSlice";
-import { accpetFollowRequest, clearAccpetFollowMessage, declineFollowRequest } from "@/lib/redux/slices/authSlice";
+import { accpetFollowRequest, clearAccpetFollowMessage, clearDeclineFollowMessage, declineFollowRequest } from "@/lib/redux/slices/authSlice";
 import { useToast } from "@/lib/state/ToastContext";
 
 type NotificationsFeedProps = {
@@ -36,10 +36,7 @@ const NotificationsFeed = ({
     const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
 
     const { notification, loading, message, error } = useSelector((state: RootState) => state.notifications);
-
-    // useEffect(() => {
-    //     dispatch(fetchNotificationListRequest({}));
-    // }, [dispatch]);
+    const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
 
     useEffect(() => {
         if (Array.isArray(notification)) {
@@ -47,27 +44,49 @@ const NotificationsFeed = ({
         };
     }, [notification]);
 
+    // useEffect(() => {
+    //     if (!loading && message) {
+    //         setToast({
+    //             id: Date.now(),
+    //             type: "success",
+    //             message: message,
+    //             duration: 3000
+    //         })
+    //         dispatch(clearAccpetFollowMessage());
+    //     };
+    //     if (!loading && error) {
+    //         setToast({
+    //             id: Date.now(),
+    //             type: "error",
+    //             message: error,
+    //             duration: 3000
+    //         })
+    //         dispatch(clearAccpetFollowMessage());
+    //     };
+
+    // }, [loading, message, error, dispatch]);
+
     useEffect(() => {
-        if (!loading && message) {
+        if (!authLoader && authMessage) {
             setToast({
                 id: Date.now(),
                 type: "success",
-                message: message,
+                message: authMessage,
                 duration: 3000
             })
             dispatch(clearAccpetFollowMessage());
         };
-        if (!loading && error) {
+        if (!authLoader && authError) {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: error,
+                message: authError,
                 duration: 3000
             })
-            dispatch(clearAccpetFollowMessage());
+            dispatch(clearDeclineFollowMessage());
         };
 
-    }, [loading, message, error, dispatch]);
+    }, [authLoader, authMessage, authError, dispatch]);
 
     const handleAccept = (requestId: string) => {
         if (!currentUser) return;

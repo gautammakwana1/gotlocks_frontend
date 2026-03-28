@@ -6,6 +6,7 @@ import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
+import { fetchNotificationListRequest } from "../slices/notificationSlice";
 
 type LoginPayload = {
 	email: string;
@@ -122,6 +123,7 @@ function* handleFollowUnfollowNewUser(action: PayloadAction<FollowUnfollowUserPa
 		);
 		yield put(followUnfollowUserSuccess(response.data));
 		yield put(fetchFollowingListRequest());
+		yield put(fetchSentFollowRequestListRequest({}));
 	} catch (error: unknown) {
 		yield put(followUnfollowUserFailure(getErrorMessage(error, "Following failed")));
 	}
@@ -305,6 +307,7 @@ function* handleAcceptFollowRequest(action: PayloadAction<AcceptDeclineFollowReq
 		);
 		const payload = response.data as { data?: unknown };
 		yield put(accpetFollowSuccess(payload));
+		yield put(fetchNotificationListRequest({}));
 	} catch (error: unknown) {
 		yield put(accpetFollowFailure(getErrorMessage(error, "Failed to accpet request")));
 	}
@@ -319,6 +322,7 @@ function* handleDeclineFollowRequest(action: PayloadAction<AcceptDeclineFollowRe
 		);
 		const payload = response.data as { data?: unknown };
 		yield put(declineFollowSuccess(payload));
+		yield put(fetchNotificationListRequest({}));
 	} catch (error: unknown) {
 		yield put(declineFollowFailure(getErrorMessage(error, "Failed to decline request")));
 	}
