@@ -6,6 +6,7 @@ import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardReques
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import { fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest } from "../slices/groupsSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -138,12 +139,17 @@ function* handleMarkGradedSlip(action: PayloadAction<MarkGradedPayload>): SagaIt
 
 function* handleStartNewContest(action: PayloadAction<StartNewContestPayload>): SagaIterator {
     try {
+        const { group_id } = action.payload;
+
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
             `${API_BASE_URL}/slip/start-contest`,
             action.payload
         );
         yield put(startNewContestSuccess(response.data));
+        yield put(fetchArchivedLeaderboardListRequest({ groupId: group_id }));
+        yield put(fetchAllLeaderboardsRequest({ group_id: group_id }));
+        yield put(fetchAllSlipsRequest({ group_id: group_id }));
     } catch (error: unknown) {
         yield put(startNewContestFailure(getErrorMessage(error, "Slip Finalized Failed")))
     }

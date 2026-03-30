@@ -16,6 +16,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
 import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
+import ScrollUpButton from "../ui/ScrollUpButton";
 
 type GroupSliceState = {
     group: {
@@ -112,6 +113,7 @@ const HomeTab = () => {
     const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
     const [page, setPage] = useState(1);
     const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
+    const [showScrollTop, setShowScrollTop] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
@@ -146,6 +148,23 @@ const HomeTab = () => {
             setNotificaitons(notification)
         };
     }, [notification]);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            if (window.scrollY > 400) {
+                setShowScrollTop(true);
+            } else {
+                setShowScrollTop(false);
+            }
+        };
+
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (pickLoader) return;
@@ -883,6 +902,10 @@ const HomeTab = () => {
                         </div>
                     </form>
                 </ModalShell>
+            )}
+
+            {showScrollTop && (
+                <ScrollUpButton scrollToTop={scrollToTop} />
             )}
         </div>
     );

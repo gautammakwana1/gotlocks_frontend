@@ -295,6 +295,8 @@ function* handleUpdateLeaderboards(action: PayloadAction<UpdateLeaderboardPayloa
 
 function* handleUpdateLeaderboardToArchived(action: PayloadAction<UpdateLeaderboardToArchivedPayload>): SagaIterator {
 	try {
+		const { group_id } = action.payload;
+
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.put,
 			`${API_BASE_URL}/group/update-archived`,
@@ -302,6 +304,7 @@ function* handleUpdateLeaderboardToArchived(action: PayloadAction<UpdateLeaderbo
 		);
 		const payload = response.data as { data?: unknown };
 		yield put(updateLeaderboardToArchivedSuccess(payload.data));
+		yield put(fetchArchivedLeaderboardListRequest({ groupId: group_id }));
 	} catch (error: unknown) {
 		yield put(updateLeaderboardToArchivedFailure(getErrorMessage(error, "Leaderboard Archived Failed")))
 	}

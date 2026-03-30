@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchNotificationListRequest } from "@/lib/redux/slices/notificationSlice";
 import { accpetFollowRequest, clearAccpetFollowMessage, clearDeclineFollowMessage, declineFollowRequest } from "@/lib/redux/slices/authSlice";
 import { useToast } from "@/lib/state/ToastContext";
+import { UserIcon } from "../layout/MainTabBar";
 
 type NotificationsFeedProps = {
     onOpenProfile: (userId: string) => void;
@@ -141,7 +142,7 @@ const NotificationsFeed = ({
                         }
                         : null;
 
-                const memberProfilePicture = actor.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${actor.profile_image}` : undefined;
+                const memberProfilePicture = actor?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${actor.profile_image}` : undefined;
 
                 return (
                     <div key={notification.id} className="px-5 py-4 sm:px-6">
@@ -168,10 +169,10 @@ const NotificationsFeed = ({
                                             className="h-full w-full rounded-full object-cover"
                                         />
                                     ) : (
-                                        initials
+                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-9 sm:w-9" />
                                     )
                                 ) : (
-                                    "GL"
+                                    <UserIcon className="h-6 w-6 text-white/80 sm:h-8 sm:w-8" />
                                 )}
                             </button>
                             <div className="min-w-0 flex-1 space-y-3">

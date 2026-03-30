@@ -113,7 +113,6 @@ const FeedList = ({
                 return;
             }
             router.push(getProfilePath(userId, currentUserId));
-            // router.push(`/user/${userId}`);
         },
         [currentUserId, onViewProfile, router]
     );
@@ -135,7 +134,7 @@ const FeedList = ({
 
     return (
         <div
-            className={`-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:max-h-[var(--feed-max-height)] sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
+            className={`-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
                 }`}
             style={feedScrollStyle}
         >

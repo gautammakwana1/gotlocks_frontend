@@ -613,7 +613,9 @@ export type MarkFinalizePayload = Record<string, unknown>;
 
 export type MarkVoidedPayload = Record<string, unknown>;
 
-export type StartNewContestPayload = Record<string, unknown>;
+export type StartNewContestPayload = {
+    group_id: string;
+};
 
 export type DeleteSlipPayload = {
     slip_id: string;
