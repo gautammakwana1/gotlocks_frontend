@@ -187,7 +187,7 @@ const LandingPage = () => {
                   setEmail(event.target.value)
                   setError(null)
                 }}
-                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
+                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
                 placeholder="shane@gotlocks.com"
                 autoComplete="email"
               />
@@ -206,7 +206,7 @@ const LandingPage = () => {
                     setPassword(event.target.value)
                     setError(null)
                   }}
-                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
                   placeholder="locks123"
                   autoComplete="current-password"
                 />

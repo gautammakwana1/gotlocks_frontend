@@ -13,7 +13,7 @@ import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroup
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
+import { clearAllNotificationRequest, fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
 import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
@@ -54,6 +54,8 @@ type StatDefinition = {
     highlight?: boolean;
 };
 
+type TabIconProps = { className?: string };
+
 const ActionCard = ({ action }: { action: ActionDefinition }) => (
     <button
         type="button"
@@ -93,6 +95,23 @@ const StatCard = ({ stat }: { stat: StatDefinition }) => (
             {stat.value}
         </p>
     </div>
+);
+
+export const TrashIcon = ({ className }: TabIconProps) => (
+    <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={`h-3 w-3 shrink-0 ${className}`}
+    >
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
 );
 
 const HomeTab = () => {
@@ -516,6 +535,10 @@ const HomeTab = () => {
         dispatch(markNotificationReadRequest({}));
     }, [activityTab, currentUserId]);
 
+    const handleClearAll = useCallback(() => {
+        dispatch(clearAllNotificationRequest({}));
+    }, [dispatch]);
+
     const stats: StatDefinition[] = [
         {
             label: "Leagues",
@@ -809,32 +832,44 @@ const HomeTab = () => {
                     <div className="-mx-5 sm:mx-0">
                         <div className="h-px w-full bg-white/10" />
                         <div className="px-5 sm:px-0">
-                            <div className="mt-2 flex items-center gap-5">
-                                <button
-                                    type="button"
-                                    onClick={() => setActivityTab("posts")}
-                                    className={`text-[11px] tracking-[0.24em] transition ${activityTab === "posts"
-                                        ? "text-white"
-                                        : "text-gray-400 hover:text-white"
-                                        }`}
-                                >
-                                    recent posts
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setActivityTab("notifications")}
-                                    className={`inline-flex items-center gap-2 text-[11px] tracking-[0.24em] transition ${activityTab === "notifications"
-                                        ? "text-white"
-                                        : "text-gray-400 hover:text-white"
-                                        }`}
-                                >
-                                    <span>notifications</span>
-                                    {unreadNotifications > 0 ? (
-                                        <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-emerald-100">
-                                            {unreadNotifications}
-                                        </span>
-                                    ) : null}
-                                </button>
+                            <div className="mt-2 flex items-center justify-between gap-5">
+                                <div className="flex items-center gap-5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActivityTab("posts")}
+                                        className={`text-[11px] tracking-[0.24em] transition ${activityTab === "posts"
+                                            ? "text-white"
+                                            : "text-gray-400 hover:text-white"
+                                            }`}
+                                    >
+                                        recent posts
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActivityTab("notifications")}
+                                        className={`inline-flex items-center gap-2 text-[11px] tracking-[0.24em] transition ${activityTab === "notifications"
+                                            ? "text-white"
+                                            : "text-gray-400 hover:text-white"
+                                            }`}
+                                    >
+                                        <span>notifications</span>
+                                        {unreadNotifications > 0 ? (
+                                            <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-emerald-100">
+                                                {unreadNotifications}
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                </div>
+                                {activityTab === "notifications" && notifications.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handleClearAll}
+                                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-gray-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white sm:text-[10px] sm:tracking-[0.18em]"
+                                    >
+                                        <TrashIcon />
+                                        <span>clear all</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

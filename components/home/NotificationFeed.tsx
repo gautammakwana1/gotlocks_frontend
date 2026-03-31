@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "@/lib/utils/date";
 import { AppNotification, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -35,37 +35,40 @@ const NotificationsFeed = ({
     const dispatch = useDispatch();
     const { setToast } = useToast();
     const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
+    const [page, setPage] = useState(1);
+    const observer = useRef<IntersectionObserver | null>(null);
+    const limit = 20;
 
-    const { notification, loading, message, error } = useSelector((state: RootState) => state.notifications);
+    const { notification, loading, hasMore } = useSelector((state: RootState) => state.notifications);
     const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
+
+    const fetchData = useCallback((pageNum: number) => {
+        dispatch(fetchNotificationListRequest({ page: pageNum, limit }));
+    }, [dispatch, limit]);
+
+    useEffect(() => {
+        setPage(1);
+        fetchData(1);
+    }, [fetchData]);
+
+    const lastItemRef = useCallback((node: HTMLDivElement | null) => {
+        if (loading) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [loading, hasMore, page, fetchData]);
 
     useEffect(() => {
         if (Array.isArray(notification)) {
             setNotificaitons(notification)
         };
     }, [notification]);
-
-    // useEffect(() => {
-    //     if (!loading && message) {
-    //         setToast({
-    //             id: Date.now(),
-    //             type: "success",
-    //             message: message,
-    //             duration: 3000
-    //         })
-    //         dispatch(clearAccpetFollowMessage());
-    //     };
-    //     if (!loading && error) {
-    //         setToast({
-    //             id: Date.now(),
-    //             type: "error",
-    //             message: error,
-    //             duration: 3000
-    //         })
-    //         dispatch(clearAccpetFollowMessage());
-    //     };
-
-    // }, [loading, message, error, dispatch]);
 
     useEffect(() => {
         if (!authLoader && authMessage) {
@@ -89,17 +92,17 @@ const NotificationsFeed = ({
 
     }, [authLoader, authMessage, authError, dispatch]);
 
-    const handleAccept = (requestId: string) => {
+    const handleAccept = (requestId: string, notificationId: string) => {
         if (!currentUser) return;
         if (requestId) {
-            dispatch(accpetFollowRequest({ requestId }));
+            dispatch(accpetFollowRequest({ requestId, notificationId }));
         }
     };
 
-    const handleDecline = (requestId: string) => {
+    const handleDecline = (requestId: string, notificationId: string) => {
         if (!currentUser) return;
         if (requestId) {
-            dispatch(declineFollowRequest({ requestId }));
+            dispatch(declineFollowRequest({ requestId, notificationId }));
         }
     };
 
@@ -113,14 +116,15 @@ const NotificationsFeed = ({
 
     return (
         <div className="-mx-5 divide-y divide-white/10 border-y border-white/10 sm:mx-0">
-            {notifications.map((notification) => {
+            {notifications.map((notification, index) => {
+                const isLast = index === notifications.length - 1;
                 const actor = notification.sender ?? null;
                 const actorLabel = actor?.username ?? actor?.full_name ?? "gotLocks";
                 const initials = buildInitials(actorLabel);
                 const request = notification.follow_request_id ?? undefined;
                 const requestPending =
                     notification.type === "follow_request" &&
-                    notification.follow_request?.status === "pending" &&
+                    notification.request_status === "pending" &&
                     Boolean(request);
                 const canOpenActorProfile = Boolean(
                     notification.sender && notification.sender_id !== currentUser?.userId
@@ -145,7 +149,11 @@ const NotificationsFeed = ({
                 const memberProfilePicture = actor?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${actor.profile_image}` : undefined;
 
                 return (
-                    <div key={notification.id} className="px-5 py-4 sm:px-6">
+                    <div
+                        key={notification.id}
+                        ref={isLast ? lastItemRef : undefined}
+                        className="px-5 py-4 sm:px-6"
+                    >
                         <div className="flex items-start gap-3">
                             <button
                                 type="button"
@@ -202,12 +210,13 @@ const NotificationsFeed = ({
                                                 </span>
                                             )}
                                             {notification.type === "follow_request" &&
-                                                notification.follow_request?.status &&
-                                                notification.follow_request?.status !== "pending" && (
+                                                notification.request_status &&
+                                                notification.request_status !== "pending" && (
                                                     <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-white/75">
-                                                        {notification.follow_request?.status}
+                                                        {notification.request_status}
                                                     </span>
-                                                )}
+                                                )
+                                            }
                                         </div>
                                     </div>
                                     {primaryAction && !requestPending ? (
@@ -224,14 +233,14 @@ const NotificationsFeed = ({
                                     <div className="flex flex-wrap gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => handleAccept(notification.follow_request_id as string)}
+                                            onClick={() => handleAccept(notification.follow_request_id as string, notification.id as string)}
                                             className="rounded-lg border border-emerald-300/50 bg-emerald-500/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-100 transition hover:border-emerald-200/70"
                                         >
                                             accept
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => handleDecline(notification.follow_request_id as string)}
+                                            onClick={() => handleDecline(notification.follow_request_id as string, notification.id as string)}
                                             className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-white transition hover:border-white/20 hover:bg-white/10"
                                         >
                                             decline
@@ -243,6 +252,27 @@ const NotificationsFeed = ({
                     </div>
                 );
             })}
+            {loading && notifications.length > 0 && (
+                <>
+                    <style>{`
+                        @keyframes notifBounce {
+                            0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+                            50%       { transform: translateY(-8px); animation-timing-function: cubic-bezier(0,0,0.2,1); }
+                        }
+                        .notif-dot { animation: notifBounce 0.9s infinite; }
+                    `}</style>
+                    <div className="flex items-center justify-center gap-2 px-5 py-4 sm:px-6">
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "0ms" }} />
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "160ms" }} />
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "320ms" }} />
+                    </div>
+                </>
+            )}
+            {!hasMore && !loading && notifications.length > 0 && (
+                <div className="px-5 py-3 text-center text-[10px] uppercase tracking-[0.18em] text-white/20 sm:px-6">
+                    all caught up
+                </div>
+            )}
         </div>
     );
 };

@@ -38,11 +38,6 @@ const PublicProfileActionsMenu = ({ targetUserId, mode }: PublicProfileActionsMe
 
     const { blockedUsers, user, followings } = useSelector((state: RootState) => state.user);
 
-    useEffect(() => {
-        if (!targetUserId) return;
-        dispatch(fetchBlockedUsersRequest({}));
-    }, [targetUserId]);
-
     const menuRef = useRef<HTMLDetailsElement | null>(null);
     const [showBlockWarning, setShowBlockWarning] = useState(false);
     const currentlyBlocked = useMemo(() => {

@@ -10,7 +10,7 @@ import ProfileControls, {
     type TypeFilter,
 } from "./ProfileControls";
 import ProfileHeader from "./ProfileHeader";
-import { CurrentUser, FollowersList, FollowingsList, FollowRequest, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
+import { BlockedUsers, CurrentUser, FollowersList, FollowingsList, FollowRequest, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchFollowRequestListRequest, fetchMemberProfileRequest, fetchSentFollowRequestListRequest, followUnfollowUserRequest, resetProfile, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
@@ -38,6 +38,7 @@ type AuthSliceState = {
     user: {
         profile?: Profile | null;
     } | null;
+    blockedUsers: BlockedUsers[] | null;
     followers: FollowersList[] | null;
     followings: FollowingsList[] | null;
     followersById: FollowersList[] | null;
@@ -77,6 +78,14 @@ const normalizeResult = (result: PickResult): NonNullable<PickResult> =>
 
 const getPickTimestamp = (pick: Pick) =>
     new Date(pick.created_at ?? pick.updated_at ?? pick.id).getTime();
+
+export const isUserBlocked = (blockedUsers: BlockedUsers[] | null, targetId: string) => {
+    if (!blockedUsers || !blockedUsers.length || !targetId) return false;
+
+    return blockedUsers.some(
+        (block) => block.blocked_id === targetId
+    );
+}
 
 const ProfileView = ({
     targetUserId,
@@ -125,7 +134,7 @@ const ProfileView = ({
     const limit = 10;
 
     const { postPicks, deleteMessage, loading: postLoader, message, hasMore } = useSelector((state: RootState) => state.pick);
-    const { followings, followers, followersById, followingsById, loading: authLoader, isProfileLoading, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests } = useSelector((state: RootState) => state.user);
+    const { followings, followers, followersById, followingsById, blockedUsers, loading: authLoader, isProfileLoading, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests } = useSelector((state: RootState) => state.user);
     const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
@@ -138,7 +147,6 @@ const ProfileView = ({
         if (!targetUserId) return;
         setTargetUser(undefined);
         dispatch(resetProfile());
-        dispatch(fetchMemberProfileRequest({ userId: targetUserId }));
         dispatch(fetchFollowingListRequest());
         dispatch(fetchFollowRequestListRequest({}));
         dispatch(fetchSentFollowRequestListRequest({}));
@@ -277,10 +285,8 @@ const ProfileView = ({
 
     const viewerId = currentUser?.userId ?? "";
     const isSelf = viewerId === targetUserId;
-    // const viewerBlockedTarget = targetUser ? isUserBlocked(viewerId, targetUser.id) : false;
-    // const targetBlockedViewer = targetUser ? isUserBlocked(targetUser.id, viewerId) : false;
-    const viewerBlockedTarget = false;
-    const targetBlockedViewer = false;
+    const viewerBlockedTarget = targetUser ? isUserBlocked(blockedUsers, targetUser.id) : false;
+    const targetBlockedViewer = targetUser ? isUserBlocked(blockedUsers, viewerId) : false;
     const followRequested = targetUser
         ? hasPendingFollowRequest(viewerId, targetUser.id)
         : false;
@@ -609,6 +615,8 @@ const ProfileView = ({
                 showLockedPrivateSummary={showLockedPrivateHeaderSummary}
                 isSelf={isSelf}
                 showFollowControls={showFollowControls}
+                targetBlockedViewer={targetBlockedViewer}
+                viewerBlockedTarget={viewerBlockedTarget}
                 isFollowRequested={followRequested}
                 isFollowing={
                     !!targetUser && !!currentUser && isFollowing(currentUser.userId, targetUser.id)

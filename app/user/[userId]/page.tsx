@@ -8,7 +8,7 @@ import PublicProfilePostAlertsMenu from "@/components/profile/PublicProfilePostA
 import PublicProfileActionsMenu from "@/components/profile/PublicProfileActionMenu";
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
-import { fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchMemberProfileRequest } from "@/lib/redux/slices/authSlice";
+import { fetchBlockedUsersRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchMemberProfileRequest } from "@/lib/redux/slices/authSlice";
 
 const UserProfilePage = () => {
     const params = useParams<{ userId: string }>();
@@ -17,7 +17,6 @@ const UserProfilePage = () => {
     const currentUser = useCurrentUser();
 
     useEffect(() => {
-
         if (params.userId === currentUser?.userId) {
             router.replace("/profile");
         }
@@ -28,6 +27,7 @@ const UserProfilePage = () => {
             dispatch(fetchMemberProfileRequest({ userId: params.userId }));
             dispatch(fetchFollowersListByIdRequest({ user_id: params.userId }));
             dispatch(fetchFollowingListByIdRequest({ user_id: params.userId }));
+            dispatch(fetchBlockedUsersRequest({}));
         }
     }, [params.userId]);
 

@@ -171,7 +171,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400"
+                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
                             placeholder="you@example.com"
                         />
 
@@ -194,7 +194,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                             type="text"
                             value={code}
                             onChange={(e) => setCode(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400"
+                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
                             placeholder="Enter code"
                         />
 
@@ -224,7 +224,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                                 type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400"
+                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
                                 placeholder="New password"
                                 autoComplete="new-password"
                             />
@@ -243,7 +243,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                                 type={showConfirmPassword ? "text" : "password"}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-400"
+                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
                                 placeholder="Confirm new password"
                                 autoComplete="confirm-password"
                             />

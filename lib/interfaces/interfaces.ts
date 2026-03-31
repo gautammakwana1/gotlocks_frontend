@@ -581,6 +581,11 @@ export type UpdateSlipPayload = {
     name?: string;
 };
 
+export type FetchNotificationsPayload = {
+    page?: number;
+    limit?: number;
+};
+
 export interface SlipState {
     error: string | null;
     slip: Slip | null;
@@ -828,6 +833,7 @@ export type NotificationsState = {
     error: string | null;
     message: string | null;
     loading: boolean;
+    hasMore: boolean;
 }
 
 export type RootState = {
@@ -857,6 +863,7 @@ export type InitialPasswordOTPPayload = {
 
 export type AcceptDeclineFollowRequestPayload = {
     requestId: string;
+    notificationId: string;
 };
 
 export type BlockUserPayload = {
@@ -1973,7 +1980,7 @@ export type AppNotification = {
         id: string;
         name: string;
     }
-    // requestStatus?: FollowRequestStatus | null;
+    request_status?: FollowRequestStatus | null;
     // reaction?: PickReaction | null;
     // pointsDelta?: number | null;
 };

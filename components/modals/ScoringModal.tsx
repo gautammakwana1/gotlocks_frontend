@@ -66,8 +66,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   const modalTitleClassName = isGroupOnly ? "text-xl sm:text-2xl" : "text-2xl";
   const modalSubtitleClassName = isGroupOnly ? "text-xs sm:text-sm" : "text-sm";
   const modalBodyClassName = isGroupOnly
-    ? "max-h-[72vh] space-y-6 overflow-y-auto px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7"
-    : "max-h-[70vh] space-y-8 overflow-y-auto px-7 py-7 text-base text-gray-300";
+    ? "max-h-[72vh] space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7"
+    : "max-h-[70vh] space-y-8 overflow-y-auto overscroll-contain px-7 py-7 text-base text-gray-300";
   const singleModeSectionClassName = isGroupOnly
     ? "mx-auto w-full max-w-[760px]"
     : isSingleMode
@@ -98,6 +98,25 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const scrollBarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
+    // Lock scroll while modal is open
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.paddingRight = `${scrollBarWidth}px`;
+
+    return () => {
+      // Restore scroll when modal closes or unmounts
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      document.body.style.paddingRight = "";
+    };
+  }, [open]);
 
   useEffect(() => {
     if (open && variant === "group") {
@@ -655,7 +674,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8 overscroll-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="scoring-modal-title"

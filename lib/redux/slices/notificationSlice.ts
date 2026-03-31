@@ -1,25 +1,34 @@
-import { createSlice } from "@reduxjs/toolkit";
-import type { NotificationsState } from "@/lib/interfaces/interfaces";
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import type { AppNotification, FetchNotificationsPayload, NotificationsState } from "@/lib/interfaces/interfaces";
 
 const initialState: NotificationsState = {
     notification: [],
     loading: false,
     error: null,
     message: null,
+    hasMore: false,
 };
 
 const notificationSlice = createSlice({
     name: "notifications",
     initialState,
     reducers: {
-        fetchNotificationListRequest: (state, action) => {
+        fetchNotificationListRequest: (state, action: PayloadAction<FetchNotificationsPayload | undefined>) => {
             void action;
             state.loading = true;
             state.error = null;
         },
-        fetchNotificationListSuccess: (state, action) => {
+        fetchNotificationListSuccess: (state, action: PayloadAction<{ notifications: AppNotification[], page: number, hasMore: boolean }>) => {
             state.loading = false;
-            state.notification = action.payload?.notifications;
+            const { notifications, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
+            if (page === 1) {
+                state.notification = notifications;
+            } else {
+                const existingIds = new Set(state.notification?.map(n => n.id) || []);
+                const newUniqueNotifications = notifications.filter(n => !existingIds.has(n.id));
+                state.notification = [...(state.notification || []), ...newUniqueNotifications];
+            }
         },
         fetchNotificationListFailure: (state, action) => {
             state.loading = false;
@@ -37,7 +46,6 @@ const notificationSlice = createSlice({
         },
         markNotificationReadSuccess: (state, action) => {
             state.loading = false;
-            // state.message = action.payload?.message;
         },
         markNotificationReadFailure: (state, action) => {
             state.loading = false;
@@ -47,6 +55,20 @@ const notificationSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        clearAllNotificationRequest: (state, action) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        clearAllNotificationSuccess: (state, action) => {
+            state.loading = false;
+            state.notification = [];
+        },
+        clearAllNotificationFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        }
     },
 });
 
@@ -59,6 +81,9 @@ export const {
     markNotificationReadSuccess,
     markNotificationReadFailure,
     clearMarkNotificationReadMessage,
+    clearAllNotificationRequest,
+    clearAllNotificationSuccess,
+    clearAllNotificationFailure,
 } = notificationSlice.actions;
 
 export default notificationSlice.reducer;

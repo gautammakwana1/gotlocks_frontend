@@ -55,6 +55,8 @@ type ProfileHeaderProps = {
     showLockedPrivateSummary?: boolean;
     isSelf: boolean;
     showFollowControls: boolean;
+    targetBlockedViewer: boolean;
+    viewerBlockedTarget: boolean;
     isFollowing: boolean;
     isFollowRequested?: boolean;
     record: ProfileHeaderRecord;
@@ -166,6 +168,8 @@ const ProfileHeader = ({
     showLockedPrivateSummary = false,
     isSelf,
     showFollowControls,
+    targetBlockedViewer,
+    viewerBlockedTarget,
     isFollowing,
     isFollowRequested = false,
     record,
@@ -193,7 +197,7 @@ const ProfileHeader = ({
     const showStats = mode === "self" || profileVisible;
     const showRightSummary = showStats || showLockedPrivateSummary;
     const showNumericProgress = mode === "self";
-    const showFollowSection = mode === "public" && showFollowControls && !isSelf;
+    const showFollowSection = mode === "public" && showFollowControls && !isSelf && !viewerBlockedTarget;
     const showFollowerStats = showStats || showFollowSection;
     const privacyStatusLabel = user.is_public ? "public profile" : "private profile";
     const recordItems = [
@@ -556,7 +560,7 @@ const ProfileHeader = ({
                                     )}
                                 </div>
                             </div>
-                            <div className="flex h-full flex-col gap-4 border-l border-white/10 pl-4 sm:gap-5 sm:pl-5 lg:pl-6">
+                            <div className={`flex h-full flex-col gap-4 ${!viewerBlockedTarget ? "border-l border-white/10" : ""} pl-4 sm:gap-5 sm:pl-5 lg:pl-6`}>
                                 {showRightSummary && (
                                     <div className="space-y-3 pt-2">
                                         <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.2em]">
@@ -586,45 +590,47 @@ const ProfileHeader = ({
                                         </button>
                                     </div>
                                 )}
-                                <div
-                                    className={`space-y-3 ${showRightSummary
-                                        ? "border-t border-white/10 pt-4 pb-1 mt-auto sm:mt-0"
-                                        : ""
-                                        }`}
-                                >
-                                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                                        <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.18em]">
-                                            badges
-                                        </p>
-                                        <span className="text-[7px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[9px] sm:pr-3">
-                                            coming soon
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {BADGE_PLACEHOLDERS.map((label, index) => (
-                                            <div
-                                                key={`${label}-${index}`}
-                                                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]"
-                                            >
-                                                <svg
-                                                    aria-hidden
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.6"
-                                                    className="h-[18px] w-[18px]"
+                                {!viewerBlockedTarget && (
+                                    <div
+                                        className={`space-y-3 ${showRightSummary
+                                            ? "border-t border-white/10 pt-4 pb-1 mt-auto sm:mt-0"
+                                            : ""
+                                            }`}
+                                    >
+                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                                            <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.18em]">
+                                                badges
+                                            </p>
+                                            <span className="text-[7px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[9px] sm:pr-3">
+                                                coming soon
+                                            </span>
+                                        </div>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {BADGE_PLACEHOLDERS.map((label, index) => (
+                                                <div
+                                                    key={`${label}-${index}`}
+                                                    className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]"
                                                 >
-                                                    <path
-                                                        d="M12 4.5 14.2 9l4.8.7-3.5 3.4.9 4.8L12 15.9 7.6 17.9l.9-4.8L5 9.7 9.8 9 12 4.5Z"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                    />
-                                                </svg>
-                                                <span className="sr-only">{label}</span>
-                                            </div>
-                                        ))}
+                                                    <svg
+                                                        aria-hidden
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        className="h-[18px] w-[18px]"
+                                                    >
+                                                        <path
+                                                            d="M12 4.5 14.2 9l4.8.7-3.5 3.4.9 4.8L12 15.9 7.6 17.9l.9-4.8L5 9.7 9.8 9 12 4.5Z"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                        />
+                                                    </svg>
+                                                    <span className="sr-only">{label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
