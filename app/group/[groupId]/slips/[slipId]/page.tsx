@@ -1442,7 +1442,7 @@ const SlipDetailsPage = () => {
                                                             type="button"
                                                             onClick={() => setShowScoringModal(true)}
                                                             className="flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
-                                                            aria-label="How scoring works"
+                                                            aria-label="Group scoring"
                                                         >
                                                             i
                                                         </button>

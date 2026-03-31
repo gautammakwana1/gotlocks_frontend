@@ -9,6 +9,7 @@ import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroup
 import { useToast } from "@/lib/state/ToastContext";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import ScoringModal from "../modals/ScoringModal";
 
 type GroupSliceState = {
     group: {
@@ -41,6 +42,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [joinOpen, setJoinOpen] = useState(false);
+    const [showScoringModal, setShowScoringModal] = useState(false);
 
     const { group, joinLoading, message, error, loading: groupLoading } = useSelector((state: RootState) => state.group);
 
@@ -97,6 +99,11 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
         setJoinError(null);
     };
 
+    const actionButtonClassName =
+        "group flex h-full w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/15 via-black/60 to-black/30 text-left shadow-sm transition hover:border-emerald-300/60 hover:bg-emerald-500/15";
+    const actionIconClassName =
+        "flex h-9 w-9 items-center justify-center text-emerald-100 transition group-hover:text-emerald-50 sm:h-10 sm:w-10";
+
     const handleJoin = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
@@ -121,15 +128,15 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
 
     return (
         <div className={`flex flex-col gap-6 ${variant === "embedded" ? "" : "text-white"}`}>
-            <div className="flex w-full flex-col gap-3 sm:flex-row">
+            <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
                 <button
                     type="button"
                     onClick={() => router.push("/cag-explained")}
-                    className="group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/15 via-black/60 to-black/30 px-5 py-4 text-left shadow-sm transition hover:border-emerald-300/60 hover:bg-emerald-500/15"
+                    className={`${actionButtonClassName} col-span-2 min-h-[88px] px-5 py-4 lg:col-span-1 lg:min-h-[88px]`}
                 >
                     <p className="text-sm font-semibold text-white">Start a new league</p>
                     <span
-                        className="flex h-10 w-10 items-center justify-center text-emerald-100 transition group-hover:text-emerald-50"
+                        className={actionIconClassName}
                         aria-hidden
                     >
                         <svg
@@ -170,11 +177,11 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 <button
                     type="button"
                     onClick={openJoinModal}
-                    className="group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/15 via-black/60 to-black/30 px-5 py-4 text-left shadow-sm transition hover:border-emerald-300/60 hover:bg-emerald-500/15"
+                    className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
                     <p className="text-sm font-semibold text-white">Join a league</p>
                     <span
-                        className="flex h-10 w-10 items-center justify-center text-emerald-100 transition group-hover:text-emerald-50"
+                        className={actionIconClassName}
                         aria-hidden
                     >
                         <svg
@@ -187,6 +194,28 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             strokeLinejoin="round"
                         >
                             <path d="M5 12h14M13 5l6 7-6 7" />
+                        </svg>
+                    </span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setShowScoringModal(true)}
+                    className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
+                >
+                    <p className="text-sm font-semibold text-white">Group scoring</p>
+                    <span className={actionIconClassName} aria-hidden>
+                        <svg
+                            viewBox="0 0 24 24"
+                            className="h-5 w-5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M12 11v5" />
+                            <path d="M12 7h.01" />
                         </svg>
                     </span>
                 </button>
@@ -286,7 +315,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             inputMode="numeric"
                             placeholder="invite code"
                             autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base text-white outline-none transition focus:border-emerald-400/70"
                         />
                         {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
                         <div className="flex justify-center gap-3">
@@ -308,6 +337,12 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     </form>
                 </ModalShell>
             )}
+
+            <ScoringModal
+                open={showScoringModal}
+                onClose={() => setShowScoringModal(false)}
+                variant="group"
+            />
         </div>
     );
 };

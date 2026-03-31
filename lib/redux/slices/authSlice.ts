@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts } from "@/lib/interfaces/interfaces";
-import { setLocalStorage } from "@/lib/utils/jwtUtils";
+import { removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type AuthState = {
 	user: User | null;
@@ -61,6 +61,12 @@ const authSlice = createSlice({
 	initialState,
 	reducers: {
 		logout: (state) => {
+			removeLocalStorage(`sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF}-auth-token`);
+			removeLocalStorage("currentUser");
+			removeLocalStorage("accessToken");
+			removeLocalStorage("refresh_token");
+			removeLocalStorage("userId");
+			removeLocalStorage("provider");
 			state.session = null;
 			state.hasSeenIntro = false;
 			state.user = null;
@@ -575,6 +581,25 @@ const authSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		// Delete Account
+		deleteAccountRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		deleteAccountSuccess: (state, action) => {
+			state.loading = false;
+			state.message = action.payload.message;
+		},
+		deleteAccountFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearDeleteAccountMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -687,6 +712,10 @@ export const {
 	fetchPostAlertsSuccess,
 	fetchPostAlertsFailure,
 	clearfetchPostAlertsMessage,
+	deleteAccountRequest,
+	deleteAccountSuccess,
+	deleteAccountFailure,
+	clearDeleteAccountMessage,
 	logout,
 	completeIntro,
 	resetProfile,

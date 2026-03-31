@@ -228,7 +228,7 @@ const AccountCreationPage = () => {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, firstName: event.target.value }))
               }
-              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
               placeholder="Shane"
               autoComplete="given-name"
             />
@@ -249,7 +249,7 @@ const AccountCreationPage = () => {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, lastName: event.target.value }))
               }
-              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
               placeholder="Walker"
               autoComplete="family-name"
             />
@@ -268,7 +268,7 @@ const AccountCreationPage = () => {
             type="email"
             value={formData.email}
             onChange={handleInputChange("email")}
-            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
             placeholder="shane@gotlocks.com"
             autoComplete="email"
             aria-invalid={!!errors.email}
@@ -294,7 +294,7 @@ const AccountCreationPage = () => {
               type={showPassword ? "text" : "password"}
               value={formData.password}
               onChange={handleInputChange("password")}
-              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 pr-14 text-sm text-white outline-none transition focus:border-emerald-400/70"
+              className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 pr-14 text-base text-white outline-none transition focus:border-emerald-400/70"
               placeholder="set a secure password"
               autoComplete="new-password"
               aria-invalid={!!errors.password}
@@ -343,7 +343,7 @@ const AccountCreationPage = () => {
             type="text"
             value={formData.username}
             onChange={handleInputChange("username")}
-            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
             placeholder="broknowsball"
             autoComplete="username"
             aria-invalid={!!errors.username}

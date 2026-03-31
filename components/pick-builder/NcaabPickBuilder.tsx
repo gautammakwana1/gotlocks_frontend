@@ -3393,7 +3393,7 @@ export const NcaabPickBuilder = ({
 
     return (
         <div
-            className={`space-y-4 ${activeGame ? "matchup-detail" : ""}`}
+            className={`space-y-4 ${activeGame ? "matchup-detail" : ""} ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-20" : "mb-30" : showReviewSheet ? isMobile ? "mb-20" : "mb-40" : ""}`}
         >
             {!activeGame ? (
                 <div className="grid gap-6">

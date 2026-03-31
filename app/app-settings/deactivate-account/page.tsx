@@ -3,12 +3,167 @@
 import Link from "next/link";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchAllGroupsRequest } from "@/lib/redux/slices/groupsSlice";
+import { useRouter } from "next/navigation";
+import { Group } from "@/lib/types";
+import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/redux/slices/authSlice";
+import FootballAnimation from "@/components/animations/FootballAnimation";
+import { AuthSliceState } from "@/lib/interfaces/interfaces";
 
-const DeactivateAccountPage = () => {
+type GroupSliceState = {
+    group: {
+        data?: {
+            groups?: Array<Group>;
+        };
+        message?: string;
+    } | null;
+    loading: boolean;
+    joinLoading: boolean;
+    error: string | null;
+    message: string | null;
+};
+
+type RootState = {
+    group: GroupSliceState;
+    user: AuthSliceState;
+};
+
+const inputClassName =
+    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20 disabled:cursor-not-allowed disabled:opacity-50";
+
+
+const DeleteAccountPage = () => {
+    const router = useRouter();
+    const dispatch = useDispatch();
     const currentUser = useCurrentUser();
     const { setToast } = useToast();
+    const [confirmation, setConfirmation] = useState("");
+    const [acknowledged, setAcknowledged] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [hasStartedDeleteFlow, setHasStartedDeleteFlow] = useState(false);
+
+    const { group, loading: groupLoading } = useSelector((state: RootState) => state.group);
+    const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
+
+    useEffect(() => {
+        dispatch(fetchAllGroupsRequest({}));
+    }, [dispatch]);
+
+    useEffect(() => {
+        if (!authLoader && authMessage) {
+            setToast({
+                id: Date.now(),
+                type: "success",
+                message: authMessage,
+                duration: 3000
+            });
+            dispatch(clearDeleteAccountMessage());
+            dispatch(logout());
+            router.replace("/landing-page");
+        }
+        if (!authLoader && authError) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: authError,
+                duration: 3000
+            });
+            dispatch(clearDeleteAccountMessage());
+        }
+    }, [dispatch, authLoader, authMessage]);
+
+    const groupsData = group?.data?.groups || [];
+
+    const { commissionerGroups, memberGroups } = useMemo(() => {
+        if (!currentUser?.userId) {
+            return {
+                sortedGroups: groupsData,
+                commissionerGroups: [],
+                memberGroups: [],
+            };
+        }
+
+        const commissioner: Group[] = [];
+        const member: Group[] = [];
+
+        groupsData.forEach((g) => {
+            (g.created_by === currentUser.userId
+                ? commissioner
+                : member
+            ).push(g);
+        });
+
+        return {
+            commissionerGroups: commissioner,
+            memberGroups: member,
+        };
+    }, [groupsData, currentUser?.userId]);
 
     if (!currentUser) return null;
+
+    const confirmationPhrase = `DELETE @${currentUser.username}`;
+    const canDelete = commissionerGroups.length === 0 && memberGroups.length === 0;
+    const deleteReady =
+        canDelete &&
+        acknowledged &&
+        confirmation.trim() === confirmationPhrase &&
+        !isDeleting;
+    const hasBlockers = !canDelete;
+
+    const handleStartDeleteFlow = () => {
+        setHasStartedDeleteFlow(true);
+    };
+
+    const handleCancelDeleteFlow = () => {
+        setHasStartedDeleteFlow(false);
+        setConfirmation("");
+        setAcknowledged(false);
+    };
+
+    const handleDeleteAccount = () => {
+        if (commissionerGroups.length > 0) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: "Transfer commissioner access and leave those groups first.",
+                duration: 3000
+            });
+            return;
+        }
+
+        if (memberGroups.length > 0) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: "Leave every group you're part of before deleting your account.",
+                duration: 3000
+            });
+            return;
+        }
+
+        if (confirmation.trim() !== confirmationPhrase || !acknowledged) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: "Type the confirmation phrase and acknowledge the warning.",
+                duration: 3000
+            });
+            return;
+        }
+
+        setIsDeleting(true);
+        dispatch(deleteAccountRequest({}));
+    };
+
+    if (groupLoading) {
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="w-48 max-w-[70vw] sm:w-60">
+                <FootballAnimation />
+            </div>
+        </div>
+    }
 
     return (
         <div className="mx-auto w-full max-w-2xl space-y-6">
@@ -20,35 +175,21 @@ const DeactivateAccountPage = () => {
                     account settings
                 </Link>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
-                    Reset or delete your account
+                    Delete your account
                 </h1>
-                <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Review what resetting or deleting your account would mean before you take action.
-                </p>
             </header>
 
-            <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5 text-sm leading-6 text-[var(--text-secondary)]">
+            <section className="space-y-4 border-b border-[var(--border-soft)] pb-5 text-sm leading-6 text-[var(--text-secondary)]">
                 <p>
-                    This account belongs to <span className="text-[var(--app-text)]">@{currentUser.username}</span>.
-                </p>
-                <p>
-                    This screen is the placeholder entry point for reset and deletion controls. Those
-                    actions are not fully wired yet.
+                    This is permanent and cannot be undone.
                 </p>
                 <div className="flex flex-wrap gap-3 pt-2">
                     <button
                         type="button"
-                        onClick={() =>
-                            setToast({
-                                id: Date.now(),
-                                type: "info",
-                                message: "Account reset and deletion controls are not live yet.",
-                                duration: 3000
-                            })
-                        }
-                        className="rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/15"
+                        onClick={handleStartDeleteFlow}
+                        className="rounded-full border border-red-500/30 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/10"
                     >
-                        Review account reset or deletion
+                        Continue to delete
                     </button>
                     <Link
                         href="/app-settings"
@@ -57,9 +198,163 @@ const DeactivateAccountPage = () => {
                         Back
                     </Link>
                 </div>
-            </div>
-        </div>
+            </section>
+
+            {hasStartedDeleteFlow && hasBlockers && (
+                <section className="space-y-4">
+                    <div>
+                        <h2 className="text-lg font-semibold tracking-tight text-[var(--app-text)]">
+                            Before you can delete this account
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+                            {commissionerGroups.length > 0 && memberGroups.length > 0
+                                ? "Transfer commissioner access where needed and leave all remaining groups first."
+                                : commissionerGroups.length > 0
+                                    ? "You still commission one or more groups. Transfer ownership and leave those groups first."
+                                    : "You still belong to one or more groups. Leave them before deleting your account."}
+                        </p>
+                    </div>
+
+                    {commissionerGroups.length > 0 && (
+                        <div className="space-y-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                Commissioner groups
+                            </p>
+                            <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
+                                {commissionerGroups.map((group) => (
+                                    <div
+                                        key={group.id}
+                                        className="flex flex-wrap items-center justify-between gap-3 py-4"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-base font-medium tracking-tight text-[var(--app-text)]">
+                                                {group.name}
+                                            </p>
+                                            <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+                                                {group?.members?.length ?? 0} members · invite code {group.invite_code}
+                                            </p>
+                                        </div>
+                                        <Link
+                                            href={`/group/${group.id}?tab=members`}
+                                            className="shrink-0 text-right text-sm leading-5 text-[var(--app-text)] transition hover:text-white"
+                                        >
+                                            <span className="sm:hidden">
+                                                Open group
+                                                <br />
+                                                settings
+                                            </span>
+                                            <span className="hidden sm:inline">Open group settings</span>
+                                        </Link>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {memberGroups.length > 0 && (
+                        <div className="space-y-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                Joined groups
+                            </p>
+                            <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
+                                {memberGroups.map((group) => (
+                                    <div
+                                        key={group.id}
+                                        className="flex flex-wrap items-center justify-between gap-3 py-4"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-base font-medium tracking-tight text-[var(--app-text)]">
+                                                {group.name}
+                                            </p>
+                                            <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+                                                {group?.members?.length ?? 0} members · invite code {group.invite_code}
+                                            </p>
+                                        </div>
+                                        <Link
+                                            href={`/group/${group.id}?tab=members`}
+                                            className="text-sm text-[var(--app-text)] transition hover:text-white"
+                                        >
+                                            Leave group
+                                        </Link>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={handleCancelDeleteFlow}
+                            className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </section>
+            )}
+
+            {hasStartedDeleteFlow && canDelete && (
+                <section className="space-y-4 border-t border-[var(--border-soft)] pt-5">
+                    <div>
+                        <h2 className="text-lg font-semibold tracking-tight text-[var(--app-text)]">
+                            Final confirmation
+                        </h2>
+                        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+                            Once deleted, this account and its stats cannot be restored.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <label className="block space-y-2">
+                            <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                Type {confirmationPhrase} to confirm
+                            </span>
+                            <input
+                                type="text"
+                                value={confirmation}
+                                onChange={(event) => setConfirmation(event.target.value)}
+                                disabled={isDeleting}
+                                className={inputClassName}
+                            />
+                        </label>
+
+                        <label className="flex items-start gap-3 text-sm leading-6 text-[var(--text-secondary)]">
+                            <input
+                                type="checkbox"
+                                checked={acknowledged}
+                                onChange={(event) => setAcknowledged(event.target.checked)}
+                                disabled={isDeleting}
+                                className="mt-1 h-4 w-4 rounded border border-white/20 bg-white/5 text-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 disabled:cursor-not-allowed"
+                            />
+                            <span>
+                                I understand this permanently deletes my account and removes its stats,
+                                XP, global points, picks, and access.
+                            </span>
+                        </label>
+
+                        <div className="flex flex-wrap gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={handleDeleteAccount}
+                                disabled={!deleteReady}
+                                className="rounded-full border border-red-500/30 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {isDeleting ? "Deleting account..." : "Delete account permanently"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleCancelDeleteFlow}
+                                className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            )}
+        </div >
     );
 };
 
-export default DeactivateAccountPage;
+export default DeleteAccountPage;

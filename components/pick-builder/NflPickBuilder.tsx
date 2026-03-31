@@ -4771,7 +4771,7 @@ export const NflPickBuilder = ({
     return (
         <>
             <div
-                className={`flex flex-col ${step.kind === "GAME_SELECT" ? "gap-4" : "gap-5"} ${activeGame ? "matchup-detail" : ""}`}
+                className={`flex flex-col ${step.kind === "GAME_SELECT" ? "gap-4" : "gap-5"} ${activeGame ? "matchup-detail" : ""} ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-20" : "mb-30" : showReviewSheet ? isMobile ? "mb-20" : "mb-40" : ""}`}
             >
                 {step.kind === "GAME_SELECT" ? (
                     <div className="flex flex-col gap-4">{renderStep()}</div>

@@ -1147,31 +1147,42 @@ const GroupPage = () => {
       </header>
 
       <section className="space-y-4">
-        <div className="-mx-5 flex w-auto flex-wrap gap-1 overflow-y-hidden border-b border-white/10 px-5 sm:mx-0 sm:w-full sm:flex-nowrap sm:gap-2 sm:overflow-x-auto sm:px-0 lg:gap-3">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                className={`relative whitespace-nowrap px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs md:px-4 md:py-2.5 md:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
-                  }`}
-              >
-                <div className="flex items-center gap-1">
-                  <span className="sm:hidden" aria-hidden>
-                    {iconForTab(tab.id)}
-                  </span>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sr-only">{tab.label}</span>
-                </div>
-                <span
-                  className={`absolute inset-x-1 -bottom-[1px] h-0.5 rounded-full transition ${isActive ? "bg-white" : "bg-transparent"
+        <div className="-mx-5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
+          <div className="flex min-w-0 flex-wrap gap-1 overflow-y-hidden sm:flex-nowrap sm:gap-2 sm:overflow-x-auto lg:gap-3">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`relative whitespace-nowrap px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs md:px-4 md:py-2.5 md:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
                     }`}
-                />
-              </button>
-            );
-          })}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="sm:hidden" aria-hidden>
+                      {iconForTab(tab.id)}
+                    </span>
+                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="sr-only">{tab.label}</span>
+                  </div>
+                  <span
+                    className={`absolute inset-x-1 -bottom-[1px] h-0.5 rounded-full transition ${isActive ? "bg-white" : "bg-transparent"
+                      }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowScoringModal(true)}
+            className="mb-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-gray-300 transition hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 sm:h-7 sm:w-7 sm:text-[11px]"
+            aria-label="Group scoring"
+            aria-haspopup="dialog"
+          >
+            i
+          </button>
         </div>
 
         {activeTab === "leaderboard" && (
@@ -1312,32 +1323,6 @@ const GroupPage = () => {
                 </div>
               )}
             </section>
-
-            <button
-              type="button"
-              onClick={() => setShowScoringModal(true)}
-              className={primaryActionButtonClass}
-            >
-              <span className="text-sm font-semibold text-white">How scoring works</span>
-              <span
-                className={primaryActionIconClass}
-                aria-hidden
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path d="M12 11v5" />
-                  <path d="M12 7h.01" />
-                </svg>
-              </span>
-            </button>
           </div>
         )}
 
@@ -1931,13 +1916,11 @@ const GroupPage = () => {
         )}
       </section>
 
-      {activeTab === "leaderboard" && (
-        <ScoringModal
-          open={showScoringModal}
-          onClose={() => setShowScoringModal(false)}
-          variant="group"
-        />
-      )}
+      <ScoringModal
+        open={showScoringModal}
+        onClose={() => setShowScoringModal(false)}
+        variant="group"
+      />
 
       {pendingLeaderboardAction && (
         <div

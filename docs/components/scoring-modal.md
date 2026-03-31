@@ -9,7 +9,7 @@ Lightweight and scrollable — opens as a centered overlay.
 ## Trigger Points
 
 - Profile screen → “Profile scoring rules” button (global)  
-- Group leaderboard → “How scoring works” button (group)  
+- Group screens → “Group scoring” trigger (group)  
 - Pick builder → “Scoring” reference link (group)  
 
 ---
