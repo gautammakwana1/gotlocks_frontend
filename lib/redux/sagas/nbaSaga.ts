@@ -91,7 +91,7 @@ function* handleValidateNBAPick(action: PayloadAction<ValidateMyNBAPickPayload |
     }
 };
 
-export default function* nflSaga() {
+export default function* nbaSaga() {
     yield takeLatest(fetchNBAScheduleRequest.type, handleFetchNBASchedule);
     yield takeLatest(fetchFanduelNBAOddsRequest.type, handleFetchFanduelNBAOdds);
     yield takeLatest(fetchDraftkingsNBAOddsRequest.type, handleFetchDraftkingsNBAOdds);

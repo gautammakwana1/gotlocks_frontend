@@ -1759,6 +1759,7 @@ export const NflPickBuilder = ({
                         home_abbr: game?.home_abbr,
                         matchup: matchup ?? undefined,
                         match_time: startTime,
+                        sport: leg.sport,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
@@ -1836,6 +1837,7 @@ export const NflPickBuilder = ({
             match_date: activeGame?.date,
             matchup: selectedMatchup ?? undefined,
             match_time: activeGame?.date,
+            sport: "NFL",
         };
     }, [
         selection.scope,

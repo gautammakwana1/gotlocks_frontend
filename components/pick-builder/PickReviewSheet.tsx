@@ -707,7 +707,7 @@ export function PickReviewSheet({
                 ) : singleReviewItem ? (
                   <div className="-mx-4 overflow-hidden border-x-0 border-y border-white/10 bg-white/5">
                     <div className="space-y-4 px-4 py-4">
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-center gap-3">
                         {singleReviewItem.onDelete ? (
                           <button
                             type="button"
@@ -734,8 +734,8 @@ export function PickReviewSheet({
                                 title={singleReviewItem.description}
                               >
                                 {singleReviewItem.description ? extractPickLine(singleReviewItem.description) : "-"}
-                                <ReviewMetaLine metaLine={singleReviewItem.metaLine} />
                               </p>
+                              <ReviewMetaLine metaLine={singleReviewItem.metaLine} />
                             </div>
                             <span className="shrink-0 text-[11px] font-semibold text-slate-100">
                               {formatOdds(singleReviewItem.odds)}

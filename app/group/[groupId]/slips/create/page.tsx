@@ -376,7 +376,7 @@ const SlipCreationPage = () => {
                                             setShowNameError(false);
                                         }
                                     }}
-                                    className={`no-focus-ring rounded-lg border bg-black/70 px-4 py-3 text-sm text-white outline-none transition ${showNameError && !form.name.trim()
+                                    className={`no-focus-ring rounded-lg border bg-black/70 px-4 py-3 text-base text-white outline-none transition ${showNameError && !form.name.trim()
                                         ? "border-rose-400/70 focus:border-rose-400/80"
                                         : "border-white/15 focus:border-sky-400/70"
                                         }`}
@@ -387,11 +387,6 @@ const SlipCreationPage = () => {
                                         {errors.name}
                                     </span>
                                 )}
-                                {/* {showNameError && !form.name.trim() && (
-                                    <p className="text-[11px] text-rose-300">
-                                        Add a slip name to continue.
-                                    </p>
-                                )} */}
                             </div>
 
                             <div className="h-px bg-white/10" />

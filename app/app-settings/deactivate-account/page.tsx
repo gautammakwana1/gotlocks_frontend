@@ -7,10 +7,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllGroupsRequest } from "@/lib/redux/slices/groupsSlice";
 import { useRouter } from "next/navigation";
-import { Group } from "@/lib/types";
 import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/redux/slices/authSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { AuthSliceState } from "@/lib/interfaces/interfaces";
+import { AuthSliceState, Group } from "@/lib/interfaces/interfaces";
 
 type GroupSliceState = {
     group: {
@@ -193,9 +192,9 @@ const DeleteAccountPage = () => {
                     </button>
                     <Link
                         href="/app-settings"
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
+                        className="rounded-full border border-white/10 px-4 py-2 text-sm lowercase text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
                     >
-                        Back
+                        back
                     </Link>
                 </div>
             </section>

@@ -12,17 +12,16 @@ import {
 } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
-import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
 import BackButton from "@/components/ui/BackButton";
 import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
 import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
-import { BuiltPickPayload, GradingPayload, Group, GroupSelector, LeaderboardList, League, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { GradingPayload, Group, GroupSelector, LeaderboardList, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, createPickRequest, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
+import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
 import { assignToSecondaryLeaderboardRequest, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import Image from "next/image";
@@ -37,12 +36,6 @@ import SlipShareModal from "@/components/slips/SlipShareModal";
 import { checkAnyRestrictedWords, useIsMobile } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
-
-type BuilderState = {
-    mode: "create" | "edit";
-    pick?: Pick;
-    initialLeague?: League | string;
-};
 
 interface FormErrors {
     name?: string;
@@ -212,8 +205,6 @@ const SlipDetailsPage = () => {
         () => slip?.pick_deadline_at ?? ""
     );
     const [pointsDraft, setPointsDraft] = useState<PointsDraft>({});
-    const [builderInstance, setBuilderInstance] = useState(0);
-    const [builderState, setBuilderState] = useState<BuilderState | null>(null);
     const [activeTab, setActiveTab] = useState<SlipTab>("picks");
     const [isRenamingSlip, setIsRenamingSlip] = useState(false);
     const [errors, setErrors] = useState<FormErrors>({});
@@ -611,43 +602,6 @@ const SlipDetailsPage = () => {
             ? "No pick yet."
             : "pick not submitted before slip deadline";
 
-    const handleSavePick = (
-        payload: BuiltPickPayload,
-        pickId?: string
-    ) => {
-        dispatch(createPickRequest({
-            slip_id: slip.id,
-            description: payload.description,
-            odds_bracket: payload.odds_bracket,
-            scope: payload.scope,
-            side: payload.side,
-            points: payload.points,
-            difficultyTier: payload.difficultyTier,
-            difficulty_label: payload.difficulty_label,
-            market: payload.market,
-            playerId: payload.playerId,
-            gameId: payload.gameId,
-            week: payload.week,
-            teamId: payload.teamId,
-            threshold: payload.threshold,
-            validationStatus: payload.validationStatus,
-            bestOffer: payload.bestOffer,
-            bookOdds: payload.bookOdds,
-            buildMode: payload.buildMode,
-            pickId,
-            external_pick_key: payload.external_pick_key,
-            confidence: payload.confidence,
-            sourceTab: payload.sourceTab,
-            selection: payload.selection,
-            legs: payload?.legs ?? undefined,
-            isCombo: payload.isCombo,
-            sport: payload.sport,
-            matchup: payload.matchup,
-            match_date: payload.match_date ? new Date(payload.match_date) : undefined,
-        }))
-        setBuilderState(null);
-    };
-
     const handleAutoGrade = () => {
         if (!canAutoGrade) return;
         if (slip.id) {
@@ -816,11 +770,7 @@ const SlipDetailsPage = () => {
 
     const startAddFlow = () => {
         if (!canAddPick) return;
-        setBuilderInstance((prev) => prev + 1);
-        setBuilderState({
-            mode: "create",
-            initialLeague: (availableSports[0] as League | undefined) ?? DEFAULT_SPORT,
-        });
+        router.push(`/group/${group.id}/slips/${slip.id}/add-pick`);
     };
 
     const handleDeletePick = (pick: Pick) => {
@@ -2095,33 +2045,6 @@ const SlipDetailsPage = () => {
                 onClose={() => setShowScoringModal(false)}
                 variant="group"
             />
-
-            {builderState && (
-                <ModalShell onClose={() => setBuilderState(null)}>
-                    <PickBuilderShell
-                        key={`${builderInstance}-${builderState.pick?.id ?? "new"}-${builderState.mode}`}
-                        context={{
-                            mode: "slip",
-                            group,
-                            slip,
-                            picks: slipPicks,
-                            currentUser,
-                            initialPick: builderState.pick,
-                            isCommissioner,
-                            onSave: handleSavePick,
-                            showCurrentPick: slip.pick_limit === 1,
-                        }}
-                        initialLeague={
-                            (builderState.initialLeague as League | undefined) ??
-                            (builderState.pick?.sport as League | undefined) ??
-                            (availableSports[0] as League | undefined)
-                        }
-                        // initialBuildMode={builderState.pick?.build_mode ?? "ODDS"}
-                        leagues={availableSports as League[]}
-                        onDismiss={() => setBuilderState(null)}
-                    />
-                </ModalShell>
-            )}
 
             <SlipShareModal
                 open={isShareModalOpen}

@@ -66,8 +66,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   const modalTitleClassName = isGroupOnly ? "text-xl sm:text-2xl" : "text-2xl";
   const modalSubtitleClassName = isGroupOnly ? "text-xs sm:text-sm" : "text-sm";
   const modalBodyClassName = isGroupOnly
-    ? "max-h-[72vh] space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7"
-    : "max-h-[70vh] space-y-8 overflow-y-auto overscroll-contain px-7 py-7 text-base text-gray-300";
+    ? "min-h-0 shrink space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7"
+    : "min-h-0 shrink space-y-8 overflow-y-auto overscroll-contain px-7 py-7 text-base text-gray-300";
   const singleModeSectionClassName = isGroupOnly
     ? "mx-auto w-full max-w-[760px]"
     : isSingleMode
@@ -681,10 +681,10 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       onClick={onClose}
     >
       <div
-        className={`max-h-full w-full ${modalWidthClassName} overflow-hidden rounded-xl border border-slate-800/80 bg-black/85 shadow-2xl backdrop-blur`}
+        className={`flex max-h-full w-full flex-col ${modalWidthClassName} overflow-hidden rounded-xl border border-slate-800/80 bg-black/85 shadow-2xl backdrop-blur`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className={`flex items-start justify-between gap-4 border-b border-white/10 ${modalHeaderClassName}`}>
+        <div className={`shrink-0 flex items-start justify-between gap-4 border-b border-white/10 ${modalHeaderClassName}`}>
           <div className={`space-y-1 ${singleModeHeaderTextClassName}`}>
             <h2 id="scoring-modal-title" className={`${modalTitleClassName} font-semibold text-white`}>
               {modalTitle}

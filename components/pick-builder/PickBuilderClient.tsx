@@ -38,6 +38,40 @@ type BuilderIntent = "post";
 
 const normalizeSport = (sport?: string) => (sport ? sport.toUpperCase() : "NFL");
 
+const getRequiredSportKeys = (payload?: BuiltPickPayload | null) => {
+    if (!payload) return [];
+
+    const legSports = Array.from(
+        new Set(
+            (payload.legs ?? [])
+                .map((leg) => leg.selection?.sport)
+                .filter((sport): sport is string => Boolean(sport))
+                .map((sport) => normalizeSport(sport))
+                .filter((sport) => sport !== "COMBO")
+        )
+    );
+
+    if (legSports.length > 0) return legSports;
+
+    const payloadSport = payload.sport ? normalizeSport(payload.sport) : "";
+    return payloadSport === "COMBO" ? [] : [payloadSport];
+};
+
+const getPickStartTimes = (payload?: BuiltPickPayload | null) => {
+    if (!payload) return [];
+
+    const legStarts = Array.from(
+        new Set(
+            (payload.legs ?? [])
+                .map((leg) => leg.selection?.gameStartTime)
+                .filter((start): start is string => Boolean(start))
+        )
+    );
+
+    if (legStarts.length > 0) return legStarts;
+    return payload.selection?.gameStartTime ? [payload.selection.gameStartTime] : [];
+};
+
 const PickBuilderClientPage = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -116,36 +150,50 @@ const PickBuilderClientPage = () => {
         return [...commissionerGroups, ...memberGroups];
     }, [group?.data?.groups, currentUser?.userId]);
 
-    const destinations = useMemo(() => {
-        const sportKey = normalizeSport(completedPick?.sport);
-        return sortedGroups
-            .map((group) => {
-                const slip = slips.filter(
-                    (slip) =>
-                        slip.group_id === group.id &&
-                        slip.status === "open" &&
-                        slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
-                );
-                return { group, slips: slip };
-            })
-    }, [completedPick?.sport, sortedGroups, slips]);
+    // const destinations = useMemo(() => {
+    //     const sportKey = normalizeSport(completedPick?.sport);
+    //     return sortedGroups
+    //         .map((group) => {
+    //             const slip = slips.filter(
+    //                 (slip) =>
+    //                     slip.group_id === group.id &&
+    //                     slip.status === "open" &&
+    //                     slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
+    //             );
+    //             return { group, slips: slip };
+    //         })
+    // }, [completedPick?.sport, sortedGroups, slips]);
 
     const buildDestinations = useCallback(
-        (sportKey: string) =>
-            sortedGroups
+        (requiredSportKeys: string[]) => {
+            if (requiredSportKeys.length === 0) return [];
+            return sortedGroups
                 .map((group) => {
                     const slip = slips.filter((slip) =>
                         slip.group_id === group.id &&
                         canUserEditSlipPicks(slip) &&
-                        slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
+                        requiredSportKeys.every((sportKey) =>
+                            slip?.sports?.some((entry) => normalizeSport(entry) === sportKey)
+                        )
                     );
                     return { group, slips: slip };
-                }),
+                });
+        },
         [sortedGroups, slips]
     );
 
+    const completedPickSportKeys = useMemo(
+        () => getRequiredSportKeys(completedPick),
+        [completedPick]
+    );
+
+    const destinations = useMemo(() => {
+        if (!completedPick) return [];
+        return buildDestinations(completedPickSportKeys);
+    }, [buildDestinations, completedPick, completedPickSportKeys]);
+
     const openDestinationSheet = (payload: BuiltPickPayload) => {
-        const nextDestinations = buildDestinations(normalizeSport(payload.sport));
+        const nextDestinations = buildDestinations(getRequiredSportKeys(payload));
         const first = nextDestinations[0];
         setCompletedPick(payload);
         setSelectedGroupId(first?.group.id ?? null);
@@ -153,14 +201,16 @@ const PickBuilderClientPage = () => {
         setShowDestination(true);
     };
 
-    const selectionStart = completedPick?.selection?.gameStartTime ?? null;
+    const pickStartTimes = useMemo(() => getPickStartTimes(completedPick), [completedPick]);
 
     const slipIsEligible = (slip: Slip) => {
-        if (!selectionStart) return true;
+        if (pickStartTimes.length === 0) return true;
         const selectionSports = completedPick?.sport;
         if (!selectionSports) return false;
         if (!slip.sports?.includes(selectionSports)) return false;
-        return isGameEligible(selectionStart, slip.pick_deadline_at, slip.window_days);
+        return pickStartTimes.every((startTime) =>
+            isGameEligible(startTime, slip.pick_deadline_at, slip.window_days)
+        );
     };
 
     const intentLabel: Record<BuilderIntent, string> = {
@@ -330,6 +380,7 @@ const PickBuilderClientPage = () => {
 
     const renderBuilderStage = () => {
         if (!builderIntent) return renderChooseGrid();
+        if (!currentUser) return null;
         return (
             <div className="space-y-3 rounded-none border-0 bg-transparent p-0 shadow-none">
                 <div className="flex items-center justify-between gap-2">
@@ -451,7 +502,9 @@ const PickBuilderClientPage = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-sm font-semibold text-white">Post to a slip</p>
-                                <p className="text-xs text-gray-400">Choose group, then an open slip that matches this league.</p>
+                                <p className="text-xs text-gray-400">
+                                    Choose group, then an open slip that includes every sport in this pick.
+                                </p>
                             </div>
                             <button
                                 type="button"

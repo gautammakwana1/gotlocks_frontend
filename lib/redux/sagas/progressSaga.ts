@@ -65,7 +65,7 @@ function* handleRedeemGlobalPoints(action: PayloadAction<RedeemGlobalPointsPaylo
     }
 };
 
-export default function* nflSaga() {
+export default function* progressSaga() {
     yield takeLatest(fetchMyProgressRequest.type, handleFetchMyProgress);
     yield takeLatest(fetchProgressByUserIdRequest.type, handleFetchProgressByUserId);
     yield takeLatest(redeemGlobalPointsRequest.type, handleRedeemGlobalPoints);

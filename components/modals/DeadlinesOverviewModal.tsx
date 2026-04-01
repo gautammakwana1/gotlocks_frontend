@@ -17,11 +17,30 @@ const DeadlinesOverviewModal = ({ open, onClose }: DeadlinesOverviewModalProps) 
         return () => window.removeEventListener("keydown", handler);
     }, [open, onClose]);
 
+    useEffect(() => {
+        if (!open) return;
+
+        const scrollBarWidth =
+            window.innerWidth - document.documentElement.clientWidth;
+
+        // Lock scroll while modal is open
+        document.body.style.overflow = "hidden";
+        document.documentElement.style.overflow = "hidden";
+        document.body.style.paddingRight = `${scrollBarWidth}px`;
+
+        return () => {
+            // Restore scroll when modal closes or unmounts
+            document.body.style.overflow = "";
+            document.documentElement.style.overflow = "";
+            document.body.style.paddingRight = "";
+        };
+    }, [open]);
+
     if (!open) return null;
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8 overscroll-none"
             role="dialog"
             aria-modal="true"
             aria-labelledby="deadlines-overview-title"
@@ -50,7 +69,7 @@ const DeadlinesOverviewModal = ({ open, onClose }: DeadlinesOverviewModalProps) 
                     </button>
                 </div>
 
-                <div className="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-6 text-sm text-gray-300">
+                <div className="max-h-[70vh] space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300">
                     <section className="space-y-2">
                         <h3 className="text-sm font-semibold uppercase tracking-wide text-emerald-200">
                             What are deadlines and why do we need them?

@@ -1,11 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    PickReviewSheet,
+    type ReviewSheetPostSelection,
+    type SameGameComboReviewGroup,
+} from "@/components/pick-builder/PickReviewSheet";
+import type {
+    CachedReviewData,
+    ReviewSheetState,
+} from "@/components/pick-builder/reviewSheetState";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
-import { formatDateTime } from "@/lib/utils/date";
+import { formatDateTime, isPast } from "@/lib/utils/date";
 import {
-    DEFAULT_ELIGIBLE_WINDOW_DAYS
+    DEFAULT_ELIGIBLE_WINDOW_DAYS,
+    filterEligibleGames,
+    filterUpcomingWindowGames,
 } from "@/lib/utils/games";
 import {
     normalizeOddToLeg,
@@ -17,21 +28,19 @@ import {
     getTierForAmericanOdds,
     getTierMetaForPick,
     parseAmericanOdds,
-    TierIndex,
 } from "@/lib/utils/scoring";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NHLOdds, NHLSchedules, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
-import { useDispatch, useSelector } from "react-redux";
-import { useToast } from "@/lib/state/ToastContext";
-import { clearNhlPickValidateMessage, fetchNHLOddsRequest, fetchNHLScheduleRequest, nhlPickValidateRequest } from "@/lib/redux/slices/nhlSlice";
-import FootballAnimation from "../animations/FootballAnimation";
-import { useIsMobile } from "../leaderboard/LeaderboardGrid";
-import { getMobileTeamName } from "@/lib/utils/helpers";
-import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
-import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
-import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
-import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
+import {
+    formatReviewSheetTierLine,
+    resolveReviewSheetTierCardAppearance,
+} from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
+import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex, User } from "@/lib/interfaces/interfaces";
+import { useToast } from "@/lib/state/ToastContext";
+import { useDispatch, useSelector } from "react-redux";
+import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
+import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
+import FootballAnimation from "../animations/FootballAnimation";
 
 type OddsBlazeTeam = {
     id: string;
@@ -46,6 +55,54 @@ type OddsBlazePlayer = {
     number?: number | null | string;
     team: OddsBlazeTeam;
 };
+
+type OddsBlazeSelection = {
+    name?: string;
+    side?: string;
+    line?: number;
+};
+
+type OddsBlazeOdd = {
+    id: string;
+    market: string;
+    name: string;
+    price: string;
+    main: boolean;
+    sgp?: string;
+    links?: {
+        desktop?: string;
+        mobile?: string;
+    };
+    selection?: OddsBlazeSelection;
+    player?: OddsBlazePlayer;
+    updated?: string;
+};
+
+type OddsBlazeEvent = {
+    id: string;
+    teams: {
+        away: OddsBlazeTeam;
+        home: OddsBlazeTeam;
+    };
+    date: string;
+    live: boolean;
+    odds: OddsBlazeOdd[];
+};
+
+type OddsBlazeSnapshot = {
+    updated: string;
+    league: {
+        id: string;
+        name: string;
+        sport: string;
+    };
+    sportsbook: {
+        id: string;
+        name: string;
+    };
+    events: OddsBlazeEvent[];
+};
+
 
 type GameOption = {
     id: string;
@@ -64,33 +121,33 @@ type GameOption = {
 };
 
 type SelectedOdd = {
-    odd: OddsObject;
+    odd: OddsBlazeOdd;
     game: GameOption;
 };
 
 type PointsTableRow = {
     player: OddsBlazePlayer;
     teamLabel: string;
-    lines: Map<number, OddsObject>;
+    lines: Map<number, OddsBlazeOdd>;
 };
 
 type SpreadLineEntry = {
-    home?: OddsObject;
-    away?: OddsObject;
+    home?: OddsBlazeOdd;
+    away?: OddsBlazeOdd;
 };
 
 type TotalLineEntry = {
-    over?: OddsObject;
-    under?: OddsObject;
+    over?: OddsBlazeOdd;
+    under?: OddsBlazeOdd;
 };
 
 type MainLineOdds = {
-    spreadAway?: OddsObject;
-    spreadHome?: OddsObject;
-    moneyAway?: OddsObject;
-    moneyHome?: OddsObject;
-    totalOver?: OddsObject;
-    totalUnder?: OddsObject;
+    spreadAway?: OddsBlazeOdd;
+    spreadHome?: OddsBlazeOdd;
+    moneyAway?: OddsBlazeOdd;
+    moneyHome?: OddsBlazeOdd;
+    totalOver?: OddsBlazeOdd;
+    totalUnder?: OddsBlazeOdd;
     totalLine?: number;
 };
 
@@ -123,7 +180,7 @@ type Props = {
     reviewSheetState?: ReviewSheetState;
 };
 
-const eventKey = (event: OddsData) =>
+const eventKey = (event: OddsBlazeEvent) =>
     event.id || `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
 
 const normalizeMergeToken = (value?: string | number | null) => {
@@ -131,7 +188,7 @@ const normalizeMergeToken = (value?: string | number | null) => {
     return `${value}`.trim().toLowerCase().replace(/\s+/g, " ");
 };
 
-const oddKey = (odd: OddsObject) =>
+const oddKey = (odd: OddsBlazeOdd) =>
     [
         odd.market,
         odd.player?.id ?? "",
@@ -141,7 +198,7 @@ const oddKey = (odd: OddsObject) =>
         odd.selection?.line ?? "",
     ].join("|");
 
-const dedupeOdds = (odds: OddsObject[]) => {
+const dedupeOdds = (odds: OddsBlazeOdd[]) => {
     const seenIds = new Set<string>();
     const seenKeys = new Set<string>();
 
@@ -160,7 +217,7 @@ const dedupeOdds = (odds: OddsObject[]) => {
     });
 };
 
-const latestUpdatedAt = (snapshots: NHLOdds[]) =>
+const latestUpdatedAt = (snapshots: OddsBlazeSnapshot[]) =>
     snapshots.reduce((latest, snapshot) => {
         const currentTime = Date.parse(snapshot.updated);
         const latestTime = Date.parse(latest);
@@ -171,19 +228,19 @@ const latestUpdatedAt = (snapshots: NHLOdds[]) =>
         return latest;
     }, "");
 
-const mergeOddsSnapshots = (...snapshots: NHLOdds[]): NHLOdds => {
+const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapshot => {
     const baseSnapshot = snapshots[0];
 
     if (!baseSnapshot) {
         return {
             updated: "",
-            league: { id: "nhl", name: "NHL", sport: "Hockey" },
+            league: { id: "mlb", name: "MLB", sport: "Baseball" },
             sportsbook: { id: "multi", name: "Multiple" },
             events: [],
         };
     }
 
-    const mergedEvents = new Map<string, OddsData>();
+    const mergedEvents = new Map<string, OddsBlazeEvent>();
 
     snapshots.forEach((snapshot) => {
         snapshot.events.forEach((event) => {
@@ -210,145 +267,84 @@ const mergeOddsSnapshots = (...snapshots: NHLOdds[]): NHLOdds => {
     };
 };
 
-const QUICK_BET_MARKETS = [
-    "1st 5 Minutes Total Goals",
-    "1st 10 Minutes Total Goals",
-    "Both Teams To Score",
-    "Both Teams To Score 2 Goals",
-    "First Team To Score 3-Way",
-    "First Team To 5 Shots On Goal",
-    "Last Team To Score 3-Way",
-    "Race To 2 Goals 3-Way Reg Time",
-    "Race To 3 Goals 3-Way Reg Time",
-    "Race To 4 Goals 3-Way Reg Time",
-    "Race To 5 Goals 3-Way Reg Time",
+const HITS_MARKETS = [
+    "Player Hits",
+    "Player Singles",
+    "Player Doubles",
+    "Player Triples",
 ];
 
-const GOALSCORER_MARKETS = [
-    "First Goalscorer",
-    "Second Goalscorer",
-    "Third Goalscorer",
-    "Home Team First Goalscorer",
-    "Away Team First Goalscorer",
+const TOTAL_BASES_MARKETS = ["Player Total Bases"];
+
+const RBI_MARKETS = ["Player RBIs"];
+
+const RUNS_MARKETS = ["Player Runs", "Player Hits + Runs + RBIs"];
+
+const HOME_RUNS_MARKETS = ["Player Home Runs", "Player Stolen Bases"];
+
+const PITCHER_MARKETS = [
+    "Player Strikeouts",
+    "Player Batting Strikeouts",
+    "Player Outs",
+    "Player Hits Allowed",
+    "Player Walks Allowed",
 ];
 
-const SHOT_ON_GOAL_MARKETS = [
-    "Player Shots On Goal",
-    "1st Period Player Shots On Goal",
-    "2nd Period Player Shots On Goal",
-    "3rd Period Player Shots On Goal",
-];
-const POINT_MARKETS = [
-    "Player Goals",
-    "Player Points",
-    "Player Power Play Points",
-    "1st Period Player Goals",
-    "1st Period Player Points",
-    "2nd Period Player Goals",
-    "2nd Period Player Points",
-    "3rd Period Player Goals",
-];
-const ASSIST_MARKETS = [
-    "Player Assists",
-    "1st Period Player Assists",
-    "2nd Period Player Assists",
-    "3rd Period Player Assists",
-];
-const GOALIE_MARKETS = [
-    "Player Saves",
-    "1st Period Player Saves",
-    "2nd Period Player Saves",
-    "3rd Period Player Saves",
+const EARLY_LINES_MARKETS = [
+    "1st 5 Innings Moneyline",
+    "1st 5 Innings Moneyline 3-Way",
+    "1st 5 Innings Run Line",
+    "1st 5 Innings Total Runs",
+    "1st 7 Innings Moneyline",
+    "1st 7 Innings Run Line",
+    "1st 7 Innings Total Runs",
+    "1st Inning Moneyline 3-Way",
+    "1st Inning Total Runs",
 ];
 
-const PERIOD_1_PLAYER_PROP_MARKETS = [
-    "1st Period Player Goals",
-    "1st Period Player Assists",
-    "1st Period Player Points",
-    "1st Period Player Saves",
-    "1st Period Player Shots On Goal",
+const INNING_LINES_MARKETS = [
+    "3rd Inning Run Line",
+    "3rd Inning Total Runs",
+    "4th Inning Run Line",
+    "4th Inning Total Runs",
+    "5th Inning Run Line",
+    "5th Inning Total Runs",
+    "6th Inning Run Line",
+    "6th Inning Total Runs",
+    "7th Inning Run Line",
+    "7th Inning Total Runs",
+    "8th Inning Run Line",
+    "8th Inning Total Runs",
+    "9th Inning Run Line",
+    "9th Inning Total Runs",
 ];
 
-const PERIOD_2_PLAYER_PROP_MARKETS = [
-    "2nd Period Player Goals",
-    "2nd Period Player Assists",
-    "2nd Period Player Points",
-    "2nd Period Player Saves",
-    "2nd Period Player Shots On Goal",
-];
+const TEAM_TOTAL_MARKETS = ["Team Total Runs", "Team Total Runs Odd/Even"];
 
-const PERIOD_3_PLAYER_PROP_MARKETS = [
-    "3rd Period Player Goals",
-    "3rd Period Player Assists",
-    "3rd Period Player Saves",
-    "3rd Period Player Shots On Goal",
-];
-
-const PERIOD_PLAYER_PROP_MARKETS = [
-    ...PERIOD_1_PLAYER_PROP_MARKETS,
-    ...PERIOD_2_PLAYER_PROP_MARKETS,
-    ...PERIOD_3_PLAYER_PROP_MARKETS,
-];
-
-const PERIOD_1_MARKETS = [
-    "1st 5 Minutes Total Goals",
-    "1st 10 Minutes Total Goals",
-    "1st Period Moneyline",
-    "1st Period Moneyline 3-Way",
-    "1st Period Puck Line",
-    "1st Period Total Goals",
-    "1st Period Total Goals Odd/Even",
-    "1st Period Home Team Total Goals",
-    "1st Period Away Team Total Goals",
-    "1st Period Both Teams To Score",
-    "1st Period First Team To Score 3-Way",
-    ...PERIOD_1_PLAYER_PROP_MARKETS,
-];
-
-const PERIOD_2_MARKETS = [
-    "2nd Period 1st 5 Minutes Total Goals",
-    "2nd Period 1st 10 Minutes Total Goals",
-    "2nd Period Moneyline 3-Way",
-    "2nd Period Puck Line",
-    "2nd Period Total Goals",
-    "2nd Period Total Goals Odd/Even",
-    "2nd Period Home Team Total Goals",
-    "2nd Period Away Team Total Goals",
-    ...PERIOD_2_PLAYER_PROP_MARKETS,
-];
-
-const PERIOD_3_MARKETS = [
-    "3rd Period 1st 5 Minutes Total Goals",
-    "3rd Period 1st 10 Minutes Total Goals",
-    "3rd Period Puck Line",
-    "3rd Period Total Goals",
-    "3rd Period Total Goals Odd/Even",
-    ...PERIOD_3_PLAYER_PROP_MARKETS,
-];
-
-const TEAM_TOTAL_MARKETS = [
-    "Home Team Total Goals",
-    "Away Team Total Goals",
-    "1st Period Home Team Total Goals",
-    "1st Period Away Team Total Goals",
-    "2nd Period Home Team Total Goals",
-    "2nd Period Away Team Total Goals",
-];
+const MAIN_OVER_UNDER_MARKETS = new Set<string>([
+    "Player Hits",
+    "Player Total Bases",
+    "Player RBIs",
+    "Player Runs",
+    "Player Hits + Runs + RBIs",
+    "Player Strikeouts",
+    "Player Batting Strikeouts",
+    "Player Outs",
+    "Player Hits Allowed",
+    "Player Walks Allowed",
+]);
 
 const TAB_ORDER = [
     "GAME_LINES",
-    "QUICK_BETS",
-    "GOALSCORER",
-    "SHOTS_ON_GOAL",
-    "POINTS",
-    "ASSISTS",
-    "BLOCKS",
-    "GOALIE",
-    "PERIOD_PLAYER_PROPS",
-    "PERIOD_1",
-    "PERIOD_2",
-    "PERIOD_3",
+    "EARLY_LINES",
     "TEAM_TOTALS",
+    "HITS",
+    "TOTAL_BASES",
+    "RBI",
+    "RUNS",
+    "HOME_RUNS",
+    "PITCHER",
+    "INNING_LINES",
 ] as const;
 
 type TabId = (typeof TAB_ORDER)[number];
@@ -357,143 +353,49 @@ const VISIBLE_TABS = TAB_ORDER;
 
 const TAB_LABELS: Record<TabId, string> = {
     GAME_LINES: "Game lines",
-    QUICK_BETS: "Quick bets",
-    GOALSCORER: "Goalscorer",
-    SHOTS_ON_GOAL: "Shots on goal",
-    POINTS: "Points",
-    ASSISTS: "Assists",
-    BLOCKS: "Blocks",
-    GOALIE: "Goalie",
-    PERIOD_PLAYER_PROPS: "Period player props",
-    PERIOD_1: "1st period",
-    PERIOD_2: "2nd period",
-    PERIOD_3: "3rd period",
+    EARLY_LINES: "Early innings",
     TEAM_TOTALS: "Team totals",
+    HITS: "Hits",
+    TOTAL_BASES: "Total bases",
+    RBI: "RBIs",
+    RUNS: "Runs + H/R/RBI",
+    HOME_RUNS: "HRs + steals",
+    PITCHER: "Pitchers",
+    INNING_LINES: "Inning lines",
 };
 
 const TAB_MARKETS: Record<TabId, string[]> = {
-    GAME_LINES: ["Moneyline", "Moneyline 3-Way", "Puck Line", "Total Goals"],
-    QUICK_BETS: QUICK_BET_MARKETS,
-    GOALSCORER: GOALSCORER_MARKETS,
-    SHOTS_ON_GOAL: SHOT_ON_GOAL_MARKETS,
-    POINTS: POINT_MARKETS,
-    ASSISTS: ASSIST_MARKETS,
-    BLOCKS: [],
-    GOALIE: GOALIE_MARKETS,
-    PERIOD_PLAYER_PROPS: PERIOD_PLAYER_PROP_MARKETS,
-    PERIOD_1: PERIOD_1_MARKETS,
-    PERIOD_2: PERIOD_2_MARKETS,
-    PERIOD_3: PERIOD_3_MARKETS,
+    GAME_LINES: ["Moneyline", "Run Line", "Total Runs"],
+    EARLY_LINES: EARLY_LINES_MARKETS,
     TEAM_TOTALS: TEAM_TOTAL_MARKETS,
+    HITS: HITS_MARKETS,
+    TOTAL_BASES: TOTAL_BASES_MARKETS,
+    RBI: RBI_MARKETS,
+    RUNS: RUNS_MARKETS,
+    HOME_RUNS: HOME_RUNS_MARKETS,
+    PITCHER: PITCHER_MARKETS,
+    INNING_LINES: INNING_LINES_MARKETS,
 };
 
 const TAB_SOURCE_PRIORITY: TabId[] = [
-    "GOALSCORER",
-    "SHOTS_ON_GOAL",
-    "ASSISTS",
-    "POINTS",
-    "GOALIE",
-    "PERIOD_PLAYER_PROPS",
+    "PITCHER",
+    "HOME_RUNS",
+    "RUNS",
+    "RBI",
+    "TOTAL_BASES",
+    "HITS",
     "TEAM_TOTALS",
-    "QUICK_BETS",
-    "PERIOD_1",
-    "PERIOD_2",
-    "PERIOD_3",
+    "EARLY_LINES",
+    "INNING_LINES",
     "GAME_LINES",
-    "BLOCKS",
 ];
 
-// const TAB_ORDER = [
-//     "GAME_LINES",
-//     "PERIOD_LINES",
-//     "PLAYER_GOALS",
-//     "PLAYER_POINTS",
-//     "PLAYER_SHOTS",
-//     "PLAYER_SAVES",
-//     "GOALSCORERS",
-//     "QUICK_BETS",
-// ];
-
-// type TabId = (typeof TAB_ORDER)[number];
-
-// const VISIBLE_TABS: TabId[] = TAB_ORDER;
-
-// const TAB_LABELS: Record<TabId, string> = {
-//     GAME_LINES: "Game lines",
-//     PERIOD_LINES: "Period lines",
-//     PLAYER_GOALS: "Player goals",
-//     PLAYER_POINTS: "Player points",
-//     PLAYER_SHOTS: "Shots on goal",
-//     PLAYER_SAVES: "Player saves",
-//     GOALSCORERS: "Goal scorers",
-//     QUICK_BETS: "Quick bets",
-// };
-
-// const TAB_MARKETS: Record<TabId, string[]> = {
-//     GAME_LINES: [
-//         "Moneyline",
-//         "Moneyline 3-Way",
-//         "Puck Line",
-//         "Total Goals",
-//         "Home Team Total Goals",
-//         "Away Team Total Goals",
-//     ],
-//     PERIOD_LINES: [
-//         "1st Period Moneyline",
-//         "1st Period Puck Line",
-//         "1st Period Total Goals",
-//         "1st Period Home Team Total Goals",
-//         "1st Period Away Team Total Goals",
-//         "2nd Period Puck Line",
-//         "2nd Period Total Goals",
-//         "2nd Period 1st 5 Minutes Total Goals",
-//         "3rd Period Puck Line",
-//         "3rd Period Total Goals",
-//         "3rd Period 1st 5 Minutes Total Goals",
-//     ],
-//     PLAYER_GOALS: [
-//         "Player Goals",
-//         "1st Period Player Goals",
-//         "2nd Period Player Goals",
-//         "3rd Period Player Goals",
-//     ],
-//     PLAYER_POINTS: ["Player Points", "Player Assists", "Player Power Play Points"],
-//     PLAYER_SHOTS: ["Player Shots On Goal"],
-//     PLAYER_SAVES: [
-//         "Player Saves",
-//         "1st Period Player Saves",
-//         "2nd Period Player Saves",
-//         "3rd Period Player Saves",
-//     ],
-//     GOALSCORERS: [
-//         "First Goalscorer",
-//         "Second Goalscorer",
-//         "Third Goalscorer",
-//         "Home Team First Goalscorer",
-//         "Away Team First Goalscorer",
-//     ],
-//     QUICK_BETS: [
-//         "First Team To Score 3-Way",
-//         "Both Teams To Score",
-//         "Both Teams To Score 2 Goals",
-//         "1st 5 Minutes Total Goals",
-//     ],
-// };
-
-// const QUICK_BET_MARKETS = TAB_MARKETS.QUICK_BETS.filter(
-//     (market) => !NON_QUICK_BET_MARKETS.has(market)
-// );
-
-const GAME_LINE_MAIN_MARKETS = new Set<string>([
-    "Moneyline",
-    "Puck Line",
-    "Total Goals",
-]);
+const GAME_LINE_MAIN_MARKETS = new Set<string>(["Moneyline", "Run Line", "Total Runs"]);
 const GAME_LINE_EXTRA_MARKETS = TAB_MARKETS.GAME_LINES.filter(
     (market) => !GAME_LINE_MAIN_MARKETS.has(market)
 );
 
-const tabForOdd = (odd: OddsObject): TabId => {
+const tabForOdd = (odd: OddsBlazeOdd): TabId => {
     if (!odd.market) return "GAME_LINES";
     for (const tab of TAB_SOURCE_PRIORITY) {
         if (TAB_MARKETS[tab].includes(odd.market)) return tab;
@@ -502,11 +404,12 @@ const tabForOdd = (odd: OddsObject): TabId => {
 };
 
 const TABLE_MARKETS = new Set<string>([
-    ...POINT_MARKETS,
-    ...ASSIST_MARKETS,
-    ...SHOT_ON_GOAL_MARKETS,
-    ...GOALIE_MARKETS,
-    ...PERIOD_PLAYER_PROP_MARKETS,
+    ...HITS_MARKETS,
+    ...TOTAL_BASES_MARKETS,
+    ...RBI_MARKETS,
+    ...RUNS_MARKETS,
+    ...HOME_RUNS_MARKETS,
+    ...PITCHER_MARKETS,
 ]);
 
 const tierMetaFromIndex = (tier?: TierIndex) =>
@@ -521,7 +424,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: NHLSchedules[],
+    snapshot: MLBSchedules[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -555,7 +458,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NHLSchedules[],
+    snapshot: MLBSchedules[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -593,7 +496,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NHLSchedules[],
+    scheduleSnapshot: MLBSchedules[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -703,7 +606,7 @@ const normalizeSide = (side?: string) => {
     return side;
 };
 
-const teamIdFromOdd = (odd: OddsObject, game: GameOption) => {
+const teamIdFromOdd = (odd: OddsBlazeOdd, game: GameOption) => {
     if (odd.market.includes("Home Team")) return game.homeTeamId;
     if (odd.market.includes("Away Team")) return game.awayTeamId;
     const candidate = odd.selection?.name ?? odd.name;
@@ -724,8 +627,10 @@ const teamIdFromOdd = (odd: OddsObject, game: GameOption) => {
     return undefined;
 };
 
-const buildPickDescription = (odd: OddsObject, game: GameOption) => {
-    const marketLabel = odd.market.replace("Player ", "");
+const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
+    const marketLabel = odd.market
+        .replace(/^Player\s+/, "")
+        .replace(/^Team\s+/, "");
     const side = odd.selection?.side;
     const line = odd.selection?.line;
     const matchup = matchupLabel(game);
@@ -744,44 +649,40 @@ const buildPickDescription = (odd: OddsObject, game: GameOption) => {
         const team = odd.selection?.name ?? odd.name;
         return `${team} ${odd.market}`.trim();
     }
-    if (odd.market.includes("Puck Line")) {
+    if (odd.market.includes("Run Line")) {
         const team = odd.selection?.name ?? odd.name;
         const spread =
             line !== undefined ? `${line > 0 ? "+" : ""}${line}` : odd.name.replace(team, "");
         return `${team} ${spread} ${odd.market}`.trim();
     }
-    if (odd.market.includes("Total Goals")) {
-        const teamLabel = odd.market.includes("Home Team")
-            ? game.homeTeam
-            : odd.market.includes("Away Team")
-                ? game.awayTeam
-                : null;
-        const totalLabel = odd.market
-            .replace("Home Team ", "")
-            .replace("Away Team ", "");
-        const subject = teamLabel ?? matchup;
+    if (odd.market.includes("Team Total Runs")) {
+        const teamLabel = odd.selection?.name ?? odd.name;
+        const subject = teamLabel || matchup;
         const separator = subject === matchup ? DASH_SEPARATOR : " - ";
         if (side && line !== undefined) {
-            return `${subject}${separator}${side} ${line} ${totalLabel}`;
+            return `${subject}${separator}${side} ${line} ${odd.market}`;
         }
         if (side) {
-            return `${subject}${separator}${side} ${totalLabel}`;
+            return `${subject}${separator}${side} ${odd.market}`;
         }
-        return `${subject}${separator}${odd.name} ${totalLabel}`;
+        return `${subject}${separator}${odd.name}`;
     }
-    if (odd.market.includes("First Team To Score")) {
-        const label = odd.selection?.name ?? odd.name;
-        return `${matchup}${DASH_SEPARATOR}${label} ${odd.market}`;
-    }
-    if (odd.market.includes("Both Teams To Score")) {
-        const label = odd.selection?.side ?? odd.name;
-        return `${matchup}${DASH_SEPARATOR}${label} ${odd.market}`;
+    if (odd.market.includes("Total Runs")) {
+        const subject = matchup;
+        const separator = subject === matchup ? DASH_SEPARATOR : " - ";
+        if (side && line !== undefined) {
+            return `${subject}${separator}${side} ${line} ${odd.market}`;
+        }
+        if (side) {
+            return `${subject}${separator}${side} ${odd.market}`;
+        }
+        return `${subject}${separator}${odd.name} ${odd.market}`;
     }
 
     return `${odd.market} - ${odd.name}`;
 };
 
-const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMeta => ({
+const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionMeta => ({
     scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
     market: odd.market,
     gameId: game.id,
@@ -797,7 +698,7 @@ const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMet
     external_pick_key: odd.id,
     matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
     match_date: game.date,
-    sport: "NHL"
+    sport: "MLB"
 });
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
@@ -816,7 +717,7 @@ const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
     return match ? { odd: match, game } : null;
 };
 
-const buildSearchHaystack = (odd: OddsObject, game: GameOption) => [
+const buildSearchHaystack = (odd: OddsBlazeOdd, game: GameOption) => [
     odd.market,
     odd.name,
     odd.selection?.name,
@@ -845,7 +746,7 @@ const compareOddsByLine = (a: SelectedOdd, b: SelectedOdd) => {
     return a.odd.name.localeCompare(b.odd.name);
 };
 
-const matchesTeamName = (odd: OddsObject, teamName: string) => {
+const matchesTeamName = (odd: OddsBlazeOdd, teamName: string) => {
     const candidate = odd.selection?.name ?? odd.name;
     if (!candidate) return false;
     return candidate.toLowerCase() === teamName.toLowerCase();
@@ -873,7 +774,7 @@ const findMainTotalOddByMarket = (
     );
 
 const findMainTotalOdd = (game: GameOption, side: "Over" | "Under") =>
-    findMainTotalOddByMarket(game, "Total Goals", side);
+    findMainTotalOddByMarket(game, "Total Runs", side);
 
 const formatLineLabel = (line: number) => `${line}`;
 
@@ -1058,7 +959,7 @@ const buildSimplePropRows = (
     game: GameOption,
     side: "Over" | "Under"
 ) => {
-    const rowMap = new Map<string, { odd: OddsObject; line?: number }>();
+    const rowMap = new Map<string, { odd: OddsBlazeOdd; line?: number }>();
     const sideLower = side.toLowerCase();
 
     odds.forEach(({ odd }) => {
@@ -1096,8 +997,8 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
             player: OddsBlazePlayer;
             teamLabel: string;
             line?: number;
-            over?: OddsObject;
-            under?: OddsObject;
+            over?: OddsBlazeOdd;
+            under?: OddsBlazeOdd;
         }
     >();
 
@@ -1130,7 +1031,7 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
     return [...rowMap.values()].sort((a, b) => a.player.name.localeCompare(b.player.name));
 };
 
-export const NhlPickBuilder = ({
+export const MlbPickBuilder = ({
     sport,
     slip,
     currentUser,
@@ -1153,7 +1054,6 @@ export const NhlPickBuilder = ({
     onDateOptionsChange,
     reviewSheetState,
 }: Props) => {
-    const isMobile = useIsMobile();
     const dispatch = useDispatch();
     const { setToast } = useToast();
     const [activeTab, setActiveTab] = useState<TabId>("GAME_LINES");
@@ -1213,19 +1113,20 @@ export const NhlPickBuilder = ({
         reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
-    const [nhlMatchSchedules, setNHLMatchSchedules] = useState<NHLSchedules[]>([]);
+
+    const [nhlMatchSchedules, setNHLMatchSchedules] = useState<MLBSchedules[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { nhlSchedules, nhlOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nhl);
+    const { mlbSchedules, mlbOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.mlb);
 
     useEffect(() => {
-        dispatch(fetchNHLScheduleRequest({ is_pick_of_day: true, is_range: false }));
+        dispatch(fetchMLBScheduleRequest({ is_pick_of_day: true, is_range: false }));
     }, [dispatch]);
 
     useEffect(() => {
-        if (Array.isArray(nhlSchedules?.events) && nhlSchedules?.events?.length) {
-            const events = nhlSchedules.events;
+        if (Array.isArray(mlbSchedules?.events) && mlbSchedules?.events?.length) {
+            const events = mlbSchedules.events;
 
             setNHLMatchSchedules(events);
 
@@ -1233,16 +1134,16 @@ export const NhlPickBuilder = ({
             // const anyLive = events.some(e => e.live === true);
             // setIsAnyLiveMatch(anyLive);
         }
-        if (nhlOdds?.events?.length) {
+        if (mlbOdds?.events?.length) {
             const activeEvent = activeGameId
-                ? nhlOdds.events.find(e => e.id === activeGameId)
-                : nhlOdds.events[0];
+                ? mlbOdds.events.find(e => e.id === activeGameId)
+                : mlbOdds.events[0];
 
             setOddsData(activeEvent?.odds ?? []);
-        } else if (nhlOdds?.updated) {
+        } else if (mlbOdds?.updated) {
             setOddsData([]);
         }
-    }, [nhlSchedules, nhlOdds, activeGameId]);
+    }, [mlbSchedules, mlbOdds, activeGameId]);
 
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
@@ -1251,7 +1152,6 @@ export const NhlPickBuilder = ({
                 : getTierForAmericanOdds(americanOdds),
         [useGroupScoring]
     );
-
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
             reviewTierScoringMode === "groupLeaderboard"
@@ -1265,26 +1165,21 @@ export const NhlPickBuilder = ({
         return buildMergedGameOptions(oddsData, nhlMatchSchedules, activeGameId);
         // }, [nhlMatchSchedules, oddsData, nhlOdds?.updated, activeGameId]);
     }, [nhlMatchSchedules, oddsData, activeGameId]);
-
-    // const upcomingGames = useMemo(() => {
-    //     const base = games.filter((game) => !isPast(game.date));
-    //     if (!enforceEligibilityWindow) {
-    //         return filterUpcomingWindowGames(base, 6, false);
-    //     }
-    //     return base;
-    // }, [enforceEligibilityWindow, games]);
-
-    // const eligibleGames = useMemo(() => {
-    //     if (!enforceEligibilityWindow) return upcomingGames;
-    //     return filterEligibleGames(upcomingGames, slip.pick_deadline_at, windowDays);
-    // }, [enforceEligibilityWindow, upcomingGames, slip.pick_deadline_at, windowDays]);
-
+    const upcomingGames = useMemo(() => {
+        const base = games.filter((game) => !game.live && !isPast(game.date));
+        if (!enforceEligibilityWindow) {
+            return filterUpcomingWindowGames(base, 6, false);
+        }
+        return base;
+    }, [enforceEligibilityWindow, games]);
+    const eligibleGames = useMemo(() => {
+        if (!enforceEligibilityWindow) return upcomingGames;
+        return filterEligibleGames(upcomingGames, slip.pick_deadline_at, windowDays);
+    }, [enforceEligibilityWindow, upcomingGames, slip.pick_deadline_at, windowDays]);
     const todayIso = useMemo(() => new Date().toISOString(), []);
     const visibleGames = useMemo(() => {
-        return games.filter(
-            (game) => !game.live
-        );
-    }, [games]);
+        return eligibleGames;
+    }, [eligibleGames]);
     const shouldFilterByDate = true;
     const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
@@ -1379,7 +1274,7 @@ export const NhlPickBuilder = ({
         if (!isParlayMode) {
             setParlayLegs([]);
         }
-    }, [isParlayMode, setParlayLegs]);
+    }, [isParlayMode]);
 
     useEffect(() => {
         if (!validateLoading && validatePickMessage) {
@@ -1389,7 +1284,7 @@ export const NhlPickBuilder = ({
                 message: validatePickMessage,
                 duration: 3000
             });
-            dispatch(clearNhlPickValidateMessage());
+            dispatch(clearMlbPickValidateMessage());
         }
         if (!validateLoading && validatePickError) {
             setToast({
@@ -1398,7 +1293,7 @@ export const NhlPickBuilder = ({
                 message: validatePickError,
                 duration: 3000
             });
-            dispatch(clearNhlPickValidateMessage());
+            dispatch(clearMlbPickValidateMessage());
         }
     }, [dispatch, validateLoading, validatePickMessage, validatePickError, setToast]);
 
@@ -1408,34 +1303,6 @@ export const NhlPickBuilder = ({
         () => visibleGames.find((game) => game.id === activeGameId) ?? null,
         [activeGameId, visibleGames]
     );
-
-    // useEffect(() => {
-    //     if (!activeGame?.id || !activeGame.live) return;
-    //     const interval = setInterval(() => {
-    //         dispatch(
-    //             fetchNHLOddsRequest({
-    //                 match_id: activeGame.id,
-    //                 is_live: activeGame.live,
-    //                 silent: true,
-    //             })
-    //         );
-    //     }, 65 * 1000); // 1 min 05 sec
-
-    //     return () => {
-    //         clearInterval(interval);
-    //     };
-    // }, [activeGame?.id, activeGame?.live, dispatch]);
-
-    // useEffect(() => {
-    //     if (!isAnyLiveMatch) return;
-    //     const interval = setInterval(() => {
-    //         dispatch(fetchNHLScheduleRequest({ is_pick_of_day: true, is_range: false }));
-    //     }, 310 * 1000); // 5 min 10 sec
-
-    //     return () => {
-    //         clearInterval(interval);
-    //     };
-    // }, [dispatch, isAnyLiveMatch]);
 
     const activeMarketMap = useMemo(() => {
         if (!activeGame) return new Map<string, SelectedOdd[]>();
@@ -1467,7 +1334,7 @@ export const NhlPickBuilder = ({
     }, [activeGame, activeTab, search]);
 
     const buildDraftPick = useCallback(
-        (odd: OddsObject, game: GameOption): DraftPick => {
+        (odd: OddsBlazeOdd, game: GameOption): DraftPick => {
             const description = buildPickDescription(odd, game);
             const americanOdds = parseAmericanOdds(odd.price);
             const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
@@ -1506,7 +1373,8 @@ export const NhlPickBuilder = ({
                 difficultyTier: tierMeta ? tierMeta.tier : undefined,
                 sourceTab,
             };
-        }, [sport, slip.isGraded]
+        },
+        [sport, slip.isGraded]
     );
     const cacheReviewFromDraft = useCallback(
         (draft: DraftPick): CachedReviewData => ({
@@ -1532,7 +1400,7 @@ export const NhlPickBuilder = ({
         () =>
             parlayLegs.map((leg) => {
                 const game = games.find((option) => option.id === leg.eventId);
-                const matchup = game ? matchupLabel(game) : leg.matchup ?? undefined;
+                const matchup = game ? matchupLabel(game) : leg.matchup ?? null;
                 const startTime = game?.date ?? leg.startTime;
                 const americanOdds = parseAmericanOdds(leg.price);
                 const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
@@ -1569,7 +1437,6 @@ export const NhlPickBuilder = ({
             }),
         [games, parlayLegs]
     );
-
     const comboSport = useMemo(() => {
         const uniqueSports = Array.from(
             new Set(parlayLegs.map((leg) => leg.sport).filter(Boolean))
@@ -1635,10 +1502,10 @@ export const NhlPickBuilder = ({
         return JSON.stringify({
             summary: activeDraft.summary,
             odds: payload.odds,
-            difficultyLabel: activeDraft.difficulty_label,
+            difficultyLabel: payload.difficulty_label,
             points: activeDraft.points,
             selection: "selection" in activeDraft ? activeDraft.selection ?? null : null,
-            isCombo: activeDraft.isCombo,
+            isCombo: payload.isCombo,
             legs: payload.legs?.map((leg) => ({
                 description: leg.description,
                 odds: leg.odds_bracket,
@@ -1668,7 +1535,7 @@ export const NhlPickBuilder = ({
         if (!showReviewSheet) {
             setIsReviewOpen(false);
         }
-    }, [showReviewSheet, setIsReviewOpen]);
+    }, [showReviewSheet]);
 
     useEffect(() => {
         if (!activeDraft) {
@@ -1679,9 +1546,9 @@ export const NhlPickBuilder = ({
         if (activeDraftSelectionKey === lastConfidenceSeedKeyRef.current) return;
         lastConfidenceSeedKeyRef.current = activeDraftSelectionKey;
         setSelectedConfidence(activeDraft.confidence ?? null);
-    }, [activeDraft, activeDraftSelectionKey, setSelectedConfidence]);
+    }, [activeDraft, activeDraftSelectionKey]);
 
-    const isOddSelected = (odd?: OddsObject | null) => {
+    const isOddSelected = (odd?: OddsBlazeOdd | null) => {
         if (!odd) return false;
         if (isParlayMode) return parlayLegs.some((leg) => leg.id === odd.id);
         return selected?.odd.id === odd.id;
@@ -1822,7 +1689,6 @@ export const NhlPickBuilder = ({
             findLegContext,
             hasMultipick,
             parlayLegs,
-            useGroupScoring,
             reviewTierDisplayMode,
             reviewTierScoringMode,
         ]
@@ -2040,7 +1906,7 @@ export const NhlPickBuilder = ({
         : [];
 
     const handleSelectOdd = (
-        odd: OddsObject,
+        odd: OddsBlazeOdd,
         game: GameOption,
         options?: { skipParlay?: boolean; forceSelect?: boolean }
     ) => {
@@ -2087,7 +1953,7 @@ export const NhlPickBuilder = ({
             const existingLeg = parlayLegs.find((leg) => leg.id === incomingLeg.id);
             if (!existingLeg) {
                 if (game.id && odd.id) {
-                    dispatch(nhlPickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
+                    dispatch(mlbPickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
                 }
             }
             if (existingLeg) {
@@ -2334,100 +2200,6 @@ export const NhlPickBuilder = ({
         );
     };
 
-    // const buildParlayLegPayloads = () => {
-    //     const payloads: BuiltPickPayload[] = [];
-    //     for (const leg of parlayLegs) {
-    //         const context = findLegContext(leg);
-    //         if (!context) return null;
-    //         payloads.push(buildDraftPick(context.odd, context.game));
-    //     }
-    //     return payloads;
-    // };
-
-    // const submitPick = (action: "post" | "slip") => {
-    //     if (locked) return;
-
-    //     if (action === "post" && !selectedConfidence) {
-    //         setToast({
-    //             id: Date.now(),
-    //             type: "error",
-    //             message: "Select a confidence level to post.",
-    //             duration: 3000
-    //         });
-    //         return;
-    //     }
-
-    //     const handler = action === "post"
-    //         ? onCreatePostPick ?? onSave
-    //         : onPostToSlip ?? onSave;
-
-    //     if (hasMultipick) {
-    //         if (action === "post") {
-    //             if (!activeDraft) return;
-    //             handler({
-    //                 ...activeDraft,
-    //                 confidence: selectedConfidence ?? activeDraft.confidence ?? null,
-    //             });
-    //             resetAfterPost();
-    //             return;
-    //         }
-
-    //         const payloads = buildParlayLegPayloads();
-    //         if (!payloads || payloads.length === 0) {
-    //             setToast({
-    //                 id: Date.now(),
-    //                 type: "error",
-    //                 message: "Couldn't build your picks. Please try again.",
-    //                 duration: 3000
-    //             });
-    //             return;
-    //         }
-
-    //         if (slip.pick_limit !== "unlimited") {
-    //             const existingCount = picks.filter(
-    //                 (entry) => entry.slip_id === slip.id && entry.user_id === currentUser.userId
-    //             ).length;
-    //             const isEditing =
-    //                 Boolean(
-    //                     initialPick &&
-    //                     initialPick.slip_id === slip.id &&
-    //                     initialPick.user_id === currentUser.userId
-    //                 );
-    //             const adjustedCount = isEditing
-    //                 ? Math.max(0, existingCount - 1)
-    //                 : existingCount;
-    //             if (adjustedCount + payloads.length > slip.pick_limit) {
-    //                 setToast({
-    //                     id: Date.now(),
-    //                     type: "error",
-    //                     message: "Pick limit reached for this slip.",
-    //                     duration: 3000
-    //                 });
-    //                 return;
-    //             }
-    //         }
-
-    //         payloads.forEach((payload) => {
-    //             handler({
-    //                 ...payload,
-    //                 confidence: selectedConfidence ?? payload.confidence ?? null,
-    //             });
-    //         });
-    //         resetAfterPost();
-    //         return;
-    //     }
-
-    //     if (!activeDraft) return;
-    //     handler({
-    //         ...activeDraft,
-    //         confidence:
-    //             action === "post"
-    //                 ? selectedConfidence ?? activeDraft.confidence ?? null
-    //                 : null,
-    //     });
-    //     resetAfterPost();
-    // };
-
     const buildOddsBoxClasses = (
         base: string,
         selected?: boolean,
@@ -2480,7 +2252,7 @@ export const NhlPickBuilder = ({
     );
 
     const renderMainLineCell = (
-        odd: OddsObject | undefined,
+        odd: OddsBlazeOdd | undefined,
         primary: string,
         secondary?: string
     ) => {
@@ -2529,7 +2301,7 @@ export const NhlPickBuilder = ({
                     }}
                 >
                     <div className="px-0">Team</div>
-                    <div className="text-center">Puck</div>
+                    <div className="text-center">Run</div>
                     <div className="text-center">Money</div>
                     <div className="text-center">Total</div>
                 </div>
@@ -2607,7 +2379,7 @@ export const NhlPickBuilder = ({
         id: string;
         label: string;
         sublabel?: string;
-        odd?: OddsObject;
+        odd?: OddsBlazeOdd;
         lineLabel?: string;
     };
 
@@ -2678,7 +2450,7 @@ export const NhlPickBuilder = ({
         );
     };
 
-    type OddsCardEntry = OddsObject | SelectedOdd;
+    type OddsCardEntry = OddsBlazeOdd | SelectedOdd;
     const normalizeOddEntry = (entry: OddsCardEntry) =>
         "odd" in entry ? entry.odd : entry;
 
@@ -2692,10 +2464,15 @@ export const NhlPickBuilder = ({
             const teamLabel = odd.player ? playerTeamLabel(odd.player, activeGame) : "";
             const subtitle = isPlayer
                 ? teamLabel || matchupLabel(activeGame)
-                : undefined;
+                : matchupLabel(activeGame);
+            const label = odd.player
+                ? odd.player.name
+                : line !== undefined
+                    ? odd.selection?.name ?? odd.name ?? "Selection"
+                    : odd.name ?? odd.selection?.name ?? "Selection";
             return {
                 id: odd.id,
-                label: odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection",
+                label,
                 sublabel: subtitle,
                 odd,
                 lineLabel:
@@ -2742,7 +2519,7 @@ export const NhlPickBuilder = ({
                         const overLine = row.over?.selection?.line ?? row.line;
                         const underLine = row.under?.selection?.line ?? row.line;
                         const renderPointButton = (
-                            odd: OddsObject | undefined,
+                            odd: OddsBlazeOdd | undefined,
                             prefix: "O" | "U",
                             line?: number
                         ) => {
@@ -2891,7 +2668,7 @@ export const NhlPickBuilder = ({
         if (data.lines.length === 0) {
             return (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-                    {options?.emptyMessage ?? "No alternate puck lines available for this matchup yet."}
+                    {options?.emptyMessage ?? "No alternate run lines available for this matchup yet."}
                 </div>
             );
         }
@@ -2955,7 +2732,7 @@ export const NhlPickBuilder = ({
         if (data.lines.length === 0) {
             return (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-                    {options?.emptyMessage ?? "No alternate total goals available for this matchup yet."}
+                    {options?.emptyMessage ?? "No alternate total runs available for this matchup yet."}
                 </div>
             );
         }
@@ -3091,8 +2868,8 @@ export const NhlPickBuilder = ({
 
     const mainLineOdds = useMemo(() => {
         if (!activeGame) return null;
-        const spreadAway = findMainTeamOdd(activeGame, "Puck Line", activeGame.awayTeam);
-        const spreadHome = findMainTeamOdd(activeGame, "Puck Line", activeGame.homeTeam);
+        const spreadAway = findMainTeamOdd(activeGame, "Run Line", activeGame.awayTeam);
+        const spreadHome = findMainTeamOdd(activeGame, "Run Line", activeGame.homeTeam);
         const moneyAway = findMainTeamOdd(activeGame, "Moneyline", activeGame.awayTeam);
         const moneyHome = findMainTeamOdd(activeGame, "Moneyline", activeGame.homeTeam);
         const totalOver = findMainTotalOdd(activeGame, "Over");
@@ -3113,7 +2890,7 @@ export const NhlPickBuilder = ({
     const altSpreadOdds = useMemo(
         () =>
             activeGame
-                ? activeGame.odds.filter((odd) => odd.market === "Puck Line" && !odd.main)
+                ? activeGame.odds.filter((odd) => odd.market === "Run Line" && !odd.main)
                 : [],
         [activeGame]
     );
@@ -3121,7 +2898,7 @@ export const NhlPickBuilder = ({
     const altTotalOdds = useMemo(
         () =>
             activeGame
-                ? activeGame.odds.filter((odd) => odd.market === "Total Goals" && !odd.main)
+                ? activeGame.odds.filter((odd) => odd.market === "Total Runs" && !odd.main)
                 : [],
         [activeGame]
     );
@@ -3232,59 +3009,12 @@ export const NhlPickBuilder = ({
         if (locked || !game.hasOdds) return;
         setActiveGameId(game.id);
         if (game.id) {
-            dispatch(fetchNHLOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            dispatch(fetchMLBOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
         }
         setActiveTab("GAME_LINES");
         setSearch("");
         setSelected(null);
     };
-
-    const smoothScrollTo = (
-        element: HTMLElement,
-        target: number,
-        duration = 400
-    ) => {
-        const start = element.scrollLeft;
-        const distance = target - start;
-        let startTime: number | null = null;
-
-        const animate = (currentTime: number) => {
-            if (startTime === null) startTime = currentTime;
-            const timeElapsed = currentTime - startTime;
-            const progress = Math.min(timeElapsed / duration, 1);
-
-            const ease =
-                progress < 0.5
-                    ? 2 * progress * progress
-                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-            element.scrollLeft = start + distance * ease;
-
-            if (timeElapsed < duration) {
-                requestAnimationFrame(animate);
-            }
-        };
-
-        requestAnimationFrame(animate);
-    };
-
-    const handleTabChange = (tab: TabId) => {
-        setActiveTab(tab)
-        setTimeout(() => {
-            const container = document.querySelector('#game-prop-details-tabs-container') as HTMLDivElement;
-            const activeTab = document.querySelector('#game-prop-details-tabs-container button.active') as HTMLButtonElement;
-
-            if (container && activeTab) {
-                const containerRect = container.getBoundingClientRect();
-                const tabRect = activeTab.getBoundingClientRect();
-
-                const scrollLeft = container.scrollLeft;
-                const offset = tabRect.left - containerRect.left + scrollLeft - (containerRect.width / 2) + (tabRect.width / 2);
-
-                smoothScrollTo(container, offset, 300)
-            }
-        }, 100);
-    }
 
     const handleBackToMatchups = () => {
         setActiveGameId(null);
@@ -3304,11 +3034,11 @@ export const NhlPickBuilder = ({
 
     return (
         <div
-            className={`space-y-4 ${activeGame ? "matchup-detail" : ""} ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-20" : "mb-30" : showReviewSheet ? isMobile ? "mb-20" : "mb-40" : ""}`}
+            className={`space-y-4 ${activeGame ? "matchup-detail" : ""}`}
         >
             {!activeGame ? (
                 <div className="grid gap-6">
-                    <div className={`space-y-3 ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-10" : "mb-30" : showReviewSheet ? isMobile ? "mb-10" : "mb-30" : ""}`}>
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                             <span className="text-xs uppercase tracking-wide text-gray-400">
@@ -3355,12 +3085,12 @@ export const NhlPickBuilder = ({
                                 {filteredGames.map((game) => {
                                     const spreadAway = findMainTeamOdd(
                                         game,
-                                        "Puck Line",
+                                        "Run Line",
                                         game.awayTeam
                                     );
                                     const spreadHome = findMainTeamOdd(
                                         game,
-                                        "Puck Line",
+                                        "Run Line",
                                         game.homeTeam
                                     );
                                     const moneyAway = findMainTeamOdd(game, "Moneyline", game.awayTeam);
@@ -3371,7 +3101,7 @@ export const NhlPickBuilder = ({
                                         totalOver?.selection?.line ?? totalUnder?.selection?.line ?? null;
 
                                     const renderPreviewCell = (
-                                        odd: OddsObject | undefined,
+                                        odd: OddsBlazeOdd | undefined,
                                         lineLabel: string,
                                         oddsLabel: string,
                                         muted: boolean,
@@ -3390,8 +3120,8 @@ export const NhlPickBuilder = ({
                                                 }}
                                                 tabIndex={isDisabled ? -1 : 0}
                                                 aria-disabled={isDisabled}
-                                                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
-                                                    } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                className={`flex min-h-[48px] w-full items-center justify-center bg-transparent p-0 text-left ${isDisabled ? "cursor-not-allowed" : ""
+                                                    }`}
                                             >
                                                 {withLine
                                                     ? renderLineOddsBox(lineLabel, oddsLabel, isSelected, muted)
@@ -3417,133 +3147,91 @@ export const NhlPickBuilder = ({
                                                     handleSelectGame(game);
                                                 }
                                             }}
-                                            className="py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
+                                            className={`grid w-full items-start gap-3 px-5 py-4 text-left transition grid-cols-[minmax(0,1fr)_200px] sm:grid-cols-[minmax(0,1fr)_320px] sm:gap-4 sm:px-6 ${isRowDisabled
+                                                ? "cursor-not-allowed opacity-60"
+                                                : "cursor-pointer hover:bg-white/[0.02]"
+                                                }`}
                                         >
-                                            <div
-                                                className="grid items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
-                                                style={{
-                                                    gridTemplateColumns:
-                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                }}
-                                            >
-                                                <div className="px-3"></div>
-                                                <div className="text-center">Spread</div>
-                                                <div className="text-center">Money</div>
-                                                <div className="text-center">Total</div>
+                                            <div className="min-w-0 self-start pt-8">
+                                                <p className="text-xs font-semibold leading-snug text-white">
+                                                    <span className="block">{game.awayTeam} @</span>
+                                                    <span className="block">{game.homeTeam}</span>
+                                                </p>
+                                                <p className="mt-3 text-[11px] text-gray-400">
+                                                    {formatDateTime(game.date)}
+                                                </p>
                                             </div>
 
-                                            <div
-                                                className="grid items-stretch gap-1"
-                                                style={{
-                                                    gridTemplateColumns:
-                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                }}
-                                            >
-                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                    <div className="min-w-0">
-                                                        <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? getMobileTeamName(game.awayAbbr, game.awayTeam) : game.awayTeam}
-                                                        </p>
+                                            <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
+                                                <div className="w-full space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                    <div
+                                                        className="grid gap-1 text-[10px] uppercase tracking-wide text-gray-500"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        <span className="text-center">Run</span>
+                                                        <span className="text-center">Money</span>
+                                                        <span className="text-center">Total</span>
+                                                    </div>
+                                                    <div
+                                                        className="grid gap-1"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        {renderPreviewCell(
+                                                            spreadAway,
+                                                            formatLineValue(spreadAway?.selection?.line),
+                                                            spreadAway ? formatOdds(spreadAway.price) : "-",
+                                                            !spreadAway,
+                                                            true
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            moneyAway,
+                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                            !moneyAway,
+                                                            false
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            totalOver,
+                                                            totalLine !== null ? `O ${totalLine}` : "-",
+                                                            totalOver ? formatOdds(totalOver.price) : "-",
+                                                            !totalOver,
+                                                            true
+                                                        )}
+                                                    </div>
+                                                    <div
+                                                        className="grid gap-1 -mt-3 sm:mt-0"
+                                                        style={{
+                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
+                                                        }}
+                                                    >
+                                                        {renderPreviewCell(
+                                                            spreadHome,
+                                                            formatLineValue(spreadHome?.selection?.line),
+                                                            spreadHome ? formatOdds(spreadHome.price) : "-",
+                                                            !spreadHome,
+                                                            true
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            moneyHome,
+                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                            !moneyHome,
+                                                            false
+                                                        )}
+                                                        {renderPreviewCell(
+                                                            totalUnder,
+                                                            totalLine !== null ? `U ${totalLine}` : "-",
+                                                            totalUnder ? formatOdds(totalUnder.price) : "-",
+                                                            !totalUnder,
+                                                            true
+                                                        )}
                                                     </div>
                                                 </div>
-                                                {renderPreviewCell(
-                                                    spreadAway,
-                                                    formatLineValue(spreadAway?.selection?.line),
-                                                    spreadAway ? formatOdds(spreadAway.price) : "-",
-                                                    !spreadAway,
-                                                    true
-                                                )}
-                                                {renderPreviewCell(
-                                                    moneyAway,
-                                                    moneyAway ? formatOdds(moneyAway.price) : "-",
-                                                    moneyAway ? formatOdds(moneyAway.price) : "-",
-                                                    !moneyAway,
-                                                    false
-                                                )}
-                                                {renderPreviewCell(
-                                                    totalOver,
-                                                    totalLine !== null ? `O ${totalLine}` : "-",
-                                                    totalOver ? formatOdds(totalOver.price) : "-",
-                                                    !totalOver,
-                                                    true
-                                                )}
-                                            </div>
-
-                                            <div
-                                                className="grid items-center -mt-2 sm:mt-0"
-                                                style={{
-                                                    gridTemplateColumns:
-                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                }}
-                                            >
-                                                <div className="px-3">
-                                                    <div className="relative flex items-center h-px w-full overflow-hidden">
-                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-emerald-700/90 to-transparent shimmer-divider"></div>
-                                                    </div>
-                                                </div>
-                                                <div></div>
-                                                <div></div>
-                                                <div></div>
-                                            </div>
-
-                                            <div
-                                                className="grid items-stretch gap-1 -mt-2 sm:mt-0"
-                                                style={{
-                                                    gridTemplateColumns:
-                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                }}
-                                            >
-                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                    <div className="min-w-0">
-                                                        <p className="truncate text-xs font-semibold leading-snug text-white">
-                                                            {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                {renderPreviewCell(
-                                                    spreadHome,
-                                                    formatLineValue(spreadHome?.selection?.line),
-                                                    spreadHome ? formatOdds(spreadHome.price) : "-",
-                                                    !spreadHome,
-                                                    true
-                                                )}
-                                                {renderPreviewCell(
-                                                    moneyHome,
-                                                    moneyHome ? formatOdds(moneyHome.price) : "-",
-                                                    moneyHome ? formatOdds(moneyHome.price) : "-",
-                                                    !moneyHome,
-                                                    false
-                                                )}
-                                                {renderPreviewCell(
-                                                    totalUnder,
-                                                    totalLine !== null ? `U ${totalLine}` : "-",
-                                                    totalUnder ? formatOdds(totalUnder.price) : "-",
-                                                    !totalUnder,
-                                                    true
-                                                )}
-                                            </div>
-                                            <div
-                                                className="flex items-center justify-between gap-2 text-xs uppercase tracking-wide text-gray-400"
-                                                style={{
-                                                    gridTemplateColumns:
-                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                }}
-                                            >
-                                                <div className="flex items-center">
-                                                    <span className={`px-3 text-gray-400 ${isMobile ? `text-[10px]` : `text-[11px]`}`}>{formatDateTime(game.date)}</span>
-                                                    {/* {game.live && (
-                                                        <span className="flex items-center gap-1 text-red-500 font-medium">
-                                                            <span className="relative flex h-2 w-2">
-                                                                <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
-                                                                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600"></span>
-                                                            </span>
-                                                            Live
-                                                        </span>
-                                                    )} */}
-                                                </div>
-                                                <div className="items-center">
-                                                    <span className="text-xs text-gray-500">→</span>
-                                                </div>
+                                                <span className="text-xs text-gray-500">→</span>
                                             </div>
                                         </div>
                                     );
@@ -3563,17 +3251,8 @@ export const NhlPickBuilder = ({
                             >
                                 &larr; back to all matchups
                             </button>
-                            <p className="flex text-xs text-gray-500 gap-2">
-                                <span>Updated {formatDateTime(nhlSchedules?.updated)}</span>
-                                {/* {activeGame.live && (
-                                    <span className="flex items-center gap-1 text-red-500 font-medium">
-                                        <span className="relative flex h-2 w-2">
-                                            <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
-                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600"></span>
-                                        </span>
-                                        Live
-                                    </span>
-                                )} */}
+                            <p className="text-xs text-gray-500 gap-2">
+                                Updated {formatDateTime(mlbSchedules?.updated)}
                             </p>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -3586,19 +3265,16 @@ export const NhlPickBuilder = ({
                                 </p>
                             </div>
                         </div>
-                        <div
-                            id="game-prop-details-tabs-container"
-                            className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0"
-                        >
+                        <div className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0">
                             {VISIBLE_TABS.map((tab) => {
                                 const active = tab === activeTab;
                                 return (
                                     <button
                                         key={tab}
                                         type="button"
-                                        onClick={() => handleTabChange(tab)}
+                                        onClick={() => setActiveTab(tab)}
                                         className={`whitespace-nowrap border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition ${active
-                                            ? "border-emerald-300 text-emerald-100 active"
+                                            ? "border-emerald-300 text-emerald-100"
                                             : "border-transparent text-gray-400 hover:text-white"
                                             }`}
                                     >
@@ -3648,12 +3324,12 @@ export const NhlPickBuilder = ({
                             {[
                                 {
                                     key: "game-lines-alt-spread",
-                                    title: "Alternate Puck Line",
+                                    title: "Alternate Run Line",
                                     odds: altSpreadOdds,
                                 },
                                 {
                                     key: "game-lines-alt-total",
-                                    title: "Alternate Total Goals",
+                                    title: "Alternate Total Runs",
                                     odds: altTotalOdds,
                                 },
                             ].map((section) => {
@@ -3742,7 +3418,7 @@ export const NhlPickBuilder = ({
                                 const hasOver = sides.has("over");
                                 const hasUnder = sides.has("under");
                                 const isMainPlayerPoints =
-                                    market === "Player Points" && hasOver && hasUnder;
+                                    MAIN_OVER_UNDER_MARKETS.has(market) && hasOver && hasUnder;
                                 const isTableMarket = TABLE_MARKETS.has(market);
                                 const defaultSide = hasOver ? "Over" : "Under";
                                 const activeSide = pointsSideByMarket[market] ?? defaultSide;
@@ -3824,7 +3500,7 @@ export const NhlPickBuilder = ({
                                                     <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
                                                         <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                                                             <div
-                                                                className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                                className="grid text-xs uppercase tracking-wide text-gray-400"
                                                                 style={{
                                                                     gridTemplateColumns:
                                                                         "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
@@ -3899,8 +3575,9 @@ export const NhlPickBuilder = ({
             )}
 
             {renderReviewSheet()}
+
         </div>
     );
 };
 
-export default NhlPickBuilder;
+export default MlbPickBuilder;

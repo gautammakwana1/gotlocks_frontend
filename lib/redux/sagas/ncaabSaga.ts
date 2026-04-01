@@ -109,7 +109,7 @@ function* handleValidateNCAABPick(action: PayloadAction<ValidateMyNCAABPickPaylo
     }
 };
 
-export default function* nflSaga() {
+export default function* ncaabSaga() {
     yield takeLatest(fetchNCAABScheduleRequest.type, handleFetchNCAABSchedule);
     yield takeLatest(fetchNCAABOddsRequest.type, handleFetchNCAABOdds);
     yield takeLatest(ncaabPickValidateRequest.type, handleValidateNCAABPick);

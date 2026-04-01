@@ -17,6 +17,7 @@ import NhlPickBuilder from "./NhlPickBuilder";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
 import { ReviewSheetState } from "./reviewSheetState";
+import MlbPickBuilder from "./MlbPickBuilder";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -55,6 +56,7 @@ type PickBuilderShellProps =
         initialBuildMode?: BuildMode;
         leagues?: League[];
         onDismiss?: () => void;
+        showDismissButton?: boolean;
     }
     | {
         context: StandaloneBuilderContext;
@@ -62,6 +64,7 @@ type PickBuilderShellProps =
         initialBuildMode?: BuildMode;
         leagues?: League[];
         onDismiss?: () => void;
+        showDismissButton?: boolean;
     };
 
 const ALL_LEAGUES: League[] = [
@@ -207,7 +210,7 @@ const StubLeagueBuilder = ({
 };
 
 export const PickBuilderShell = (props: PickBuilderShellProps) => {
-    const { context, onDismiss } = props;
+    const { context, onDismiss, showDismissButton = true } = props;
     const dispatch = useDispatch();
 
     // const buildMode = "ODDS";
@@ -230,6 +233,8 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     const [sharedStraightConfidences, setSharedStraightConfidences] = useState<
         Record<string, ConfidenceLevel | null>
     >({});
+    const [hasManualLeagueSelection, setHasManualLeagueSelection] = useState(false);
+    const [hasAutoSelectedLeague, setHasAutoSelectedLeague] = useState(false);
 
     const { leagueCounts } = useSelector((state: RootState) => state.league);
 
@@ -266,6 +271,19 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         allowedLeagues[0] ??
         "NFL"
     );
+
+    useEffect(() => {
+        const hasCounts = leagueCounts && Object.keys(leagueCounts).length > 0;
+        if (!hasManualLeagueSelection && !hasAutoSelectedLeague && hasCounts && !context.initialPick) {
+            if (allowedLeagues.length > 0) {
+                const firstLeague = allowedLeagues[0];
+                if (firstLeague !== activeLeague) {
+                    setActiveLeague(firstLeague);
+                }
+                setHasAutoSelectedLeague(true);
+            }
+        }
+    }, [allowedLeagues, leagueCounts, hasManualLeagueSelection, hasAutoSelectedLeague, context.initialPick, activeLeague]);
 
     const handleDateChange = useCallback(
         (key: string, source: "user" | "auto" = "user") => {
@@ -401,6 +419,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
 
     const handleLeagueSelect = (league: League) => {
         setActiveLeague(league);
+        setHasManualLeagueSelection(true);
         setTimeout(() => {
             const container = document.querySelector('#league-list-tabs-container') as HTMLDivElement;
             const activeTab = document.querySelector('#league-list-tabs-container button.active') as HTMLButtonElement;
@@ -647,6 +666,63 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
             }
         }
 
+        if (activeLeague === "MLB") {
+            if (context.mode === "slip") {
+                return (
+                    <MlbPickBuilder
+                        sport={activeLeague}
+                        group={context.group}
+                        slip={context.slip}
+                        currentUser={context.currentUser}
+                        picks={context.picks}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCancel={onDismiss}
+                        isCommissioner={context.isCommissioner}
+                        showCurrentPick={context.showCurrentPick}
+                        enforceEligibilityWindow
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+
+            if (standaloneGroup && standaloneSlip) {
+                return (
+                    <MlbPickBuilder
+                        sport={activeLeague}
+                        group={standaloneGroup}
+                        slip={standaloneSlip}
+                        currentUser={context.currentUser}
+                        picks={[]}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCreatePostPick={context.onCreatePostPick}
+                        onPostToSlip={context.onPostToSlip}
+                        onCancel={onDismiss}
+                        isCommissioner
+                        showCurrentPick
+                        builderMode={context.intent}
+                        enforceEligibilityWindow={false}
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+        }
+
         return (
             <StubLeagueBuilder
                 league={activeLeague}
@@ -663,7 +739,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     return (
         <div className="space-y-4">
             <div className="sticky top-0 z-20 -mx-5 bg-gradient-to-b from-black to-black/60 px-5 py-3">
-                {onDismiss && (
+                {/* {onDismiss && showDismissButton && (
                     <div className="flex items-center justify-end">
                         <button
                             type="button"
@@ -673,7 +749,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                             Close
                         </button>
                     </div>
-                )}
+                )} */}
                 {hasDateOptions && (
                     <div
                         id="active-date-key--container"

@@ -1,0 +1,197 @@
+"use client";
+
+import { useEffect, useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
+import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
+import { useToast } from "@/lib/state/ToastContext";
+import { useDispatch, useSelector } from "react-redux";
+import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { BuiltPickPayload, Group, GroupSelector, League, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { createPickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
+import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
+import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { GroupDataShape } from "../../../page";
+
+const hasNestedGroup = (
+    value: GroupDataShape
+): value is { group?: Group | null } => {
+    return Boolean(value && typeof value === "object" && "group" in value);
+};
+
+const extractGroup = (data: GroupDataShape): Group | null => {
+    if (!data) {
+        return null;
+    }
+
+    if (hasNestedGroup(data)) {
+        return data.group ?? null;
+    }
+
+    return data;
+};
+
+const DEFAULT_SPORT = "NFL";
+
+const SlipAddPickPage = () => {
+    const params = useParams<{ groupId: string; slipId: string }>();
+    const router = useRouter();
+    const { setToast } = useToast();
+    const dispatch = useDispatch();
+    const currentUser = useCurrentUser();
+
+    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
+    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+    const { slip: slipState, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
+    const { pick: pickState, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: PickSelector) => state.pick);
+    const slipData = slipState as { slips?: Slips } | null;
+    const pickData = pickState as { picks?: Picks } | null;
+
+    // useEffect(() => {
+    //     if (!params.slipId) return;
+    //     dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
+    //     if (params.groupId) {
+    //         dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
+    //         dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
+    //     }
+    // }, [dispatch, params.slipId, params.groupId]);
+
+    const slips: Slips = useMemo(() => {
+        if (!group?.id || !slipData?.slips?.length) return [];
+
+        return slipData?.slips;
+    }, [slipData, group?.id]);
+
+    const slip = useMemo(
+        () => slips.find((candidate) => candidate.id === params.slipId),
+        [params.slipId, slips]
+    );
+    const slipPicks = useMemo<Pick[]>(() => {
+        if (!pickData) return [];
+        if (!Array.isArray(pickData.picks) || !slip?.id) return [];
+        return pickData.picks.filter(pick => pick.slip_id === slip.id);
+    }, [pickData, slip?.id]);
+
+    const returnPath = group && slip ? `/group/${group.id}/slips/${slip.id}` : "/home";
+
+    useEffect(() => {
+        if (!currentUser) return;
+        if (!group || !currentUser) {
+            router.replace("/home");
+            return;
+        }
+        if (!slip) {
+            router.replace(`/group/${group.id}?tab=slips`);
+            return;
+        }
+        if (isSlipFinal(slip)) {
+            router.replace(`/group/${group.id}/slips/${slip.id}/results`);
+        }
+    }, [group, currentUser, slip, router]);
+
+    const availableSports = (slip?.sports?.length ? slip.sports : [DEFAULT_SPORT]).filter(Boolean);
+    const limitValue = slip?.pick_limit === "unlimited" ? Infinity : (slip?.pick_limit ?? 0);
+    const userPicks = useMemo(
+        () => slipPicks.filter((pick) => pick.user_id === currentUser?.userId),
+        [slipPicks, currentUser?.userId]
+    );
+    const canManagePicks = slip ? canUserEditSlipPicks(slip) : false;
+    const canAddPick = canManagePicks && userPicks.length < limitValue;
+    const isCommissioner = group?.created_by === currentUser?.userId;
+
+    useEffect(() => {
+        if (!group || !slip || !currentUser) return;
+        if (isSlipFinal(slip)) return;
+        if (canAddPick) return;
+        setToast({
+            id: Date.now(),
+            type: "error",
+            message: canManagePicks ? "Pick limit reached." : "Picks are locked for this slip.",
+            duration: 3000
+        });
+        router.replace(returnPath);
+    }, [canAddPick, canManagePicks, currentUser, group, returnPath, router, setToast, slip]);
+
+    if (!group || !currentUser || !slip || !canAddPick) {
+        return null;
+    }
+
+    const handleSavePick = (payload: BuiltPickPayload) => {
+        dispatch(createPickRequest({
+            slip_id: slip.id,
+            description: payload.description,
+            odds_bracket: payload.odds_bracket,
+            scope: payload.scope,
+            side: payload.side,
+            points: payload.points,
+            difficultyTier: payload.difficultyTier,
+            difficulty_label: payload.difficulty_label,
+            market: payload.market,
+            playerId: payload.playerId,
+            gameId: payload.gameId,
+            week: payload.week,
+            teamId: payload.teamId,
+            threshold: payload.threshold,
+            validationStatus: payload.validationStatus,
+            bestOffer: payload.bestOffer,
+            bookOdds: payload.bookOdds,
+            buildMode: payload.buildMode,
+            external_pick_key: payload.external_pick_key,
+            confidence: payload.confidence,
+            sourceTab: payload.sourceTab,
+            selection: payload.selection,
+            legs: payload?.legs ?? undefined,
+            isCombo: payload.isCombo,
+            sport: payload.sport,
+            matchup: payload.matchup,
+            match_date: payload.match_date ? new Date(payload.match_date) : undefined,
+        }))
+        router.replace(returnPath);
+    };
+
+    return (
+        <div className="space-y-2 pb-16">
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <button
+                        type="button"
+                        onClick={() => router.replace(returnPath)}
+                        className="text-xs lowercase tracking-wide text-gray-400 transition hover:text-white"
+                    >
+                        ← back to slip
+                    </button>
+                    <p className="text-xs lowercase tracking-wide text-gray-400">pick builder</p>
+                </div>
+                <div className="space-y-1">
+                    <h1 className="text-xl font-semibold text-white sm:text-2xl">
+                        {slip.name}
+                    </h1>
+                    <p className="text-sm text-gray-400">
+                        Add a pick from the leagues this slip supports.
+                    </p>
+                </div>
+            </div>
+
+            <div className="-mt-1">
+                <PickBuilderShell
+                    context={{
+                        mode: "slip",
+                        group,
+                        slip,
+                        picks: slipPicks,
+                        currentUser,
+                        isCommissioner,
+                        onSave: handleSavePick,
+                        showCurrentPick: slip.pick_limit === 1,
+                    }}
+                    initialLeague={(availableSports[0] as League | undefined) ?? DEFAULT_SPORT}
+                    leagues={availableSports as League[]}
+                    onDismiss={() => router.replace(returnPath)}
+                    showDismissButton={false}
+                />
+            </div>
+        </div>
+    );
+};
+
+export default SlipAddPickPage;

@@ -39,6 +39,6 @@ function* handleFetchLeagueCounts(action: PayloadAction<FetchLeagueCountsPayload
     }
 };
 
-export default function* nflSaga() {
+export default function* leagueSaga() {
     yield takeLatest(fetchLeaguesCountsRequest.type, handleFetchLeagueCounts);
 };

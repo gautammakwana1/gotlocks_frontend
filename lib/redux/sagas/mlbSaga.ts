@@ -4,8 +4,8 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { FetchNHLOddsPayload, FetchNHLSchedulePayload, ValidateMyNHLPickPayload } from "@/lib/interfaces/interfaces";
-import { fetchNHLOddsFailure, fetchNHLOddsRequest, fetchNHLOddsSuccess, fetchNHLScheduleFailure, fetchNHLScheduleRequest, fetchNHLScheduleSuccess, nhlPickValidateFailure, nhlPickValidateRequest, nhlPickValidateSuccess } from "../slices/nhlSlice";
+import { FetchMLBOddsPayload, FetchMLBSchedulePayload, ValidateMyMLBPickPayload } from "@/lib/interfaces/interfaces";
+import { fetchMLBOddsFailure, fetchMLBOddsRequest, fetchMLBOddsSuccess, fetchMLBScheduleFailure, fetchMLBScheduleRequest, fetchMLBScheduleSuccess, mlbPickValidateFailure, mlbPickValidateRequest, mlbPickValidateSuccess } from "../slices/mlbSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -21,60 +21,60 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
     return fallback;
 };
 
-function* handleFetchNHLSchedule(action: PayloadAction<FetchNHLSchedulePayload | undefined>): SagaIterator {
+function* handleFetchMLBSchedule(action: PayloadAction<FetchMLBSchedulePayload | undefined>): SagaIterator {
     try {
         const { is_pick_of_day, date } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nhl/schedules-with-odds`,
+            `${API_BASE_URL}/leagues/mlb/schedules-with-odds`,
             {
                 params: { is_pick_of_day, date },
             }
         );
         const payload = response.data as { data?: unknown };
-        yield put(fetchNHLScheduleSuccess(payload.data));
+        yield put(fetchMLBScheduleSuccess(payload.data));
     } catch (error: unknown) {
-        yield put(fetchNHLScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+        yield put(fetchMLBScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
     }
 };
 
-function* handleFetchNHLOdds(action: PayloadAction<FetchNHLOddsPayload | undefined>): SagaIterator {
+function* handleFetchMLBOdds(action: PayloadAction<FetchMLBOddsPayload | undefined>): SagaIterator {
     try {
         const { match_id, is_live } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
-            `${API_BASE_URL}/leagues/nhl/odds`,
+            `${API_BASE_URL}/leagues/mlb/odds`,
             {
                 params: { match_id, is_live },
             }
         );
         const payload = response.data as { data?: unknown };
-        yield put(fetchNHLOddsSuccess(payload.data));
+        yield put(fetchMLBOddsSuccess(payload.data));
     } catch (error: unknown) {
-        yield put(fetchNHLOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+        yield put(fetchMLBOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
     }
 };
 
-function* handleValidateNHLPick(action: PayloadAction<ValidateMyNHLPickPayload | undefined>): SagaIterator {
+function* handleValidateMLBPick(action: PayloadAction<ValidateMyMLBPickPayload | undefined>): SagaIterator {
     try {
         const { match_id, external_pick_key, is_live = false } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
-            `${API_BASE_URL}/leagues/nhl/bet-validate`,
+            `${API_BASE_URL}/leagues/mlb/bet-validate`,
             { match_id, external_pick_key, is_live }
         );
         const payload = response.data as { data?: unknown };
-        yield put(nhlPickValidateSuccess(payload));
+        yield put(mlbPickValidateSuccess(payload));
     } catch (error: unknown) {
-        yield put(nhlPickValidateFailure(getErrorMessage(error, "NHL Pick Validation Failed")));
+        yield put(mlbPickValidateFailure(getErrorMessage(error, "MLB Pick Validation Failed")));
     }
 };
 
-export default function* nhlSaga() {
-    yield takeLatest(fetchNHLScheduleRequest.type, handleFetchNHLSchedule);
-    yield takeLatest(fetchNHLOddsRequest.type, handleFetchNHLOdds);
-    yield takeLatest(nhlPickValidateRequest.type, handleValidateNHLPick);
+export default function* mlbSaga() {
+    yield takeLatest(fetchMLBScheduleRequest.type, handleFetchMLBSchedule);
+    yield takeLatest(fetchMLBOddsRequest.type, handleFetchMLBOdds);
+    yield takeLatest(mlbPickValidateRequest.type, handleValidateMLBPick);
 };

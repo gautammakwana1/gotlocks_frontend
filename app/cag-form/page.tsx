@@ -191,7 +191,7 @@ const CagFormPage = () => {
                 <input
                   value={form.name}
                   onChange={handleInputChange("name")}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Sunday Locks"
                 />
                 {errors.name && (
@@ -208,7 +208,7 @@ const CagFormPage = () => {
                 <textarea
                   value={form.description}
                   onChange={handleInputChange("description")}
-                  className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Multi-sport slips, leaderboard or just for vibes."
                 />
                 {errors.description && (

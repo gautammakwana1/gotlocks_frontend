@@ -1,6 +1,6 @@
 import { all, fork } from "redux-saga/effects";
 import authSaga from "./sagas/authSaga";
-import groupsSaga from "./sagas/groupsSaga";
+import groupSaga from "./sagas/groupsSaga";
 import slipSaga from "./sagas/slipSaga";
 import pickSaga from "./sagas/pickSaga";
 import activitySaga from "./sagas/activitySaga";
@@ -12,11 +12,12 @@ import nhlSaga from "./sagas/nhlSaga";
 import leagueSaga from "./sagas/leagueSaga";
 import feedbackSaga from "./sagas/feedbackSaga";
 import notificationSaga from "./sagas/notificationSaga";
+import mlbSaga from "./sagas/mlbSaga";
 
 export default function* rootSaga() {
 	yield all([
 		fork(authSaga),
-		fork(groupsSaga),
+		fork(groupSaga),
 		fork(slipSaga),
 		fork(pickSaga),
 		fork(activitySaga),
@@ -28,6 +29,7 @@ export default function* rootSaga() {
 		fork(leagueSaga),
 		fork(feedbackSaga),
 		fork(notificationSaga),
+		fork(mlbSaga),
 	]);
 }
 

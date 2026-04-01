@@ -284,9 +284,9 @@ const ChangePasswordPage = () => {
                     </button>
                     <Link
                         href="/app-settings"
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
+                        className="rounded-full border border-white/10 px-4 py-2 text-sm lowercase text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
                     >
-                        Back
+                        back
                     </Link>
                 </div>
             </form>

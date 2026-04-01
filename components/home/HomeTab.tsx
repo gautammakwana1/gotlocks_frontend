@@ -54,6 +54,20 @@ type StatDefinition = {
     highlight?: boolean;
 };
 
+const TwoLineActionLabel = ({
+    top,
+    bottom,
+}: {
+    top: string;
+    bottom: string;
+}) => (
+    <span className="flex flex-col leading-[1.1] lg:block lg:whitespace-nowrap">
+        <span className="lg:inline">{top}</span>
+        <span className="lg:hidden">{bottom}</span>
+        <span className="hidden lg:inline"> {bottom}</span>
+    </span>
+);
+
 type TabIconProps = { className?: string };
 
 const ActionCard = ({ action }: { action: ActionDefinition }) => (
@@ -562,12 +576,7 @@ const HomeTab = () => {
     const quickActions: ActionDefinition[] = [
         {
             id: "create",
-            label: (
-                <>
-                    <span className="sm:hidden">Start a league</span>
-                    <span className="hidden sm:inline">Start a new league</span>
-                </>
-            ),
+            label: <TwoLineActionLabel top="Start a" bottom="league" />,
             href: "/cag-explained",
             description: "Start a new league",
             featured: true,
@@ -610,7 +619,7 @@ const HomeTab = () => {
         },
         {
             id: "join",
-            label: "Join a league",
+            label: <TwoLineActionLabel top="Join a" bottom="league" />,
             href: "/fantasy",
             description: "Join a league by invitation code",
             onClick: openJoinModal,
@@ -629,7 +638,7 @@ const HomeTab = () => {
         },
         {
             id: "builder",
-            label: "Build a post",
+            label: <TwoLineActionLabel top="Build a" bottom="post" />,
             description: "Spin up a new post or slip pick.",
             href: "/pick-builder",
             onClick: () => router.push("/pick-builder"),

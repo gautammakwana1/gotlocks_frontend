@@ -10,7 +10,7 @@ type Props = {
 };
 
 export const BackButton = ({
-    label = "Back",
+    label = "back",
     fallback = "/home",
     className,
     preferFallback = false,
@@ -29,7 +29,7 @@ export const BackButton = ({
         <button
             type="button"
             onClick={handleBack}
-            className={`self-start text-xs uppercase tracking-wide text-gray-400 transition hover:text-white ${className ?? ""}`}
+            className={`self-start text-xs lowercase tracking-wide text-gray-400 transition hover:text-white ${className ?? ""}`}
         >
             ← {label}
         </button>

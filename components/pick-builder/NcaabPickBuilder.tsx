@@ -608,6 +608,7 @@ const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionM
     external_pick_key: odd.id,
     matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
     match_date: game.date,
+    sport: "NCAAB"
 });
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
@@ -1429,6 +1430,7 @@ export const NcaabPickBuilder = ({
                         home_abbr: game?.homeAbbr,
                         matchup: matchup ?? undefined,
                         match_time: startTime,
+                        sport: leg.sport,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,

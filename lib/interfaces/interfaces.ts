@@ -845,6 +845,7 @@ export type RootState = {
     nba: NBAState;
     ncaab: NCAABState;
     nhl: NHLState;
+    mlb: MLBState;
     progress: ProgressState;
     league: LeagueState;
     feedback: FeedbackState;
@@ -1054,6 +1055,12 @@ export type FetchNHLSchedulePayload = {
     is_range: boolean;
 };
 
+export type FetchMLBSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
 export type FetchLeagueCountsPayload = {
     date?: string;
 };
@@ -1074,6 +1081,11 @@ export type FetchNCAABOddsPayload = {
 };
 
 export type FetchNHLOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchMLBOddsPayload = {
     match_id: string;
     is_live: boolean;
 };
@@ -1111,6 +1123,12 @@ export type ValidateMyNCAABPickPayload = {
 };
 
 export type ValidateMyNHLPickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
+};
+
+export type ValidateMyMLBPickPayload = {
     external_pick_key: string;
     match_id: string;
     is_live: boolean;
@@ -1191,6 +1209,15 @@ export type NHLSchedules = {
     updated?: string;
 }
 
+export type MLBSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+    odds: OddsObject[];
+    updated?: string;
+}
+
 export type OddSelectionObject = {
     name?: string;
     side?: string;
@@ -1255,6 +1282,13 @@ export type NCAABOdds = {
 }
 
 export type NHLOdds = {
+    updated: string;
+    league: LeagueObject;
+    sportsbook: SportsBookObject;
+    events: OddsData[];
+}
+
+export type MLBOdds = {
     updated: string;
     league: LeagueObject;
     sportsbook: SportsBookObject;
@@ -1494,6 +1528,21 @@ export type NHLState = {
     validatePickError: string | null;
 };
 
+export type MLBState = {
+    mlbSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: MLBSchedules[];
+    } | null,
+    mlbOdds: MLBOdds | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+    validateLoading: boolean;
+    validatePickMessage: string | null;
+    validatePickError: string | null;
+};
+
 export type LeagueState = {
     leagueCounts: Record<string, number> | null;
     loading: boolean;
@@ -1502,6 +1551,7 @@ export type LeagueState = {
 };
 
 export type PickSelectionMeta = {
+    sport?: League | string;
     scope?: string;
     market?: string;
     gameId?: string;

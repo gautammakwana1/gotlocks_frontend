@@ -39,6 +39,6 @@ function* handleFetchAllActivities(action: PayloadAction<FetchActivityPayload | 
     }
 }
 
-export default function* pickSaga() {
+export default function* activitySaga() {
     yield takeLatest(fetchAllActivitiesRequest.type, handleFetchAllActivities);
 };
