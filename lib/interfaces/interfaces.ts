@@ -103,6 +103,11 @@ export interface User {
     };
 }
 
+export interface UsernameHistory {
+    username: string;
+    updated_at: string;
+}
+
 export interface Profile {
     id: string;
     email: string;
@@ -117,6 +122,7 @@ export interface Profile {
     groups?: number;
     sharedGroup?: number;
     full_name?: string;
+    username_history?: UsernameHistory[];
 }
 
 export interface ActiveSlip {
@@ -684,6 +690,10 @@ export interface FetchProgressByUserIdPayload {
     user_id: string;
 }
 
+export interface FetchSearchedUsersPayload {
+    q: string;
+}
+
 export interface RedeemGlobalPointsPayload {
     points: number;
 }
@@ -850,6 +860,7 @@ export type RootState = {
     league: LeagueState;
     feedback: FeedbackState;
     notifications: NotificationsState;
+    social: SocialState;
 };
 
 export type UpdateGroupPayload = {
@@ -1015,6 +1026,7 @@ export type AuthSliceState = {
     user: AuthUserPayload | null;
     followers: FollowersList[] | null;
     followings: FollowingsList[] | null;
+    blockedUsers: BlockedUsers[] | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -1478,6 +1490,21 @@ export type ProgressState = {
     message: string | null,
     progress: Progress | null,
     picksCount: PicksCount | null,
+}
+
+export type SearchUsers = {
+    id: string;
+    username: string;
+    is_public: boolean;
+    profile_image?: string;
+    full_name?: string;
+}
+
+export type SocialState = {
+    loading: boolean,
+    error: string | null,
+    message: string | null,
+    users: SearchUsers | null,
 }
 
 export type NBAState = {
@@ -1964,6 +1991,7 @@ export type BlockedUsers = {
         username: string;
         full_name: string;
         profile_image: string;
+        is_public: boolean;
     }
 }
 

@@ -8,6 +8,7 @@ const COMPACT_ROUTES = new Set([
   "/landing-page",
   "/account-creation",
   "/cag-form",
+  "/auth/callback",
   "/auth/set-username",
 ]);
 
@@ -15,7 +16,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const compact = pathname ? COMPACT_ROUTES.has(pathname) : false;
   const tightTop =
-    pathname === "/profile" || (pathname ? pathname.startsWith("/users/") : false);
+    pathname === "/profile" || (pathname ? pathname.startsWith("/user/") : false);
   const topPadding = tightTop ? "pt-4 sm:pt-5" : "pt-8";
 
   return (

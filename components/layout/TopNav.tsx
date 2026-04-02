@@ -12,6 +12,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { CircleDollarSignIcon, LogOutIcon, MessageSquareMoreIcon, Settings } from "lucide-react";
+import Image from "next/image";
 
 type AuthUserPayload = {
   data?: {
@@ -124,18 +125,24 @@ export const TopNav = () => {
               </span>
             </button>
           </div>
-          <div className="flex justify-center items-center gap-3">
+          <div className="ml-auto flex justify-center items-center gap-3 sm:ml-0">
             <button
               type="button"
               onClick={() => router.push("/home")}
-              className="text-lg font-extrabold uppercase tracking-[0.18em] text-white transition hover:text-emerald-200"
+              className="text-[21px] font-extrabold uppercase tracking-[0.18em] text-white transition hover:text-emerald-200"
               style={accentStyle}
             >
               gotlocks?
             </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/15 bg-white/10 text-sm text-gray-300">
-              ◻︎
-            </div>
+            <Image
+              src="/logocolorblackborder.svg"
+              alt=""
+              aria-hidden="true"
+              width={36}
+              height={35}
+              className="h-9 w-9 object-contain"
+              priority
+            />
           </div>
         </div>
       </header>

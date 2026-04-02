@@ -1,5 +1,6 @@
 "use client";
 
+import { useIsMobile } from "@/lib/utils/helpers";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
@@ -37,6 +38,7 @@ const ProfileControls = ({
     onConfidenceChange,
     onSortChange,
 }: ProfileControlsProps) => {
+    const isMobile = useIsMobile();
     const resultOptions: Array<{ value: ResultFilter; label: string }> = [
         { value: "all", label: "All" },
         { value: "win", label: "Wins" },
@@ -226,7 +228,7 @@ const ProfileControls = ({
                                     }`}
                             >
                                 <span>{option.label}</span>
-                                {selected ? (
+                                {selected && !isMobile ? (
                                     <svg
                                         aria-hidden
                                         viewBox="0 0 16 16"

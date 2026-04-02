@@ -503,7 +503,7 @@ const ProfileHeader = ({
                                                     <div className="truncate text-xl font-semibold leading-tight text-white sm:text-2xl">
                                                         {displayName}
                                                     </div>
-                                                    {mode === "self" ? renderOptionsMenu() : null}
+                                                    {/* {mode === "self" ? renderOptionsMenu() : null} */}
                                                 </div>
                                             </div>
                                         </div>

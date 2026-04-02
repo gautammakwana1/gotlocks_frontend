@@ -41,6 +41,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import FootballAnimation from "../animations/FootballAnimation";
+import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 
 type OddsBlazeTeam = {
     id: string;
@@ -1055,6 +1056,7 @@ export const MlbPickBuilder = ({
     reviewSheetState,
 }: Props) => {
     const dispatch = useDispatch();
+    const isMobile = useIsMobile();
     const { setToast } = useToast();
     const [activeTab, setActiveTab] = useState<TabId>("GAME_LINES");
     const [activeGameId, setActiveGameId] = useState<string | null>(null);
@@ -3034,11 +3036,11 @@ export const MlbPickBuilder = ({
 
     return (
         <div
-            className={`space-y-4 ${activeGame ? "matchup-detail" : ""}`}
+            className={`space-y-4 ${activeGame ? "matchup-detail" : ""} ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-20" : "mb-30" : showReviewSheet ? isMobile ? "mb-20" : "mb-40" : ""}`}
         >
             {!activeGame ? (
                 <div className="grid gap-6">
-                    <div className="space-y-3">
+                    <div className={`space-y-3 ${confirmationVariant === "slip" && showReviewSheet ? isMobile ? "mb-10" : "mb-30" : showReviewSheet ? isMobile ? "mb-10" : "mb-30" : ""}`}>
                         <div className="flex items-center justify-between">
                             <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                             <span className="text-xs uppercase tracking-wide text-gray-400">
@@ -3120,8 +3122,8 @@ export const MlbPickBuilder = ({
                                                 }}
                                                 tabIndex={isDisabled ? -1 : 0}
                                                 aria-disabled={isDisabled}
-                                                className={`flex min-h-[48px] w-full items-center justify-center bg-transparent p-0 text-left ${isDisabled ? "cursor-not-allowed" : ""
-                                                    }`}
+                                                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
+                                                    } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                             >
                                                 {withLine
                                                     ? renderLineOddsBox(lineLabel, oddsLabel, isSelected, muted)
@@ -3147,91 +3149,133 @@ export const MlbPickBuilder = ({
                                                     handleSelectGame(game);
                                                 }
                                             }}
-                                            className={`grid w-full items-start gap-3 px-5 py-4 text-left transition grid-cols-[minmax(0,1fr)_200px] sm:grid-cols-[minmax(0,1fr)_320px] sm:gap-4 sm:px-6 ${isRowDisabled
-                                                ? "cursor-not-allowed opacity-60"
-                                                : "cursor-pointer hover:bg-white/[0.02]"
-                                                }`}
+                                            className="py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
                                         >
-                                            <div className="min-w-0 self-start pt-8">
-                                                <p className="text-xs font-semibold leading-snug text-white">
-                                                    <span className="block">{game.awayTeam} @</span>
-                                                    <span className="block">{game.homeTeam}</span>
-                                                </p>
-                                                <p className="mt-3 text-[11px] text-gray-400">
-                                                    {formatDateTime(game.date)}
-                                                </p>
+                                            <div
+                                                className="grid items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
+                                                style={{
+                                                    gridTemplateColumns:
+                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                                }}
+                                            >
+                                                <div className="px-3"></div>
+                                                <div className="text-center">Spread</div>
+                                                <div className="text-center">Money</div>
+                                                <div className="text-center">Total</div>
                                             </div>
 
-                                            <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
-                                                <div className="w-full space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    <div
-                                                        className="grid gap-1 text-[10px] uppercase tracking-wide text-gray-500"
-                                                        style={{
-                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <span className="text-center">Run</span>
-                                                        <span className="text-center">Money</span>
-                                                        <span className="text-center">Total</span>
-                                                    </div>
-                                                    <div
-                                                        className="grid gap-1"
-                                                        style={{
-                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        {renderPreviewCell(
-                                                            spreadAway,
-                                                            formatLineValue(spreadAway?.selection?.line),
-                                                            spreadAway ? formatOdds(spreadAway.price) : "-",
-                                                            !spreadAway,
-                                                            true
-                                                        )}
-                                                        {renderPreviewCell(
-                                                            moneyAway,
-                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
-                                                            moneyAway ? formatOdds(moneyAway.price) : "-",
-                                                            !moneyAway,
-                                                            false
-                                                        )}
-                                                        {renderPreviewCell(
-                                                            totalOver,
-                                                            totalLine !== null ? `O ${totalLine}` : "-",
-                                                            totalOver ? formatOdds(totalOver.price) : "-",
-                                                            !totalOver,
-                                                            true
-                                                        )}
-                                                    </div>
-                                                    <div
-                                                        className="grid gap-1 -mt-3 sm:mt-0"
-                                                        style={{
-                                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        {renderPreviewCell(
-                                                            spreadHome,
-                                                            formatLineValue(spreadHome?.selection?.line),
-                                                            spreadHome ? formatOdds(spreadHome.price) : "-",
-                                                            !spreadHome,
-                                                            true
-                                                        )}
-                                                        {renderPreviewCell(
-                                                            moneyHome,
-                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
-                                                            moneyHome ? formatOdds(moneyHome.price) : "-",
-                                                            !moneyHome,
-                                                            false
-                                                        )}
-                                                        {renderPreviewCell(
-                                                            totalUnder,
-                                                            totalLine !== null ? `U ${totalLine}` : "-",
-                                                            totalUnder ? formatOdds(totalUnder.price) : "-",
-                                                            !totalUnder,
-                                                            true
-                                                        )}
+                                            <div
+                                                className="grid items-stretch gap-1"
+                                                style={{
+                                                    gridTemplateColumns:
+                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                                }}
+                                            >
+                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-xs font-semibold leading-snug text-white">
+                                                            {isMobile ? getMobileTeamName(game.awayAbbr, game.awayTeam) : game.awayTeam}
+                                                        </p>
                                                     </div>
                                                 </div>
-                                                <span className="text-xs text-gray-500">→</span>
+                                                {renderPreviewCell(
+                                                    spreadAway,
+                                                    formatLineValue(spreadAway?.selection?.line),
+                                                    spreadAway ? formatOdds(spreadAway.price) : "-",
+                                                    !spreadAway,
+                                                    true
+                                                )}
+                                                {renderPreviewCell(
+                                                    moneyAway,
+                                                    moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                    moneyAway ? formatOdds(moneyAway.price) : "-",
+                                                    !moneyAway,
+                                                    false
+                                                )}
+                                                {renderPreviewCell(
+                                                    totalOver,
+                                                    totalLine !== null ? `O ${totalLine}` : "-",
+                                                    totalOver ? formatOdds(totalOver.price) : "-",
+                                                    !totalOver,
+                                                    true
+                                                )}
+                                            </div>
+
+                                            <div
+                                                className="grid items-center -mt-2 sm:mt-0"
+                                                style={{
+                                                    gridTemplateColumns:
+                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                                }}
+                                            >
+                                                <div className="px-3">
+                                                    <div className="relative flex items-center h-px w-full overflow-hidden">
+                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-emerald-700/90 to-transparent shimmer-divider"></div>
+                                                    </div>
+                                                </div>
+                                                <div></div>
+                                                <div></div>
+                                                <div></div>
+                                            </div>
+
+                                            <div
+                                                className="grid items-stretch gap-1 -mt-2 sm:mt-0"
+                                                style={{
+                                                    gridTemplateColumns:
+                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                                }}
+                                            >
+                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="truncate text-xs font-semibold leading-snug text-white">
+                                                            {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {renderPreviewCell(
+                                                    spreadHome,
+                                                    formatLineValue(spreadHome?.selection?.line),
+                                                    spreadHome ? formatOdds(spreadHome.price) : "-",
+                                                    !spreadHome,
+                                                    true
+                                                )}
+                                                {renderPreviewCell(
+                                                    moneyHome,
+                                                    moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                    moneyHome ? formatOdds(moneyHome.price) : "-",
+                                                    !moneyHome,
+                                                    false
+                                                )}
+                                                {renderPreviewCell(
+                                                    totalUnder,
+                                                    totalLine !== null ? `U ${totalLine}` : "-",
+                                                    totalUnder ? formatOdds(totalUnder.price) : "-",
+                                                    !totalUnder,
+                                                    true
+                                                )}
+                                            </div>
+                                            <div
+                                                className="flex items-center justify-between gap-2 text-xs uppercase tracking-wide text-gray-400"
+                                                style={{
+                                                    gridTemplateColumns:
+                                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                                }}
+                                            >
+                                                <div className="flex items-center">
+                                                    <span className={`px-3 text-gray-400 ${isMobile ? `text-[10px]` : `text-[11px]`}`}>{formatDateTime(game.date)}</span>
+                                                    {/* {game.live && (
+                                                                                                <span className="flex items-center gap-1 text-red-500 font-medium">
+                                                                                                    <span className="relative flex h-2 w-2">
+                                                                                                        <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping"></span>
+                                                                                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600"></span>
+                                                                                                    </span>
+                                                                                                    Live
+                                                                                                </span>
+                                                                                            )} */}
+                                                </div>
+                                                <div className="items-center">
+                                                    <span className="text-xs text-gray-500">→</span>
+                                                </div>
                                             </div>
                                         </div>
                                     );

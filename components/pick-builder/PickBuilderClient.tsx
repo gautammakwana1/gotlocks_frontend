@@ -287,9 +287,9 @@ const PickBuilderClientPage = () => {
 
     const renderChooseGrid = () => {
         const pickCardClasses =
-            "flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6";
+            "flex h-[10rem] flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6";
         const disabledPickCardClasses =
-            "flex h-full cursor-not-allowed flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left opacity-60 shadow-lg shadow-black/30 sm:p-6";
+            "flex h-[10rem] cursor-not-allowed flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left opacity-60 shadow-lg shadow-black/30 sm:p-6";
 
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

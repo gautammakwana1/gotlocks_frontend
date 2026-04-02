@@ -20,10 +20,9 @@ import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
-import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
-import { getMobileTeamName } from "@/lib/utils/helpers";
+import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 
 type BookOdds = {
     book?: string;

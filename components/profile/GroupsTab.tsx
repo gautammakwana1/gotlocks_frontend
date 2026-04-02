@@ -127,7 +127,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
     }
 
     return (
-        <div className={`flex flex-col gap-6 ${variant === "embedded" ? "" : "text-white"}`}>
+        <div className={`flex flex-col gap-4 ${variant === "embedded" ? "" : "text-white"}`}>
             <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
                 <button
                     type="button"

@@ -16,6 +16,7 @@ import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
+import { useIsMobile } from "@/lib/utils/helpers";
 
 type Props = {
     group: Group | null;
@@ -50,21 +51,21 @@ type Props = {
 //     };
 // };
 
-export const useIsMobile = () => {
-    const [isMobile, setIsMobile] = useState(false);
+// export const useIsMobile = () => {
+//     const [isMobile, setIsMobile] = useState(false);
 
-    useEffect(() => {
-        const mql = window.matchMedia("(max-width: 639px)");
-        const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+//     useEffect(() => {
+//         const mql = window.matchMedia("(max-width: 639px)");
+//         const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
 
-        setIsMobile(mql.matches);
-        mql.addEventListener("change", onChange);
+//         setIsMobile(mql.matches);
+//         mql.addEventListener("change", onChange);
 
-        return () => mql.removeEventListener("change", onChange);
-    }, []);
+//         return () => mql.removeEventListener("change", onChange);
+//     }, []);
 
-    return isMobile;
-};
+//     return isMobile;
+// };
 
 const resultMeta = (pick_result?: PickResult) => {
     const result = pick_result ?? "pending";
@@ -504,7 +505,6 @@ const SlipCellCard = ({
         </div>
     )
 }
-
 
 export const LeaderboardGrid = ({
     group,

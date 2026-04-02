@@ -111,3 +111,10 @@ export const calculateAge = (
 
     return age;
 };
+
+export const generateProfileImageUrl = (url: string | undefined) => {
+    if (!url) return undefined;
+
+    const memberProfilePicture = url ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${url}` : undefined;
+    return memberProfilePicture;
+};

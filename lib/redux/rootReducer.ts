@@ -13,6 +13,7 @@ import leaguesReducer from "./slices/leagueSlice";
 import feedbackReducer from "./slices/feedbackSlice";
 import notificationReducer from "./slices/notificationSlice";
 import mlbReducer from "./slices/mlbSlice";
+import socialReducer from "./slices/socialSlice";
 
 export const rootReducer = combineReducers({
 	user: authReducer,
@@ -29,6 +30,7 @@ export const rootReducer = combineReducers({
 	feedback: feedbackReducer,
 	notifications: notificationReducer,
 	mlb: mlbReducer,
+	social: socialReducer,
 });
 
 export type RootReducer = ReturnType<typeof rootReducer>;

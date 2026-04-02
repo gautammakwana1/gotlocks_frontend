@@ -8,8 +8,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchLiveNFLScheduleRequest, fetchPassingPropsPlayersRequest, fetchReceivingPropsPlayersRequest, fetchRushingPropsPlayersRequest, fetchTouchDownPropsPlayersRequest } from "@/lib/redux/slices/nflSlice";
 import { eligibleWindowEnd, filterEligibleGames } from "@/lib/utils/games";
 import FootballAnimation from "../animations/FootballAnimation";
-import { useIsMobile } from "../leaderboard/LeaderboardGrid";
 import { useToast } from "@/lib/state/ToastContext";
+import { useIsMobile } from "@/lib/utils/helpers";
 
 type GroupLeaderboardEntry = {
     userId: string;

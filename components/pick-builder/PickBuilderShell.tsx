@@ -246,11 +246,23 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
 
     const leagues = props.leagues ?? ALL_LEAGUES;
 
-    const sortedLeagues = [...leagues].sort((a, b) => {
-        const countA = leagueCounts?.[a] ?? 0;
-        const countB = leagueCounts?.[b] ?? 0;
-        return countB - countA;
-    });
+    const initialLeagueBasis = useMemo(() => {
+        return normalizeLeague(
+            props.initialLeague ?? (context.mode === "slip"
+                ? (context.initialPick?.sport as League | undefined)
+                : context.initialPick?.sport) ?? "NFL"
+        );
+    }, [props.initialLeague, context]);
+
+    const sortedLeagues = useMemo(() => {
+        return [...leagues]
+            .filter((l) => (leagueCounts?.[l] ?? 0) > 0 || l === initialLeagueBasis)
+            .sort((a, b) => {
+                const countA = leagueCounts?.[a] ?? 0;
+                const countB = leagueCounts?.[b] ?? 0;
+                return countB - countA;
+            });
+    }, [leagues, leagueCounts, initialLeagueBasis]);
 
     const allowedLeagues = useMemo(() => {
         if (context.mode !== "slip") return sortedLeagues;
@@ -274,7 +286,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
 
     useEffect(() => {
         const hasCounts = leagueCounts && Object.keys(leagueCounts).length > 0;
-        if (!hasManualLeagueSelection && !hasAutoSelectedLeague && hasCounts && !context.initialPick) {
+        if (!hasManualLeagueSelection && hasCounts && !context.initialPick) {
             if (allowedLeagues.length > 0) {
                 const firstLeague = allowedLeagues[0];
                 if (firstLeague !== activeLeague) {
@@ -283,7 +295,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                 setHasAutoSelectedLeague(true);
             }
         }
-    }, [allowedLeagues, leagueCounts, hasManualLeagueSelection, hasAutoSelectedLeague, context.initialPick, activeLeague]);
+    }, [allowedLeagues, leagueCounts, hasManualLeagueSelection, context.initialPick, activeLeague]);
 
     const handleDateChange = useCallback(
         (key: string, source: "user" | "auto" = "user") => {
@@ -317,6 +329,19 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         },
         []
     );
+
+    useEffect(() => {
+        if (!hasManualDateSelection && leagueCounts && Object.keys(leagueCounts).length > 0) {
+            const allZeros = Object.values(leagueCounts).every((count) => count === 0);
+            if (allZeros && dateOptions.length > 0) {
+                const currentIndex = dateOptions.findIndex((opt) => opt.key === activeDateKey);
+                if (currentIndex !== -1 && currentIndex < dateOptions.length - 1) {
+                    const nextDay = dateOptions[currentIndex + 1];
+                    handleDateChange(nextDay.key, "auto");
+                }
+            }
+        }
+    }, [leagueCounts, hasManualDateSelection, dateOptions, activeDateKey, handleDateChange]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;

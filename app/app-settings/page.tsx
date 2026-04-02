@@ -23,6 +23,10 @@ const AppSettingsPage = () => {
             href: "/app-settings/change-password",
         },
         {
+            title: "Blocked accounts",
+            href: "/app-settings/blocked-accounts",
+        },
+        {
             title: "Delete your account",
             href: "/app-settings/deactivate-account",
         },
@@ -36,8 +40,8 @@ const AppSettingsPage = () => {
                         Your Account
                     </h1>
                     <p className="max-w-2xl text-sm leading-6 text-[var(--text-secondary)] sm:text-base">
-                        View your account details, update your password, or review account deletion
-                        options.
+                        View your account details, update your password, manage blocked accounts,
+                        or review account deletion options.
                     </p>
                 </header>
 

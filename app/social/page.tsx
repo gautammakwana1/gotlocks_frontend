@@ -13,6 +13,8 @@ import { formatDateTime } from "@/lib/utils/date";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
+import UserSearchDialog from "@/components/social/UserSearchDialog";
+import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -87,6 +89,20 @@ const feedScrollStyle = {
     "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
 } as CSSProperties;
 
+const SearchIcon = ({ className }: { className?: string }) => (
+    <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className={className}
+    >
+        <circle cx="11" cy="11" r="6.5" />
+        <path strokeLinecap="round" d="m16 16 4.5 4.5" />
+    </svg>
+);
+
 const SocialPage = () => {
     const router = useRouter();
     const dispatch = useDispatch();
@@ -94,6 +110,7 @@ const SocialPage = () => {
     const [topHitsScope, setTopHitsScope] = useState<"global" | "following">("global");
     const [forYouScope, setForYouScope] = useState<"posts" | "reacted">("posts");
     const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
+    const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const observer = useRef<IntersectionObserver | null>(null);
@@ -128,6 +145,7 @@ const SocialPage = () => {
         setPage(1);
         setHasMore(true);
         fetchDataByTab(1);
+        dispatch(fetchFollowingListRequest());
     }, [activeTab, forYouScope, topHitsScope, dispatch]);
 
     useEffect(() => {
@@ -588,11 +606,22 @@ const SocialPage = () => {
         <div className="space-y-6">
             <section className="space-y-4">
                 <div className="-mx-5 sm:mx-0">
-                    <div className="flex flex-nowrap items-center justify-between gap-2 overflow-x-auto px-5 sm:px-0">
-                        <div className="inline-flex w-fit items-center gap-0.5 sm:gap-1">
+                    <div className="flex flex-nowrap items-center justify-between sm:gap-2 overflow-x-auto px-5 sm:px-0">
+                        <div className="inline-flex w-fit items-center sm:gap-1">
                             {renderTabButton("for-you", "for you")}
                             {renderTabButton("following", "following")}
                             {renderTabButton("top-hits", "winners")}
+                            <button
+                                type="button"
+                                onClick={() => setIsUserSearchOpen(true)}
+                                aria-label="Search members"
+                                className={`flex h-8 w-8 shrink-0 items-center justify-center transition sm:h-9 sm:w-9 ${isUserSearchOpen
+                                    ? "text-white"
+                                    : "text-[var(--text-secondary)] hover:text-white"
+                                    }`}
+                            >
+                                <SearchIcon className="h-4 w-4" />
+                            </button>
                         </div>
                         {activeTab === "top-hits" && (
                             <div className="shrink-0">
@@ -689,6 +718,8 @@ const SocialPage = () => {
                     </section>
                 )}
             </section>
+
+            <UserSearchDialog open={isUserSearchOpen} onClose={() => setIsUserSearchOpen(false)} />
         </div>
     );
 };

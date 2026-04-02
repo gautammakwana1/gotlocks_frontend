@@ -38,6 +38,22 @@ interface FormErrors {
     email?: string;
 }
 
+const formatDobWithAge = (dob?: string) => {
+    if (!dob) return "";
+
+    const date = new Date(dob);
+
+    const formattedDate = date.toLocaleDateString("en-US", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+    });
+
+    const age = calculateAge(dob);
+
+    return `${formattedDate} • ${age} years`;
+};
+
 const inputClassName =
     "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20 disabled:text-white/50";
 
@@ -97,6 +113,15 @@ const AccountInformationPage = () => {
                 duration: 3000
             })
             dispatch(clearUpdateProfileMessage());
+            if (user?.profile) {
+                setForm({
+                    fullName: user?.profile?.full_name ?? "",
+                    username: user?.profile?.username,
+                    email: user?.profile?.email,
+                    age: calculateAge(user?.profile?.dob) ?? 0
+                });
+                setIsPublicDraft(user?.profile?.is_public);
+            };
         }
     }, [dispatch, currentUser?.userId, loading, profileUpdateMessage, error, setToast]);
 
@@ -272,10 +297,11 @@ const AccountInformationPage = () => {
                 </label>
                 <label className="block space-y-2">
                     <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Age
+                        DOB / Age
                     </span>
                     <input
-                        value={calculateAge(user?.profile?.dob)}
+                        readOnly
+                        value={formatDobWithAge(user?.profile?.dob)}
                         onChange={handleInputChange("age")}
                         className={inputClassName}
                         disabled
