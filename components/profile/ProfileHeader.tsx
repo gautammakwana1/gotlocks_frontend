@@ -15,8 +15,9 @@ import Image from "next/image";
 import { Profile, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
-import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, checkForReservedWords, generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "../layout/MainTabBar";
+import { EditIcon, StartIcon } from "../ui/SvgIcons";
 
 interface FormErrors {
     username?: string;
@@ -193,7 +194,7 @@ const ProfileHeader = ({
     const optionsMenuRef = useRef<HTMLDetailsElement | null>(null);
     const displayName = user.username ?? user.full_name ?? "Member";
     const initials = useMemo(() => buildInitials(displayName), [displayName]);
-    const avatarUrl = user.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.profile_image}` : "";
+    const avatarUrl = generateProfileImageUrl(user.profile_image);
     const showStats = mode === "self" || profileVisible;
     const showRightSummary = showStats || showLockedPrivateSummary;
     const showNumericProgress = mode === "self";
@@ -222,25 +223,7 @@ const ProfileHeader = ({
                     aria-label="Profile options"
                     className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
                 >
-                    <svg
-                        aria-hidden
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                        className="h-4 w-4"
-                    >
-                        <path
-                            d="M4 20h4l10-10-4-4L4 16v4Z"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                        <path
-                            d="M13.5 6.5l4 4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    </svg>
+                    <EditIcon />
                 </summary>
                 <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
                     <button
@@ -611,20 +594,7 @@ const ProfileHeader = ({
                                                     key={`${label}-${index}`}
                                                     className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]"
                                                 >
-                                                    <svg
-                                                        aria-hidden
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="1.6"
-                                                        className="h-[18px] w-[18px]"
-                                                    >
-                                                        <path
-                                                            d="M12 4.5 14.2 9l4.8.7-3.5 3.4.9 4.8L12 15.9 7.6 17.9l.9-4.8L5 9.7 9.8 9 12 4.5Z"
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                        />
-                                                    </svg>
+                                                    <StartIcon />
                                                     <span className="sr-only">{label}</span>
                                                 </div>
                                             ))}

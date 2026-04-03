@@ -6,6 +6,7 @@ import { disablePostAlertRequest, enablePostAlertRequest, fetchFollowersListById
 import { useToast } from "@/lib/state/ToastContext";
 import { useCallback, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { BellIcon } from "../ui/SvgIcons";
 
 type AuthSliceState = {
     user: {
@@ -122,26 +123,7 @@ const PublicProfilePostAlertsMenu = ({
                 className={`flex h-7 w-7 cursor-pointer items-center justify-center transition sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden ${alertsEnabled ? "text-sky-200 hover:text-sky-100" : "text-white/80 hover:text-sky-100"
                     }`}
             >
-                <svg
-                    aria-hidden
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    className="h-4 w-4"
-                >
-                    <path
-                        d="M14.5 18a2.5 2.5 0 0 1-5 0"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                    <path
-                        d="M6.5 16.5h11c-1.1-1.1-2-2.5-2-5.5a3.5 3.5 0 1 0-7 0c0 3-.9 4.4-2 5.5Z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                    {alertsEnabled ? <circle cx="18" cy="6" r="2.2" fill="currentColor" stroke="none" /> : null}
-                </svg>
+                <BellIcon alertsEnabled={alertsEnabled} />
             </summary>
             <div className="absolute right-0 top-full mt-2 w-max rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
                 <button

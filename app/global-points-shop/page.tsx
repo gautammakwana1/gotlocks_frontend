@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearRedeemGlobalPointsMessage, fetchProgressByUserIdRequest, redeemGlobalPointsRequest } from "@/lib/redux/slices/progressSlice";
 import { RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
+import { ChevronUpDownIcon } from "@/components/ui/SvgIcons";
 
 const pointFormatter = new Intl.NumberFormat("en-US");
 const rewardSlots = [0, 1, 2];
@@ -33,18 +34,6 @@ const redemptionBuckets = [
         description: "Top-tier premium rewards.",
     },
 ];
-
-const ChevronIcon = ({ open }: { open: boolean }) => (
-    <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        className={`h-5 w-5 transition ${open ? "rotate-180" : ""}`}
-    >
-        <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-    </svg>
-);
 
 const GlobalPointsShopPage = () => {
     const dispatch = useDispatch();
@@ -198,7 +187,7 @@ const GlobalPointsShopPage = () => {
                                                 aria-expanded={isOpen}
                                                 aria-label={`${isOpen ? "Collapse" : "Expand"} ${bucket.title}`}
                                             >
-                                                <ChevronIcon open={isOpen} />
+                                                <ChevronUpDownIcon className={`h-5 w-5 transition ${isOpen ? "rotate-180" : ""}`} />
                                             </button>
                                         </div>
                                         <p className="text-[10px] uppercase tracking-[0.12em] leading-tight text-[var(--text-muted)]">

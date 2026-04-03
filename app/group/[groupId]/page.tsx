@@ -17,10 +17,11 @@ import FeedTab from "@/components/group/FeedTab";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import BackButton from "@/components/ui/BackButton";
 import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGroupModal";
-import { X } from "lucide-react";
+import { PlusIcon, X } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { ChatIcon, ChevronIcon, ChevronUpDownIcon, EditIcon, EditPencilIcon, FeedIcon, LeaderboardIcon, MembersIcon, SettingIcon, SlipIcon } from "@/components/ui/SvgIcons";
 
 interface FormErrors {
   name?: string;
@@ -127,81 +128,27 @@ const GroupPage = () => {
     switch (tabId) {
       case "leaderboard":
         return (
-          <svg viewBox="0 0 24 24" {...commonProps}>
-            <path d="M4 9h4v11H4zM10 4h4v16h-4zM16 12h4v8h-4z" strokeLinecap="round" />
-          </svg>
+          <LeaderboardIcon {...commonProps} />
         );
       case "slips":
         return (
-          <svg viewBox="0 0 24 24" {...commonProps}>
-            <path d="M7 5h10a2 2 0 0 1 2 2v12l-3-2-3 2-3-2-3 2V7a2 2 0 0 1 2-2Z" />
-            <path d="M9 9h6m-6 4h4" strokeLinecap="round" />
-          </svg>
+          <SlipIcon {...commonProps} />
         );
       case "members":
         return (
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4 overflow-visible"
-            fill="currentColor"
-            aria-hidden
-          >
-            <circle
-              cx="3.4"
-              cy="5.4"
-              r="3.1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <circle
-              cx="20.6"
-              cy="5.4"
-              r="3.1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <circle
-              cx="12"
-              cy="10"
-              r="3.1"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <ellipse cx="3.4" cy="15" rx="5.4" ry="4" />
-            <ellipse cx="20.6" cy="15" rx="5.4" ry="4" />
-            <ellipse cx="12" cy="19.6" rx="5.4" ry="4" />
-          </svg>
+          <MembersIcon />
         );
       case "feed":
         return (
-          <svg viewBox="0 0 24 24" {...commonProps}>
-            <path d="M5 6h14M5 12h10M5 18h7" strokeLinecap="round" />
-          </svg>
+          <FeedIcon {...commonProps} />
         );
       case "chat":
         return (
-          <svg viewBox="0 0 24 24" {...commonProps}>
-            <path
-              d="M5.5 17.5 4 21l3.75-1.5h8.5A3.75 3.75 0 0 0 20 15.75V8.25A3.75 3.75 0 0 0 16.25 4.5h-8.5A3.75 3.75 0 0 0 4 8.25v7.5a1.75 1.75 0 0 0 1.5 1.75Z"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path d="M9 9.75h6m-6 3h3.75" strokeLinecap="round" />
-          </svg>
+          <ChatIcon {...commonProps} />
         );
       case "settings":
         return (
-          <svg viewBox="0 0 24 24" {...commonProps}>
-            <circle cx="12" cy="12" r="2.75" />
-            <path
-              d="M4 12.75V11.5l2.1-.44a6 6 0 0 1 .65-1.56L5.8 7.7l.88-.88 1.8.95a6 6 0 0 1 1.56-.65L10.5 4h1.25l.44 2.1a6 6 0 0 1 1.56.65l1.36-1.96.88.88-.95 1.8a6 6 0 0 1 .65 1.56L20 10.5v1.25l-2.1.44a6 6 0 0 1-.65 1.56l1.96 1.36-.88.88-1.8-.95a6 6 0 0 1-1.56.65L13.5 20h-1.25l-.44-2.1a6 6 0 0 1-1.56-.65l-1.36 1.96-.88-.88.95-1.8a6 6 0 0 1-.65-1.56Z"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <SettingIcon {...commonProps} />
         );
       default:
         return null;
@@ -1062,18 +1009,7 @@ const GroupPage = () => {
               <p className="mt-1 text-[11px] text-gray-500">Scope: {board.leaderboards.sport_scope}</p>
             )}
           </div>
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4 flex-none text-gray-500"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m9 6 6 6-6 6" />
-          </svg>
+          <ChevronIcon className="h-4 w-4 flex-none text-gray-500" />
         </button>
       ))}
     </div>
@@ -1109,25 +1045,7 @@ const GroupPage = () => {
             className="inline-flex items-center justify-center rounded-full border border-white/15 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50 sm:ml-auto"
             aria-label="Edit group"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M16.862 4.487a2.25 2.25 0 1 1 3.182 3.182L8.818 18.896a4.5 4.5 0 0 1-1.591.999l-2.911.97.97-2.91a4.5 4.5 0 0 1 .999-1.592z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m19.5 7.125-2.625-2.625"
-              />
-            </svg>
+            <EditPencilIcon />
           </button>
         </div>
         <div className="space-y-2">
@@ -1201,21 +1119,10 @@ const GroupPage = () => {
                     <span className="normal-case">
                       {selectedLeaderboard?.name ?? "Leaderboard"}
                     </span>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className={`h-3 w-3 transition ${showLeaderboardMenu
-                        ? "rotate-180 text-emerald-300"
-                        : "text-gray-500"
-                        }`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
+                    <ChevronUpDownIcon className={`h-3 w-3 transition ${showLeaderboardMenu
+                      ? "rotate-180 text-emerald-300"
+                      : "text-gray-500"
+                      }`} />
                   </button>
                   {showLeaderboardMenu && (
                     <div
@@ -1340,17 +1247,7 @@ const GroupPage = () => {
                 className={createSlipIconClass}
                 aria-hidden
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-5 w-5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
+                <PlusIcon />
               </span>
             </button>
             <div className="space-y-5">
@@ -1520,19 +1417,7 @@ const GroupPage = () => {
                               className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
                               aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
                             >
-                              <svg
-                                viewBox="0 0 24 24"
-                                className="h-3.5 w-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                              >
-                                <path d="M12 20h9" />
-                                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
-                              </svg>
+                              <EditIcon />
                             </button>
                           </div>
                         </div>
@@ -1680,17 +1565,7 @@ const GroupPage = () => {
                         Create a secondary leaderboard
                       </span>
                       <span className={primaryActionIconClass} aria-hidden>
-                        <svg
-                          viewBox="0 0 24 24"
-                          className="h-5 w-5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M12 5v14M5 12h14" />
-                        </svg>
+                        <PlusIcon />
                       </span>
                     </button>
                   </div>
@@ -1724,19 +1599,7 @@ const GroupPage = () => {
                                     className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
                                     aria-label={`Edit ${board.name} leaderboard name`}
                                   >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      className="h-3.5 w-3.5"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="1.6"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      aria-hidden="true"
-                                    >
-                                      <path d="M12 20h9" />
-                                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
-                                    </svg>
+                                    <EditIcon />
                                   </button>
                                 </div>
                                 {board.sport_scope && (

@@ -3,6 +3,7 @@
 import { ConfidenceLevel } from "@/lib/interfaces/interfaces";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { CheckIcon, ChevronUpDownIcon } from "./SvgIcons";
 
 type ConfidenceOption = {
     value: ConfidenceLevel;
@@ -135,15 +136,7 @@ const ConfidenceDropdown = ({ value, onChange, disabled = false }: Props) => {
                     </span>
                 </span>
                 <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
-                    <svg
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        className={`h-3 w-3 transition ${open ? "rotate-180" : ""}`}
-                    >
-                        <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                    <ChevronUpDownIcon className={`h-3 w-3 transition ${open ? "rotate-180" : ""}`} />
                 </span>
             </button>
 
@@ -182,19 +175,7 @@ const ConfidenceDropdown = ({ value, onChange, disabled = false }: Props) => {
                                     </span>
                                     {active ? (
                                         <span className="text-emerald-200" aria-hidden>
-                                            <svg
-                                                viewBox="0 0 16 16"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                strokeWidth="2"
-                                                className="h-3.5 w-3.5"
-                                            >
-                                                <path
-                                                    d="M3 8l3 3 7-7"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                />
-                                            </svg>
+                                            <CheckIcon className="h-3.5 w-3.5" />
                                         </span>
                                     ) : (
                                         <span className="h-3.5 w-3.5" aria-hidden />

@@ -6,6 +6,7 @@ import { blockUserRequest, fetchBlockedUsersRequest, fetchFollowersListByIdReque
 import { useToast } from "@/lib/state/ToastContext";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { ThreeDotIcon } from "../ui/SvgIcons";
 
 type AuthSliceState = {
     user: {
@@ -157,16 +158,7 @@ const PublicProfileActionsMenu = ({ targetUserId, mode }: PublicProfileActionsMe
                     aria-label="Profile actions"
                     className="flex h-7 w-7 cursor-pointer items-center justify-center text-white/80 transition hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
                 >
-                    <svg
-                        aria-hidden
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="h-4 w-4"
-                    >
-                        <circle cx="5" cy="12" r="1.8" />
-                        <circle cx="12" cy="12" r="1.8" />
-                        <circle cx="19" cy="12" r="1.8" />
-                    </svg>
+                    <ThreeDotIcon />
                 </summary>
                 <div className="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
                     <button

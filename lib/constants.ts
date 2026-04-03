@@ -1,6 +1,30 @@
 export const APP_NAME = "gotLocks?"
 export const TAGLINE = "trust your gut. 🔒 it in. climb the rankings."
 
+export const ALLOWED_API_KEYS = [
+  "WGWESzeVXPiBBzOFCuKBmdyRU8192GMH",
+  "Z7P4AKtNevxMYsBVFmMfIktaxxPmW0Hw",
+  "UAnSyqvVR44gX1ZxhdR5WdWcNjeQNagD",
+  "ocTd5QuE1C7dXjzQoe1blHzZiGCPincK",
+  "HM1EsqV6rDeBWgnnBa905cghu6K5LUhf",
+  "CjfmyG9XPSWKvFbeP3xWVPGVMOnIg9Hu",
+  "T3B5kN4VO3xtt6Qbj3cMZyYFaBrFDFyP",
+  "8YJzVrH1mIbiGeKqePoQNpozWL8FdbeB",
+  "Aosa3FC9K85OGRLCAkxRlBX2rekXTcGd",
+  "JSc8UINE7Luvx3Oi0axNOItMfWuUHxzS",
+  "oexDGh9dftIldoj88IGoqhja8tWzoVBg",
+  "qTEH2z0bBAKx9b02ZwrcqCCJg9xCbo4G",
+  "yUCnIPPP2BIeU4ZVvfW6Gw52L6qGq6tn",
+  "JX7f9RQahHEgXXvkxwmNEfZqZaaG3NYO",
+  "I1uKutTbjt6XBdoKfvWNlZBenLjhAJUp",
+  "pGLQjEaJcAmMIWvX3UpMTscpQo2EX2Pu",
+  "BXMnWSsSgm3Mp6QvnnYWyd9cHTkoRlsh",
+  "yG4E9weepoCSBpXATKdOD5pixGwsV2Se",
+  "KJgYb0hVCLaWITIei3XdTJ3Fq8qZyKzx",
+  "1lIWXqSEIDjY1pqACj7NTziYmeeuuCJt",
+  "eT6UDi1o7HVCGwB9XOeCdUgoG7DuPl5R",
+];
+
 export const SLIP_STATUS = {
   OPEN: "open",
   LOCKED: "locked",

@@ -17,6 +17,7 @@ import { clearAllNotificationRequest, fetchNotificationListRequest, markNotifica
 import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
+import { MembersIcon, RightArrowIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
 
 type GroupSliceState = {
     group: {
@@ -109,23 +110,6 @@ const StatCard = ({ stat }: { stat: StatDefinition }) => (
             {stat.value}
         </p>
     </div>
-);
-
-export const TrashIcon = ({ className }: TabIconProps) => (
-    <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={`h-3 w-3 shrink-0 ${className}`}
-    >
-        <polyline points="3 6 5 6 21 6" />
-        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-        <path d="M10 11v6M14 11v6" />
-        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-    </svg>
 );
 
 const HomeTab = () => {
@@ -582,39 +566,7 @@ const HomeTab = () => {
             featured: true,
             onClick: () => router.push("/cag-explained"),
             icon: (
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="h-3.5 w-3.5 overflow-visible sm:h-4 sm:w-4"
-                >
-                    <circle
-                        cx="3.4"
-                        cy="5.4"
-                        r="3.1"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                    />
-                    <circle
-                        cx="20.6"
-                        cy="5.4"
-                        r="3.1"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                    />
-                    <circle
-                        cx="12"
-                        cy="10"
-                        r="3.1"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                    />
-                    <ellipse cx="3.4" cy="15" rx="5.4" ry="4" />
-                    <ellipse cx="20.6" cy="15" rx="5.4" ry="4" />
-                    <ellipse cx="12" cy="19.6" rx="5.4" ry="4" />
-                </svg>
+                <MembersIcon className="h-3.5 w-3.5 overflow-visible sm:h-4 sm:w-4" />
             ),
         },
         {
@@ -624,16 +576,7 @@ const HomeTab = () => {
             description: "Join a league by invitation code",
             onClick: openJoinModal,
             icon: (
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                >
-                    <path d="M5 12h14" strokeLinecap="round" />
-                    <path d="m13 5 6 7-6 7" strokeLinecap="round" />
-                </svg>
+                <RightArrowIcon />
             ),
         },
         {
@@ -643,19 +586,7 @@ const HomeTab = () => {
             href: "/pick-builder",
             onClick: () => router.push("/pick-builder"),
             icon: (
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                >
-                    <path
-                        d="M12 3.5 9.7 8.4l-5.2 1.9 5.2 1.7 2.3 5 2.2-5 5.2-1.9-5.2-1.7-2.3-5Z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                    />
-                </svg>
+                <SparkIcon />
             ),
         },
     ];
@@ -875,7 +806,7 @@ const HomeTab = () => {
                                         onClick={handleClearAll}
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-gray-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white sm:text-[10px] sm:tracking-[0.18em]"
                                     >
-                                        <TrashIcon />
+                                        <TrashIcon className={`h-3 w-3 shrink-0`} />
                                         <span>clear all</span>
                                     </button>
                                 )}

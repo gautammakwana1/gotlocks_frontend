@@ -15,6 +15,8 @@ import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescri
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import UserSearchDialog from "@/components/social/UserSearchDialog";
 import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { SearchIcon } from "@/components/ui/SvgIcons";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -88,20 +90,6 @@ const FEED_CARD_EST_HEIGHT = 220;
 const feedScrollStyle = {
     "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
 } as CSSProperties;
-
-const SearchIcon = ({ className }: { className?: string }) => (
-    <svg
-        aria-hidden
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        className={className}
-    >
-        <circle cx="11" cy="11" r="6.5" />
-        <path strokeLinecap="round" d="m16 16 4.5 4.5" />
-    </svg>
-);
 
 const SocialPage = () => {
     const router = useRouter();
@@ -257,7 +245,7 @@ const SocialPage = () => {
                     username.length > 12
                         ? `${username.slice(0, 12)}\u2026`
                         : username;
-                const profileImg = item?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${item?.profiles?.profile_image}` : "";
+                const profileImg = generateProfileImageUrl(item?.profiles?.profile_image);
                 const tierMeta = getTierMetaForPick({
                     odds: item.odds_bracket,
                     label: item.difficulty_label,

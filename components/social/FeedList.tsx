@@ -9,6 +9,7 @@ import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 type FeedListProps = {
     items: Picks | null;
@@ -217,7 +218,7 @@ const FeedList = ({
                 const { up, down, userReaction } = reactionSummary;
                 const upActive = userReaction === "up";
                 const downActive = userReaction === "down";
-                const profileImg = item?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${item?.profiles?.profile_image}` : "";
+                const profileImg = generateProfileImageUrl(item?.profiles?.profile_image);
 
                 return (
                     <div

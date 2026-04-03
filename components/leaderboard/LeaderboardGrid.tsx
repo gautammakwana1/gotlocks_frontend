@@ -16,7 +16,7 @@ import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
-import { useIsMobile } from "@/lib/utils/helpers";
+import { generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 
 type Props = {
     group: Group | null;
@@ -225,8 +225,7 @@ const RankCell = ({
     user_id: string;
 }) => {
     const displayName = username ?? user_id ?? "Member";
-    // const initials = displayName.slice(0, 2).toUpperCase();
-    const profileImg = profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${profile_image}` : "";
+    const profileImg = generateProfileImageUrl(profile_image);
     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
 
     const avatarSize = isMobile

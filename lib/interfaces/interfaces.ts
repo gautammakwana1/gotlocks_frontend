@@ -86,14 +86,11 @@ export interface CurrentUser {
 // NOTE: `name` is a legacy alias for the username/handle chosen during onboarding.
 export interface User {
     id: string;
-    // `name` is the public-facing handle/pseudonym across the app.
     name: string;
     email: string;
-    // Full legal name captured at signup.
     fullName: string;
     password?: string;
     joined_at?: string;
-    // Username/handle used consistently across the app.
     username?: string;
     userId?: string;
     user?: {
@@ -544,6 +541,14 @@ export type FetchPicksPaginationPayload = {
     hasMore: boolean;
 };
 
+export type FetchSearchedUsersPaginationPayload = {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
 export type FetchPicksPayload = {
     slip_id: string | undefined;
 };
@@ -692,6 +697,8 @@ export interface FetchProgressByUserIdPayload {
 
 export interface FetchSearchedUsersPayload {
     q: string;
+    page?: number;
+    limit?: number;
 }
 
 export interface RedeemGlobalPointsPayload {
@@ -1504,7 +1511,8 @@ export type SocialState = {
     loading: boolean,
     error: string | null,
     message: string | null,
-    users: SearchUsers | null,
+    users: SearchUsers[] | null,
+    hasMore: boolean,
 }
 
 export type NBAState = {

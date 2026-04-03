@@ -33,9 +33,10 @@ import { canCommissionerReview, canFinalize, canUserEditSlipPicks, isSlipFinal, 
 import { createPortal } from "react-dom";
 import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
-import { checkAnyRestrictedWords, useIsMobile } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
+import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
 
 interface FormErrors {
     name?: string;
@@ -588,7 +589,8 @@ const SlipDetailsPage = () => {
     const userMember = members.find(
         m => m.user_id === currentUser.userId
     );
-    const userProfilePictureLink = userMember?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${userMember?.profiles?.profile_image}` : undefined;
+    // const userProfilePictureLink = userMember?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${userMember?.profiles?.profile_image}` : undefined;
+    const userProfilePictureLink = generateProfileImageUrl(userMember?.profiles?.profile_image);
     const userPickLabel = orderedUserPicks.length > 1 ? "Your picks" : "Your pick";
     const addPickLabel = userPicks.length > 0 ? "Add another pick" : "Add your pick";
     const addPickCardLabel = canAddPick
@@ -876,25 +878,7 @@ const SlipDetailsPage = () => {
                                         className="inline-flex flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50"
                                         aria-label="Edit slip name"
                                     >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            className="h-4 w-4"
-                                            fill="none"
-                                            viewBox="0 0 24 24"
-                                            stroke="currentColor"
-                                            strokeWidth="1.5"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="M16.862 4.487a2.25 2.25 0 1 1 3.182 3.182L8.818 18.896a4.5 4.5 0 0 1-1.591.999l-2.911.97.97-2.91a4.5 4.5 0 0 1 .999-1.592z"
-                                            />
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                d="m19.5 7.125-2.625-2.625"
-                                            />
-                                        </svg>
+                                       <EditPencilIcon />
                                     </button>
                                 )}
                             </div>
@@ -924,20 +908,7 @@ const SlipDetailsPage = () => {
                                         title="Share slip"
                                         className="inline-flex h-4 w-4 items-center justify-center text-gray-400 transition hover:text-white"
                                     >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            className="h-3 w-3"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="1.6"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            aria-hidden
-                                        >
-                                            <path d="M15 4h5v5" />
-                                            <path d="M10 14 20 4" />
-                                            <path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5" />
-                                        </svg>
+                                        <ShareIcon />
                                     </button>
                                 </span>
                             </div>
@@ -1099,7 +1070,7 @@ const SlipDetailsPage = () => {
                                                     const picks = member.user_id ? picksByMember.get(member.user_id) : [];
                                                     const displayName = member.profiles?.username ?? "Member";
                                                     // const initials = getMemberInitials(displayName);
-                                                    const memberProfilePicture = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
+                                                    const memberProfilePicture = generateProfileImageUrl(member.profiles?.profile_image);
 
                                                     return (
                                                         <div key={member.id} className="space-y-2">
@@ -1476,7 +1447,7 @@ const SlipDetailsPage = () => {
 
                                                             debouncedUpdatePoints(headerPick.id, validValue, headerPick);
                                                         };
-                                                        const memberProfilePicture = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
+                                                        const memberProfilePicture = generateProfileImageUrl(member.profiles?.profile_image);
                                                         return (
                                                             <div
                                                                 key={member.id}

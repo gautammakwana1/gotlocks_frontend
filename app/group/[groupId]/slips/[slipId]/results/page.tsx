@@ -18,6 +18,8 @@ import { isSlipFinal } from "@/lib/slips/state";
 import SlipShareModal from "@/components/slips/SlipShareModal";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { ShareIcon } from "@/components/ui/SvgIcons";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -311,20 +313,7 @@ const SlipResultsPage = () => {
                             title="Share slip"
                             className="inline-flex h-4 w-4 items-center justify-center text-gray-400 transition hover:text-white"
                         >
-                            <svg
-                                viewBox="0 0 24 24"
-                                className="h-3 w-3"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
-                            >
-                                <path d="M15 4h5v5" />
-                                <path d="M10 14 20 4" />
-                                <path d="M20 14v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5" />
-                            </svg>
+                            <ShareIcon />
                         </button>
                     </span>
                 </span>
@@ -425,7 +414,7 @@ const SlipResultsPage = () => {
                                                     const resultLabel =
                                                         resolvedResult === "not_found" ? "n/a" : resolvedResult;
                                                     const accent = PICK_RESULT_ACCENTS[resolvedResult];
-                                                    const profileImg = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : "";
+                                                    const profileImg = generateProfileImageUrl(member.profiles?.profile_image);
                                                     const displayPick = pick.description ?? "No pick was submitted";
                                                     const {
                                                         matchup: matchupCandidate,

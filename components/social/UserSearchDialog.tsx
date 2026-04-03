@@ -3,16 +3,15 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
-import { RootState, SearchUsers, User } from "@/lib/interfaces/interfaces";
+import { RootState, SearchUsers } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { useToast } from "@/lib/state/ToastContext";
 import { fetchSearchedUsersRequest } from "@/lib/redux/slices/socialSlice";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
-import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { SearchIcon } from "../ui/SvgIcons";
 
 type UserSearchDialogProps = {
     open: boolean;
@@ -34,28 +33,15 @@ const getSearchScore = (user: SearchUsers, query: string) => {
     return score;
 };
 
-const SearchIcon = ({ className }: { className?: string }) => (
-    <svg
-        aria-hidden
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        className={className}
-    >
-        <circle cx="11" cy="11" r="6.5" />
-        <path strokeLinecap="round" d="m16 16 4.5 4.5" />
-    </svg>
-);
-
 const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
     const router = useRouter();
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
-    const { setToast } = useToast();
     const [query, setQuery] = useState("");
     const [recentSearches, setRecentSearches] = useState<SearchUsers[]>([]);
     const [usersList, setUsersList] = useState<SearchUsers[]>([]);
+    const [page, setPage] = useState(1);
+    const observer = useRef<IntersectionObserver | null>(null);
     const [recentSearchesLoaded, setRecentSearchesLoaded] = useState(false);
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const deferredQuery = useDeferredValue(query.trim().toLowerCase());
@@ -63,7 +49,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
     const cacheRef = useRef<Record<string, SearchUsers[]>>({});
 
     const { followings } = useSelector((state: RootState) => state.user);
-    const { users } = useSelector((state: RootState) => state.social);
+    const { users, hasMore, loading } = useSelector((state: RootState) => state.social);
 
     const recentSearchStorageKey = currentUser
         ? `gotlocks:recent-user-searches:${currentUser.userId}`
@@ -86,6 +72,25 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
     }, [onClose, open]);
 
     useEffect(() => {
+        if (!open) return;
+
+        const scrollBarWidth =
+            window.innerWidth - document.documentElement.clientWidth;
+
+        // Lock scroll while modal is open
+        document.body.style.overflow = "hidden";
+        document.documentElement.style.overflow = "hidden";
+        document.body.style.paddingRight = `${scrollBarWidth}px`;
+
+        return () => {
+            // Restore scroll when modal closes or unmounts
+            document.body.style.overflow = "";
+            document.documentElement.style.overflow = "";
+            document.body.style.paddingRight = "";
+        };
+    }, [open]);
+
+    useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedQuery(query.trim());
         }, 400);
@@ -93,32 +98,53 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
         return () => clearTimeout(timer);
     }, [query]);
 
+    const fetchData = useCallback((pageNum: number) => {
+        if (!debouncedQuery || debouncedQuery.length < 2) return;
+        dispatch(fetchSearchedUsersRequest({
+            q: debouncedQuery,
+            page: pageNum,
+            limit: 10
+        }));
+    }, [dispatch, debouncedQuery]);
+
     useEffect(() => {
         if (
             debouncedQuery.length >= 2 &&
             debouncedQuery !== lastQueryRef.current
         ) {
             lastQueryRef.current = debouncedQuery;
+            setPage(1);
 
             if (cacheRef.current[debouncedQuery]) {
                 setUsersList(cacheRef.current[debouncedQuery]);
                 return;
             }
 
-            dispatch(fetchSearchedUsersRequest({
-                q: debouncedQuery
-            }));
+            fetchData(1);
         }
-    }, [debouncedQuery, dispatch]);
+    }, [debouncedQuery, fetchData]);
 
     useEffect(() => {
         if (Array.isArray(users)) {
             setUsersList(users);
-            if (lastQueryRef.current) {
+            if (lastQueryRef.current && page === 1) {
                 cacheRef.current[lastQueryRef.current] = users;
             }
         }
-    }, [users]);
+    }, [users, page]);
+
+    const lastItemRef = useCallback((node: HTMLElement | null) => {
+        if (loading) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting && hasMore) {
+                const nextPage = page + 1;
+                setPage(nextPage);
+                fetchData(nextPage);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [loading, hasMore, page, fetchData]);
 
     useEffect(() => {
         if (!recentSearchStorageKey) {
@@ -199,8 +225,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                 }
                 return left.user.username.localeCompare(right.user.username);
             })
-            .map((entry) => entry.user)
-            .slice(0, 12);
+            .map((entry) => entry.user);
     }, [currentUser, deferredQuery, sortedVisibleUsers]);
 
     if (!open || !currentUser) return null;
@@ -255,7 +280,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                     />
                 </label>
 
-                <div className="scrollbar-hide mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                <div className="scrollbar-hide mt-5 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                     {showingRecentSearches ? (
                         <div className="flex items-center justify-between gap-3 px-1">
                             <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--text-muted)]">
@@ -272,7 +297,8 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                     ) : null}
 
                     {visibleList.length > 0 ? (
-                        visibleList.map((user) => {
+                        visibleList.map((user, index) => {
+                            const isLast = index === visibleList.length - 1 && hasQuery;
                             const following = isFollowing(currentUser.userId, user.id);
                             const username = user.username ?? user.full_name;
                             const memberProfilePicture = generateProfileImageUrl(user?.profile_image);
@@ -280,6 +306,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                             return (
                                 <button
                                     key={user.id}
+                                    ref={isLast ? lastItemRef : undefined}
                                     type="button"
                                     onClick={() => handleSelectUser(user.id, user)}
                                     className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20 hover:bg-white/10"
@@ -324,6 +351,13 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                             {hasQuery
                                 ? `No members match "${query.trim()}".`
                                 : "Start typing a username to search the platform. Selected profiles will appear here as recent searches."}
+                        </div>
+                    )}
+                    {loading && visibleList.length > 0 && (
+                        <div className="flex items-center justify-center gap-2 py-4">
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-white/40" style={{ animationDelay: "0ms" }} />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-white/40" style={{ animationDelay: "160ms" }} />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-white/40" style={{ animationDelay: "320ms" }} />
                         </div>
                     )}
                 </div>

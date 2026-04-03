@@ -10,6 +10,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
+import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
 
 type GroupSliceState = {
     group: {
@@ -139,39 +140,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                         className={actionIconClassName}
                         aria-hidden
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            className="h-5 w-5 overflow-visible"
-                            fill="currentColor"
-                        >
-                            <circle
-                                cx="3.4"
-                                cy="5.4"
-                                r="3.1"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                            />
-                            <circle
-                                cx="20.6"
-                                cy="5.4"
-                                r="3.1"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                            />
-                            <circle
-                                cx="12"
-                                cy="10"
-                                r="3.1"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.6"
-                            />
-                            <ellipse cx="3.4" cy="15" rx="5.4" ry="4" />
-                            <ellipse cx="20.6" cy="15" rx="5.4" ry="4" />
-                            <ellipse cx="12" cy="19.6" rx="5.4" ry="4" />
-                        </svg>
+                        <MembersIcon className="h-5 w-5 overflow-visible" />
                     </span>
                 </button>
                 <button
@@ -184,17 +153,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                         className={actionIconClassName}
                         aria-hidden
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M5 12h14M13 5l6 7-6 7" />
-                        </svg>
+                        <RightArrowIcon className="h-5 w-5" />
                     </span>
                 </button>
                 <button
@@ -204,19 +163,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 >
                     <p className="text-sm font-semibold text-white">Group scoring</p>
                     <span className={actionIconClassName} aria-hidden>
-                        <svg
-                            viewBox="0 0 24 24"
-                            className="h-5 w-5"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M12 11v5" />
-                            <path d="M12 7h.01" />
-                        </svg>
+                        <InfoIcon />
                     </span>
                 </button>
             </div>

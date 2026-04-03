@@ -3,6 +3,7 @@
 import { useIsMobile } from "@/lib/utils/helpers";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import { CheckIcon, ChevronUpDownIcon } from "../ui/SvgIcons";
 
 export type ResultFilter = "all" | "win" | "loss" | "pending" | "void";
 export type TypeFilter = "all" | "straight" | "combo";
@@ -202,16 +203,7 @@ const ProfileControls = ({
                 <summary className={dropdownSummaryClass} aria-label={ariaLabel}>
                     <span className="block truncate">{selectedLabel}</span>
                     <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/70">
-                        <svg
-                            aria-hidden
-                            viewBox="0 0 20 20"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            className={iconClassName}
-                        >
-                            <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        <ChevronUpDownIcon className={iconClassName} />
                     </span>
                 </summary>
                 <div role="listbox" aria-label={ariaLabel} className={dropdownMenuClass}>
@@ -229,16 +221,7 @@ const ProfileControls = ({
                             >
                                 <span>{option.label}</span>
                                 {selected && !isMobile ? (
-                                    <svg
-                                        aria-hidden
-                                        viewBox="0 0 16 16"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        className="h-3 w-3 text-emerald-200"
-                                    >
-                                        <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
+                                    <CheckIcon />
                                 ) : null}
                             </button>
                         );

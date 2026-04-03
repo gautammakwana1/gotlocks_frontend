@@ -10,6 +10,7 @@ import { clearUpdateProfileMessage, fetchMemberProfileRequest, updateProfilePubl
 import { Profile } from "@/lib/interfaces/interfaces";
 import { calculateAge, checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import FootballAnimation from "@/components/animations/FootballAnimation";
+import { ArrowLeft } from "lucide-react";
 
 type AuthSliceState = {
     user: {
@@ -176,6 +177,11 @@ const AccountInformationPage = () => {
         )
         : "Recently joined";
 
+    const remainingUsernameChanges = 3 - (user?.profile?.username_history?.length ?? 0);
+
+    const remainingUsernameChangesLabel =
+        `You can update your username ${remainingUsernameChanges} more time${remainingUsernameChanges === 1 ? "" : "s"}. Please choose carefully, as username changes are limited.`;
+
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!validate()) return;
@@ -223,7 +229,9 @@ const AccountInformationPage = () => {
                     href="/app-settings"
                     className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
                 >
-                    account settings
+                    <span className="flex items-center gap-2">
+                        <ArrowLeft size={14} /> account settings
+                    </span>
                 </Link>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
                     Account information
@@ -260,10 +268,15 @@ const AccountInformationPage = () => {
                         onChange={handleInputChange("username")}
                         className={inputClassName}
                         autoComplete="username"
+                        disabled={remainingUsernameChanges === 0}
                     />
-                    {errors.username && (
+                    {errors.username ? (
                         <span className="text-xs font-medium text-red-400">
                             {errors.username}
+                        </span>
+                    ) : (
+                        <span className="text-xs font-medium text-amber-400" >
+                            {remainingUsernameChangesLabel}
                         </span>
                     )}
                 </label>

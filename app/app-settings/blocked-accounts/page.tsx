@@ -10,6 +10,7 @@ import { clearUnblockUserMessage, fetchBlockedUsersRequest, unblockUserRequest }
 import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "@/components/layout/MainTabBar";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 const BlockedAccountsPage = () => {
     const dispatch = useDispatch();
@@ -73,7 +74,7 @@ const BlockedAccountsPage = () => {
                     {blockedUsers.map((user) => {
                         const primaryLabel = user.blocked_user?.username ?? user.blocked_user?.full_name;
                         const profilePath = getProfilePath(user.blocked_id, currentUser.userId);
-                        const memberProfilePicture = user.blocked_user?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.blocked_user?.profile_image}` : undefined;
+                        const memberProfilePicture = generateProfileImageUrl(user.blocked_user?.profile_image);
 
                         return (
                             <div

@@ -8,6 +8,7 @@ import { toPng } from "html-to-image";
 import { Member, Pick, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 type SlipShareModalProps = {
     open: boolean;
@@ -148,7 +149,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                             pick.source_tab ??
                                             (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
                                         ).toLowerCase();
-                                        const profileImg = member?.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member?.profiles?.profile_image}` : "";
+                                        const profileImg = generateProfileImageUrl(member?.profiles?.profile_image);
 
                                         return (
                                             <li key={pick.id} className="relative pl-5" >

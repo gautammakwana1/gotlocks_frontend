@@ -25,6 +25,8 @@ import { UserIcon } from "../layout/MainTabBar";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { LeftChevronIcon } from "../ui/SvgIcons";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -666,16 +668,7 @@ const ProfileView = ({
                             onClick={closeFollowPanel}
                             className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)] transition hover:text-white"
                         >
-                            <svg
-                                aria-hidden
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                className="h-4 w-4"
-                            >
-                                <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
+                            <LeftChevronIcon />
                             back
                         </button>
                     </div>
@@ -718,7 +711,7 @@ const ProfileView = ({
                                 {followPanelUsers.map((user) => {
                                     const label = user.user.username ?? "Member";
                                     const handle = (user.user.username ?? "member").toLowerCase();
-                                    const profilePicture = user.user?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${user.user?.profile_image}` : undefined;
+                                    const profilePicture = generateProfileImageUrl(user.user?.profile_image);
                                     return (
                                         <li
                                             key={user.user.id}

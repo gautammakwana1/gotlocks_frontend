@@ -5,6 +5,7 @@ import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import ConfidenceDropdown from "../ui/ConfidenceDropdown";
 import { useEffect } from "react";
 import { extractPickLine } from "@/lib/utils/pickDescription";
+import { ChevronUpDownIcon } from "../ui/SvgIcons";
 
 export type ReviewSheetItem = {
   id: string;
@@ -86,25 +87,6 @@ type Props = {
 };
 
 const formatOdds = (odds?: string | null) => odds?.trim() || "—";
-
-const ChevronIcon = ({ direction }: { direction: "up" | "down" }) => (
-  <svg
-    aria-hidden="true"
-    viewBox="0 0 16 16"
-    className="h-4 w-4 shrink-0"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    {direction === "down" ? (
-      <path d="M4 6l4 4 4-4" />
-    ) : (
-      <path d="M4 10l4-4 4 4" />
-    )}
-  </svg>
-);
 
 const formatCountLabel = (
   count: number,
@@ -294,7 +276,7 @@ export function PickReviewSheet({
                 }
               </div>
               < span className="text-gray-400" >
-                <ChevronIcon direction={isOpen ? "down" : "up"} />
+                <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isOpen ? "" : "rotate-180"}`} />
               </span>
             </button>
 
@@ -453,11 +435,7 @@ export function PickReviewSheet({
                             Same Game Combo Picks
                           </p>
                           <span className="text-gray-400">
-                            <ChevronIcon
-                              direction={
-                                isSameGameSectionCollapsed ? "down" : "up"
-                              }
-                            />
+                            <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isSameGameSectionCollapsed ? "" : "rotate-180"}`} />
                           </span>
                         </button>
 
@@ -604,11 +582,7 @@ export function PickReviewSheet({
                             Straight Picks
                           </p>
                           <span className="text-gray-400">
-                            <ChevronIcon
-                              direction={
-                                isStraightSectionCollapsed ? "down" : "up"
-                              }
-                            />
+                            <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isStraightSectionCollapsed ? "" : "rotate-180"}`} />
                           </span>
                         </button>
 

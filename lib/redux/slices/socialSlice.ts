@@ -1,11 +1,12 @@
-import { FetchSearchedUsersPayload, SocialState } from "@/lib/interfaces/interfaces";
+import { FetchSearchedUsersPayload, SearchUsers, SocialState } from "@/lib/interfaces/interfaces";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: SocialState = {
     loading: false,
     error: null,
     message: null,
-    users: null,
+    users: [],
+    hasMore: false,
 };
 
 const socialSlice = createSlice({
@@ -19,7 +20,15 @@ const socialSlice = createSlice({
         },
         fetchSearchedUsersSuccess: (state, action) => {
             state.loading = false;
-            state.users = action.payload.users;
+            const { users, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
+            if (page === 1) {
+                state.users = users;
+            } else {
+                const existingIds = new Set(state.users?.map(u => u.id) || []);
+                const newUniqueUsers = users.filter((u: SearchUsers) => !existingIds.has(u.id));
+                state.users = [...(state.users || []), ...newUniqueUsers];
+            }
         },
         fetchSearchedUsersFailure: (state, action) => {
             state.loading = false;

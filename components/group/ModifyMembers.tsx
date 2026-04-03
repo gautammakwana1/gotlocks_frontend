@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -120,16 +121,7 @@ const MemberCard = ({
     leavingGroup?: boolean;
 }) => {
     const displayName = formatDisplayName(member.profiles?.username);
-    const memberProfileImage = member.profiles?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${member.profiles?.profile_image}` : undefined;
-    // const initials =
-    //     displayName.trim().length > 0
-    //         ? displayName
-    //             .split(" ")
-    //             .map((segment) => segment.charAt(0))
-    //             .join("")
-    //             .slice(0, 2)
-    //             .toUpperCase()
-    //         : "??";
+    const memberProfileImage = generateProfileImageUrl(member.profiles?.profile_image);
     const showActions = showPromote || showLeave || Boolean(state?.error);
 
     return (

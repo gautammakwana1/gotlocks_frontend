@@ -13,6 +13,7 @@ import FootballAnimation from "@/components/animations/FootballAnimation";
 import { greenGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { CopyIcon } from "@/components/ui/SvgIcons";
 
 interface FormData {
   name: string;
@@ -243,19 +244,7 @@ const CagFormPage = () => {
                   className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-2 text-emerald-100 transition hover:border-emerald-300/70 hover:text-white"
                   aria-label="Copy invite code"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
+                  <CopyIcon />
                 </button>
               </div>
             </div>
