@@ -11,6 +11,7 @@ import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { ArrowLeft } from "lucide-react";
 
 const BlockedAccountsPage = () => {
     const dispatch = useDispatch();
@@ -59,7 +60,9 @@ const BlockedAccountsPage = () => {
                     href="/app-settings"
                     className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
                 >
-                    account settings
+                    <span className="flex items-center gap-2">
+                        <ArrowLeft size={14} /> account settings
+                    </span>
                 </Link>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
                     Blocked accounts

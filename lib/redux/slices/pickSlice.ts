@@ -1,22 +1,9 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Pick, Picks, ReactionPickOfDayPayload, SessionState, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
-
-type PickState = {
-    pick: Pick | null;
-    pickOfDay: Pick | null;
-    vibePicks: Picks | null;
-    postPicks: Picks | null;
-    session: SessionState | null;
-    hasSeenIntro: boolean;
-    loading: boolean;
-    error: string | null;
-    message: string | null;
-    deleteMessage: string | null;
-    hasMore: boolean;
-};
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
+    picks: null,
     pickOfDay: null,
     vibePicks: null,
     postPicks: null,
@@ -60,7 +47,7 @@ const pickSlice = createSlice({
         },
         fetchAllPicksSuccess: (state, action) => {
             state.loading = false;
-            state.pick = action.payload;
+            state.picks = action.payload.picks;
         },
         fetchAllPicksFailure: (state, action) => {
             state.loading = false;

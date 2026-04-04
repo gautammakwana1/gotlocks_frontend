@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BuiltPickPayload, Group, PickSliceState, PickType, Slip, SlipSliceState } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, Group, PickSliceState, PickType, Slip, SlipSliceState, SlipState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { isGameEligible } from "@/lib/utils/games";
 import PickBuilderShell from "@/components/pick-builder/PickBuilderShell";
@@ -30,7 +30,7 @@ type GroupSliceState = {
 type RootState = {
     group: GroupSliceState;
     pick: PickSliceState;
-    slip: SlipSliceState;
+    slip: SlipState;
 };
 
 type FlowStage = "choose" | "groups" | "builder";
@@ -91,17 +91,17 @@ const PickBuilderClientPage = () => {
 
     const { group } = useSelector((state: RootState) => state.group);
     const { loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
-    const { slip: slipState } = useSelector((state: RootState) => state.slip);
-    const slipData = slipState as { slips?: Slip[] } | null;
+    const { slips: slipList } = useSelector((state: RootState) => state.slip);
 
     useEffect(() => {
         dispatch(fetchAllGroupsRequest({}));
     }, [dispatch]);
-    const slips: Slip[] = useMemo(() => {
-        if (!slipData?.slips?.length) return [];
 
-        return slipData?.slips;
-    }, [slipData]);
+    const slips: Slip[] = useMemo(() => {
+        if (!Array.isArray(slipList) || !slipList?.length) return [];
+
+        return slipList;
+    }, [slipList]);
 
     const fantasySlips = slips.filter((slip) => slip.isGraded && slip.slip_type === "fantasy");
     const activeSlips = fantasySlips.filter((slip) => slip.status === "open");

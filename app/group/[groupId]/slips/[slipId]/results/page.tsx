@@ -4,10 +4,10 @@ import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { GroupDataShape } from "../../../page";
-import { Group, GroupSelector, Pick, Picks, PickSelector, Slip, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { Group, GroupSelector, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest } from "@/lib/redux/slices/slipSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
@@ -116,16 +116,8 @@ const SlipResultsPage = () => {
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
-    const { slip: slipState, loading: slipLoader, message: slipMessage } = useSelector((state: SlipSelector) => state.slip);
-    const { pick: pickState } = useSelector((state: PickSelector) => state.pick);
-    const slipData = slipState as { slips?: Slips } | null;
-    const pickData = pickState as { picks?: Picks } | null;
-
-    const slips: Slips = useMemo(() => {
-        if (!group?.id || !slipData?.slips?.length) return [];
-
-        return slipData?.slips;
-    }, [slipData, group?.id]);
+    const { slips, loading: slipLoader, message: slipMessage } = useSelector((state: RootState) => state.slip);
+    const { picks: pickList } = useSelector((state: RootState) => state.pick);
 
     const activeSlip = useMemo<Slip | null>(() => {
         if (!Array.isArray(slips) || !params?.slipId) return null;
@@ -133,12 +125,10 @@ const SlipResultsPage = () => {
     }, [slips, params?.slipId]);
 
     useEffect(() => {
-        if (!params.slipId) return;
+        if (!params.slipId && !params.groupId) return;
         dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
-        if (params.groupId) {
-            dispatch(fetchGroupByIdRequest({ groupId: params.groupId }))
-            dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
-        }
+        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }))
+        dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
     }, [dispatch, params.slipId, params.groupId]);
 
     useEffect(() => {
@@ -175,10 +165,10 @@ const SlipResultsPage = () => {
     }, [group?.members]);
 
     const slipPicks = useMemo<Pick[]>(() => {
-        if (!pickData) return [];
-        if (!Array.isArray(pickData.picks) || !activeSlip?.id) return [];
-        return pickData.picks.filter(pick => pick.slip_id === activeSlip?.id);
-    }, [pickData, activeSlip?.id]);
+        if (!pickList) return [];
+        if (!Array.isArray(pickList) || !activeSlip?.id) return [];
+        return pickList.filter(pick => pick.slip_id === activeSlip?.id);
+    }, [pickList, activeSlip?.id]);
 
     const memberLookup = useMemo(() => {
         const map = new Map<string, (typeof members)[number]>();

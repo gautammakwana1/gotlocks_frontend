@@ -67,14 +67,14 @@ export type CreatedContext = {
     slip: Slip;
 };
 
-export interface Toast {
+export type Toast = {
     id: number;
     type: "success" | "error" | "info";
     message: string;
     duration: number;
 }
 
-export interface CurrentUser {
+export type CurrentUser = {
     username: string;
     email: string;
     email_verified: boolean;
@@ -84,7 +84,7 @@ export interface CurrentUser {
 }
 
 // NOTE: `name` is a legacy alias for the username/handle chosen during onboarding.
-export interface User {
+export type User = {
     id: string;
     name: string;
     email: string;
@@ -100,12 +100,12 @@ export interface User {
     };
 }
 
-export interface UsernameHistory {
+export type UsernameHistory = {
     username: string;
     updated_at: string;
 }
 
-export interface Profile {
+export type Profile = {
     id: string;
     email: string;
     username: string;
@@ -122,7 +122,7 @@ export interface Profile {
     username_history?: UsernameHistory[];
 }
 
-export interface ActiveSlip {
+export type ActiveSlip = {
     id: string;
     group_id: string;
     index: number;
@@ -142,7 +142,7 @@ export interface ActiveSlip {
     created_by?: string;
 }
 
-export interface Group {
+export type Group = {
     id?: string;
     name: string;
     sport_type?: string;
@@ -305,18 +305,18 @@ export type GradingSnapshot = Record<
     }
 >;
 
-export interface AuthState {
+export type AuthState = {
     error: string | null;
     user: User | null;
     message: string | null;
     loading: boolean;
 }
 
-export interface AuthSelector {
+export type AuthSelector = {
     user: AuthState;
 }
 
-export interface GroupState {
+export type GroupState = {
     error: string | null;
     group: Group | null;
     message: string | null;
@@ -332,11 +332,11 @@ export interface GroupState {
     leaveMessage: string | null;
 }
 
-export interface GroupSelector {
+export type GroupSelector = {
     group: GroupState;
 }
 
-export interface RegisterPayload {
+export type RegisterPayload = {
     fullName: string;
     username: string;
     email: string;
@@ -344,12 +344,12 @@ export interface RegisterPayload {
     dob: string;
 }
 
-export interface LoginPayload {
+export type LoginPayload = {
     loginId: string;
     password: string;
 }
 
-export interface Member {
+export type Member = {
     length?: number | undefined;
     id?: string;
     group_id?: string;
@@ -368,7 +368,7 @@ export type Members = Member[];
 export type Slips = Slip[];
 export type Picks = Pick[];
 
-export interface GroupResponse {
+export type GroupResponse = {
     data?: {
         group?: Group | null;
     };
@@ -574,6 +574,10 @@ export type FetchSlipsPayload = {
     group_id: string;
 };
 
+export type FetchSlipByIdPayload = {
+    slip_id: string;
+};
+
 export type FetchPickOfDayByUserIdPayload = {
     userId: string;
 };
@@ -597,27 +601,30 @@ export type FetchNotificationsPayload = {
     limit?: number;
 };
 
-export interface SlipState {
-    error: string | null;
+export type SlipState = {
     slip: Slip | null;
-    message: string | null;
+    slips: Slips | null;
+    session: SessionState | null;
+    hasSeenIntro: boolean;
     loading: boolean;
-}
-
-export interface SlipSelector {
-    slip: SlipState;
-}
-
-export interface PickState {
     error: string | null;
-    pick: Pick | null;
     message: string | null;
-    loading: boolean;
-}
+};
 
-export interface PickSelector {
-    pick: PickState;
-}
+export type PickState = {
+    pick: Pick | null;
+    picks: Picks | null;
+    pickOfDay: Pick | null;
+    vibePicks: Picks | null;
+    postPicks: Picks | null;
+    session: SessionState | null;
+    hasSeenIntro: boolean;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+    deleteMessage: string | null;
+    hasMore: boolean;
+};
 
 export type MarkLockPayload = Record<string, unknown>;
 
@@ -664,7 +671,7 @@ export type UpdateMultiplePayload = {
     slip_id: string;
 };
 
-export interface TokenData {
+export type TokenData = {
     accessToken: string;
     refreshToken: string;
     expiresAt?: number;
@@ -681,54 +688,54 @@ export type Feed = {
 
 export type Feeds = Feed[];
 
-export interface FetchActivityPayload {
+export type FetchActivityPayload = {
     group_id: string;
     start?: number;
     limit?: number;
 }
 
-export interface CreateFeedbackPayload {
+export type CreateFeedbackPayload = {
     description: string;
 }
 
-export interface FetchProgressByUserIdPayload {
+export type FetchProgressByUserIdPayload = {
     user_id: string;
 }
 
-export interface FetchSearchedUsersPayload {
+export type FetchSearchedUsersPayload = {
     q: string;
     page?: number;
     limit?: number;
 }
 
-export interface RedeemGlobalPointsPayload {
+export type RedeemGlobalPointsPayload = {
     points: number;
 }
 
-export interface ActivityState {
+export type ActivityState = {
     error: string | null;
     feed: FeedResponse | null;
     message: string | null;
     loading: boolean;
 }
 
-export interface FeedSelector {
+export type FeedSelector = {
     feed: ActivityState;
 }
 
-export interface Pagination {
+export type Pagination = {
     start?: number;
     limit?: number;
     count?: number;
     page?: number;
 }
 
-export interface FeedResponse {
+export type FeedResponse = {
     activities: Feed[];
     pagination: Pagination;
 }
 
-export interface leaderboardSlip {
+export type leaderboardSlip = {
     odds_bracket: string;
     pick_description: string;
     pick_difficulty_tier: TierIndex | null;
@@ -743,7 +750,7 @@ export interface leaderboardSlip {
     pick_leg?: PickLeg[]
 }
 
-export interface Leaderboard {
+export type Leaderboard = {
     group_id: string;
     slip_id: string;
     user_id: string;
@@ -756,7 +763,7 @@ export interface Leaderboard {
     slips?: leaderboardSlip[];
 }
 
-export interface ArchiveLeaderboardSlip {
+export type ArchiveLeaderboardSlip = {
     id: string;
     group_id: string;
     name: string;
@@ -766,7 +773,7 @@ export interface ArchiveLeaderboardSlip {
     created_at: string;
 }
 
-export interface ArchivedLeaderboard {
+export type ArchivedLeaderboard = {
     leaderboard: Leaderboard[];
     slips: ArchiveLeaderboardSlip[];
     label: string;
@@ -777,7 +784,7 @@ export interface ArchivedLeaderboard {
     id: string;
 }
 
-export interface archiveLeaderBoardObject {
+export type archiveLeaderBoardObject = {
     id: string;
     leaderboard_id: string;
     group_id: string;
@@ -795,7 +802,7 @@ export interface archiveLeaderBoardObject {
     }
 }
 
-export interface ArchiveLeaderboardList {
+export type ArchiveLeaderboardList = {
     archivedLeaderboards: archiveLeaderBoardObject[];
 }
 
@@ -818,7 +825,7 @@ export type GroupSliceState = {
 };
 
 export type SlipSliceState = {
-    slip: unknown;
+    slip: Slips | null;
     error: string | null;
     message: string | null;
     loading: boolean;
@@ -855,8 +862,8 @@ export type NotificationsState = {
 
 export type RootState = {
     group: GroupSliceState;
-    slip: SlipSliceState;
-    pick: PickSliceState;
+    slip: SlipState;
+    pick: PickState;
     user: AuthSliceState;
     nfl: NFLState;
     nba: NBAState;

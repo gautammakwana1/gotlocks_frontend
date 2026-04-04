@@ -14,15 +14,19 @@ export function AuthSync() {
 
         // Listen to all changes
         const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === "INITIAL_SESSION") {
+            if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
                 if (session) {
                     saveCleanUser(session);
                 }
             }
 
-            // if (event === 'SIGNED_OUT') {
-            //     localStorage.removeItem('currentUser');
-            // }
+            if (event === 'SIGNED_OUT') {
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('provider');
+            }
         });
 
         return () => listener.subscription.unsubscribe();
@@ -31,7 +35,7 @@ export function AuthSync() {
     return null;
 }
 
-function saveCleanUser(session: Session) {
+export async function saveCleanUser(session: Session) {
     const { user } = session;
     if (!user) return;
     const cleanUser = {
@@ -39,7 +43,7 @@ function saveCleanUser(session: Session) {
         refresh_token: session.refresh_token,
         expires_at: session.expires_at,
         email: user?.email,
-        username: user?.user_metadata?.preferred_username || user?.user_metadata?.username || user?.email?.split('@')[0],
+        username: user?.user_metadata?.username || user?.user_metadata?.preferred_username,
         full_name: user?.user_metadata?.full_name || user?.user_metadata?.name,
         avatar_url: user?.user_metadata?.avatar_url || user?.user_metadata?.picture,
         provider: user?.app_metadata?.provider,

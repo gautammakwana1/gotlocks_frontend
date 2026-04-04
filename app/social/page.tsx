@@ -594,7 +594,7 @@ const SocialPage = () => {
         <div className="space-y-6">
             <section className="space-y-4">
                 <div className="-mx-5 sm:mx-0">
-                    <div className="flex flex-nowrap items-center justify-between sm:gap-2 overflow-x-auto px-5 sm:px-0">
+                    <div className="flex flex-nowrap items-center justify-between sm:gap-2 overflow-x-auto px-2 sm:px-6">
                         <div className="inline-flex w-fit items-center sm:gap-1">
                             {renderTabButton("for-you", "for you")}
                             {renderTabButton("following", "following")}

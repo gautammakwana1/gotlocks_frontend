@@ -224,6 +224,7 @@ const RankCell = ({
     username: string | undefined;
     user_id: string;
 }) => {
+    const [imgError, setImgError] = useState(false);
     const displayName = username ?? user_id ?? "Member";
     const profileImg = generateProfileImageUrl(profile_image);
     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
@@ -235,13 +236,16 @@ const RankCell = ({
         ? "h-[18px] w-[18px] text-[9px]"
         : "h-[28px] w-[28px] text-[12px]";
 
+    const hasValidImage =
+        profile_image && !imgError;
+
     return (
         < div className="flex w-full items-start pt-[14px]" >
             <div className="relative inline-flex">
                 <div
                     className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize}`}
                 >
-                    {profileImg ? (
+                    {profileImg && hasValidImage ? (
                         <Image
                             src={profileImg}
                             alt="Profile image"
@@ -251,6 +255,7 @@ const RankCell = ({
                             draggable={false}
                             onDragStart={(e) => e.preventDefault()}
                             unoptimized
+                            onError={() => setImgError(true)}
                         />
                     ) : (
                         <UserIcon className="h-6 w-6 text-white/80 sm:h-9 sm:w-9" />

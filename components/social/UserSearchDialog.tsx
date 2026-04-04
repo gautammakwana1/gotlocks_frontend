@@ -10,7 +10,7 @@ import { fetchSearchedUsersRequest } from "@/lib/redux/slices/socialSlice";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
-import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 import { SearchIcon } from "../ui/SvgIcons";
 
 type UserSearchDialogProps = {
@@ -34,6 +34,7 @@ const getSearchScore = (user: SearchUsers, query: string) => {
 };
 
 const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
+    const isMobile = useIsMobile();
     const router = useRouter();
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
@@ -328,21 +329,35 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                                                 <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                             )}
                                         </div>
-                                        <div className="min-w-0">
+                                        <div className="flex flex-col justify-between gap-1 min-w-0">
                                             <p className="truncate text-sm font-semibold text-white">@{username}</p>
+                                            {isMobile && (
+                                                <div className="flex shrink-0 items-center gap-2">
+                                                    {following ? (
+                                                        <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
+                                                            Following
+                                                        </span>
+                                                    ) : null}
+                                                    <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                                                        {user.is_public ? "Public" : "Private"}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
-                                    <div className="flex shrink-0 items-center gap-2">
-                                        {following ? (
-                                            <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
-                                                Following
+                                    {!isMobile && (
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            {following ? (
+                                                <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
+                                                    Following
+                                                </span>
+                                            ) : null}
+                                            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
+                                                {user.is_public ? "Public" : "Private"}
                                             </span>
-                                        ) : null}
-                                        <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]">
-                                            {user.is_public ? "Public" : "Private"}
-                                        </span>
-                                    </div>
+                                        </div>
+                                    )}
                                 </button>
                             );
                         })

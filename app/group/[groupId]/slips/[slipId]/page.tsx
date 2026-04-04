@@ -16,13 +16,13 @@ import BackButton from "@/components/ui/BackButton";
 import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
 import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
-import { GradingPayload, Group, GroupSelector, LeaderboardList, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { GradingPayload, Group, GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
-import { assignToSecondaryLeaderboardRequest, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { assignToSecondaryLeaderboardRequest, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import Image from "next/image";
 import { getPickPoints, GROUP_CAP_POINTS, GROUP_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
@@ -131,10 +131,8 @@ const SlipDetailsPage = () => {
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
     const activeSlip = group?.active_slip ?? null;
     const members = useMemo(() => group?.members ?? [], [group?.members]);
-    const { slip: slipState, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
-    const { pick: pickState, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: PickSelector) => state.pick);
-    const slipData = slipState as { slips?: Slips } | null;
-    const pickData = pickState as { picks?: Picks } | null;
+    const { slips, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: RootState) => state.slip);
+    const { picks: pickList, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
     const {
         leaderboard: leaderboardData,
         leaderboardList: leaderboardListData,
@@ -144,11 +142,6 @@ const SlipDetailsPage = () => {
         DEFAULT_ELIGIBLE_WINDOW_DAYS
     );
 
-    const slips: Slips = useMemo(() => {
-        if (!group?.id || !slipData?.slips?.length) return [];
-
-        return slipData?.slips;
-    }, [slipData, group?.id]);
     useEffect(() => {
         if (typeof activeSlip?.window_days === "number") {
             setWindowDaysDraft(activeSlip.window_days);
@@ -162,18 +155,19 @@ const SlipDetailsPage = () => {
     }, [leaderboardData?.leaderboard, leaderboardListData]);
 
     useEffect(() => {
-        if (!params.groupId || !currentUser) return
+        if (!params.groupId || !params.slipId || !currentUser) return
 
         dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-        dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
+        dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
         dispatch(fetchAllLeaderboardsRequest({ group_id: params.groupId }));
         dispatch(clearCreatePickMessage());
     }, [params.groupId, currentUser, dispatch, params.slipId]);
 
-    const slip = useMemo(
-        () => slips.find((candidate) => candidate.id === params.slipId),
-        [params.slipId, slips]
-    );
+    const slip = useMemo(() => {
+        if (!Array.isArray(slips) || !params?.slipId) return null;
+        return slips.find((candidate) => candidate.id === params.slipId)
+    }, [params.slipId, slips]);
+
     const isFinalized = slip ? isSlipFinal(slip) : false;
     const secondaryLeaderboardsEnabled =
         group?.is_enable_secondary_leaderboard ?? false;
@@ -229,10 +223,10 @@ const SlipDetailsPage = () => {
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
     const slipPicks = useMemo<Pick[]>(() => {
-        if (!pickData) return [];
-        if (!Array.isArray(pickData.picks) || !slip?.id) return [];
-        return pickData.picks.filter(pick => pick.slip_id === slip.id);
-    }, [pickData, slip?.id]);
+        if (!pickList) return [];
+        if (!Array.isArray(pickList) || !slip?.id) return [];
+        return pickList.filter(pick => pick.slip_id === slip.id);
+    }, [pickList, slip?.id]);
     const scoringMode = slip?.isGraded ? "groupLeaderboard" : "global";
 
     const userPicks = useMemo(
@@ -878,7 +872,7 @@ const SlipDetailsPage = () => {
                                         className="inline-flex flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50"
                                         aria-label="Edit slip name"
                                     >
-                                       <EditPencilIcon />
+                                        <EditPencilIcon />
                                     </button>
                                 )}
                             </div>

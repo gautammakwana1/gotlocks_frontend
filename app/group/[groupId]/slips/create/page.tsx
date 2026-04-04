@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { fromLocalInputValue, toLocalInputValue, formatDateTime } from "@/lib/utils/date";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
-import { Group, GroupSelector, LeaderboardList, SlipSelector } from "@/lib/interfaces/interfaces";
+import { Group, GroupSelector, LeaderboardList, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { clearCreateSlipMessage, createSlipRequest } from "@/lib/redux/slices/slipSlice";
 import { GroupDataShape } from "../../page";
@@ -114,7 +114,7 @@ const SlipCreationPage = () => {
     const [errors, setErrors] = useState<FormErrors>({});
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
-    const { slip, loading: slipLoading, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
+    const { slip, loading: slipLoading, message: slipMessage, error: slipError } = useSelector((state: RootState) => state.slip);
     const isCommissioner = currentUser && group && currentUser.userId === group.created_by;
     const windowDropdownRef = useRef<HTMLDivElement | null>(null);
     const [windowDropdownOpen, setWindowDropdownOpen] = useState(false);

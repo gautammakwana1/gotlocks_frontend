@@ -8,7 +8,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { changePasswordRequest, clearChangePasswordMessage } from "@/lib/redux/slices/authSlice";
 import { RootState } from "@/lib/interfaces/interfaces";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { EyeClosedIcon, EyeIcon } from "lucide-react";
+import { ArrowLeft, EyeClosedIcon, EyeIcon } from "lucide-react";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
 
 interface FormData {
@@ -153,7 +153,9 @@ const ChangePasswordPage = () => {
                     href="/app-settings"
                     className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
                 >
-                    account settings
+                    <span className="flex items-center gap-2">
+                        <ArrowLeft size={14} /> account settings
+                    </span>
                 </Link>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
                     Change your password

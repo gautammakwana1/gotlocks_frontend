@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
+import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest } from "../slices/groupsSlice";
 
 type ApiErrorResponse = {
@@ -51,6 +51,24 @@ function* handleFetchAllSlips(action: PayloadAction<FetchSlipsPayload | undefine
         yield put(fetchAllSlipsSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchAllSlipsFailure(getErrorMessage(error, "Slip Fetch Failed")))
+    }
+}
+
+function* handleFetchSlipById(action: PayloadAction<FetchSlipByIdPayload | undefined>): SagaIterator {
+    try {
+        const { slip_id = '' } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/slip-by-id`,
+            {
+                params: { slip_id }
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchSlipByIdSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchSlipByIdFailure(getErrorMessage(error, "Slip Fetch Failed")))
     }
 }
 
@@ -199,6 +217,7 @@ function* handleAssignToSecondaryLeaderboard(action: PayloadAction<AssignToSecon
 export default function* slipSaga() {
     yield takeLatest(createSlipRequest.type, handleCreateSlip);
     yield takeLatest(fetchAllSlipsRequest.type, handleFetchAllSlips);
+    yield takeLatest(fetchSlipByIdRequest.type, handleFetchSlipById);
     yield takeLatest(updateSlipsRequest.type, handleUpdateSlips);
     yield takeLatest(markLockSlipRequest.type, handleMarkLockSlip);
     yield takeLatest(markedUnlockSlipRequest.type, handleMarkUnlockSlip);

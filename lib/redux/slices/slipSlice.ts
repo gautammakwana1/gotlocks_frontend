@@ -1,17 +1,9 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
-
-type SlipState = {
-    slip: Slip | null;
-    session: SessionState | null;
-    hasSeenIntro: boolean;
-    loading: boolean;
-    error: string | null;
-    message: string | null;
-};
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, Slips, SlipState, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: SlipState = {
     slip: null,
+    slips: null,
     session: null,
     hasSeenIntro: false,
     loading: false,
@@ -50,13 +42,31 @@ const slipSlice = createSlice({
         },
         fetchAllSlipsSuccess: (state, action) => {
             state.loading = false;
-            state.slip = action.payload;
+            state.slips = action.payload.slips;
         },
         fetchAllSlipsFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchAllSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchSlipByIdRequest: (state, action: PayloadAction<FetchSlipByIdPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchSlipByIdSuccess: (state, action) => {
+            state.loading = false;
+            state.slips = action.payload.slips;
+        },
+        fetchSlipByIdFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchSlipByIdMessage(state) {
             state.error = null;
             state.message = null;
         },
@@ -300,6 +310,10 @@ export const {
     assignToSecondaryLeaderboardSuccess,
     assignToSecondaryLeaderboardFailure,
     clearAssignToSecondaryLeaderboardMessage,
+    fetchSlipByIdRequest,
+    fetchSlipByIdSuccess,
+    fetchSlipByIdFailure,
+    clearFetchSlipByIdMessage,
 } = slipSlice.actions;
 
 export default slipSlice.reducer;

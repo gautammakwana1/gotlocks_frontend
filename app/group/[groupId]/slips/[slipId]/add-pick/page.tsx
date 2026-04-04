@@ -7,7 +7,7 @@ import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { BuiltPickPayload, Group, GroupSelector, League, Pick, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, Group, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { createPickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
@@ -42,10 +42,8 @@ const SlipAddPickPage = () => {
 
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
-    const { slip: slipState, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: SlipSelector) => state.slip);
-    const { pick: pickState, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: PickSelector) => state.pick);
-    const slipData = slipState as { slips?: Slips } | null;
-    const pickData = pickState as { picks?: Picks } | null;
+    const { slips } = useSelector((state: RootState) => state.slip);
+    const { picks: pickList } = useSelector((state: RootState) => state.pick);
 
     // useEffect(() => {
     //     if (!params.slipId) return;
@@ -56,21 +54,22 @@ const SlipAddPickPage = () => {
     //     }
     // }, [dispatch, params.slipId, params.groupId]);
 
-    const slips: Slips = useMemo(() => {
-        if (!group?.id || !slipData?.slips?.length) return [];
+    // const slips: Slips = useMemo(() => {
+    //     if (!group?.id || !slipData?.slips?.length) return [];
 
-        return slipData?.slips;
-    }, [slipData, group?.id]);
+    //     return slipData?.slips;
+    // }, [slipData, group?.id]);
 
-    const slip = useMemo(
-        () => slips.find((candidate) => candidate.id === params.slipId),
-        [params.slipId, slips]
-    );
+    const slip = useMemo(() => {
+        if (!Array.isArray(slips) || !params?.slipId) return null;
+        return slips.find((candidate) => candidate.id === params.slipId)
+    }, [params.slipId, slips]);
+
     const slipPicks = useMemo<Pick[]>(() => {
-        if (!pickData) return [];
-        if (!Array.isArray(pickData.picks) || !slip?.id) return [];
-        return pickData.picks.filter(pick => pick.slip_id === slip.id);
-    }, [pickData, slip?.id]);
+        if (!pickList) return [];
+        if (!Array.isArray(pickList) || !slip?.id) return [];
+        return pickList.filter(pick => pick.slip_id === slip.id);
+    }, [pickList, slip?.id]);
 
     const returnPath = group && slip ? `/group/${group.id}/slips/${slip.id}` : "/home";
 

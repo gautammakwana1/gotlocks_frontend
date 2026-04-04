@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/redux/slices/authSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { AuthSliceState, Group } from "@/lib/interfaces/interfaces";
+import { ArrowLeft } from "lucide-react";
 
 type GroupSliceState = {
     group: {
@@ -171,7 +172,9 @@ const DeleteAccountPage = () => {
                     href="/app-settings"
                     className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
                 >
-                    account settings
+                    <span className="flex items-center gap-2">
+                        <ArrowLeft size={14} /> account settings
+                    </span>
                 </Link>
                 <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
                     Delete your account

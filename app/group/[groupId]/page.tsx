@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, Picks, PickSelector, Slips, SlipSelector } from "@/lib/interfaces/interfaces";
+import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, Picks, RootState, Slips } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
 import ModifyMembers, { MemberWithRole } from "@/components/group/ModifyMembers";
@@ -207,10 +207,8 @@ const GroupPage = () => {
     ArchiveLeaderboardList,
     archivedLeaderboard: ArchivedLeaderboardObject
   } = useSelector((state: GroupSelector) => state.group);
-  const { slip: slipState } = useSelector((state: SlipSelector) => state.slip);
-  const { pick: pickState, loading: pickLoader, message: pickMessage } = useSelector((state: PickSelector) => state.pick);
-  const slipData = slipState as { slips?: Slips } | null;
-  const pickData = pickState as { picks?: Picks } | null;
+  const { slips: slipList } = useSelector((state: RootState) => state.slip);
+  const { picks: pickList, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
   const rawGroup = useSelector((state: GroupSelector) => state.group.group);
   const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
 
@@ -237,10 +235,10 @@ const GroupPage = () => {
   const members = useMemo(() => group?.members ?? [], [group?.members]);
 
   const slips: Slips = useMemo(() => {
-    if (!group?.id || !slipData?.slips?.length) return [];
+    if (!group?.id || !Array.isArray(slipList) || !slipList?.length) return [];
 
-    return slipData?.slips;
-  }, [slipData, group?.id]);
+    return slipList;
+  }, [slipList, group?.id]);
 
   const tabs = useMemo(
     () =>
@@ -301,9 +299,9 @@ const GroupPage = () => {
   );
 
   const picks: Picks = useMemo(() => {
-    if (!activeSlip?.id || !pickData?.picks?.length) return [];
-    return pickData?.picks;
-  }, [pickData, activeSlip?.id]);
+    if (!activeSlip?.id || !Array.isArray(pickList) || !pickList?.length) return [];
+    return pickList;
+  }, [pickList, activeSlip?.id]);
 
   const gradedPicks = useMemo(
     () => picks.filter((pick) => gradedSlipIds.has(pick.id)),
