@@ -76,7 +76,7 @@ export const ChangePasswordModal = ({
                             type="password"
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
-                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-base sm:text-sm text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
                             placeholder="Enter current password"
                             disabled={loading}
                         />
@@ -90,7 +90,7 @@ export const ChangePasswordModal = ({
                             type="password"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
-                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-base sm:text-sm text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
                             placeholder="Enter new password"
                             disabled={loading}
                         />
@@ -104,7 +104,7 @@ export const ChangePasswordModal = ({
                             type="password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
+                            className="w-full rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-base sm:text-sm text-white placeholder-gray-500 outline-none focus:border-emerald-400/70"
                             placeholder="Confirm new password"
                             disabled={loading}
                         />

@@ -856,7 +856,7 @@ const HomeTab = () => {
                             inputMode="numeric"
                             placeholder="invite code"
                             autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                         />
                         {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
                         <div className="flex justify-center gap-3">

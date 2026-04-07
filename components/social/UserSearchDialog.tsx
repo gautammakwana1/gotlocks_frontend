@@ -277,7 +277,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                         onChange={(event) => setQuery(event.target.value)}
                         placeholder="Search @username"
                         autoFocus
-                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[var(--text-muted)]"
+                        className="w-full bg-transparent text-base sm:text-sm text-white outline-none placeholder:text-[var(--text-muted)]"
                     />
                 </label>
 

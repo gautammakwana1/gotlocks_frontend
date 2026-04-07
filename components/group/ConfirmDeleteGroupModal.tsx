@@ -138,7 +138,7 @@ export const DeleteGroupConfirmationModal = ({
                             type="text"
                             onChange={(event) => onConfirmationChange(event.target.value)}
                             autoComplete="off"
-                            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-red-400/70"
+                            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
                         />
                     </label>
                 </div>

@@ -76,7 +76,7 @@ export default function CustomDatePicker({
                     placeholder={placeholder}
                     onChange={handleInputChange}
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className="w-full cursor-pointer rounded-2xl border border-white/10 bg-black px-4 py-3 pr-10 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                    className="w-full cursor-pointer rounded-2xl border border-white/10 bg-black px-4 py-3 pr-10 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                 />
 
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -134,7 +134,7 @@ export default function CustomDatePicker({
                         disabled={
                             disableFuture ? { after: new Date() } : undefined
                         }
-                        footer={`Note: ${note}`}
+                        footer={note ? `Note: ${note}` : ``}
                         className="text-sm sm:text-base"
                         classNames={{
                             caption: "flex justify-center gap-3",

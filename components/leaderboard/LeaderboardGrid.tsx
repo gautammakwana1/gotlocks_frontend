@@ -27,6 +27,7 @@ type Props = {
     currentUserId?: string;
     leaderboardId: string;
     leaderboardName?: string;
+    leaderboardSlips: Slips;
 };
 
 // const glowClassesForCumulative = (cumulative: number) => {
@@ -517,6 +518,7 @@ export const LeaderboardGrid = ({
     currentUserId,
     leaderboardName,
     leaderboardId,
+    leaderboardSlips,
 }: Props) => {
     const isMobile = useIsMobile();
     const scrollerRef = useRef<HTMLDivElement>(null);

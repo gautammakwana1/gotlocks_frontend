@@ -1,14 +1,20 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, Slips, SlipState, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, Slips, SlipState, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: SlipState = {
     slip: null,
     slips: null,
+    openSlips: null,
+    reviewSlips: null,
+    finalizeSlips: null,
     session: null,
     hasSeenIntro: false,
     loading: false,
     error: null,
     message: null,
+    hasMoreOpens: false,
+    hasMoreReviews: false,
+    hasMoreFinalizes: false,
 };
 
 const slipSlice = createSlice({
@@ -49,6 +55,84 @@ const slipSlice = createSlice({
             state.error = action.payload;
         },
         clearFetchAllSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchAllOpenSlipsRequest: (state, action: PayloadAction<FetchOpenSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllOpenSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreOpens = hasMore;
+            if (page === 1) {
+                state.openSlips = slips;
+            } else {
+                const existingIds = new Set(state.openSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.openSlips = [...(state.openSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllOpenSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllOpenSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchAllReviewSlipsRequest: (state, action: PayloadAction<FetchReviewSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllReviewSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreReviews = hasMore;
+            if (page === 1) {
+                state.reviewSlips = slips;
+            } else {
+                const existingIds = new Set(state.reviewSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.reviewSlips = [...(state.reviewSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllReviewSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllReviewSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchAllFinalizedSlipsRequest: (state, action: PayloadAction<FetchFinalizeSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllFinalizedSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreFinalizes = hasMore;
+            if (page === 1) {
+                state.finalizeSlips = slips;
+            } else {
+                const existingIds = new Set(state.finalizeSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.finalizeSlips = [...(state.finalizeSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllFinalizedSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllFinalizedSlipsMessage(state) {
             state.error = null;
             state.message = null;
         },
@@ -258,6 +342,84 @@ const slipSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        fetchAllVibeOpenSlipsRequest: (state, action: PayloadAction<FetchOpenSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllVibeOpenSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreOpens = hasMore;
+            if (page === 1) {
+                state.openSlips = slips;
+            } else {
+                const existingIds = new Set(state.openSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.openSlips = [...(state.openSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllVibeOpenSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllVibeOpenSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchAllVibeReviewSlipsRequest: (state, action: PayloadAction<FetchReviewSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllVibeReviewSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreReviews = hasMore;
+            if (page === 1) {
+                state.reviewSlips = slips;
+            } else {
+                const existingIds = new Set(state.reviewSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.reviewSlips = [...(state.reviewSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllVibeReviewSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllVibeReviewSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchAllVibeFinalizedSlipsRequest: (state, action: PayloadAction<FetchFinalizeSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllVibeFinalizedSlipsSuccess: (state, action: PayloadAction<{ slips: Slips, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { slips, hasMore, page } = action.payload;
+            state.hasMoreFinalizes = hasMore;
+            if (page === 1) {
+                state.finalizeSlips = slips;
+            } else {
+                const existingIds = new Set(state.finalizeSlips?.map(s => s.id) || []);
+                const newUniquePicks = slips.filter(s => !existingIds.has(s.id));
+                state.finalizeSlips = [...(state.finalizeSlips || []), ...newUniquePicks];
+            }
+        },
+        fetchAllVibeFinalizedSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllVibeFinalizedSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -314,6 +476,30 @@ export const {
     fetchSlipByIdSuccess,
     fetchSlipByIdFailure,
     clearFetchSlipByIdMessage,
+    fetchAllOpenSlipsRequest,
+    fetchAllOpenSlipsSuccess,
+    fetchAllOpenSlipsFailure,
+    clearFetchAllOpenSlipsMessage,
+    fetchAllReviewSlipsRequest,
+    fetchAllReviewSlipsSuccess,
+    fetchAllReviewSlipsFailure,
+    clearFetchAllReviewSlipsMessage,
+    fetchAllFinalizedSlipsRequest,
+    fetchAllFinalizedSlipsSuccess,
+    fetchAllFinalizedSlipsFailure,
+    clearFetchAllFinalizedSlipsMessage,
+    fetchAllVibeOpenSlipsRequest,
+    fetchAllVibeOpenSlipsSuccess,
+    fetchAllVibeOpenSlipsFailure,
+    clearFetchAllVibeOpenSlipsMessage,
+    fetchAllVibeReviewSlipsRequest,
+    fetchAllVibeReviewSlipsSuccess,
+    fetchAllVibeReviewSlipsFailure,
+    clearFetchAllVibeReviewSlipsMessage,
+    fetchAllVibeFinalizedSlipsRequest,
+    fetchAllVibeFinalizedSlipsSuccess,
+    fetchAllVibeFinalizedSlipsFailure,
+    clearFetchAllVibeFinalizedSlipsMessage,
 } = slipSlice.actions;
 
 export default slipSlice.reducer;

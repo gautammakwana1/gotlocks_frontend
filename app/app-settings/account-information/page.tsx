@@ -56,7 +56,7 @@ const formatDobWithAge = (dob?: string) => {
 };
 
 const inputClassName =
-    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20 disabled:text-white/50";
+    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base sm:text-sm text-[var(--app-text)] outline-none transition focus:border-white/20 disabled:text-white/50";
 
 const AccountInformationPage = () => {
     const dispatch = useDispatch();

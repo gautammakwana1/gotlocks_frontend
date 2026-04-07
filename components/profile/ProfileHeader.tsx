@@ -122,6 +122,7 @@ type FollowerStatsProps = {
     followers: number;
     following: number;
     className?: string;
+    showStats: boolean;
     onFollowersClick?: () => void;
     onFollowingClick?: () => void;
 };
@@ -132,6 +133,7 @@ const FollowerStats = ({
     className = "",
     onFollowersClick,
     onFollowingClick,
+    showStats = true,
 }: FollowerStatsProps) => (
     <div
         className={`flex flex-nowrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-sky-100/80 ${className}`}
@@ -141,6 +143,7 @@ const FollowerStats = ({
                 type="button"
                 onClick={onFollowersClick}
                 className="whitespace-nowrap transition hover:text-white"
+                disabled={!showStats}
             >
                 {followers} followers
             </button>
@@ -153,6 +156,7 @@ const FollowerStats = ({
                 type="button"
                 onClick={onFollowingClick}
                 className="whitespace-nowrap transition hover:text-white"
+                disabled={!showStats}
             >
                 {following} following
             </button>
@@ -517,6 +521,7 @@ const ProfileHeader = ({
                                                         className="sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
                                                         onFollowersClick={onFollowersClick}
                                                         onFollowingClick={onFollowingClick}
+                                                        showStats={showStats}
                                                     />
                                                     <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
                                                         {privacyStatusLabel}
@@ -534,6 +539,7 @@ const ProfileHeader = ({
                                                 className="mt-2"
                                                 onFollowersClick={onFollowersClick}
                                                 onFollowingClick={onFollowingClick}
+                                                showStats={showStats}
                                             />
                                             <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
                                                 {privacyStatusLabel}
@@ -630,7 +636,7 @@ const ProfileHeader = ({
                             }}
                             placeholder="username"
                             autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-sky-400/70"
+                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition focus:border-sky-400/70"
                         />
                         {errors.username && (
                             <span className="text-xs font-medium text-red-400">

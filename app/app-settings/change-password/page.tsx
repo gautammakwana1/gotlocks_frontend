@@ -24,7 +24,7 @@ interface FormErrors {
 }
 
 const inputClassName =
-    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20";
+    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base sm:text-sm text-[var(--app-text)] outline-none transition focus:border-white/20";
 
 const ChangePasswordPage = () => {
     const dispatch = useDispatch();

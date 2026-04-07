@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
 import { formatDateTime } from "@/lib/utils/date";
@@ -71,6 +71,9 @@ type PointsTableRow = {
     player: OddsBlazePlayer;
     teamLabel: string;
     lines: Map<number, OddsObject>;
+    availableLines: number[];
+    lineCount: number;
+    highestLine: number | null;
 };
 
 type SpreadLineEntry = {
@@ -516,6 +519,8 @@ const tierNameFromIndex = (tier?: TierIndex) =>
 
 const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
 
+const CATEGORY_ROW_PREVIEW_LIMIT = 5;
+
 const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
@@ -886,6 +891,20 @@ const formatNumberLine = (line?: number) => {
     return `${line}`;
 };
 
+const compareNumbersDesc = (
+    left?: number | null,
+    right?: number | null
+) => {
+    if (left === undefined || left === null) {
+        return right === undefined || right === null ? 0 : 1;
+    }
+    if (right === undefined || right === null) return -1;
+    return right - left;
+};
+
+const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
+    left.name.localeCompare(right.name);
+
 const STICKY_COLUMN_BASE_CLASSES =
     "relative sticky left-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:inset-y-0 after:left-full after:w-8 after:bg-gradient-to-r after:to-transparent after:content-[''] sm:before:w-6 sm:after:w-10";
 
@@ -910,6 +929,25 @@ const scrollerStickyColumnRowClasses = (
         ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
         : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
     } ${selected ? "after:bg-emerald-300/60" : "after:bg-white/5"}`;
+
+const PropRowScroller = ({
+    scrollerKey,
+    lines,
+    renderChip,
+}: {
+    scrollerKey: string;
+    lines: number[];
+    renderChip: (line: number) => ReactNode;
+}) => {
+    return (
+        <div
+            key={scrollerKey}
+            className="scrollbar-hide flex gap-2 overflow-x-auto px-1 py-1"
+        >
+            {lines.map((line) => renderChip(line))}
+        </div>
+    );
+};
 
 const LineScroller = ({
     lines,
@@ -1027,6 +1065,9 @@ const buildPointsTable = (
                 player,
                 teamLabel,
                 lines: new Map(),
+                availableLines: [],
+                lineCount: 0,
+                highestLine: null,
             });
         }
 
@@ -1045,9 +1086,23 @@ const buildPointsTable = (
     });
 
     const lines = [...lineSet].sort((a, b) => a - b);
-    const rows = [...rowMap.values()].sort((a, b) =>
-        a.player.name.localeCompare(b.player.name)
-    );
+    const rows = [...rowMap.values()]
+        .map((row) => {
+            const availableLines = [...row.lines.keys()].sort((a, b) => a - b);
+            return {
+                ...row,
+                availableLines,
+                lineCount: availableLines.length,
+                highestLine: availableLines[availableLines.length - 1] ?? null,
+            };
+        })
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.highestLine, right.highestLine);
+            if (lineDiff !== 0) return lineDiff;
+            const countDiff = right.lineCount - left.lineCount;
+            if (countDiff !== 0) return countDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return { lines, rows };
 };
@@ -1083,7 +1138,11 @@ const buildSimplePropRows = (
             const teamLabel = playerTeamLabel(player, game);
             return { player, teamLabel, line, odd };
         })
-        .sort((a, b) => a.player.name.localeCompare(b.player.name));
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.line, right.line);
+            if (lineDiff !== 0) return lineDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return rows;
 };
@@ -1126,7 +1185,15 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
         if (side === "under") entry.under = odd;
     });
 
-    return [...rowMap.values()].sort((a, b) => a.player.name.localeCompare(b.player.name));
+    return [...rowMap.values()].sort((left, right) => {
+        const leftThreshold =
+            left.line ?? left.over?.selection?.line ?? left.under?.selection?.line;
+        const rightThreshold =
+            right.line ?? right.over?.selection?.line ?? right.under?.selection?.line;
+        const lineDiff = compareNumbersDesc(leftThreshold, rightThreshold);
+        if (lineDiff !== 0) return lineDiff;
+        return comparePlayerNames(left.player, right.player);
+    });
 };
 
 export const NhlPickBuilder = ({
@@ -1166,6 +1233,9 @@ export const NhlPickBuilder = ({
     >(
         {}
     );
+    const [expandedCategoryRows, setExpandedCategoryRows] = useState<
+        Record<string, boolean>
+    >({});
     const [selected, setSelected] = useState<SelectedOdd | null>(null);
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
     const [altTotalLine, setAltTotalLine] = useState<number | null>(null);
@@ -2153,6 +2223,42 @@ export const NhlPickBuilder = ({
         });
     };
 
+    const isCategoryRowsExpanded = (key: string) =>
+        expandedCategoryRows[key] ?? false;
+
+    const toggleCategoryRows = (key: string) => {
+        setExpandedCategoryRows((prev) => ({
+            ...prev,
+            [key]: !(prev[key] ?? false),
+        }));
+    };
+
+    const getVisibleCategoryRows = <T,>(rows: T[], key: string) => {
+        const expanded = isCategoryRowsExpanded(key);
+        const hasMore = rows.length > CATEGORY_ROW_PREVIEW_LIMIT;
+        return {
+            rows: expanded ? rows : rows.slice(0, CATEGORY_ROW_PREVIEW_LIMIT),
+            expanded,
+            hasMore,
+        };
+    };
+
+    const renderCategoryRowsToggle = (key: string, totalRows: number) => {
+        if (totalRows <= CATEGORY_ROW_PREVIEW_LIMIT) return null;
+        const expanded = isCategoryRowsExpanded(key);
+        return (
+            <div className="mt-3 w-full">
+                <button
+                    type="button"
+                    onClick={() => toggleCategoryRows(key)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20 hover:text-white"
+                >
+                    {expanded ? "show less" : "show more"}
+                </button>
+            </div>
+        );
+    };
+
     const straightSectionKey = "review-straight-picks";
     const sameGameSectionKey = "review-same-game-combo-picks";
     const isSameGameSectionCollapsed = hasMultiSelection
@@ -2712,6 +2818,7 @@ export const NhlPickBuilder = ({
 
     const renderMainOverUnderTable = (
         rows: ReturnType<typeof buildMainPointsRows>,
+        sectionKey: string,
         className = "mt-4 -mx-5 sm:-mx-6"
     ) => {
         if (!activeGame) return null;
@@ -2722,161 +2829,183 @@ export const NhlPickBuilder = ({
                 </div>
             );
         }
+        const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
         return (
-            <div className={className}>
-                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                    <div
-                        className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
-                        style={{
-                            gridTemplateColumns:
-                                "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                        }}
-                    >
-                        <div className="pl-0 pr-3 py-2">Player</div>
-                        <div className="px-3 py-2 text-center">Over line</div>
-                        <div className="px-3 py-2 text-center">Under line</div>
-                    </div>
-                    {rows.map((row, rowIndex) => {
-                        const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                        const overLine = row.over?.selection?.line ?? row.line;
-                        const underLine = row.under?.selection?.line ?? row.line;
-                        const renderPointButton = (
-                            odd: OddsObject | undefined,
-                            prefix: "O" | "U",
-                            line?: number
-                        ) => {
-                            const isSelected = isOddSelected(odd);
-                            const label = `${prefix} ${line ?? "-"}`;
-                            return (
-                                <button
-                                    type="button"
-                                    onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                    disabled={!odd || locked}
-                                    className={`${tableOddsBoxClasses(
-                                        isSelected,
-                                        !odd
-                                    )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                >
-                                    <div className="flex flex-col items-center leading-tight">
-                                        <span
-                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
-                                                }`}
-                                        >
-                                            {label}
-                                        </span>
-                                        <span
-                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
-                                                }`}
-                                        >
-                                            {odd ? formatOdds(odd.price) : "-"}
-                                        </span>
-                                    </div>
-                                </button>
-                            );
-                        };
+            <>
+                <div className={className}>
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                            style={{
+                                gridTemplateColumns:
+                                    "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                            }}
+                        >
+                            <div className="pl-0 pr-3 py-2">Player</div>
+                            <div className="px-3 py-2 text-center">Over line</div>
+                            <div className="px-3 py-2 text-center">Under line</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const overLine = row.over?.selection?.line ?? row.line;
+                            const underLine = row.under?.selection?.line ?? row.line;
+                            const renderPointButton = (
+                                odd: OddsObject | undefined,
+                                prefix: "O" | "U",
+                                line?: number
+                            ) => {
+                                const isSelected = isOddSelected(odd);
+                                const label = `${prefix} ${line ?? "-"}`;
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                        disabled={!odd || locked}
+                                        className={`${tableOddsBoxClasses(
+                                            isSelected,
+                                            !odd
+                                        )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                    >
+                                        <div className="flex flex-col items-center leading-tight">
+                                            <span
+                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                    }`}
+                                            >
+                                                {label}
+                                            </span>
+                                            <span
+                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                    }`}
+                                            >
+                                                {odd ? formatOdds(odd.price) : "-"}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            };
 
-                        return (
-                            <div
-                                key={row.player.id}
-                                className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
-                                style={{
-                                    gridTemplateColumns:
-                                        "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                }}
-                            >
-                                <div className="min-w-0 pl-0 pr-3 py-2.5">
-                                    <p className="truncate text-sm font-semibold text-white">
-                                        {row.player.name}
-                                    </p>
-                                    <p className="mt-1 truncate text-xs text-gray-400">
-                                        {row.teamLabel}
-                                    </p>
+                            return (
+                                <div
+                                    key={row.player.id}
+                                    className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
+                                    style={{
+                                        gridTemplateColumns:
+                                            "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                                    }}
+                                >
+                                    <div className="min-w-0 pl-0 pr-3 py-2.5">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                            {row.player.name}
+                                        </p>
+                                        <p className="mt-1 truncate text-xs text-gray-400">
+                                            {row.teamLabel}
+                                        </p>
+                                    </div>
+                                    {renderPointButton(row.over, "O", overLine)}
+                                    {renderPointButton(row.under, "U", underLine)}
                                 </div>
-                                {renderPointButton(row.over, "O", overLine)}
-                                {renderPointButton(row.under, "U", underLine)}
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
+                {renderCategoryRowsToggle(sectionKey, rows.length)}
+            </>
         );
     };
 
     const renderScrollablePropTable = (
         table: { lines: number[]; rows: PointsTableRow[] },
-        market: string
+        market: string,
+        sectionKey: string,
+        activeSide: "Over" | "Under"
     ) => {
         if (!activeGame) return null;
-        if (table.lines.length === 0 || table.rows.length === 0) return null;
+        if (table.rows.length === 0) return null;
+        const { rows: visibleRows } = getVisibleCategoryRows(table.rows, sectionKey);
         return (
-            <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
-                <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                    <div
-                        className="grid gap-2 text-xs uppercase tracking-wide text-gray-400"
-                        style={{
-                            gridTemplateColumns: table.lines.length
-                                ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                : "minmax(160px,1fr)",
-                        }}
-                    >
-                        <div className={`${SCROLLER_STICKY_COLUMN_HEADER_CLASSES} sm:min-w-[190px]`}>
-                            Scroll right to see more
+            <>
+                <div className="mt-4 -mx-5 sm:-mx-6">
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)] sm:px-6"
+                        >
+                            <div className="pl-0 pr-3 py-2">Player</div>
+                            <div className="px-0 py-2">Available lines</div>
                         </div>
-                        {table.lines.map((line) => (
-                            <div key={`${market}-${line}`} className="px-3 py-2 text-center">
-                                {formatLineLabel(line)}
-                            </div>
-                        ))}
-                    </div>
-                    {table.rows.map((row, rowIndex) => {
-                        const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                        return (
-                            <div
-                                key={`${market}-${row.player.id}`}
-                                className={`grid gap-2 ${rowBand}`}
-                                style={{
-                                    gridTemplateColumns: table.lines.length
-                                        ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                        : "minmax(160px,1fr)",
-                                }}
-                            >
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const lineCountLabel = `${row.lineCount} line${row.lineCount === 1 ? "" : "s"}`;
+                            return (
                                 <div
-                                    className={`${scrollerStickyColumnRowClasses(
-                                        rowIndex % 2 === 1
-                                    )} sm:min-w-[190px]`}
+                                    key={`${market}-${row.player.id}`}
+                                    className={`border-b border-white/5 px-5 py-3 sm:px-6 ${rowBand}`}
                                 >
-                                    <p className="text-sm font-semibold text-white">
-                                        {row.player.name}
-                                    </p>
-                                    <p className="mt-1 text-xs text-gray-400">
-                                        {row.teamLabel}
-                                    </p>
-                                </div>
-                                {table.lines.map((line) => {
-                                    const odd = row.lines.get(line);
-                                    const isSelected = isOddSelected(odd);
-                                    const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                    return (
-                                        <div key={`${row.player.id}-${line}`} className="flex justify-center px-1 py-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                disabled={!odd || locked}
-                                                className={`${tableOddsBoxClasses(
-                                                    isSelected,
-                                                    !odd
-                                                )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                            >
-                                                {oddsLabel}
-                                            </button>
+                                    <div
+                                        className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]"
+                                    >
+                                        <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                            <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
+                                                {row.player.name}
+                                            </p>
+                                            <p className="mt-1 text-[11px] leading-tight text-gray-400 sm:text-xs">
+                                                {row.teamLabel}
+                                                {row.teamLabel ? " · " : ""}
+                                                {lineCountLabel}
+                                            </p>
                                         </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })}
+                                        <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                                            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                                            <PropRowScroller
+                                                scrollerKey={`${sectionKey}-${row.player.id}`}
+                                                lines={row.availableLines}
+                                                renderChip={(line) => {
+                                                    const odd = row.lines.get(line);
+                                                    const isSelected = isOddSelected(odd);
+                                                    const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                                                    const lineLabel =
+                                                        activeSide === "Over"
+                                                            ? formatLineLabel(line)
+                                                            : `U ${formatNumberLine(line)}`;
+                                                    return (
+                                                        <button
+                                                            key={`${row.player.id}-${line}`}
+                                                            type="button"
+                                                            data-line={line}
+                                                            onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                                            disabled={!odd || locked}
+                                                            className={`${tableOddsBoxClasses(
+                                                                isSelected,
+                                                                !odd
+                                                            )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                        >
+                                                            <div className="flex flex-col items-center leading-tight">
+                                                                <span
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                                        }`}
+                                                                >
+                                                                    {lineLabel}
+                                                                </span>
+                                                                <span
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                                        }`}
+                                                                >
+                                                                    {oddsLabel}
+                                                                </span>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
+                {renderCategoryRowsToggle(sectionKey, table.rows.length)}
+            </>
         );
     };
 
@@ -3758,6 +3887,10 @@ export const NhlPickBuilder = ({
                                     : [];
                                 const sectionKey = `${activeTab}-${market}`;
                                 const collapsed = isSectionCollapsed(sectionKey, index === 0);
+                                const { rows: visibleSimpleRows } = getVisibleCategoryRows(
+                                    simpleRows,
+                                    sectionKey
+                                );
 
                                 const sectionPadding =
                                     index === 0 ? "px-5 pb-6 pt-3 sm:px-6" : "px-5 py-6 sm:px-6";
@@ -3816,74 +3949,77 @@ export const NhlPickBuilder = ({
                                                 ) : null}
 
                                                 {isMainPlayerPoints ? (
-                                                    renderMainOverUnderTable(mainPointsRows)
+                                                    renderMainOverUnderTable(mainPointsRows, sectionKey)
                                                 ) : showTable ? (
-                                                    renderScrollablePropTable(table, market)
+                                                    renderScrollablePropTable(table, market, sectionKey, activeSide)
                                                 ) : isTableMarket ? (
-                                                    <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
-                                                        <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                            <div
-                                                                className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                                style={{
-                                                                    gridTemplateColumns:
-                                                                        "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                }}
-                                                            >
-                                                                <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
-                                                                    Player
+                                                    <>
+                                                        <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                                                            <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                                <div
+                                                                    className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                                    style={{
+                                                                        gridTemplateColumns:
+                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                    }}
+                                                                >
+                                                                    <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
+                                                                        Player
+                                                                    </div>
+                                                                    <div className="px-3 py-2 text-center">
+                                                                        {activeSide} line
+                                                                    </div>
+                                                                    <div className="px-3 py-2 text-center">Odds</div>
                                                                 </div>
-                                                                <div className="px-3 py-2 text-center">
-                                                                    {activeSide} line
-                                                                </div>
-                                                                <div className="px-3 py-2 text-center">Odds</div>
-                                                            </div>
-                                                            {simpleRows.map((row, rowIndex) => {
-                                                                const isSelected = isOddSelected(row.odd);
-                                                                const rowBand =
-                                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                                return (
-                                                                    <button
-                                                                        key={`${market}-${row.player.id}`}
-                                                                        type="button"
-                                                                        onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                                                        disabled={!row.odd || locked}
-                                                                        className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
-                                                                            ? "border-emerald-300/60 bg-emerald-500/10"
-                                                                            : "hover:bg-white/[0.02]"
-                                                                            } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                                        style={{
-                                                                            gridTemplateColumns:
-                                                                                "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                        }}
-                                                                    >
-                                                                        <div
-                                                                            className={scrollerStickyColumnRowClasses(
-                                                                                rowIndex % 2 === 1,
-                                                                                isSelected
-                                                                            )}
+                                                                {visibleSimpleRows.map((row, rowIndex) => {
+                                                                    const isSelected = isOddSelected(row.odd);
+                                                                    const rowBand =
+                                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                                    return (
+                                                                        <button
+                                                                            key={`${market}-${row.player.id}`}
+                                                                            type="button"
+                                                                            onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
+                                                                            disabled={!row.odd || locked}
+                                                                            className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
+                                                                                ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                                : "hover:bg-white/[0.02]"
+                                                                                } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                                            style={{
+                                                                                gridTemplateColumns:
+                                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                            }}
                                                                         >
-                                                                            <p className="text-sm font-semibold text-white">
-                                                                                {row.player.name}
-                                                                            </p>
-                                                                            <p className="mt-1 text-xs text-gray-400">
-                                                                                {row.teamLabel}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                                                            {row.line ?? "-"}
-                                                                        </div>
-                                                                        <div className="flex justify-center px-3 py-3">
-                                                                            {renderTableOddsBox(
-                                                                                row.odd ? formatOdds(row.odd.price) : "-",
-                                                                                isSelected,
-                                                                                !row.odd
-                                                                            )}
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })}
+                                                                            <div
+                                                                                className={scrollerStickyColumnRowClasses(
+                                                                                    rowIndex % 2 === 1,
+                                                                                    isSelected
+                                                                                )}
+                                                                            >
+                                                                                <p className="text-sm font-semibold text-white">
+                                                                                    {row.player.name}
+                                                                                </p>
+                                                                                <p className="mt-1 text-xs text-gray-400">
+                                                                                    {row.teamLabel}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
+                                                                                {row.line ?? "-"}
+                                                                            </div>
+                                                                            <div className="flex justify-center px-3 py-3">
+                                                                                {renderTableOddsBox(
+                                                                                    row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                    isSelected,
+                                                                                    !row.odd
+                                                                                )}
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                        {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
+                                                    </>
                                                 ) : (
                                                     renderOddCards(odds)
                                                 )}

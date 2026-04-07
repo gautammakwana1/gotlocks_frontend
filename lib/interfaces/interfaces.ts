@@ -541,6 +541,22 @@ export type FetchPicksPaginationPayload = {
     hasMore: boolean;
 };
 
+export type FetchSlipsPaginationPayload = {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
+export type FetchGroupsPaginationPayload = {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
 export type FetchSearchedUsersPaginationPayload = {
     page: number;
     limit: number;
@@ -574,6 +590,24 @@ export type FetchSlipsPayload = {
     group_id: string;
 };
 
+export type FetchOpenSlipsPayload = {
+    group_id: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FetchReviewSlipsPayload = {
+    group_id: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FetchFinalizeSlipsPayload = {
+    group_id: string;
+    page?: number;
+    limit?: number;
+};
+
 export type FetchSlipByIdPayload = {
     slip_id: string;
 };
@@ -596,6 +630,11 @@ export type UpdateSlipPayload = {
     name?: string;
 };
 
+export type FetchBlockedUsersPayload = {
+    page?: number;
+    limit?: number;
+};
+
 export type FetchNotificationsPayload = {
     page?: number;
     limit?: number;
@@ -604,11 +643,17 @@ export type FetchNotificationsPayload = {
 export type SlipState = {
     slip: Slip | null;
     slips: Slips | null;
+    openSlips: Slips | null;
+    reviewSlips: Slips | null;
+    finalizeSlips: Slips | null;
     session: SessionState | null;
     hasSeenIntro: boolean;
     loading: boolean;
     error: string | null;
     message: string | null;
+    hasMoreOpens: boolean;
+    hasMoreReviews: boolean;
+    hasMoreFinalizes: boolean;
 };
 
 export type PickState = {
@@ -771,6 +816,7 @@ export type ArchiveLeaderboardSlip = {
     archived: boolean;
     index: number;
     created_at: string;
+    pick_deadline_at: string;
 }
 
 export type ArchivedLeaderboard = {
@@ -1052,6 +1098,7 @@ export type AuthSliceState = {
     refreshTokenData: string | null;
     resetPasswordMessage: string | null;
     resetPasswordError: string | null;
+    hasMoreBlockedUsers: boolean;
 };
 
 export type FetchNFLSchedulePayload = {
@@ -1850,6 +1897,9 @@ export type AltPropsTableRow = {
     player: OddsBlazePlayer;
     teamLabel: string;
     lines: Map<number, OddsBlazeOdd>;
+    availableLines: number[];
+    lineCount: number;
+    highestLine: number | null;
 };
 
 export type TdScorerColumn = {

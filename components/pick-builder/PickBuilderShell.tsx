@@ -159,7 +159,7 @@ const StubLeagueBuilder = ({
                 <textarea
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
-                    className="min-h-[120px] rounded-2xl border border-white/12 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                    className="min-h-[120px] rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                     placeholder={`Example: ${league} custom pick`}
                 />
             </label>
@@ -170,7 +170,7 @@ const StubLeagueBuilder = ({
                     <input
                         value={odds}
                         onChange={(event) => setOdds(event.target.value)}
-                        className="rounded-2xl border border-white/12 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                        className="rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                         placeholder="+150"
                     />
                 </label>
@@ -255,13 +255,19 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     }, [props.initialLeague, context]);
 
     const sortedLeagues = useMemo(() => {
-        return [...leagues]
-            .filter((l) => (leagueCounts?.[l] ?? 0) > 0 || l === initialLeagueBasis)
-            .sort((a, b) => {
-                const countA = leagueCounts?.[a] ?? 0;
-                const countB = leagueCounts?.[b] ?? 0;
-                return countB - countA;
-            });
+        const filtered = [...leagues].filter((l) => {
+            const count = leagueCounts?.[l] ?? 0;
+            if (leagues.length > 1) {
+                return count > 0;
+            }
+            return count > 0 || l === initialLeagueBasis;
+        });
+
+        return filtered.sort((a, b) => {
+            const countA = leagueCounts?.[a] ?? 0;
+            const countB = leagueCounts?.[b] ?? 0;
+            return countB - countA;
+        });
     }, [leagues, leagueCounts, initialLeagueBasis]);
 
     const allowedLeagues = useMemo(() => {

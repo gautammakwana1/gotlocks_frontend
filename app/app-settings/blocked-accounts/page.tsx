@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -11,18 +11,59 @@ import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronUp, Loader2 } from "lucide-react";
+import ScrollUpButton from "@/components/ui/ScrollUpButton";
 
 const BlockedAccountsPage = () => {
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
     const { setToast } = useToast();
 
-    const { blockedUsers, loading, message, error } = useSelector((state: RootState) => state.user);
+    const [page, setPage] = useState(1);
+    const [showScrollTop, setShowScrollTop] = useState(false);
+    const observerTarget = useRef<HTMLDivElement>(null);
+
+    const { blockedUsers, loading, message, error, hasMoreBlockedUsers } = useSelector((state: RootState) => state.user);
+
+    const fetchBlockedUsers = useCallback((pageNum: number) => {
+        dispatch(fetchBlockedUsersRequest({ page: pageNum, limit: 10 }));
+    }, [dispatch]);
 
     useEffect(() => {
-        dispatch(fetchBlockedUsersRequest({}));
-    }, [dispatch]);
+        fetchBlockedUsers(1);
+    }, [fetchBlockedUsers]);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && hasMoreBlockedUsers && !loading) {
+                    const nextPage = page + 1;
+                    setPage(nextPage);
+                    fetchBlockedUsers(nextPage);
+                }
+            },
+            { threshold: 1.0 }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => observer.disconnect();
+    }, [hasMoreBlockedUsers, loading, page, fetchBlockedUsers]);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setShowScrollTop(window.scrollY > 400);
+        };
+
+        window.addEventListener("scroll", handleScroll);
+        return () => window.removeEventListener("scroll", handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
 
     useEffect(() => {
         if (!loading && message) {
@@ -43,7 +84,7 @@ const BlockedAccountsPage = () => {
             })
             dispatch(clearUnblockUserMessage());
         }
-    }, [dispatch, loading, message, error]);
+    }, [dispatch, loading, message, error, setToast]);
 
     const handleUnblock = (targetUserId: string) => {
         if (targetUserId) {
@@ -54,7 +95,7 @@ const BlockedAccountsPage = () => {
     if (!currentUser) return null;
 
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="mx-auto w-full max-w-2xl space-y-6 pb-20">
             <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
                 <Link
                     href="/app-settings"
@@ -126,12 +167,20 @@ const BlockedAccountsPage = () => {
                             </div>
                         );
                     })}
+
+                    <div ref={observerTarget} className="flex justify-center py-4">
+                        {loading && hasMoreBlockedUsers && (
+                            <Loader2 className="h-6 w-6 animate-spin text-emerald-500/60" />
+                        )}
+                    </div>
                 </div>
             ) : (
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm leading-6 text-[var(--text-secondary)]">
-                    You have not blocked any members. If you block someone from their profile,
-                    they will appear here for easy unblocking later.
-                </div>
+                !loading && (
+                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm leading-6 text-[var(--text-secondary)]">
+                        You have not blocked any members. If you block someone from their profile,
+                        they will appear here for easy unblocking later.
+                    </div>
+                )
             )}
 
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-[var(--text-secondary)]">
@@ -145,6 +194,10 @@ const BlockedAccountsPage = () => {
             >
                 back
             </Link>
+
+            {showScrollTop && (
+                <ScrollUpButton scrollToTop={scrollToTop} />
+            )}
         </div>
     );
 };

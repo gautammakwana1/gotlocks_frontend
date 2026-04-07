@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts } from "@/lib/interfaces/interfaces";
+import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts, FetchBlockedUsersPayload } from "@/lib/interfaces/interfaces";
 import { removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type AuthState = {
@@ -27,6 +27,7 @@ type AuthState = {
 	refreshTokenData: string | null;
 	resetPasswordMessage: string | null;
 	resetPasswordError: string | null;
+	hasMoreBlockedUsers: boolean;
 };
 
 const initialState: AuthState = {
@@ -54,6 +55,7 @@ const initialState: AuthState = {
 	refreshTokenData: null,
 	resetPasswordMessage: null,
 	resetPasswordError: null,
+	hasMoreBlockedUsers: false,
 };
 
 const authSlice = createSlice({
@@ -510,14 +512,22 @@ const authSlice = createSlice({
 			state.message = null;
 		},
 
-		fetchBlockedUsersRequest: (state, action) => {
+		fetchBlockedUsersRequest: (state, action: PayloadAction<FetchBlockedUsersPayload | undefined>) => {
 			void action;
 			state.loading = true;
 			state.error = null;
 		},
-		fetchBlockedUsersSuccess: (state, action) => {
+		fetchBlockedUsersSuccess: (state, action: PayloadAction<{ blockedUsers: BlockedUsers[], page: number, hasMore: boolean }>) => {
 			state.loading = false;
-			state.blockedUsers = action.payload.blockedUsers;
+			const { blockedUsers, page, hasMore } = action.payload;
+			state.hasMoreBlockedUsers = hasMore;
+			if (page === 1) {
+				state.blockedUsers = blockedUsers;
+			} else {
+				const existingIds = new Set(state.blockedUsers?.map(user => user.id) || []);
+				const newUniqueUsers = blockedUsers.filter(user => !existingIds.has(user.id));
+				state.blockedUsers = [...(state.blockedUsers || []), ...newUniqueUsers];
+			}
 		},
 		fetchBlockedUsersFailure: (state, action) => {
 			state.loading = false;

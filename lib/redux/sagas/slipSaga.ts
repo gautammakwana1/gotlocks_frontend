@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
+import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllFinalizedSlipsFailure, fetchAllFinalizedSlipsRequest, fetchAllFinalizedSlipsSuccess, fetchAllOpenSlipsFailure, fetchAllOpenSlipsRequest, fetchAllOpenSlipsSuccess, fetchAllReviewSlipsFailure, fetchAllReviewSlipsRequest, fetchAllReviewSlipsSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchAllVibeFinalizedSlipsFailure, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeFinalizedSlipsSuccess, fetchAllVibeOpenSlipsFailure, fetchAllVibeOpenSlipsRequest, fetchAllVibeOpenSlipsSuccess, fetchAllVibeReviewSlipsFailure, fetchAllVibeReviewSlipsRequest, fetchAllVibeReviewSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPaginationPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest } from "../slices/groupsSlice";
 
 type ApiErrorResponse = {
@@ -214,6 +214,126 @@ function* handleAssignToSecondaryLeaderboard(action: PayloadAction<AssignToSecon
     }
 }
 
+function* handleFetchAllOpenSlips(action: PayloadAction<FetchOpenSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/open`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllOpenSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllOpenSlipsFailure(getErrorMessage(error, "Open slips Fetch Failed")))
+    }
+}
+
+function* handleFetchAllReviewSlips(action: PayloadAction<FetchReviewSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/review`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllReviewSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllReviewSlipsFailure(getErrorMessage(error, "Review slips Fetch Failed")))
+    }
+}
+
+function* handleFetchAllFinalizedSlips(action: PayloadAction<FetchFinalizeSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/final`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllFinalizedSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllFinalizedSlipsFailure(getErrorMessage(error, "Finalized slips Fetch Failed")))
+    }
+}
+
+function* handleFetchAllVibeOpenSlips(action: PayloadAction<FetchOpenSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/vibe-open`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllVibeOpenSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllVibeOpenSlipsFailure(getErrorMessage(error, "Open vibe slips Fetch Failed")))
+    }
+}
+
+function* handleFetchAllVibeReviewSlips(action: PayloadAction<FetchReviewSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/vibe-review`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllVibeReviewSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllVibeReviewSlipsFailure(getErrorMessage(error, "Review vibe slips Fetch Failed")))
+    }
+}
+
+function* handleFetchAllVibeFinalizedSlips(action: PayloadAction<FetchFinalizeSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/vibe-final`,
+            {
+                params: { group_id, page, limit }
+            }
+        );
+        const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
+        const slips = payload.data?.slips ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchAllVibeFinalizedSlipsSuccess({ slips, page, hasMore: pagination?.hasMore ?? slips.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchAllVibeFinalizedSlipsFailure(getErrorMessage(error, "Finalized vibe slips Fetch Failed")))
+    }
+}
+
 export default function* slipSaga() {
     yield takeLatest(createSlipRequest.type, handleCreateSlip);
     yield takeLatest(fetchAllSlipsRequest.type, handleFetchAllSlips);
@@ -228,4 +348,10 @@ export default function* slipSaga() {
     yield takeLatest(deleteSlipRequest.type, handleDeleteSlip);
     yield takeLatest(reOpenSlipRequest.type, handleReOpenSlip);
     yield takeLatest(assignToSecondaryLeaderboardRequest.type, handleAssignToSecondaryLeaderboard);
+    yield takeLatest(fetchAllOpenSlipsRequest.type, handleFetchAllOpenSlips);
+    yield takeLatest(fetchAllReviewSlipsRequest.type, handleFetchAllReviewSlips);
+    yield takeLatest(fetchAllFinalizedSlipsRequest.type, handleFetchAllFinalizedSlips);
+    yield takeLatest(fetchAllVibeOpenSlipsRequest.type, handleFetchAllVibeOpenSlips);
+    yield takeLatest(fetchAllVibeReviewSlipsRequest.type, handleFetchAllVibeReviewSlips);
+    yield takeLatest(fetchAllVibeFinalizedSlipsRequest.type, handleFetchAllVibeFinalizedSlips);
 };

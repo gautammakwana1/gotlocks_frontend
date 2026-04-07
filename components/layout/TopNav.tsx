@@ -107,7 +107,7 @@ export const TopNav = () => {
         className="sticky top-0 z-30 border-b backdrop-blur"
         style={{ backgroundColor: "var(--nav-bg)", borderColor: "var(--nav-border)" }}
       >
-        <div className="relative mx-auto w-full max-w-4xl px-5 py-4">
+        <div className="relative flex items-center justify-end sm:justify-center gap-10 mx-auto w-full max-w-4xl px-5 py-4">
           <div className="absolute left-5 top-1/2 -translate-y-1/2">
             <button
               type="button"

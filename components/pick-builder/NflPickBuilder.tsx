@@ -625,6 +625,22 @@ const formatAltLineLabel = (line: number) => {
     return `${value}+`;
 };
 
+const CATEGORY_ROW_PREVIEW_LIMIT = 5;
+
+const compareNumbersDesc = (
+    left?: number | null,
+    right?: number | null
+) => {
+    if (left === undefined || left === null) {
+        return right === undefined || right === null ? 0 : 1;
+    }
+    if (right === undefined || right === null) return -1;
+    return right - left;
+};
+
+const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
+    left.name.localeCompare(right.name);
+
 const LineScroller = ({
     lines,
     activeLine,
@@ -685,6 +701,25 @@ const LineScroller = ({
                     );
                 })}
             </div>
+        </div>
+    );
+};
+
+const PropRowScroller = ({
+    scrollerKey,
+    lines,
+    renderChip,
+}: {
+    scrollerKey: string;
+    lines: number[];
+    renderChip: (line: number) => ReactNode;
+}) => {
+    return (
+        <div
+            key={scrollerKey}
+            className="scrollbar-hide flex gap-2 overflow-x-auto px-1 py-1"
+        >
+            {lines.map((line) => renderChip(line))}
         </div>
     );
 };
@@ -776,6 +811,9 @@ const buildAltLinesTable = (
                 player: odd.player,
                 teamLabel: playerTeamLabel(odd.player, game),
                 lines: new Map(),
+                availableLines: [],
+                lineCount: 0,
+                highestLine: null,
             });
         }
 
@@ -787,9 +825,23 @@ const buildAltLinesTable = (
     });
 
     const lines = [...lineSet].sort((a, b) => a - b);
-    const rows = [...rowMap.values()].sort((a, b) =>
-        a.player.name.localeCompare(b.player.name)
-    );
+    const rows = [...rowMap.values()]
+        .map((row) => {
+            const availableLines = [...row.lines.keys()].sort((a, b) => a - b);
+            return {
+                ...row,
+                availableLines,
+                lineCount: availableLines.length,
+                highestLine: availableLines[availableLines.length - 1] ?? null,
+            };
+        })
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.highestLine, right.highestLine);
+            if (lineDiff !== 0) return lineDiff;
+            const countDiff = right.lineCount - left.lineCount;
+            if (countDiff !== 0) return countDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return { lines, rows };
 };
@@ -826,7 +878,11 @@ const buildSimpleAltRows = (
             line,
             odd,
         }))
-        .sort((a, b) => a.player.name.localeCompare(b.player.name));
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.line, right.line);
+            if (lineDiff !== 0) return lineDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return rows;
 };
@@ -1040,6 +1096,9 @@ export const NflPickBuilder = ({
     >(
         {}
     );
+    const [expandedCategoryRows, setExpandedCategoryRows] = useState<
+        Record<string, boolean>
+    >({});
     const [altSideByMarket, setAltSideByMarket] = useState<
         Record<string, "Over" | "Under">
     >({});
@@ -3202,6 +3261,40 @@ export const NflPickBuilder = ({
         });
     };
 
+    const isCategoryRowsExpanded = (key: string) =>
+        expandedCategoryRows[key] ?? false;
+
+    const toggleCategoryRows = (key: string) => {
+        setExpandedCategoryRows((prev) => ({
+            ...prev,
+            [key]: !(prev[key] ?? false),
+        }));
+    };
+
+    const getVisibleCategoryRows = <T,>(rows: T[], key: string) => {
+        const expanded = isCategoryRowsExpanded(key);
+        return {
+            rows: expanded ? rows : rows.slice(0, CATEGORY_ROW_PREVIEW_LIMIT),
+            expanded,
+        };
+    };
+
+    const renderCategoryRowsToggle = (key: string, totalRows: number) => {
+        if (totalRows <= CATEGORY_ROW_PREVIEW_LIMIT) return null;
+        const expanded = isCategoryRowsExpanded(key);
+        return (
+            <div className="mt-3 w-full">
+                <button
+                    type="button"
+                    onClick={() => toggleCategoryRows(key)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20 hover:text-white"
+                >
+                    {expanded ? "show less" : "show more"}
+                </button>
+            </div>
+        );
+    };
+
     const renderPropMarketSection = (
         sectionKey: string,
         title: string,
@@ -3249,7 +3342,7 @@ export const NflPickBuilder = ({
             game.odds.filter((odd) => markets.includes(odd.market) && odd.player),
             game
         );
-        const altOdds = marketOdds.filter((odd) => !odd.main);
+        const altOdds = marketOdds;
         const collapsed = isSectionCollapsed(sectionKey, defaultOpen);
         const sides = new Set(
             altOdds
@@ -3261,9 +3354,9 @@ export const NflPickBuilder = ({
         const defaultSide = hasOver ? "Over" : hasUnder ? "Under" : "Over";
         const activeSide = altSideByMarket[sectionKey] ?? defaultSide;
         const table = buildAltLinesTable(altOdds, game, activeSide);
-        const showTable =
-            activeSide === "Over" && table.lines.length > 1 && table.rows.length > 0;
+        const showTable = table.lines.length > 1 && table.rows.length > 0;
         const simpleRows = buildSimpleAltRows(altOdds, game, activeSide);
+        const { rows: visibleSimpleRows } = getVisibleCategoryRows(simpleRows, sectionKey);
 
         return (
             <section key={sectionKey} className="px-5 py-6 sm:px-6">
@@ -3320,147 +3413,138 @@ export const NflPickBuilder = ({
                                 )}
 
                                 {showTable ? (
-                                    <div className="mt-4 overflow-x-auto">
-                                        <div className="min-w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                            <div
-                                                className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                style={{
-                                                    gridTemplateColumns: table.lines.length
-                                                        ? `minmax(140px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                        : "minmax(140px,1fr)",
-                                                }}
-                                            >
-                                                <div className="sticky left-0 z-20 bg-black/80 px-3 py-2 sm:min-w-[190px]">
-                                                    Scroll right to see more
+                                    <>
+                                        <div className="mt-4">
+                                            <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                <div className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]">
+                                                    <div className="pr-3 py-2">Player</div>
+                                                    <div className="py-2">Available lines</div>
                                                 </div>
-                                                {table.lines.map((line) => (
-                                                    <div
-                                                        key={`${sectionKey}-${line}`}
-                                                        className="px-3 py-2 text-center"
-                                                    >
-                                                        <span className="sr-only">
-                                                            {formatAltLineLabel(line)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            {table.rows.map((row, rowIndex) => {
-                                                const rowBand =
-                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                return (
-                                                    <div
-                                                        key={`${sectionKey}-${row.player.id}`}
-                                                        className={`grid gap-2 border-b border-white/5 ${rowBand}`}
-                                                        style={{
-                                                            gridTemplateColumns: table.lines.length
-                                                                ? `minmax(140px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                                : "minmax(140px,1fr)",
-                                                        }}
-                                                    >
-                                                        <div className="sticky left-0 z-10 bg-black/80 px-3 py-3 sm:min-w-[190px]">
-                                                            <p className="text-sm font-semibold text-white">
-                                                                {row.player.name}
-                                                            </p>
-                                                            <p className="mt-1 text-xs text-gray-400">
-                                                                {/* {row.teamLabel} */}
-                                                                {playerMetaLabel(row.player, row.teamLabel)}
-                                                            </p>
-                                                        </div>
-                                                        {table.lines.map((line) => {
-                                                            const odd = row.lines.get(line);
-                                                            const isSelected = isOddSelected(odd);
-                                                            const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                            const lineLabel =
-                                                                activeSide === "Over"
-                                                                    ? formatAltLineLabel(line)
-                                                                    : `U ${formatNumberLine(line)}`;
-                                                            return (
-                                                                <div
-                                                                    key={`${row.player.id}-${line}`}
-                                                                    className="flex justify-center px-1 py-2"
-                                                                >
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => odd && handleOddsSelection(odd)}
-                                                                        disabled={!odd || locked}
-                                                                        className={`flex ${!odd ? "cursor-not-allowed" : ""}`}
-                                                                    >
-                                                                        {renderLineOddsBox(
-                                                                            lineLabel,
-                                                                            oddsLabel,
-                                                                            isSelected,
-                                                                            !odd
-                                                                        )}
-                                                                    </button>
+                                                {getVisibleCategoryRows(table.rows, sectionKey).rows.map((row, rowIndex) => {
+                                                    const rowBand =
+                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                    const lineCountLabel = `${row.lineCount} line${row.lineCount === 1 ? "" : "s"}`;
+                                                    return (
+                                                        <div
+                                                            key={`${sectionKey}-${row.player.id}`}
+                                                            className={`border-b border-white/5 py-3 ${rowBand}`}
+                                                        >
+                                                            <div className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]">
+                                                                <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                                                    <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
+                                                                        {row.player.name}
+                                                                    </p>
+                                                                    <p className="mt-1 text-[11px] leading-tight text-gray-400 sm:text-xs">
+                                                                        {playerMetaLabel(row.player, row.teamLabel)}
+                                                                        {" · "}
+                                                                        {lineCountLabel}
+                                                                    </p>
                                                                 </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ) : simpleRows.length > 0 ? (
-                                    <div className="mt-4 overflow-x-auto">
-                                        <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                            <div
-                                                className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                style={{
-                                                    gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
-                                                }}
-                                            >
-                                                <div className="px-3 py-2">Player</div>
-                                                <div className="px-3 py-2 text-center">{activeSide}</div>
+                                                                <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                                                                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                                                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                                                                    <PropRowScroller
+                                                                        scrollerKey={`${sectionKey}-${row.player.id}`}
+                                                                        lines={row.availableLines}
+                                                                        renderChip={(line) => {
+                                                                            const odd = row.lines.get(line);
+                                                                            const isSelected = isOddSelected(odd);
+                                                                            const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                                                                            const lineLabel =
+                                                                                activeSide === "Over"
+                                                                                    ? formatAltLineLabel(line)
+                                                                                    : `U ${formatNumberLine(line)}`;
+                                                                            return (
+                                                                                <button
+                                                                                    key={`${row.player.id}-${line}`}
+                                                                                    type="button"
+                                                                                    data-line={line}
+                                                                                    onClick={() => odd && handleOddsSelection(odd)}
+                                                                                    disabled={!odd || locked}
+                                                                                    className={`flex ${!odd ? "cursor-not-allowed" : ""}`}
+                                                                                >
+                                                                                    {renderLineOddsBox(
+                                                                                        lineLabel,
+                                                                                        oddsLabel,
+                                                                                        isSelected,
+                                                                                        !odd
+                                                                                    )}
+                                                                                </button>
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                            {simpleRows.map((row, rowIndex) => {
-                                                const isSelected = isOddSelected(row.odd);
-                                                const rowBand =
-                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                const lineLabel =
-                                                    activeSide === "Over"
-                                                        ? row.line !== undefined
-                                                            ? formatAltLineLabel(row.line)
-                                                            : "-"
-                                                        : row.line !== undefined
-                                                            ? `U ${formatNumberLine(row.line)}`
-                                                            : "U -";
-                                                const oddsLabel = row.odd ? formatOdds(row.odd.price) : "-";
-                                                return (
-                                                    <button
-                                                        key={`${sectionKey}-${row.player.id}`}
-                                                        type="button"
-                                                        onClick={() => row.odd && handleOddsSelection(row.odd)}
-                                                        disabled={!row.odd || locked}
-                                                        className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
-                                                            ? "border-emerald-300/60 bg-emerald-500/10"
-                                                            : "hover:bg-white/[0.02]"
-                                                            } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                        style={{
-                                                            gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
-                                                        }}
-                                                    >
-                                                        <div className="px-3 py-3">
-                                                            <p className="text-sm font-semibold text-white">
-                                                                {row.player.name}
-                                                            </p>
-                                                            <p className="mt-1 text-xs text-gray-400">
-                                                                {/* {row.teamLabel} */}
-                                                                {playerMetaLabel(row.player, row.teamLabel)}
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex justify-center px-3 py-3">
-                                                            {renderLineOddsBox(
-                                                                lineLabel,
-                                                                oddsLabel,
-                                                                isSelected,
-                                                                !row.odd
-                                                            )}
-                                                        </div>
-                                                    </button>
-                                                );
-                                            })}
                                         </div>
-                                    </div>
+                                        {renderCategoryRowsToggle(sectionKey, table.rows.length)}
+                                    </>
+                                ) : simpleRows.length > 0 ? (
+                                    <>
+                                        <div className="mt-4 overflow-x-auto">
+                                            <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                <div
+                                                    className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                    style={{
+                                                        gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                                                    }}
+                                                >
+                                                    <div className="px-3 py-2">Player</div>
+                                                    <div className="px-3 py-2 text-center">{activeSide}</div>
+                                                </div>
+                                                {visibleSimpleRows.map((row, rowIndex) => {
+                                                    const isSelected = isOddSelected(row.odd);
+                                                    const rowBand =
+                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                    const lineLabel =
+                                                        activeSide === "Over"
+                                                            ? row.line !== undefined
+                                                                ? formatAltLineLabel(row.line)
+                                                                : "-"
+                                                            : row.line !== undefined
+                                                                ? `U ${formatNumberLine(row.line)}`
+                                                                : "U -";
+                                                    const oddsLabel = row.odd ? formatOdds(row.odd.price) : "-";
+                                                    return (
+                                                        <button
+                                                            key={`${sectionKey}-${row.player.id}`}
+                                                            type="button"
+                                                            onClick={() => row.odd && handleOddsSelection(row.odd)}
+                                                            disabled={!row.odd || locked}
+                                                            className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
+                                                                ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                : "hover:bg-white/[0.02]"
+                                                                } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                            style={{
+                                                                gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                                                            }}
+                                                        >
+                                                            <div className="px-3 py-3">
+                                                                <p className="text-sm font-semibold text-white">
+                                                                    {row.player.name}
+                                                                </p>
+                                                                <p className="mt-1 text-xs text-gray-400">
+                                                                    {playerMetaLabel(row.player, row.teamLabel)}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex justify-center px-3 py-3">
+                                                                {renderLineOddsBox(
+                                                                    lineLabel,
+                                                                    oddsLabel,
+                                                                    isSelected,
+                                                                    !row.odd
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
+                                    </>
                                 ) : (
                                     <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
                                         No {title.toLowerCase()} available for this matchup yet.

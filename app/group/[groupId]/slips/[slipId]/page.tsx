@@ -1160,7 +1160,7 @@ const SlipDetailsPage = () => {
                                                                         setPickDeadlineDraft(fromLocalInputValue(event.target.value))
                                                                     }
                                                                     disabled={!canEditDeadlines}
-                                                                    className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                    className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70 disabled:cursor-not-allowed disabled:opacity-60"
                                                                 />
                                                             </label>
                                                             <label className="flex flex-col gap-1 text-xs text-gray-400">
@@ -1714,7 +1714,7 @@ const SlipDetailsPage = () => {
                                 onChange={(event) =>
                                     setReopenDeadlineDraft(fromLocalInputValue(event.target.value))
                                 }
-                                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                             />
                         </label>
                         <div className="flex justify-center gap-3">
@@ -1968,7 +1968,7 @@ const SlipDetailsPage = () => {
                                 <input
                                     value={editingName}
                                     onChange={(event) => setEditingName(event.target.value)}
-                                    className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                    className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                                     placeholder="Slip name"
                                 />
                                 {errors.name && (

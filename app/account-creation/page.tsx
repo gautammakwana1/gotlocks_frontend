@@ -332,7 +332,6 @@ const AccountCreationPage = () => {
           startYear={1900}
           disableFuture
           placeholder="select your date of birth"
-          note="User must be 13 years old"
         />
 
         <label className="flex flex-col gap-2">

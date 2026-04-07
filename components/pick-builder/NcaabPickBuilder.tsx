@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
 import { formatDateTime } from "@/lib/utils/date";
@@ -93,6 +93,9 @@ type PointsTableRow = {
     player: OddsBlazePlayer;
     teamLabel: string;
     lines: Map<number, OddsBlazeOdd>;
+    availableLines: number[];
+    lineCount: number;
+    highestLine: number | null;
 };
 
 type SpreadLineEntry = {
@@ -333,6 +336,8 @@ const tierNameFromIndex = (tier?: TierIndex) =>
     tierMetaFromIndex(tier)?.name ?? "EVEN";
 
 const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
+
+const CATEGORY_ROW_PREVIEW_LIMIT = 5;
 
 const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
@@ -757,6 +762,22 @@ const formatNumberLine = (line?: number) => {
     return `${line}`;
 };
 
+const normalizeAltPointsLine = (value: number) => value;
+
+const compareNumbersDesc = (
+    left?: number | null,
+    right?: number | null
+) => {
+    if (left === undefined || left === null) {
+        return right === undefined || right === null ? 0 : 1;
+    }
+    if (right === undefined || right === null) return -1;
+    return right - left;
+};
+
+const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
+    left.name.localeCompare(right.name);
+
 const STICKY_COLUMN_BASE_CLASSES =
     "relative sticky left-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:inset-y-0 after:left-full after:w-8 after:bg-gradient-to-r after:to-transparent after:content-[''] sm:before:w-6 sm:after:w-10";
 
@@ -768,18 +789,24 @@ const stickyColumnRowClasses = (banded: boolean) =>
         : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
     } after:from-black/40`;
 
-const SCROLLER_STICKY_COLUMN_BASE_CLASSES =
-    "relative sticky left-0 pl-0 pr-3 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:bottom-0 after:left-[-100vw] after:h-px after:w-[200vw] after:content-[''] sm:before:w-6";
-
-const SCROLLER_STICKY_COLUMN_HEADER_CLASSES = `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-30 py-2 bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.72)_100%)] after:bg-white/10`;
-
-const scrollerStickyColumnRowClasses = (banded: boolean, selected = false) =>
-    `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-20 py-3 ${banded
-        ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
-        : selected
-            ? "bg-[linear-gradient(90deg,rgba(8,34,27,0.95)_0%,rgba(8,34,27,0.92)_76%,rgba(8,34,27,0.72)_100%)]"
-            : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
-    } after:bg-white/5`;
+const PropRowScroller = ({
+    scrollerKey,
+    lines,
+    renderChip,
+}: {
+    scrollerKey: string;
+    lines: number[];
+    renderChip: (line: number) => ReactNode;
+}) => {
+    return (
+        <div
+            key={scrollerKey}
+            className="scrollbar-hide flex gap-2 overflow-x-auto px-1 py-1"
+        >
+            {lines.map((line) => renderChip(line))}
+        </div>
+    );
+};
 
 const LineScroller = ({
     lines,
@@ -863,7 +890,7 @@ const buildPointsTable = (
     options?: { normalizeToFive?: boolean }
 ) => {
     const normalizeLine = options?.normalizeToFive
-        ? (value: number) => Math.round(value / 5) * 5
+        ? normalizeAltPointsLine
         : (value: number) => value;
     const lineSet = new Set<number>();
     const rowMap = new Map<string, PointsTableRow>();
@@ -885,6 +912,9 @@ const buildPointsTable = (
                 player,
                 teamLabel,
                 lines: new Map(),
+                availableLines: [],
+                lineCount: 0,
+                highestLine: null,
             });
         }
 
@@ -903,9 +933,23 @@ const buildPointsTable = (
     });
 
     const lines = [...lineSet].sort((a, b) => a - b);
-    const rows = [...rowMap.values()].sort((a, b) =>
-        a.player.name.localeCompare(b.player.name)
-    );
+    const rows = [...rowMap.values()]
+        .map((row) => {
+            const availableLines = [...row.lines.keys()].sort((a, b) => a - b);
+            return {
+                ...row,
+                availableLines,
+                lineCount: availableLines.length,
+                highestLine: availableLines[availableLines.length - 1] ?? null,
+            };
+        })
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.highestLine, right.highestLine);
+            if (lineDiff !== 0) return lineDiff;
+            const countDiff = right.lineCount - left.lineCount;
+            if (countDiff !== 0) return countDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return { lines, rows };
 };
@@ -913,7 +957,8 @@ const buildPointsTable = (
 const buildSimplePropRows = (
     odds: SelectedOdd[],
     game: GameOption,
-    side: "Over" | "Under"
+    side: "Over" | "Under",
+    options?: { normalizeToFive?: boolean }
 ) => {
     const rowMap = new Map<string, { odd: OddsBlazeOdd; line?: number }>();
     const sideLower = side.toLowerCase();
@@ -939,9 +984,19 @@ const buildSimplePropRows = (
         .map(({ odd, line }) => {
             const player = odd.player as OddsBlazePlayer;
             const teamLabel = playerTeamLabel(player, game);
-            return { player, teamLabel, line, odd };
+            const displayLine =
+                line === undefined
+                    ? undefined
+                    : options?.normalizeToFive
+                        ? normalizeAltPointsLine(line)
+                        : line;
+            return { player, teamLabel, line, displayLine, odd };
         })
-        .sort((a, b) => a.player.name.localeCompare(b.player.name));
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.displayLine, right.displayLine);
+            if (lineDiff !== 0) return lineDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 
     return rows;
 };
@@ -984,7 +1039,15 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
         if (side === "under") entry.under = odd;
     });
 
-    return [...rowMap.values()].sort((a, b) => a.player.name.localeCompare(b.player.name));
+    return [...rowMap.values()].sort((left, right) => {
+        const leftThreshold =
+            left.line ?? left.over?.selection?.line ?? left.under?.selection?.line;
+        const rightThreshold =
+            right.line ?? right.over?.selection?.line ?? right.under?.selection?.line;
+        const lineDiff = compareNumbersDesc(leftThreshold, rightThreshold);
+        if (lineDiff !== 0) return lineDiff;
+        return comparePlayerNames(left.player, right.player);
+    });
 };
 
 export const NcaabPickBuilder = ({
@@ -1021,6 +1084,9 @@ export const NcaabPickBuilder = ({
     >(
         {}
     );
+    const [expandedCategoryRows, setExpandedCategoryRows] = useState<
+        Record<string, boolean>
+    >({});
     const [selected, setSelected] = useState<SelectedOdd | null>(null);
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
     const [altTotalLine, setAltTotalLine] = useState<number | null>(null);
@@ -1313,14 +1379,17 @@ export const NcaabPickBuilder = ({
         markets.forEach((market) => marketMap.set(market, []));
 
         activeGame.odds.forEach((odd) => {
-            let bucketKey: string | null = null;
+            const bucketKeys = new Set<string>();
             if (isPointsTab && odd.market === "Player Points") {
-                bucketKey = odd.main ? "Player Points" : ALT_POINTS_MARKET;
+                bucketKeys.add(odd.main ? "Player Points" : ALT_POINTS_MARKET);
+                if (odd.main) {
+                    bucketKeys.add(ALT_POINTS_MARKET);
+                }
             } else if (markets.includes(odd.market)) {
-                bucketKey = odd.market;
+                bucketKeys.add(odd.market);
             }
 
-            if (!bucketKey || !marketMap.has(bucketKey)) return;
+            if (bucketKeys.size === 0) return;
             if (term) {
                 const haystack = buildSearchHaystack(odd, activeGame)
                     .filter(Boolean)
@@ -1328,8 +1397,10 @@ export const NcaabPickBuilder = ({
                     .toLowerCase();
                 if (!haystack.includes(term)) return;
             }
-            const bucket = marketMap.get(bucketKey);
-            if (bucket) bucket.push({ odd, game: activeGame });
+            bucketKeys.forEach((bucketKey) => {
+                const bucket = marketMap.get(bucketKey);
+                if (bucket) bucket.push({ odd, game: activeGame });
+            });
         });
 
         marketMap.forEach((list) => list.sort(compareOddsByLine));
@@ -2036,6 +2107,42 @@ export const NcaabPickBuilder = ({
         });
     };
 
+    const isCategoryRowsExpanded = (key: string) =>
+        expandedCategoryRows[key] ?? false;
+
+    const toggleCategoryRows = (key: string) => {
+        setExpandedCategoryRows((prev) => ({
+            ...prev,
+            [key]: !(prev[key] ?? false),
+        }));
+    };
+
+    const getVisibleCategoryRows = <T,>(rows: T[], key: string) => {
+        const expanded = isCategoryRowsExpanded(key);
+        const hasMore = rows.length > CATEGORY_ROW_PREVIEW_LIMIT;
+        return {
+            rows: expanded ? rows : rows.slice(0, CATEGORY_ROW_PREVIEW_LIMIT),
+            expanded,
+            hasMore,
+        };
+    };
+
+    const renderCategoryRowsToggle = (key: string, totalRows: number) => {
+        if (totalRows <= CATEGORY_ROW_PREVIEW_LIMIT) return null;
+        const expanded = isCategoryRowsExpanded(key);
+        return (
+            <div className="mt-3 w-full">
+                <button
+                    type="button"
+                    onClick={() => toggleCategoryRows(key)}
+                    className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-white/20 hover:text-white"
+                >
+                    {expanded ? "show less" : "show more"}
+                </button>
+            </div>
+        );
+    };
+
     const straightSectionKey = "review-straight-picks";
     const sameGameSectionKey = "review-same-game-combo-picks";
     const isSameGameSectionCollapsed = hasMultiSelection
@@ -2505,6 +2612,7 @@ export const NcaabPickBuilder = ({
 
     const renderMainOverUnderTable = (
         rows: ReturnType<typeof buildMainPointsRows>,
+        sectionKey: string,
         className = "mt-4 -mx-5 sm:-mx-6"
     ) => {
         if (!activeGame) return null;
@@ -2515,159 +2623,176 @@ export const NcaabPickBuilder = ({
                 </div>
             );
         }
+        const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
         return (
-            <div className={className}>
-                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                    <div
-                        className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
-                        style={{
-                            gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                        }}
-                    >
-                        <div className="pl-0 pr-3 py-2">Player</div>
-                        <div className="px-3 py-2 text-center">Over line</div>
-                        <div className="px-3 py-2 text-center">Under line</div>
-                    </div>
-                    {rows.map((row, rowIndex) => {
-                        const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                        const overLine = row.over?.selection?.line ?? row.line;
-                        const underLine = row.under?.selection?.line ?? row.line;
-                        const renderPointButton = (
-                            odd: OddsBlazeOdd | undefined,
-                            prefix: "O" | "U",
-                            line?: number
-                        ) => {
-                            const isSelected = isOddSelected(odd);
-                            const label = `${prefix} ${line ?? "-"}`;
-                            return (
-                                <button
-                                    type="button"
-                                    onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                    disabled={!odd || locked}
-                                    className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
-                                        }`}
-                                >
-                                    <div className="flex flex-col items-center leading-tight">
-                                        <span
-                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
-                                                }`}
-                                        >
-                                            {label}
-                                        </span>
-                                        <span
-                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
-                                                }`}
-                                        >
-                                            {odd ? formatOdds(odd.price) : "-"}
-                                        </span>
-                                    </div>
-                                </button>
-                            );
-                        };
+            <>
+                <div className={className}>
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                            style={{
+                                gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                            }}
+                        >
+                            <div className="pl-0 pr-3 py-2">Player</div>
+                            <div className="px-3 py-2 text-center">Over line</div>
+                            <div className="px-3 py-2 text-center">Under line</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const overLine = row.over?.selection?.line ?? row.line;
+                            const underLine = row.under?.selection?.line ?? row.line;
+                            const renderPointButton = (
+                                odd: OddsBlazeOdd | undefined,
+                                prefix: "O" | "U",
+                                line?: number
+                            ) => {
+                                const isSelected = isOddSelected(odd);
+                                const label = `${prefix} ${line ?? "-"}`;
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                        disabled={!odd || locked}
+                                        className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
+                                            }`}
+                                    >
+                                        <div className="flex flex-col items-center leading-tight">
+                                            <span
+                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                    }`}
+                                            >
+                                                {label}
+                                            </span>
+                                            <span
+                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                    }`}
+                                            >
+                                                {odd ? formatOdds(odd.price) : "-"}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            };
 
-                        return (
-                            <div
-                                key={row.player.id}
-                                className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
-                                style={{
-                                    gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                }}
-                            >
-                                <div className="min-w-0 pl-0 pr-3 py-2.5">
-                                    <p className="truncate text-sm font-semibold text-white">
-                                        {row.player.name}
-                                    </p>
-                                    <p className="mt-1 truncate text-xs text-gray-400">
-                                        {row.teamLabel}
-                                    </p>
+                            return (
+                                <div
+                                    key={row.player.id}
+                                    className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
+                                    style={{
+                                        gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                                    }}
+                                >
+                                    <div className="min-w-0 pl-0 pr-3 py-2.5">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                            {row.player.name}
+                                        </p>
+                                        <p className="mt-1 truncate text-xs text-gray-400">
+                                            {row.teamLabel}
+                                        </p>
+                                    </div>
+                                    {renderPointButton(row.over, "O", overLine)}
+                                    {renderPointButton(row.under, "U", underLine)}
                                 </div>
-                                {renderPointButton(row.over, "O", overLine)}
-                                {renderPointButton(row.under, "U", underLine)}
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
                 </div>
-            </div>
+                {renderCategoryRowsToggle(sectionKey, rows.length)}
+            </>
         );
     };
 
     const renderScrollablePropTable = (
         table: { lines: number[]; rows: PointsTableRow[] },
         market: string,
-        showPointsSuffix: boolean
+        showPointsSuffix: boolean,
+        sectionKey: string
     ) => {
         if (!activeGame) return null;
-        if (table.lines.length === 0 || table.rows.length === 0) return null;
+        if (table.rows.length === 0) return null;
+        const { rows: visibleRows } = getVisibleCategoryRows(table.rows, sectionKey);
         return (
-            <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
-                <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                    <div
-                        className="grid gap-2 text-xs uppercase tracking-wide text-gray-400"
-                        style={{
-                            gridTemplateColumns: table.lines.length
-                                ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                : "minmax(160px,1fr)",
-                        }}
-                    >
-                        <div className={`${SCROLLER_STICKY_COLUMN_HEADER_CLASSES} sm:min-w-[190px]`}>
-                            Scroll right to see more
+            <>
+                <div className="mt-4 -mx-5 sm:-mx-6">
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)] sm:px-6"
+                        >
+                            <div className="pl-0 pr-3 py-2">Player</div>
+                            <div className="px-0 py-2">Available lines</div>
                         </div>
-                        {table.lines.map((line) => {
-                            const headerLabel = showPointsSuffix
-                                ? `${formatLineLabel(line)} pts`
-                                : formatLineLabel(line);
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const lineCountLabel = `${row.lineCount} line${row.lineCount === 1 ? "" : "s"}`;
                             return (
-                                <div key={`${market}-${line}`} className="px-3 py-2 text-center">
-                                    {headerLabel}
+                                <div
+                                    key={`${market}-${row.player.id}`}
+                                    className={`border-b border-white/5 px-5 py-3 sm:px-6 ${rowBand}`}
+                                >
+                                    <div
+                                        className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]"
+                                    >
+                                        <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                            <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
+                                                {row.player.name}
+                                            </p>
+                                            <p className="mt-1 text-[11px] leading-tight text-gray-400 sm:text-xs">
+                                                {row.teamLabel}
+                                                {row.teamLabel ? " · " : ""}
+                                                {lineCountLabel}
+                                            </p>
+                                        </div>
+                                        <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                                            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                                            <PropRowScroller
+                                                scrollerKey={`${sectionKey}-${row.player.id}`}
+                                                lines={row.availableLines}
+                                                renderChip={(line) => {
+                                                    const odd = row.lines.get(line);
+                                                    const isSelected = isOddSelected(odd);
+                                                    const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                                                    const lineLabel = showPointsSuffix
+                                                        ? `${formatLineLabel(line)} pts`
+                                                        : formatLineLabel(line);
+                                                    return (
+                                                        <button
+                                                            key={`${row.player.id}-${line}`}
+                                                            type="button"
+                                                            data-line={line}
+                                                            onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                                            disabled={!odd || locked}
+                                                            className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
+                                                                }`}
+                                                        >
+                                                            <div className="flex flex-col items-center leading-tight">
+                                                                <span
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                                        }`}
+                                                                >
+                                                                    {lineLabel}
+                                                                </span>
+                                                                <span
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                                        }`}
+                                                                >
+                                                                    {oddsLabel}
+                                                                </span>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             );
                         })}
                     </div>
-                    {table.rows.map((row, rowIndex) => {
-                        const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                        return (
-                            <div
-                                key={`${market}-${row.player.id}`}
-                                className={`grid gap-2 ${rowBand}`}
-                                style={{
-                                    gridTemplateColumns: table.lines.length
-                                        ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                        : "minmax(160px,1fr)",
-                                }}
-                            >
-                                <div
-                                    className={`${scrollerStickyColumnRowClasses(
-                                        rowIndex % 2 === 1
-                                    )} sm:min-w-[190px]`}
-                                >
-                                    <p className="text-sm font-semibold text-white">
-                                        {row.player.name}
-                                    </p>
-                                    <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
-                                </div>
-                                {table.lines.map((line) => {
-                                    const odd = row.lines.get(line);
-                                    const isSelected = isOddSelected(odd);
-                                    const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                    return (
-                                        <div key={`${row.player.id}-${line}`} className="flex justify-center px-1 py-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                disabled={!odd || locked}
-                                                className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
-                                                    }`}
-                                            >
-                                                {oddsLabel}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        );
-                    })}
                 </div>
-            </div>
+                {renderCategoryRowsToggle(sectionKey, table.rows.length)}
+            </>
         );
     };
 
@@ -2784,212 +2909,6 @@ export const NcaabPickBuilder = ({
         );
     };
 
-    // const renderOddCards = (odds: OddsCardEntry[], marketOverride?: string) => {
-    //     if (!activeGame) return null;
-    //     return (
-    //         <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/60">
-    //             <div className="divide-y divide-white/5">
-    //                 {odds.map((entry) => {
-    //                     const odd = normalizeOddEntry(entry);
-    //                     const isSelected = isOddSelected(odd);
-    //                     const label = odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection";
-    //                     const side = odd.selection?.side;
-    //                     const line = odd.selection?.line;
-    //                     const isPlayer = Boolean(odd.player);
-    //                     const teamLabel = odd.player ? playerTeamLabel(odd.player, activeGame) : "";
-    //                     const subtitle = isPlayer
-    //                         ? teamLabel || matchupLabel(activeGame)
-    //                         : matchupLabel(activeGame);
-    //                     const lineLabel =
-    //                         line !== undefined ? `${side ? `${side} ` : ""}${line}` : side ?? "";
-    //                     return (
-    //                         <button
-    //                             key={odd.id}
-    //                             type="button"
-    //                             onClick={() => handleSelectOdd(odd, activeGame)}
-    //                             disabled={locked}
-    //                             className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition ${isSelected
-    //                                 ? "bg-emerald-500/10 text-emerald-50"
-    //                                 : "hover:bg-white/[0.03]"
-    //                                 } ${locked ? "cursor-not-allowed opacity-60" : ""}`}
-    //                         >
-    //                             <div className="min-w-0">
-    //                                 <p className="truncate text-sm font-semibold text-white">{label}</p>
-    //                                 {subtitle ? (
-    //                                     <p className="mt-1 text-xs text-gray-400">{subtitle}</p>
-    //                                 ) : null}
-    //                                 <p className="mt-1 text-[11px] text-gray-500">
-    //                                     {marketOverride ?? odd.market}
-    //                                 </p>
-    //                                 {lineLabel ? (
-    //                                     <p className="mt-1 text-[11px] text-gray-500">{lineLabel}</p>
-    //                                 ) : null}
-    //                             </div>
-    //                             {renderOddsBox(formatOdds(odd.price), isSelected)}
-    //                         </button>
-    //                     );
-    //                 })}
-    //             </div>
-    //         </div>
-    //     );
-    // };
-
-    // const renderFirstBasketSection = (odds: OddsBlazeOdd[]) => {
-    //     if (!activeGame) return null;
-    //     const primaryOdds = odds.filter((odd) => odd.market === "First Basket");
-    //     const listOdds = (primaryOdds.length > 0 ? primaryOdds : odds).slice().sort((a, b) => {
-    //         const aValue = parseAmericanOdds(a.price);
-    //         const bValue = parseAmericanOdds(b.price);
-    //         if (aValue === null && bValue === null) {
-    //             return (a.player?.name ?? a.name).localeCompare(b.player?.name ?? b.name);
-    //         }
-    //         if (aValue === null) return 1;
-    //         if (bValue === null) return -1;
-    //         if (aValue !== bValue) return aValue - bValue;
-    //         return (a.player?.name ?? a.name).localeCompare(b.player?.name ?? b.name);
-    //     });
-
-    //     return (
-    //         <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/60">
-    //             <div className="divide-y divide-white/5">
-    //                 {listOdds.map((odd) => {
-    //                     const isSelected = isOddSelected(odd);
-    //                     const label = odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection";
-    //                     const teamLabel = odd.player ? playerTeamLabel(odd.player, activeGame) : "";
-    //                     return (
-    //                         <button
-    //                             key={odd.id}
-    //                             type="button"
-    //                             onClick={() => handleSelectOdd(odd, activeGame)}
-    //                             disabled={locked}
-    //                             className={`flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition ${isSelected
-    //                                 ? "bg-emerald-500/10 text-emerald-50"
-    //                                 : "hover:bg-white/[0.03]"
-    //                                 } ${locked ? "cursor-not-allowed opacity-60" : ""}`}
-    //                         >
-    //                             <div className="min-w-0">
-    //                                 <p className="truncate text-sm font-semibold text-white">{label}</p>
-    //                                 {teamLabel ? (
-    //                                     <p className="mt-1 text-xs text-gray-400">{teamLabel}</p>
-    //                                 ) : null}
-    //                             </div>
-    //                             {renderOddsBox(formatOdds(odd.price), isSelected)}
-    //                         </button>
-    //                     );
-    //                 })}
-    //             </div>
-    //         </div>
-    //     );
-    // };
-
-    // const renderAltLineCard = (
-    //     odd: OddsBlazeOdd | undefined,
-    //     label: string,
-    //     lineLabel: string
-    // ) => {
-    //     const isSelected = isOddSelected(odd);
-    //     return (
-    //         <button
-    //             type="button"
-    //             onClick={() => odd && handleSelectOdd(odd, activeGame as GameOption)}
-    //             disabled={!odd || locked}
-    //             className={`flex min-h-[64px] items-center justify-between rounded-2xl px-4 py-3 text-left transition ${isSelected ? "bg-black/70" : "bg-black/70"
-    //                 } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
-    //         >
-    //             <div>
-    //                 <p className="text-sm font-semibold text-white">{label}</p>
-    //                 <p className="text-sm font-semibold text-white">{lineLabel}</p>
-    //             </div>
-    //             {renderOddsBox(odd ? formatOdds(odd.price) : "-", isSelected, !odd)}
-    //         </button>
-    //     );
-    // };
-
-    // const renderAlternateSpreadSection = () => {
-    //     if (!activeGame) return null;
-    //     if (altSpreadLineData.lines.length === 0) {
-    //         return (
-    //             <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-    //                 No alternate spreads available for this matchup yet.
-    //             </div>
-    //         );
-    //     }
-    //     const activeLine = altSpreadLine ?? altSpreadLineData.lines[0] ?? null;
-    //     const homeEntry = activeLine !== null ? altSpreadLineData.map.get(activeLine) : undefined;
-    //     const awayEntry =
-    //         activeLine !== null ? altSpreadLineData.map.get(-activeLine) : undefined;
-    //     const homeOdd = homeEntry?.home;
-    //     const awayOdd = awayEntry?.away;
-    //     const homeLine = activeLine ?? homeOdd?.selection?.line;
-    //     const awayLine =
-    //         activeLine !== null ? -activeLine : awayOdd?.selection?.line ?? undefined;
-    //     return (
-    //         <div className="mt-4 space-y-3">
-    //             <div className="grid gap-2 md:grid-cols-2">
-    //                 {renderAltLineCard(
-    //                     awayOdd,
-    //                     activeGame.awayTeam,
-    //                     formatLineValue(awayLine ?? awayOdd?.selection?.line)
-    //                 )}
-    //                 {renderAltLineCard(
-    //                     homeOdd,
-    //                     activeGame.homeTeam,
-    //                     formatLineValue(homeLine ?? homeOdd?.selection?.line)
-    //                 )}
-    //             </div>
-    //             <LineScroller
-    //                 lines={altSpreadLineData.lines}
-    //                 activeLine={activeLine}
-    //                 onSelect={setAltSpreadLine}
-    //                 formatLine={(line) => formatLineValue(line)}
-    //                 locked={locked}
-    //             />
-    //         </div>
-    //     );
-    // };
-
-    // const renderAlternateTotalSection = () => {
-    //     if (!activeGame) return null;
-    //     if (altTotalLineData.lines.length === 0) {
-    //         return (
-    //             <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-    //                 No alternate totals available for this matchup yet.
-    //             </div>
-    //         );
-    //     }
-    //     const activeLine = altTotalLine ?? altTotalLineData.lines[0] ?? null;
-    //     const entry = activeLine !== null ? altTotalLineData.map.get(activeLine) : undefined;
-    //     const overOdd = entry?.over;
-    //     const underOdd = entry?.under;
-    //     const lineLabel = formatNumberLine(activeLine ?? undefined);
-    //     return (
-    //         <div className="mt-4 space-y-3">
-    //             <div className="grid gap-2 md:grid-cols-2">
-    //                 {renderAltLineCard(
-    //                     overOdd,
-    //                     "Over",
-    //                     overOdd?.selection?.line !== undefined
-    //                         ? formatNumberLine(overOdd.selection.line)
-    //                         : lineLabel
-    //                 )}
-    //                 {renderAltLineCard(
-    //                     underOdd,
-    //                     "Under",
-    //                     underOdd?.selection?.line !== undefined
-    //                         ? formatNumberLine(underOdd.selection.line)
-    //                         : lineLabel
-    //                 )}
-    //             </div>
-    //             <LineScroller
-    //                 lines={altTotalLineData.lines}
-    //                 activeLine={activeLine}
-    //                 onSelect={setAltTotalLine}
-    //                 locked={locked}
-    //             />
-    //         </div>
-    //     );
-    // };
-
     const sheetSummary = activeDraft?.summary ?? "Selected pick";
     const sheetTierMeta = activeDraft
         ? getTierMetaForPick({
@@ -3086,51 +3005,6 @@ export const NcaabPickBuilder = ({
             total: "Total Points",
         });
     }, [activeGame]);
-
-    // const firstHalfLineOdds = useMemo(() => {
-    //     if (!activeGame) return null;
-    //     const spreadAway = findMainTeamOdd(
-    //         activeGame,
-    //         "1st Half Point Spread",
-    //         activeGame.awayTeam
-    //     );
-    //     const spreadHome = findMainTeamOdd(
-    //         activeGame,
-    //         "1st Half Point Spread",
-    //         activeGame.homeTeam
-    //     );
-    //     const moneyAway = findMainTeamOdd(
-    //         activeGame,
-    //         "1st Half Moneyline",
-    //         activeGame.awayTeam
-    //     );
-    //     const moneyHome = findMainTeamOdd(
-    //         activeGame,
-    //         "1st Half Moneyline",
-    //         activeGame.homeTeam
-    //     );
-    //     const totalOver = findMainTotalOddByMarket(
-    //         activeGame,
-    //         "1st Half Total Points",
-    //         "Over"
-    //     );
-    //     const totalUnder = findMainTotalOddByMarket(
-    //         activeGame,
-    //         "1st Half Total Points",
-    //         "Under"
-    //     );
-    //     const totalLine = totalOver?.selection?.line ?? totalUnder?.selection?.line;
-
-    //     return {
-    //         spreadAway,
-    //         spreadHome,
-    //         moneyAway,
-    //         moneyHome,
-    //         totalOver,
-    //         totalUnder,
-    //         totalLine,
-    //     };
-    // }, [activeGame]);
 
     const altSpreadOdds = useMemo(
         () =>
@@ -3730,98 +3604,6 @@ export const NcaabPickBuilder = ({
                                             </button>
 
                                             {!collapsed && activeGame && renderMainLinesGrid(mainLineOdds)}
-                                            {/* {!collapsed && activeGame && (
-                                                <div className="mt-4 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    <div
-                                                        className="grid items-center gap-2 text-xs uppercase tracking-wide text-gray-400"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="px-3">Team</div>
-                                                        <div className="text-center">Spread</div>
-                                                        <div className="text-center">Money</div>
-                                                        <div className="text-center">Total</div>
-                                                    </div>
-
-                                                    <div
-                                                        className="grid items-stretch gap-1"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="flex min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                            <div className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/70 text-xs font-semibold text-white sm:flex sm:h-10 sm:w-10">
-                                                                {activeGame.awayAbbr}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate text-sm font-semibold text-white">
-                                                                    {activeGame.awayTeam}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.spreadAway,
-                                                            formatLineValue(mainLineOdds?.spreadAway?.selection?.line),
-                                                            mainLineOdds?.spreadAway
-                                                                ? formatOdds(mainLineOdds.spreadAway.price)
-                                                                : "-"
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.moneyAway,
-                                                            mainLineOdds?.moneyAway ? formatOdds(mainLineOdds.moneyAway.price) : "-",
-                                                            undefined
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.totalOver,
-                                                            `O ${totalLine ?? "-"}`,
-                                                            mainLineOdds?.totalOver
-                                                                ? formatOdds(mainLineOdds.totalOver.price)
-                                                                : "-"
-                                                        )}
-                                                    </div>
-
-                                                    <div
-                                                        className="grid items-stretch gap-1 -mt-4 sm:mt-0"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="flex min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                            <div className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/70 text-xs font-semibold text-white sm:flex sm:h-10 sm:w-10">
-                                                                {activeGame.homeAbbr}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate text-sm font-semibold text-white">
-                                                                    {activeGame.homeTeam}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.spreadHome,
-                                                            formatLineValue(mainLineOdds?.spreadHome?.selection?.line),
-                                                            mainLineOdds?.spreadHome
-                                                                ? formatOdds(mainLineOdds.spreadHome.price)
-                                                                : "-"
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.moneyHome,
-                                                            mainLineOdds?.moneyHome ? formatOdds(mainLineOdds.moneyHome.price) : "-",
-                                                            undefined
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            mainLineOdds?.totalUnder,
-                                                            `U ${totalLine ?? "-"}`,
-                                                            mainLineOdds?.totalUnder
-                                                                ? formatOdds(mainLineOdds.totalUnder.price)
-                                                                : "-"
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )} */}
                                         </>
                                     );
                                 })()}
@@ -3986,132 +3768,6 @@ export const NcaabPickBuilder = ({
                                         </section>
                                     );
                                 })}
-                            {/* <section className="px-5 pb-6 pt-3 sm:px-6">
-                                {(() => {
-                                    const sectionKey = "first-half-lines-main";
-                                    const collapsed = isSectionCollapsed(sectionKey, true);
-                                    const totalLine = firstHalfLineOdds?.totalLine;
-                                    return (
-                                        <>
-                                            <button
-                                                type="button"
-                                                onClick={() => toggleSection(sectionKey, true)}
-                                                aria-expanded={!collapsed}
-                                                className="flex w-full items-center justify-between pb-0 text-left"
-                                            >
-                                                <span className="text-sm font-semibold text-white">
-                                                    1st Half Lines
-                                                </span>
-                                                <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
-                                                    <span
-                                                        className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
-                                                            }`}
-                                                    >
-                                                        v
-                                                    </span>
-                                                </span>
-                                            </button>
-
-                                            {!collapsed && activeGame && (
-                                                <div className="mt-4 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    <div
-                                                        className="grid items-center gap-2 text-xs uppercase tracking-wide text-gray-400"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="px-3">Team</div>
-                                                        <div className="text-center">Spread</div>
-                                                        <div className="text-center">Money</div>
-                                                        <div className="text-center">Total</div>
-                                                    </div>
-
-                                                    <div
-                                                        className="grid items-stretch gap-1"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="flex min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                            <div className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/70 text-xs font-semibold text-white sm:flex sm:h-10 sm:w-10">
-                                                                {activeGame.awayAbbr}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate text-sm font-semibold text-white">
-                                                                    {activeGame.awayTeam}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.spreadAway,
-                                                            formatLineValue(firstHalfLineOdds?.spreadAway?.selection?.line),
-                                                            firstHalfLineOdds?.spreadAway
-                                                                ? formatOdds(firstHalfLineOdds.spreadAway.price)
-                                                                : "-"
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.moneyAway,
-                                                            firstHalfLineOdds?.moneyAway
-                                                                ? formatOdds(firstHalfLineOdds.moneyAway.price)
-                                                                : "-",
-                                                            undefined
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.totalOver,
-                                                            `O ${totalLine ?? "-"}`,
-                                                            firstHalfLineOdds?.totalOver
-                                                                ? formatOdds(firstHalfLineOdds.totalOver.price)
-                                                                : "-"
-                                                        )}
-                                                    </div>
-
-                                                    <div
-                                                        className="grid items-stretch gap-1 -mt-4 sm:mt-0"
-                                                        style={{
-                                                            gridTemplateColumns:
-                                                                "minmax(0,1fr) repeat(3, var(--table-chip-width))",
-                                                        }}
-                                                    >
-                                                        <div className="flex min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
-                                                            <div className="hidden h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/70 text-xs font-semibold text-white sm:flex sm:h-10 sm:w-10">
-                                                                {activeGame.homeAbbr}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <p className="truncate text-sm font-semibold text-white">
-                                                                    {activeGame.homeTeam}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.spreadHome,
-                                                            formatLineValue(firstHalfLineOdds?.spreadHome?.selection?.line),
-                                                            firstHalfLineOdds?.spreadHome
-                                                                ? formatOdds(firstHalfLineOdds.spreadHome.price)
-                                                                : "-"
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.moneyHome,
-                                                            firstHalfLineOdds?.moneyHome
-                                                                ? formatOdds(firstHalfLineOdds.moneyHome.price)
-                                                                : "-",
-                                                            undefined
-                                                        )}
-                                                        {renderMainLineCell(
-                                                            firstHalfLineOdds?.totalUnder,
-                                                            `U ${totalLine ?? "-"}`,
-                                                            firstHalfLineOdds?.totalUnder
-                                                                ? formatOdds(firstHalfLineOdds.totalUnder.price)
-                                                                : "-"
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
-                            </section> */}
                         </div>
                     ) : (
                         <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
@@ -4138,13 +3794,19 @@ export const NcaabPickBuilder = ({
                                 const showTable =
                                     isTableMarket && table.lines.length > 1 && table.rows.length > 0;
                                 const simpleRows = isTableMarket
-                                    ? buildSimplePropRows(odds, activeGame, activeSide)
+                                    ? buildSimplePropRows(odds, activeGame, activeSide, {
+                                        normalizeToFive: isAltPlayerPoints,
+                                    })
                                     : [];
                                 const mainPointsRows = isMainPlayerPoints
                                     ? buildMainPointsRows(odds, activeGame)
                                     : [];
                                 const sectionKey = `${activeTab}-${market}`;
                                 const collapsed = isSectionCollapsed(sectionKey, index === 0);
+                                const { rows: visibleSimpleRows } = getVisibleCategoryRows(
+                                    simpleRows,
+                                    sectionKey
+                                );
                                 const primaryPointsOdds = activeMarketMap.get("Player Points") ?? [];
                                 const marketTitle = isAltPlayerPoints
                                     ? primaryPointsOdds.length > 0
@@ -4180,241 +3842,76 @@ export const NcaabPickBuilder = ({
 
                                         {!collapsed && (
                                             <>
-                                                {/* {isTableMarket && (hasOver || hasUnder) ? (
-                                                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                                                        {["Over", "Under"].map((side) => {
-                                                            if (side === "Over" && !hasOver) return null;
-                                                            if (side === "Under" && !hasUnder) return null;
-                                                            const active = activeSide === side;
-                                                            return (
-                                                                <button
-                                                                    key={`${market}-${side}`}
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setPointsSideByMarket((prev) => ({
-                                                                            ...prev,
-                                                                            [market]: side as "Over" | "Under",
-                                                                        }))
-                                                                    }
-                                                                    className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                                        ? "border-emerald-300/70 bg-emerald-500/20 text-white"
-                                                                        : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
-                                                                        }`}
-                                                                >
-                                                                    {side}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ) : null} */}
-
                                                 {isMainPlayerPoints ? (
-                                                    renderMainOverUnderTable(mainPointsRows)
-                                                    // <div className="mt-4 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    //     <div
-                                                    //         className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                    //         style={{
-                                                    //             gridTemplateColumns:
-                                                    //                 "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                                    //         }}
-                                                    //     >
-                                                    //         <div className="px-3 py-2">Player</div>
-                                                    //         <div className="px-3 py-2 text-center">Over line</div>
-                                                    //         <div className="px-3 py-2 text-center">Under line</div>
-                                                    //     </div>
-                                                    //     {mainPointsRows.map((row, rowIndex) => {
-                                                    //         const rowBand =
-                                                    //             rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                    //         const overLine = row.over?.selection?.line ?? row.line;
-                                                    //         const underLine = row.under?.selection?.line ?? row.line;
-                                                    //         const renderPointButton = (
-                                                    //             odd: OddsBlazeOdd | undefined,
-                                                    //             prefix: "O" | "U",
-                                                    //             line?: number
-                                                    //         ) => {
-                                                    //             const isSelected = isOddSelected(odd);
-                                                    //             const label = `${prefix} ${line ?? "-"}`;
-                                                    //             return (
-                                                    //                 <button
-                                                    //                     type="button"
-                                                    //                     onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                    //                     disabled={!odd || locked}
-                                                    //                     className={`${tableOddsBoxClasses(
-                                                    //                         isSelected,
-                                                    //                         !odd
-                                                    //                     )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                                    //                 >
-                                                    //                     <div className="flex flex-col items-center leading-tight">
-                                                    //                         <span
-                                                    //                             className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
-                                                    //                                 }`}
-                                                    //                         >
-                                                    //                             {label}
-                                                    //                         </span>
-                                                    //                         <span
-                                                    //                             className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
-                                                    //                                 }`}
-                                                    //                         >
-                                                    //                             {odd ? formatOdds(odd.price) : "-"}
-                                                    //                         </span>
-                                                    //                     </div>
-                                                    //                 </button>
-                                                    //             );
-                                                    //         };
-
-                                                    //         return (
-                                                    //             <div
-                                                    //                 key={`${market}-${row.player.id}`}
-                                                    //                 className={`grid items-center gap-2 border-b border-white/5 px-0 text-left ${rowBand}`}
-                                                    //                 style={{
-                                                    //                     gridTemplateColumns:
-                                                    //                         "minmax(0,1fr) repeat(2, var(--table-chip-width))",
-                                                    //                 }}
-                                                    //             >
-                                                    //                 <div className="min-w-0 px-3 py-2.5">
-                                                    //                     <p className="truncate text-sm font-semibold text-white">
-                                                    //                         {row.player.name}
-                                                    //                     </p>
-                                                    //                     <p className="mt-1 truncate text-xs text-gray-400">
-                                                    //                         {row.teamLabel}
-                                                    //                     </p>
-                                                    //                 </div>
-                                                    //                 {renderPointButton(row.over, "O", overLine)}
-                                                    //                 {renderPointButton(row.under, "U", underLine)}
-                                                    //             </div>
-                                                    //         );
-                                                    //     })}
-                                                    // </div>
+                                                    renderMainOverUnderTable(mainPointsRows, sectionKey)
                                                 ) : showTable ? (
-                                                    renderScrollablePropTable(table, market, isAltPlayerPoints)
-                                                    // <div className="mt-4 overflow-x-auto">
-                                                    //     <div className="min-w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                    //         <div
-                                                    //             className="grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                    //             style={{
-                                                    //                 gridTemplateColumns: table.lines.length
-                                                    //                     ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                    //                     : "minmax(160px,1fr)",
-                                                    //             }}
-                                                    //         >
-                                                    //             <div className="sticky left-0 z-20 border-b border-white/10 bg-black/80 px-3 py-2 sm:min-w-[190px]">
-                                                    //                 Scroll right to see more
-                                                    //             </div>
-                                                    //             {table.lines.map((line) => {
-                                                    //                 const headerLabel = isAltPlayerPoints
-                                                    //                     ? `${formatLineLabel(line)} pts`
-                                                    //                     : formatLineLabel(line);
-                                                    //                 return (
-                                                    //                     <div key={`${market}-${line}`} className="px-3 py-2 text-center">
-                                                    //                         {headerLabel}
-                                                    //                     </div>
-                                                    //                 );
-                                                    //             })}
-                                                    //         </div>
-                                                    //         {table.rows.map((row, rowIndex) => {
-                                                    //             const rowBand =
-                                                    //                 rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                    //             return (
-                                                    //                 <div
-                                                    //                     key={`${market}-${row.player.id}`}
-                                                    //                     className={`grid gap-2 border-b border-white/5 ${rowBand}`}
-                                                    //                     style={{
-                                                    //                         gridTemplateColumns: table.lines.length
-                                                    //                             ? `minmax(160px,1fr) repeat(${table.lines.length}, var(--table-chip-width))`
-                                                    //                             : "minmax(160px,1fr)",
-                                                    //                     }}
-                                                    //                 >
-                                                    //                     <div className="sticky left-0 z-10 border-b border-white/5 bg-black/80 px-3 py-2.5 sm:min-w-[190px]">
-                                                    //                         <p className="text-sm font-semibold text-white">
-                                                    //                             {row.player.name}
-                                                    //                         </p>
-                                                    //                         <p className="mt-1 text-xs text-gray-400">
-                                                    //                             {row.teamLabel}
-                                                    //                         </p>
-                                                    //                     </div>
-                                                    //                     {table.lines.map((line) => {
-                                                    //                         const odd = row.lines.get(line);
-                                                    //                         const isSelected = isOddSelected(odd);
-                                                    //                         const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                    //                         return (
-                                                    //                             <div key={`${row.player.id}-${line}`} className="flex justify-center px-1 py-2">
-                                                    //                                 <button
-                                                    //                                     type="button"
-                                                    //                                     onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                                    //                                     disabled={!odd || locked}
-                                                    //                                     className={`${tableOddsBoxClasses(
-                                                    //                                         isSelected,
-                                                    //                                         !odd
-                                                    //                                     )} ${!odd ? "cursor-not-allowed" : ""}`}
-                                                    //                                 >
-                                                    //                                     {oddsLabel}
-                                                    //                                 </button>
-                                                    //                             </div>
-                                                    //                         );
-                                                    //                     })}
-                                                    //                 </div>
-                                                    //             );
-                                                    //         })}
-                                                    //     </div>
-                                                    // </div>
+                                                    renderScrollablePropTable(
+                                                        table,
+                                                        market,
+                                                        isAltPlayerPoints,
+                                                        sectionKey
+                                                    )
                                                 ) : isTableMarket ? (
-                                                    <div className="mt-4 overflow-x-auto">
-                                                        <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                            <div
-                                                                className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                                style={{
-                                                                    gridTemplateColumns:
-                                                                        "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                }}
-                                                            >
-                                                                <div className={STICKY_COLUMN_HEADER_CLASSES}>Player</div>
-                                                                <div className="px-3 py-2 text-center">
-                                                                    {activeSide} line
+                                                    <>
+                                                        <div className="mt-4 overflow-x-auto">
+                                                            <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                                <div
+                                                                    className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                                                                    style={{
+                                                                        gridTemplateColumns:
+                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                    }}
+                                                                >
+                                                                    <div className={STICKY_COLUMN_HEADER_CLASSES}>Player</div>
+                                                                    <div className="px-3 py-2 text-center">
+                                                                        {activeSide} line
+                                                                    </div>
+                                                                    <div className="px-3 py-2 text-center">Odds</div>
                                                                 </div>
-                                                                <div className="px-3 py-2 text-center">Odds</div>
+                                                                {visibleSimpleRows.map((row, rowIndex) => {
+                                                                    const isSelected = isOddSelected(row.odd);
+                                                                    const rowBand =
+                                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                                    return (
+                                                                        <button
+                                                                            key={`${market}-${row.player.id}`}
+                                                                            type="button"
+                                                                            onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
+                                                                            disabled={!row.odd || locked}
+                                                                            className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
+                                                                                ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                                : "hover:bg-white/[0.02]"
+                                                                                } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                                            style={{
+                                                                                gridTemplateColumns:
+                                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                            }}
+                                                                        >
+                                                                            <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
+                                                                                <p className="text-sm font-semibold text-white">
+                                                                                    {row.player.name}
+                                                                                </p>
+                                                                                <p className="mt-1 text-xs text-gray-400">
+                                                                                    {row.teamLabel}
+                                                                                </p>
+                                                                            </div>
+                                                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
+                                                                                {row.displayLine ?? row.line ?? "-"}
+                                                                            </div>
+                                                                            <div className="flex justify-center px-3 py-2.5">
+                                                                                {renderTableOddsBox(
+                                                                                    row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                    isSelected,
+                                                                                    !row.odd
+                                                                                )}
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
                                                             </div>
-                                                            {simpleRows.map((row, rowIndex) => {
-                                                                const isSelected = isOddSelected(row.odd);
-                                                                const rowBand =
-                                                                    rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                                return (
-                                                                    <button
-                                                                        key={`${market}-${row.player.id}`}
-                                                                        type="button"
-                                                                        onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                                                        disabled={!row.odd || locked}
-                                                                        className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
-                                                                            ? "border-emerald-300/60 bg-emerald-500/10"
-                                                                            : "hover:bg-white/[0.02]"
-                                                                            } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                                        style={{
-                                                                            gridTemplateColumns:
-                                                                                "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                        }}
-                                                                    >
-                                                                        <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
-                                                                            <p className="text-sm font-semibold text-white">
-                                                                                {row.player.name}
-                                                                            </p>
-                                                                            <p className="mt-1 text-xs text-gray-400">
-                                                                                {row.teamLabel}
-                                                                            </p>
-                                                                        </div>
-                                                                        <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                                                            {row.line ?? "-"}
-                                                                        </div>
-                                                                        <div className="flex justify-center px-3 py-2.5">
-                                                                            {renderTableOddsBox(
-                                                                                row.odd ? formatOdds(row.odd.price) : "-",
-                                                                                isSelected,
-                                                                                !row.odd
-                                                                            )}
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })}
                                                         </div>
-                                                    </div>
+                                                        {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
+                                                    </>
                                                 ) : (
                                                     renderOddCards(odds)
                                                 )}

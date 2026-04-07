@@ -5,7 +5,7 @@ import axios, { AxiosResponse } from "axios";
 import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload } from "@/lib/interfaces/interfaces";
+import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload, FetchBlockedUsersPayload, BlockedUsers } from "@/lib/interfaces/interfaces";
 import { fetchNotificationListRequest } from "../slices/notificationSlice";
 
 type LoginPayload = {
@@ -358,14 +358,20 @@ function* handleUnblockUserRequest(action: PayloadAction<UnblockUserPayload>): S
 	}
 };
 
-function* handleFetchBlockedUsersList(action: PayloadAction): SagaIterator {
+function* handleFetchBlockedUsersList(action: PayloadAction<FetchBlockedUsersPayload | undefined>): SagaIterator {
 	try {
+		const { page = 1, limit = 10 } = action.payload || {};
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.get,
 			`${API_BASE_URL}/auth/blocked-users`,
+			{
+				params: { page, limit }
+			}
 		);
-		const payload = response.data as { data?: unknown };
-		yield put(fetchBlockedUsersSuccess(payload.data));
+		const payload = response.data as { data?: { blockedUsers: BlockedUsers[], pagination: { hasMore: boolean } } };
+		const blockedUsers = payload.data?.blockedUsers ?? [];
+		const hasMore = payload.data?.pagination?.hasMore ?? blockedUsers.length === limit;
+		yield put(fetchBlockedUsersSuccess({ blockedUsers, page, hasMore }));
 	} catch (error: unknown) {
 		yield put(fetchBlockedUsersFailure(getErrorMessage(error, "Fetch blocked users list failed")));
 	}

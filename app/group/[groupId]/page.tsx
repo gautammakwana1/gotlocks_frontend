@@ -5,9 +5,9 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, Picks, RootState, Slips } from "@/lib/interfaces/interfaces";
+import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, leaderboardSlip, Picks, RootState, Slips } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
-import { fetchAllSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
+import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest, fetchAllSlipsRequest, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeOpenSlipsRequest, fetchAllVibeReviewSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
 import ModifyMembers, { MemberWithRole } from "@/components/group/ModifyMembers";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
@@ -113,6 +113,7 @@ const GroupPage = () => {
   const searchParams = useSearchParams();
   const groupId = params.groupId as string;
   const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
+  const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slips>([]);
   const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
 
   type TabId = (typeof BASE_TABS)[number]["id"];
@@ -186,6 +187,15 @@ const GroupPage = () => {
   const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
     searchParams.get("mode") === "vibe" ? "vibe" : "leaderboard"
   );
+  const [openPage, setOpenPage] = useState(1);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [finalPage, setFinalPage] = useState(1);
+
+  useEffect(() => {
+    setOpenPage(1);
+    setReviewPage(1);
+    setFinalPage(1);
+  }, [slipTab]);
   const [archiveLeaderboardData, setArchiveLeaderboardData] = useState<Leaderboard[]>([]);
   // const [showFootballOverlay, setShowFootballOverlay] = useState(false);
   // const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -207,7 +217,7 @@ const GroupPage = () => {
     ArchiveLeaderboardList,
     archivedLeaderboard: ArchivedLeaderboardObject
   } = useSelector((state: GroupSelector) => state.group);
-  const { slips: slipList } = useSelector((state: RootState) => state.slip);
+  const { slips: slipList, openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews } = useSelector((state: RootState) => state.slip);
   const { picks: pickList, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
   const rawGroup = useSelector((state: GroupSelector) => state.group.group);
   const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -283,12 +293,15 @@ const GroupPage = () => {
     !isSlipFinal(slip) && isSlipTimeLocked(slip);
   const isOpenSlip = (slip: (typeof slips)[number]) =>
     !isSlipFinal(slip) && !isSlipTimeLocked(slip);
-  const leaderboardActiveSlips = leaderboardSlips.filter(isOpenSlip);
-  const leaderboardLockedSlips = leaderboardSlips.filter(isLockedSlip);
-  const leaderboardCompletedSlips = leaderboardSlips.filter(isSlipFinal);
-  const vibeActiveSlips = vibeSlips.filter(isOpenSlip);
-  const vibeLockedSlips = vibeSlips.filter(isLockedSlip);
-  const vibeCompletedSlips = vibeSlips.filter(isSlipFinal);
+  // const leaderboardActiveSlips = leaderboardSlips.filter(isOpenSlip);
+  const leaderboardActiveSlips = openSlips;
+  // const leaderboardLockedSlips = leaderboardSlips.filter(isLockedSlip);
+  const leaderboardLockedSlips = reviewSlips;
+  // const leaderboardCompletedSlips = leaderboardSlips.filter(isSlipFinal);
+  const leaderboardCompletedSlips = finalizeSlips;
+  const vibeActiveSlips = openSlips;
+  const vibeLockedSlips = reviewSlips;
+  const vibeCompletedSlips = finalizeSlips;
 
   const gradedFinalSlips = slips.filter(
     (slip) => slip.isGraded && slip.status === "final"
@@ -584,6 +597,39 @@ const GroupPage = () => {
     setShowEditGroupModal(true);
   };
 
+  const handleLoadMoreOpen = () => {
+    if (!group?.id) return;
+    const nextPage = openPage + 1;
+    setOpenPage(nextPage);
+    if (slipTab === "vibe") {
+      dispatch(fetchAllVibeOpenSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    } else {
+      dispatch(fetchAllOpenSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    }
+  };
+
+  const handleLoadMoreReview = () => {
+    if (!group?.id) return;
+    const nextPage = reviewPage + 1;
+    setReviewPage(nextPage);
+    if (slipTab === "vibe") {
+      dispatch(fetchAllVibeReviewSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    } else {
+      dispatch(fetchAllReviewSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    }
+  };
+
+  const handleLoadMoreFinal = () => {
+    if (!group?.id) return;
+    const nextPage = finalPage + 1;
+    setFinalPage(nextPage);
+    if (slipTab === "vibe") {
+      dispatch(fetchAllVibeFinalizedSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    } else {
+      dispatch(fetchAllFinalizedSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "leaderboard" && !archivedLeaderboardId) {
       const defaultLeaderboard = groupLeaderboards.find((l) => l.isDefault && l.status === "ACTIVE")
@@ -598,7 +644,8 @@ const GroupPage = () => {
       setEditingLeaderboardId(null);
       setLeaderboardNameDraft("");
     }
-    if (activeSlip?.id && (activeTab === "slips" || activeTab === "settings")) {
+    // if (activeSlip?.id && (activeTab === "slips" || activeTab === "settings")) {
+    if (activeSlip?.id && (activeTab === "settings")) {
       dispatch(fetchAllPicksRequest({ slip_id: activeSlip?.id }))
     }
   }, [dispatch, activeSlip, activeTab]);
@@ -734,17 +781,29 @@ const GroupPage = () => {
     }
     if (activeTab === "slips" && group?.id) {
       dispatch(fetchAllSlipsRequest({ group_id: group?.id }));
+      if (slipTab === "vibe") {
+        dispatch(fetchAllVibeOpenSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+        dispatch(fetchAllVibeReviewSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+        dispatch(fetchAllVibeFinalizedSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+      } else {
+        dispatch(fetchAllOpenSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+        dispatch(fetchAllReviewSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+        dispatch(fetchAllFinalizedSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
+      }
     }
-  }, [dispatch, activeTab, group?.id, selectedLeaderboard?.id]);
+  }, [dispatch, activeTab, group?.id, selectedLeaderboard?.id, slipTab]);
 
   useEffect(() => {
     if (Array.isArray(leaderboardData?.leaderboard)) {
       setLeaderboardList(leaderboardData?.leaderboard)
     }
+    if (Array.isArray(leaderboardData?.slips)) {
+      setLeaderboardSlipsList(leaderboardData?.slips)
+    }
     if (Array.isArray(leaderboardListData)) {
       setLeaderboardDataList(leaderboardListData)
     }
-  }, [leaderboardData?.leaderboard, leaderboardListData]);
+  }, [leaderboardData?.leaderboard, leaderboardListData, leaderboardData?.slips]);
 
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
@@ -1195,6 +1254,7 @@ const GroupPage = () => {
                 leaderboardId={selectedLeaderboard.id}
                 leaderboardName={selectedLeaderboard.name}
                 currentUserId={currentUser?.userId}
+                leaderboardSlips={leaderboardSlipsList}
               />
             ) : (
               <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
@@ -1282,24 +1342,30 @@ const GroupPage = () => {
                   </div>
                   <SlipCategorySection
                     title="open for picks"
-                    slips={leaderboardActiveSlips}
+                    slips={leaderboardActiveSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreOpen}
                     layout="grid"
                     emptyCopy="No leaderboard slips open yet — create one to kick things off."
+                    hasMore={hasMoreOpens}
                   />
                   <SlipCategorySection
                     title="slips in review"
-                    slips={leaderboardLockedSlips}
+                    slips={leaderboardLockedSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreReview}
                     layout="grid"
                     emptyCopy="No locked leaderboard slips right now."
+                    hasMore={hasMoreReviews}
                   />
                   <SlipCategorySection
                     title="finalized slips"
-                    slips={leaderboardCompletedSlips}
+                    slips={leaderboardCompletedSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreFinal}
                     layout="grid"
                     emptyCopy="No finalized leaderboard slips yet."
+                    hasMore={hasMoreFinalizes}
                   />
                 </section>
               ) : (
@@ -1311,24 +1377,30 @@ const GroupPage = () => {
                   </div>
                   <SlipCategorySection
                     title="open for picks"
-                    slips={vibeActiveSlips}
+                    slips={vibeActiveSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreOpen}
                     layout="grid"
                     emptyCopy="No vibe slips open yet — drop one to set the tone."
+                    hasMore={hasMoreOpens}
                   />
                   <SlipCategorySection
                     title="slips in review"
-                    slips={vibeLockedSlips}
+                    slips={vibeLockedSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreReview}
                     layout="grid"
                     emptyCopy="No locked vibe slips right now."
+                    hasMore={hasMoreReviews}
                   />
                   <SlipCategorySection
                     title="finalized slips"
-                    slips={vibeCompletedSlips}
+                    slips={vibeCompletedSlips || []}
                     onSelect={handleSlipSelect}
+                    onLoadMore={handleLoadMoreFinal}
                     layout="grid"
                     emptyCopy="No finalized vibe slips yet."
+                    hasMore={hasMoreFinalizes}
                   />
                 </section>
               )}
@@ -1448,7 +1520,7 @@ const GroupPage = () => {
                                 value={leaderboardNameDraft}
                                 onChange={(event) => setLeaderboardNameDraft(event.target.value)}
                                 maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                               />
                             </label>
                             <div className="flex gap-2">
@@ -1635,7 +1707,7 @@ const GroupPage = () => {
                                         setLeaderboardNameDraft(event.target.value)
                                       }
                                       maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                                     />
                                   </label>
                                   <div className="flex gap-2">
@@ -1746,7 +1818,7 @@ const GroupPage = () => {
                     <input
                       value={deleteConfirmation}
                       onChange={(event) => setDeleteConfirmation(event.target.value)}
-                      className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-red-400/70"
+                      className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
                     />
                   </label>
 
@@ -1864,7 +1936,7 @@ const GroupPage = () => {
                 <input
                   value={editGroupName}
                   onChange={(event) => setEditGroupName(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="Group name"
                 />
                 {errors.name && (
@@ -1949,7 +2021,7 @@ const GroupPage = () => {
                   value={sideContestName}
                   onChange={(event) => setSideContestName(event.target.value)}
                   maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
                   placeholder="NBA playoff slips"
                 />
               </label>
@@ -2019,6 +2091,7 @@ const GroupPage = () => {
                 leaderboardName={ArchivedLeaderboardObject.label}
                 currentUserId={currentUser?.userId}
                 leaderboard={archiveLeaderboardData}
+                leaderboardSlips={leaderboardSlipsList}
               />
             </div>
           </div>

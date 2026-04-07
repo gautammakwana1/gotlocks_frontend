@@ -528,7 +528,7 @@ const SlipCreationPage = () => {
                                             pickDeadline: fromLocalInputValue(event.target.value),
                                         }))
                                     }
-                                    className="no-focus-ring rounded-lg border border-white/15 bg-black/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-400/70"
+                                    className="no-focus-ring rounded-lg border border-white/15 bg-black/70 px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-sky-400/70"
                                 />
                             </div>
 
