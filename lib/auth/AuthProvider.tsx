@@ -9,7 +9,7 @@ import { supabase } from "../supabaseClient";
 
 export const AuthContext = createContext<CurrentUser | null>(null);
 
-const PUBLIC_ROUTES = ["/landing-page", "/account-creation", "/auth/callback", "/auth/set-username"];
+const PUBLIC_ROUTES = ["/landing-page", "/account-creation", "/auth/callback", "/auth/set-username", "/privacy-policy", "/terms-and-conditions"];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();

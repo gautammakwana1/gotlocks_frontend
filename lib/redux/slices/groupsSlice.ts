@@ -25,11 +25,13 @@ import type {
 	ArchivedLeaderboard,
 	FetchArchivedLeaderBoardListPayload,
 	ArchiveLeaderboardList,
+	LeaderboardData,
+	PaginationMetadata,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
 	group: Group | null;
-	leaderboard: Leaderboard | null;
+	leaderboard: LeaderboardData | null;
 	leaderboardList: LeaderboardList | null;
 	summary: GroupSummary | null;
 	archivedLeaderboard: ArchivedLeaderboard | null;
@@ -46,6 +48,8 @@ type GroupState = {
 	message: string | null;
 	deleteMessage: string | null;
 	leaveMessage: string | null;
+	hasMoreLeaderboard: boolean;
+	leaderboardPagination?: PaginationMetadata;
 };
 
 const initialState: GroupState = {
@@ -67,6 +71,7 @@ const initialState: GroupState = {
 	deleteMessage: null,
 	leaveLoading: false,
 	leaveMessage: null,
+	hasMoreLeaderboard: false,
 };
 
 const groupSlice = createSlice({
@@ -227,9 +232,28 @@ const groupSlice = createSlice({
 			state.loadingLeaderboard = true;
 			state.error = null;
 		},
-		fetchLeaderboardSuccess: (state, action) => {
+		fetchLeaderboardSuccess: (state, action: PayloadAction<LeaderboardData>) => {
 			state.loadingLeaderboard = false;
-			state.leaderboard = action.payload;
+			const { leaderboard, pagination, slips } = action.payload || {};
+			const page = pagination?.page || 1;
+
+			if (page === 1) {
+				state.leaderboard = action.payload;
+			} else if (state.leaderboard) {
+				// Append new leaderboard entries
+				state.leaderboard = {
+					...state.leaderboard,
+					leaderboard: [
+						...(state.leaderboard.leaderboard || []),
+						...(leaderboard || []),
+					],
+					pagination: pagination,
+					// Optional: update slips if they are also paginated or part of the response
+					slips: slips || state.leaderboard.slips,
+				};
+			}
+			state.hasMoreLeaderboard = pagination ? pagination.page < pagination.total_pages : false;
+			state.leaderboardPagination = pagination;
 		},
 		fetchLeaderboardFailure: (state, action) => {
 			state.loadingLeaderboard = false;

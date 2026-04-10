@@ -12,6 +12,7 @@ import { AuthSelector, RegisterPayload } from "@/lib/interfaces/interfaces";
 import { EyeClosedIcon, EyeIcon } from "lucide-react";
 import CustomDatePicker from "@/components/ui/CustomDatePicker";
 import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
+import AuthLegalNotice from "@/components/ui/AuthLegalNotic";
 
 interface FormData {
   firstName?: string;
@@ -359,10 +360,12 @@ const AccountCreationPage = () => {
           )}
         </label>
 
+        <AuthLegalNotice />
+
         <button
           type="submit"
           disabled={loading}
-          className="mt-2 w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? "registering..." : "register"}
         </button>

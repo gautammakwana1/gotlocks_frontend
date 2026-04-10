@@ -322,7 +322,7 @@ export type GroupState = {
     message: string | null;
     loading: boolean;
     loadingLeaderboard: boolean;
-    leaderboard?: Record<string, unknown>;
+    leaderboard?: LeaderboardData | null;
     leaderboardList: LeaderboardList | null;
     archivedLeaderboard: ArchivedLeaderboard | null;
     ArchiveLeaderboardList: ArchiveLeaderboardList | null;
@@ -330,6 +330,8 @@ export type GroupState = {
     deleteLoading: boolean;
     leaveLoading: boolean;
     leaveMessage: string | null;
+    hasMoreLeaderboard: boolean;
+    leaderboardPagination?: PaginationMetadata;
 }
 
 export type GroupSelector = {
@@ -768,6 +770,13 @@ export type FeedSelector = {
     feed: ActivityState;
 }
 
+export type PaginationMetadata = {
+    page: number;
+    limit: number;
+    total: number;
+    total_pages: number;
+}
+
 export type Pagination = {
     start?: number;
     limit?: number;
@@ -806,6 +815,13 @@ export type Leaderboard = {
     username?: string;
     profile_image?: string;
     slips?: leaderboardSlip[];
+}
+
+export type LeaderboardData = {
+    group_id: string;
+    slips: Slip[];
+    leaderboard: Leaderboard[];
+    pagination: PaginationMetadata;
 }
 
 export type ArchiveLeaderboardSlip = {
@@ -855,6 +871,8 @@ export type ArchiveLeaderboardList = {
 export type LeaderboardPayload = {
     groupId: string | undefined;
     leaderboard_id?: string;
+    page?: number;
+    limit?: number;
 }
 
 export type SessionState = {

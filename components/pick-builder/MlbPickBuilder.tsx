@@ -135,6 +135,36 @@ type PointsTableRow = {
     highestLine: number | null;
 };
 
+type DualPointsTableRow = {
+    player: OddsBlazePlayer;
+    teamLabel: string;
+    overLines: Map<number, OddsBlazeOdd>;
+    underLines: Map<number, OddsBlazeOdd>;
+    overAvailableLines: number[];
+    underAvailableLines: number[];
+    overLineCount: number;
+    underLineCount: number;
+    highestLine: number | null;
+    lineCount: number;
+};
+
+type SimplePropRow = {
+    player: OddsBlazePlayer;
+    teamLabel: string;
+    line?: number;
+    odd: OddsBlazeOdd;
+};
+
+type PairedPropRow = {
+    player: OddsBlazePlayer;
+    teamLabel: string;
+    over?: OddsBlazeOdd;
+    under?: OddsBlazeOdd;
+    overLine?: number;
+    underLine?: number;
+    highestLine: number | null;
+};
+
 type SpreadLineEntry = {
     home?: OddsBlazeOdd;
     away?: OddsBlazeOdd;
@@ -282,19 +312,40 @@ const TOTAL_BASES_MARKETS = ["Player Total Bases"];
 
 const RBI_MARKETS = ["Player RBIs"];
 
-const RUNS_MARKETS = ["Player Runs", "Player Hits + Runs + RBIs"];
+const RUNS_MARKETS = ["Player Runs"];
 
-const HOME_RUNS_MARKETS = ["Player Home Runs", "Player Stolen Bases"];
+const POWER_SPEED_MARKETS = ["Player Home Runs", "Player Stolen Bases"];
 
-const PITCHER_MARKETS = [
+const BATTER_DISCIPLINE_MARKETS = ["Player Batting Strikeouts"];
+
+const BATTER_PROP_MARKETS = [
+    ...HITS_MARKETS,
+    ...TOTAL_BASES_MARKETS,
+    ...RBI_MARKETS,
+    ...RUNS_MARKETS,
+    ...POWER_SPEED_MARKETS,
+    ...BATTER_DISCIPLINE_MARKETS,
+];
+
+const PITCHER_PROP_MARKETS = [
     "Player Strikeouts",
-    "Player Batting Strikeouts",
     "Player Outs",
     "Player Hits Allowed",
     "Player Walks Allowed",
 ];
 
-const EARLY_LINES_MARKETS = [
+const COMBINED_PLAYER_PROP_MARKETS = ["Player Hits + Runs + RBIs"];
+
+const TEAM_PROP_MARKETS = ["Team Total Runs", "Team Total Runs Odd/Even"];
+
+const FIRST_INNING_MARKETS = [
+    "1st Inning Moneyline 3-Way",
+    "1st Inning Run Line",
+    "1st Inning Total Runs",
+    "1st Inning Total Runs Odd/Even",
+];
+
+const INNINGS_MARKETS = [
     "1st 5 Innings Moneyline",
     "1st 5 Innings Moneyline 3-Way",
     "1st 5 Innings Run Line",
@@ -302,11 +353,8 @@ const EARLY_LINES_MARKETS = [
     "1st 7 Innings Moneyline",
     "1st 7 Innings Run Line",
     "1st 7 Innings Total Runs",
-    "1st Inning Moneyline 3-Way",
-    "1st Inning Total Runs",
-];
-
-const INNING_LINES_MARKETS = [
+    "2nd Inning Run Line",
+    "2nd Inning Total Runs",
     "3rd Inning Run Line",
     "3rd Inning Total Runs",
     "4th Inning Run Line",
@@ -323,8 +371,6 @@ const INNING_LINES_MARKETS = [
     "9th Inning Total Runs",
 ];
 
-const TEAM_TOTAL_MARKETS = ["Team Total Runs", "Team Total Runs Odd/Even"];
-
 const MAIN_OVER_UNDER_MARKETS = new Set<string>([
     "Player Hits",
     "Player Total Bases",
@@ -340,15 +386,12 @@ const MAIN_OVER_UNDER_MARKETS = new Set<string>([
 
 const TAB_ORDER = [
     "GAME_LINES",
-    "EARLY_LINES",
-    "TEAM_TOTALS",
-    "HITS",
-    "TOTAL_BASES",
-    "RBI",
-    "RUNS",
-    "HOME_RUNS",
-    "PITCHER",
-    "INNING_LINES",
+    "BATTER_PROPS",
+    "PITCHER_PROPS",
+    "COMBINED_PLAYER_PROPS",
+    "TEAM_PROPS",
+    "FIRST_INNING",
+    "INNINGS",
 ] as const;
 
 type TabId = (typeof TAB_ORDER)[number];
@@ -357,40 +400,31 @@ const VISIBLE_TABS = TAB_ORDER;
 
 const TAB_LABELS: Record<TabId, string> = {
     GAME_LINES: "Game lines",
-    EARLY_LINES: "Early innings",
-    TEAM_TOTALS: "Team totals",
-    HITS: "Hits",
-    TOTAL_BASES: "Total bases",
-    RBI: "RBIs",
-    RUNS: "Runs + H/R/RBI",
-    HOME_RUNS: "HRs + steals",
-    PITCHER: "Pitchers",
-    INNING_LINES: "Inning lines",
+    BATTER_PROPS: "Batter props",
+    PITCHER_PROPS: "Pitcher props",
+    COMBINED_PLAYER_PROPS: "Combined player props",
+    TEAM_PROPS: "Team props",
+    FIRST_INNING: "1st Inning",
+    INNINGS: "Innings",
 };
 
 const TAB_MARKETS: Record<TabId, string[]> = {
     GAME_LINES: ["Moneyline", "Run Line", "Total Runs"],
-    EARLY_LINES: EARLY_LINES_MARKETS,
-    TEAM_TOTALS: TEAM_TOTAL_MARKETS,
-    HITS: HITS_MARKETS,
-    TOTAL_BASES: TOTAL_BASES_MARKETS,
-    RBI: RBI_MARKETS,
-    RUNS: RUNS_MARKETS,
-    HOME_RUNS: HOME_RUNS_MARKETS,
-    PITCHER: PITCHER_MARKETS,
-    INNING_LINES: INNING_LINES_MARKETS,
+    BATTER_PROPS: BATTER_PROP_MARKETS,
+    PITCHER_PROPS: PITCHER_PROP_MARKETS,
+    COMBINED_PLAYER_PROPS: COMBINED_PLAYER_PROP_MARKETS,
+    TEAM_PROPS: TEAM_PROP_MARKETS,
+    FIRST_INNING: FIRST_INNING_MARKETS,
+    INNINGS: INNINGS_MARKETS,
 };
 
 const TAB_SOURCE_PRIORITY: TabId[] = [
-    "PITCHER",
-    "HOME_RUNS",
-    "RUNS",
-    "RBI",
-    "TOTAL_BASES",
-    "HITS",
-    "TEAM_TOTALS",
-    "EARLY_LINES",
-    "INNING_LINES",
+    "PITCHER_PROPS",
+    "COMBINED_PLAYER_PROPS",
+    "BATTER_PROPS",
+    "TEAM_PROPS",
+    "FIRST_INNING",
+    "INNINGS",
     "GAME_LINES",
 ];
 
@@ -408,12 +442,9 @@ const tabForOdd = (odd: OddsBlazeOdd): TabId => {
 };
 
 const TABLE_MARKETS = new Set<string>([
-    ...HITS_MARKETS,
-    ...TOTAL_BASES_MARKETS,
-    ...RBI_MARKETS,
-    ...RUNS_MARKETS,
-    ...HOME_RUNS_MARKETS,
-    ...PITCHER_MARKETS,
+    ...BATTER_PROP_MARKETS,
+    ...COMBINED_PLAYER_PROP_MARKETS,
+    ...PITCHER_PROP_MARKETS,
 ]);
 
 const tierMetaFromIndex = (tier?: TierIndex) =>
@@ -1010,6 +1041,83 @@ const buildPointsTable = (
     return { lines, rows };
 };
 
+const buildDualPointsTable = (
+    odds: SelectedOdd[],
+    game: GameOption,
+    options?: { normalizeToFive?: boolean }
+) => {
+    const normalizeLine = options?.normalizeToFive
+        ? (value: number) => Math.round(value / 5) * 5
+        : (value: number) => value;
+    const rowMap = new Map<string, DualPointsTableRow>();
+
+    odds.forEach(({ odd }) => {
+        if (!odd.player) return;
+        const line = odd.selection?.line;
+        const side = odd.selection?.side?.toLowerCase();
+        if (line === undefined || (side !== "over" && side !== "under")) return;
+
+        const normalizedLine = normalizeLine(line);
+        const player = odd.player;
+        if (!rowMap.has(player.id)) {
+            const teamLabel = playerTeamLabel(player, game);
+            rowMap.set(player.id, {
+                player,
+                teamLabel,
+                overLines: new Map(),
+                underLines: new Map(),
+                overAvailableLines: [],
+                underAvailableLines: [],
+                overLineCount: 0,
+                underLineCount: 0,
+                highestLine: null,
+                lineCount: 0,
+            });
+        }
+
+        const row = rowMap.get(player.id);
+        if (!row) return;
+
+        const targetMap = side === "over" ? row.overLines : row.underLines;
+        const existing = targetMap.get(normalizedLine);
+        const currentDiff = Math.abs(line - normalizedLine);
+        const existingDiff =
+            existing?.selection?.line !== undefined
+                ? Math.abs(existing.selection.line - normalizedLine)
+                : Number.POSITIVE_INFINITY;
+        if (!existing || currentDiff <= existingDiff) {
+            targetMap.set(normalizedLine, odd);
+        }
+    });
+
+    const rows = [...rowMap.values()]
+        .map((row) => {
+            const overAvailableLines = [...row.overLines.keys()].sort((a, b) => a - b);
+            const underAvailableLines = [...row.underLines.keys()].sort((a, b) => a - b);
+            const allAvailableLines = [...new Set([...overAvailableLines, ...underAvailableLines])].sort(
+                (a, b) => a - b
+            );
+            return {
+                ...row,
+                overAvailableLines,
+                underAvailableLines,
+                overLineCount: overAvailableLines.length,
+                underLineCount: underAvailableLines.length,
+                highestLine: allAvailableLines[allAvailableLines.length - 1] ?? null,
+                lineCount: allAvailableLines.length,
+            };
+        })
+        .sort((left, right) => {
+            const lineDiff = compareNumbersDesc(left.highestLine, right.highestLine);
+            if (lineDiff !== 0) return lineDiff;
+            const countDiff = right.lineCount - left.lineCount;
+            if (countDiff !== 0) return countDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
+
+    return { rows };
+};
+
 const buildSimplePropRows = (
     odds: SelectedOdd[],
     game: GameOption,
@@ -1050,17 +1158,60 @@ const buildSimplePropRows = (
     return rows;
 };
 
-const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
-    const rowMap = new Map<
-        string,
-        {
-            player: OddsBlazePlayer;
-            teamLabel: string;
-            line?: number;
-            over?: OddsBlazeOdd;
-            under?: OddsBlazeOdd;
+const buildPairedSimplePropRows = (
+    odds: SelectedOdd[],
+    game: GameOption
+): PairedPropRow[] => {
+    const rowMap = new Map<string, PairedPropRow>();
+
+    odds.forEach(({ odd }) => {
+        if (!odd.player) return;
+        const side = odd.selection?.side?.toLowerCase();
+        if (side !== "over" && side !== "under") return;
+
+        const player = odd.player;
+        if (!rowMap.has(player.id)) {
+            rowMap.set(player.id, {
+                player,
+                teamLabel: playerTeamLabel(player, game),
+                over: undefined,
+                under: undefined,
+                overLine: undefined,
+                underLine: undefined,
+                highestLine: null,
+            });
         }
-    >();
+
+        const entry = rowMap.get(player.id);
+        if (!entry) return;
+
+        if (side === "over" && (!entry.over || (!entry.over.main && odd.main))) {
+            entry.over = odd;
+            entry.overLine = odd.selection?.line;
+        }
+
+        if (side === "under" && (!entry.under || (!entry.under.main && odd.main))) {
+            entry.under = odd;
+            entry.underLine = odd.selection?.line;
+        }
+    });
+
+    return [...rowMap.values()]
+        .map((row) => ({
+            ...row,
+            highestLine: Math.max(row.overLine ?? Number.NEGATIVE_INFINITY, row.underLine ?? Number.NEGATIVE_INFINITY),
+        }))
+        .sort((left, right) => {
+            const leftLine = Number.isFinite(left.highestLine) ? left.highestLine : null;
+            const rightLine = Number.isFinite(right.highestLine) ? right.highestLine : null;
+            const lineDiff = compareNumbersDesc(leftLine, rightLine);
+            if (lineDiff !== 0) return lineDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
+};
+
+const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption): PairedPropRow[] => {
+    const rowMap = new Map<string, PairedPropRow>();
 
     odds.forEach(({ odd }) => {
         if (!odd.player || !odd.main) return;
@@ -1068,35 +1219,46 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
         const line = odd.selection?.line;
         const player = odd.player;
         if (!rowMap.has(player.id)) {
-            const teamLabel = playerTeamLabel(player, game);
             rowMap.set(player.id, {
                 player,
-                teamLabel,
-                line,
+                teamLabel: playerTeamLabel(player, game),
                 over: undefined,
                 under: undefined,
+                overLine: undefined,
+                underLine: undefined,
+                highestLine: null,
             });
         }
 
         const entry = rowMap.get(player.id);
         if (!entry) return;
 
-        if (line !== undefined && entry.line === undefined) {
-            entry.line = line;
+        if (side === "over") {
+            entry.over = odd;
+            if (line !== undefined) entry.overLine = line;
         }
-        if (side === "over") entry.over = odd;
-        if (side === "under") entry.under = odd;
+        if (side === "under") {
+            entry.under = odd;
+            if (line !== undefined) entry.underLine = line;
+        }
     });
 
-    return [...rowMap.values()].sort((left, right) => {
-        const leftThreshold =
-            left.line ?? left.over?.selection?.line ?? left.under?.selection?.line;
-        const rightThreshold =
-            right.line ?? right.over?.selection?.line ?? right.under?.selection?.line;
-        const lineDiff = compareNumbersDesc(leftThreshold, rightThreshold);
-        if (lineDiff !== 0) return lineDiff;
-        return comparePlayerNames(left.player, right.player);
-    });
+    return [...rowMap.values()]
+        .map((row): PairedPropRow => ({
+            ...row,
+            highestLine:
+                Math.max(
+                    row.overLine ?? Number.NEGATIVE_INFINITY,
+                    row.underLine ?? Number.NEGATIVE_INFINITY
+                ),
+        }))
+        .sort((left, right) => {
+            const leftLine = Number.isFinite(left.highestLine) ? left.highestLine : null;
+            const rightLine = Number.isFinite(right.highestLine) ? right.highestLine : null;
+            const lineDiff = compareNumbersDesc(leftLine, rightLine);
+            if (lineDiff !== 0) return lineDiff;
+            return comparePlayerNames(left.player, right.player);
+        });
 };
 
 export const MlbPickBuilder = ({
@@ -1128,9 +1290,6 @@ export const MlbPickBuilder = ({
     const [activeTab, setActiveTab] = useState<TabId>("GAME_LINES");
     const [activeGameId, setActiveGameId] = useState<string | null>(null);
     const [search, setSearch] = useState("");
-    const [pointsSideByMarket, setPointsSideByMarket] = useState<
-        Record<string, "Over" | "Under">
-    >({});
     const [localCollapsedSections, setLocalCollapsedSections] = useState<
         Record<string, boolean>
     >(
@@ -2564,20 +2723,144 @@ export const MlbPickBuilder = ({
 
     const renderOddCards = (odds: OddsCardEntry[]) => {
         if (!activeGame) return null;
+
+        const sides = new Set(
+            odds
+                .map((entry) => normalizeOddEntry(entry).selection?.side?.toLowerCase())
+                .filter(Boolean) as string[]
+        );
+        const showSidePrefix = sides.has("over") && sides.has("under");
+        const getOddCardLabel = (odd: OddsBlazeOdd) => {
+            if (odd.player) return odd.player.name;
+            if (odd.market.includes("Total Runs") && !odd.market.includes("Team Total Runs")) {
+                return odd.market;
+            }
+            return odd.selection?.name ?? odd.name ?? "Selection";
+        };
+        const getOddCardSublabel = (odd: OddsBlazeOdd) =>
+            odd.player ? playerTeamLabel(odd.player, activeGame) || matchupLabel(activeGame) : matchupLabel(activeGame);
+
+        if (showSidePrefix) {
+            const pairedRows = new Map<
+                string,
+                {
+                    id: string;
+                    label: string;
+                    sublabel?: string;
+                    over?: OddsBlazeOdd;
+                    under?: OddsBlazeOdd;
+                    overLine?: number;
+                    underLine?: number;
+                }
+            >();
+
+            odds.forEach((entry) => {
+                const odd = normalizeOddEntry(entry);
+                const side = odd.selection?.side?.toLowerCase();
+                if (side !== "over" && side !== "under") return;
+                const label = getOddCardLabel(odd);
+                const sublabel = getOddCardSublabel(odd);
+                const key = [
+                    odd.market,
+                    label,
+                    sublabel,
+                    odd.selection?.line ?? "",
+                ].join("|");
+                const existing = pairedRows.get(key) ?? {
+                    id: key,
+                    label,
+                    sublabel,
+                    over: undefined,
+                    under: undefined,
+                    overLine: undefined,
+                    underLine: undefined,
+                };
+
+                if (side === "over") {
+                    existing.over = odd;
+                    existing.overLine = odd.selection?.line;
+                }
+                if (side === "under") {
+                    existing.under = odd;
+                    existing.underLine = odd.selection?.line;
+                }
+
+                pairedRows.set(key, existing);
+            });
+
+            return (
+                <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                    <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid gap-2 text-xs uppercase tracking-wide text-gray-400"
+                            style={{
+                                gridTemplateColumns:
+                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                            }}
+                        >
+                            <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>Selection</div>
+                            <div className="px-3 py-2 text-center">Over</div>
+                            <div className="px-3 py-2 text-center">Under</div>
+                        </div>
+                        {[...pairedRows.values()].map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const rowHasSelection = isOddSelected(row.over) || isOddSelected(row.under);
+                            const renderSideCell = (odd: OddsBlazeOdd | undefined, line?: number) => {
+                                const isSelected = isOddSelected(odd);
+                                return (
+                                    <button
+                                        type="button"
+                                        onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                        disabled={!odd || locked}
+                                        className={`flex justify-center px-3 py-3 ${!odd ? "cursor-not-allowed" : ""
+                                            }`}
+                                    >
+                                        {renderLineOddsBox(
+                                            formatNumberLine(line),
+                                            odd ? formatOdds(odd.price) : "-",
+                                            isSelected,
+                                            !odd
+                                        )}
+                                    </button>
+                                );
+                            };
+
+                            return (
+                                <div
+                                    key={row.id}
+                                    className={`grid items-center gap-2 border-b border-white/5 text-left ${rowBand}`}
+                                    style={{
+                                        gridTemplateColumns:
+                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                    }}
+                                >
+                                    <div
+                                        className={scrollerStickyColumnRowClasses(
+                                            rowIndex % 2 === 1,
+                                            rowHasSelection
+                                        )}
+                                    >
+                                        <p className="text-sm font-semibold text-white">{row.label}</p>
+                                        {row.sublabel ? (
+                                            <p className="mt-1 text-xs text-gray-400">{row.sublabel}</p>
+                                        ) : null}
+                                    </div>
+                                    {renderSideCell(row.over, row.overLine)}
+                                    {renderSideCell(row.under, row.underLine)}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        }
+
         const rows: SimpleMarketRow[] = odds.map((entry) => {
             const odd = normalizeOddEntry(entry);
-            const side = odd.selection?.side;
             const line = odd.selection?.line;
-            const isPlayer = Boolean(odd.player);
-            const teamLabel = odd.player ? playerTeamLabel(odd.player, activeGame) : "";
-            const subtitle = isPlayer
-                ? teamLabel || matchupLabel(activeGame)
-                : matchupLabel(activeGame);
-            const label = odd.player
-                ? odd.player.name
-                : line !== undefined
-                    ? odd.selection?.name ?? odd.name ?? "Selection"
-                    : odd.name ?? odd.selection?.name ?? "Selection";
+            const subtitle = getOddCardSublabel(odd);
+            const label = line !== undefined ? getOddCardLabel(odd) : odd.name ?? odd.selection?.name ?? "Selection";
+
             return {
                 id: odd.id,
                 label,
@@ -2585,7 +2868,7 @@ export const MlbPickBuilder = ({
                 odd,
                 lineLabel:
                     line !== undefined
-                        ? `${side ? `${side[0]?.toUpperCase()} ` : ""}${line}`.trim()
+                        ? `${line}`.trim()
                         : undefined,
             };
         });
@@ -2599,20 +2882,20 @@ export const MlbPickBuilder = ({
     const renderMainOverUnderTable = (
         rows: ReturnType<typeof buildMainPointsRows>,
         sectionKey: string,
-        className = "mt-4 -mx-5 sm:-mx-6"
+        options?: { className?: string; emptyMessage?: string }
     ) => {
         if (!activeGame) return null;
         if (rows.length === 0) {
             return (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
-                    No main lines available for this market yet.
+                    {options?.emptyMessage ?? "No main lines available for this market yet."}
                 </div>
             );
         }
         const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
         return (
             <>
-                <div className={className}>
+                <div className={options?.className ?? "mt-4 -mx-5 sm:-mx-6"}>
                     <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                         <div
                             className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
@@ -2622,20 +2905,16 @@ export const MlbPickBuilder = ({
                             }}
                         >
                             <div className="pl-0 pr-3 py-2">Player</div>
-                            <div className="px-3 py-2 text-center">Over line</div>
-                            <div className="px-3 py-2 text-center">Under line</div>
+                            <div className="px-3 py-2 text-center">Over</div>
+                            <div className="px-3 py-2 text-center">Under</div>
                         </div>
                         {visibleRows.map((row, rowIndex) => {
                             const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                            const overLine = row.over?.selection?.line ?? row.line;
-                            const underLine = row.under?.selection?.line ?? row.line;
-                            const renderPointButton = (
-                                odd: OddsBlazeOdd | undefined,
-                                prefix: "O" | "U",
-                                line?: number
-                            ) => {
+                            const overLine = row.over?.selection?.line ?? row.overLine;
+                            const underLine = row.under?.selection?.line ?? row.underLine;
+                            const renderPointButton = (odd: OddsBlazeOdd | undefined, line?: number) => {
                                 const isSelected = isOddSelected(odd);
-                                const label = `${prefix} ${line ?? "-"}`;
+                                const label = formatNumberLine(line);
                                 return (
                                     <button
                                         type="button"
@@ -2681,8 +2960,8 @@ export const MlbPickBuilder = ({
                                             {row.teamLabel}
                                         </p>
                                     </div>
-                                    {renderPointButton(row.over, "O", overLine)}
-                                    {renderPointButton(row.under, "U", underLine)}
+                                    {renderPointButton(row.over, overLine)}
+                                    {renderPointButton(row.under, underLine)}
                                 </div>
                             );
                         })}
@@ -2693,11 +2972,10 @@ export const MlbPickBuilder = ({
         );
     };
 
-    const renderScrollablePropTable = (
+    const renderSingleSideScrollablePropTable = (
         table: { lines: number[]; rows: PointsTableRow[] },
         market: string,
-        sectionKey: string,
-        activeSide: "Over" | "Under"
+        sectionKey: string
     ) => {
         if (!activeGame) return null;
         if (table.rows.length === 0) return null;
@@ -2743,10 +3021,6 @@ export const MlbPickBuilder = ({
                                                     const odd = row.lines.get(line);
                                                     const isSelected = isOddSelected(odd);
                                                     const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                    const lineLabel =
-                                                        activeSide === "Over"
-                                                            ? formatLineLabel(line)
-                                                            : `U ${formatNumberLine(line)}`;
                                                     return (
                                                         <button
                                                             key={`${row.player.id}-${line}`}
@@ -2764,7 +3038,7 @@ export const MlbPickBuilder = ({
                                                                     className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
                                                                         }`}
                                                                 >
-                                                                    {lineLabel}
+                                                                    {formatLineLabel(line)}
                                                                 </span>
                                                                 <span
                                                                     className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
@@ -2785,6 +3059,197 @@ export const MlbPickBuilder = ({
                     </div>
                 </div>
                 {renderCategoryRowsToggle(sectionKey, table.rows.length)}
+            </>
+        );
+    };
+
+    const renderDualScrollablePropTable = (
+        table: { rows: DualPointsTableRow[] },
+        market: string,
+        sectionKey: string
+    ) => {
+        if (!activeGame) return null;
+        if (table.rows.length === 0) return null;
+        const { rows: visibleRows } = getVisibleCategoryRows(table.rows, sectionKey);
+
+        const renderSideScroller = (
+            lines: number[],
+            lineMap: Map<number, OddsBlazeOdd>,
+            scrollerKey: string
+        ) => (
+            <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                <PropRowScroller
+                    scrollerKey={scrollerKey}
+                    lines={lines}
+                    renderChip={(line) => {
+                        const odd = lineMap.get(line);
+                        const isSelected = isOddSelected(odd);
+                        const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                        return (
+                            <button
+                                key={`${scrollerKey}-${line}`}
+                                type="button"
+                                data-line={line}
+                                onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                disabled={!odd || locked}
+                                className={`${tableOddsBoxClasses(
+                                    isSelected,
+                                    !odd
+                                )} ${!odd ? "cursor-not-allowed" : ""}`}
+                            >
+                                <div className="flex flex-col items-center leading-tight">
+                                    <span
+                                        className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                            }`}
+                                    >
+                                        {formatLineLabel(line)}
+                                    </span>
+                                    <span
+                                        className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                            }`}
+                                    >
+                                        {oddsLabel}
+                                    </span>
+                                </div>
+                            </button>
+                        );
+                    }}
+                />
+            </div>
+        );
+
+        return (
+            <>
+                <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                    <div className="min-w-[720px] text-xs text-white">
+                        <div
+                            className="grid items-center gap-3 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
+                            style={{
+                                gridTemplateColumns:
+                                    "minmax(140px,190px) minmax(220px,1fr) minmax(220px,1fr)",
+                            }}
+                        >
+                            <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>Player</div>
+                            <div className="px-3 py-2 text-center">Over lines</div>
+                            <div className="px-3 py-2 text-center">Under lines</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const rowHasSelection =
+                                row.overAvailableLines.some((line) => isOddSelected(row.overLines.get(line))) ||
+                                row.underAvailableLines.some((line) =>
+                                    isOddSelected(row.underLines.get(line))
+                                );
+                            return (
+                                <div
+                                    key={`${market}-${row.player.id}`}
+                                    className={`grid items-center gap-3 border-b border-white/5 ${rowBand}`}
+                                    style={{
+                                        gridTemplateColumns:
+                                            "minmax(140px,190px) minmax(220px,1fr) minmax(220px,1fr)",
+                                    }}
+                                >
+                                    <div
+                                        className={scrollerStickyColumnRowClasses(
+                                            rowIndex % 2 === 1,
+                                            rowHasSelection
+                                        )}
+                                    >
+                                        <p className="text-sm font-semibold text-white">{row.player.name}</p>
+                                        <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
+                                    </div>
+                                    <div className="px-3 py-3">
+                                        {renderSideScroller(
+                                            row.overAvailableLines,
+                                            row.overLines,
+                                            `${sectionKey}-over-${row.player.id}`
+                                        )}
+                                    </div>
+                                    <div className="px-3 py-3">
+                                        {renderSideScroller(
+                                            row.underAvailableLines,
+                                            row.underLines,
+                                            `${sectionKey}-under-${row.player.id}`
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                {renderCategoryRowsToggle(sectionKey, table.rows.length)}
+            </>
+        );
+    };
+
+    const renderSingleSideSimplePropTable = (
+        rows: SimplePropRow[],
+        market: string,
+        sectionKey: string
+    ) => {
+        if (!activeGame) return null;
+        const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
+
+        return (
+            <>
+                <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                    <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid text-xs uppercase tracking-wide text-gray-400"
+                            style={{
+                                gridTemplateColumns:
+                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                            }}
+                        >
+                            <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>Player</div>
+                            <div className="px-3 py-2 text-center">Line</div>
+                            <div className="px-3 py-2 text-center">Odds</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const isSelected = isOddSelected(row.odd);
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            return (
+                                <button
+                                    key={`${market}-${row.player.id}`}
+                                    type="button"
+                                    onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
+                                    disabled={!row.odd || locked}
+                                    className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
+                                        ? "border-emerald-300/60 bg-emerald-500/10"
+                                        : "hover:bg-white/[0.02]"
+                                        } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                    style={{
+                                        gridTemplateColumns:
+                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                    }}
+                                >
+                                    <div
+                                        className={scrollerStickyColumnRowClasses(
+                                            rowIndex % 2 === 1,
+                                            isSelected
+                                        )}
+                                    >
+                                        <p className="text-sm font-semibold text-white">{row.player.name}</p>
+                                        <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
+                                    </div>
+                                    <div className="px-3 py-2.5 text-center text-xs text-gray-300">
+                                        {formatNumberLine(row.line)}
+                                    </div>
+                                    <div className="flex justify-center px-3 py-3">
+                                        {renderTableOddsBox(
+                                            row.odd ? formatOdds(row.odd.price) : "-",
+                                            isSelected,
+                                            !row.odd
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+                {renderCategoryRowsToggle(sectionKey, rows.length)}
             </>
         );
     };
@@ -3026,6 +3491,12 @@ export const MlbPickBuilder = ({
         [activeGame]
     );
 
+    const runLineOdds = useMemo(
+        () =>
+            activeGame ? activeGame.odds.filter((odd) => odd.market === "Run Line") : [],
+        [activeGame]
+    );
+
     const altTotalOdds = useMemo(
         () =>
             activeGame
@@ -3040,7 +3511,7 @@ export const MlbPickBuilder = ({
         }
         const map = new Map<number, SpreadLineEntry>();
         const lineSet = new Set<number>();
-        altSpreadOdds.forEach((odd) => {
+        runLineOdds.forEach((odd) => {
             const line = odd.selection?.line;
             if (line === undefined) return;
             lineSet.add(line);
@@ -3054,7 +3525,7 @@ export const MlbPickBuilder = ({
             .filter((line) => map.get(line)?.home && map.get(-line)?.away)
             .sort((a, b) => a - b);
         return { lines, map };
-    }, [activeGame, altSpreadOdds]);
+    }, [activeGame, runLineOdds]);
 
     const altTotalLineData = useMemo(() => {
         const map = new Map<number, TotalLineEntry>();
@@ -3593,25 +4064,41 @@ export const MlbPickBuilder = ({
                                 const isMainPlayerPoints =
                                     MAIN_OVER_UNDER_MARKETS.has(market) && hasOver && hasUnder;
                                 const isTableMarket = TABLE_MARKETS.has(market);
-                                const defaultSide = hasOver ? "Over" : "Under";
-                                const activeSide = pointsSideByMarket[market] ?? defaultSide;
-                                const table = isTableMarket
-                                    ? buildPointsTable(odds, activeGame, activeSide)
-                                    : { lines: [], rows: [] };
-                                const showTable =
-                                    isTableMarket && table.lines.length > 1 && table.rows.length > 0;
-                                const simpleRows = isTableMarket
-                                    ? buildSimplePropRows(odds, activeGame, activeSide)
-                                    : [];
+                                const singleSide = hasOver ? "Over" : hasUnder ? "Under" : null;
+                                const singleSideTable =
+                                    isTableMarket && singleSide
+                                        ? buildPointsTable(odds, activeGame, singleSide)
+                                        : { lines: [] as number[], rows: [] as PointsTableRow[] };
+                                const dualSideTable =
+                                    isTableMarket && hasOver && hasUnder
+                                        ? buildDualPointsTable(odds, activeGame)
+                                        : { rows: [] as DualPointsTableRow[] };
+                                const showSingleSideTable =
+                                    isTableMarket &&
+                                    Boolean(singleSide) &&
+                                    (!hasOver || !hasUnder) &&
+                                    singleSideTable.lines.length > 1 &&
+                                    singleSideTable.rows.length > 0;
+                                const showDualSideTable =
+                                    isTableMarket &&
+                                    hasOver &&
+                                    hasUnder &&
+                                    dualSideTable.rows.some(
+                                        (row) => row.overLineCount > 1 || row.underLineCount > 1
+                                    );
+                                const simpleRows =
+                                    isTableMarket && singleSide
+                                        ? buildSimplePropRows(odds, activeGame, singleSide)
+                                        : [];
+                                const pairedSimpleRows =
+                                    isTableMarket && hasOver && hasUnder
+                                        ? buildPairedSimplePropRows(odds, activeGame)
+                                        : [];
                                 const mainPointsRows = isMainPlayerPoints
                                     ? buildMainPointsRows(odds, activeGame)
                                     : [];
                                 const sectionKey = `${activeTab}-${market}`;
                                 const collapsed = isSectionCollapsed(sectionKey, index === 0);
-                                const { rows: visibleSimpleRows } = getVisibleCategoryRows(
-                                    simpleRows,
-                                    sectionKey
-                                );
 
                                 const sectionPadding =
                                     index === 0 ? "px-5 pb-6 pt-3 sm:px-6" : "px-5 py-6 sm:px-6";
@@ -3641,106 +4128,22 @@ export const MlbPickBuilder = ({
 
                                         {!collapsed && (
                                             <>
-                                                {isTableMarket && (hasOver || hasUnder) ? (
-                                                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                                                        {["Over", "Under"].map((side) => {
-                                                            if (side === "Over" && !hasOver) return null;
-                                                            if (side === "Under" && !hasUnder) return null;
-                                                            const active = activeSide === side;
-                                                            return (
-                                                                <button
-                                                                    key={`${market}-${side}`}
-                                                                    type="button"
-                                                                    onClick={() =>
-                                                                        setPointsSideByMarket((prev) => ({
-                                                                            ...prev,
-                                                                            [market]: side as "Over" | "Under",
-                                                                        }))
-                                                                    }
-                                                                    className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                                        ? "border-emerald-300/70 bg-emerald-500/20 text-white"
-                                                                        : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
-                                                                        }`}
-                                                                >
-                                                                    {side}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                ) : null}
-
                                                 {isMainPlayerPoints ? (
                                                     renderMainOverUnderTable(mainPointsRows, sectionKey)
-                                                ) : showTable ? (
-                                                    renderScrollablePropTable(table, market, sectionKey, activeSide)
+                                                ) : showDualSideTable ? (
+                                                    renderDualScrollablePropTable(dualSideTable, market, sectionKey)
+                                                ) : showSingleSideTable ? (
+                                                    renderSingleSideScrollablePropTable(
+                                                        singleSideTable,
+                                                        market,
+                                                        sectionKey
+                                                    )
+                                                ) : isTableMarket && hasOver && hasUnder ? (
+                                                    renderMainOverUnderTable(pairedSimpleRows, sectionKey, {
+                                                        emptyMessage: "No lines available for this market yet.",
+                                                    })
                                                 ) : isTableMarket ? (
-                                                    <>
-                                                        <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
-                                                            <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                                <div
-                                                                    className="grid text-xs uppercase tracking-wide text-gray-400"
-                                                                    style={{
-                                                                        gridTemplateColumns:
-                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                    }}
-                                                                >
-                                                                    <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
-                                                                        Player
-                                                                    </div>
-                                                                    <div className="px-3 py-2 text-center">
-                                                                        {activeSide} line
-                                                                    </div>
-                                                                    <div className="px-3 py-2 text-center">Odds</div>
-                                                                </div>
-                                                                {visibleSimpleRows.map((row, rowIndex) => {
-                                                                    const isSelected = isOddSelected(row.odd);
-                                                                    const rowBand =
-                                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                                    return (
-                                                                        <button
-                                                                            key={`${market}-${row.player.id}`}
-                                                                            type="button"
-                                                                            onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                                                            disabled={!row.odd || locked}
-                                                                            className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
-                                                                                ? "border-emerald-300/60 bg-emerald-500/10"
-                                                                                : "hover:bg-white/[0.02]"
-                                                                                } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                                            style={{
-                                                                                gridTemplateColumns:
-                                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                            }}
-                                                                        >
-                                                                            <div
-                                                                                className={scrollerStickyColumnRowClasses(
-                                                                                    rowIndex % 2 === 1,
-                                                                                    isSelected
-                                                                                )}
-                                                                            >
-                                                                                <p className="text-sm font-semibold text-white">
-                                                                                    {row.player.name}
-                                                                                </p>
-                                                                                <p className="mt-1 text-xs text-gray-400">
-                                                                                    {row.teamLabel}
-                                                                                </p>
-                                                                            </div>
-                                                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                                                                {row.line ?? "-"}
-                                                                            </div>
-                                                                            <div className="flex justify-center px-3 py-3">
-                                                                                {renderTableOddsBox(
-                                                                                    row.odd ? formatOdds(row.odd.price) : "-",
-                                                                                    isSelected,
-                                                                                    !row.odd
-                                                                                )}
-                                                                            </div>
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                        {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
-                                                    </>
+                                                    renderSingleSideSimplePropTable(simpleRows, market, sectionKey)
                                                 ) : (
                                                     renderOddCards(odds)
                                                 )}

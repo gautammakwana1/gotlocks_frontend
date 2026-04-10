@@ -26,7 +26,9 @@ const HIDDEN_ROUTES = new Set([
   "/landing-page",
   "/account-creation",
   "/auth/callback",
-  "/auth/set-username"
+  "/auth/set-username",
+  "/terms-and-conditions",
+  "/privacy-policy"
 ]);
 
 const accentStyle = { color: COLORS.ACCENT } as const;

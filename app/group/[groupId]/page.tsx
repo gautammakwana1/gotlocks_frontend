@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, leaderboardSlip, Picks, RootState, Slips } from "@/lib/interfaces/interfaces";
+import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, leaderboardSlip, Picks, RootState, Slip, Slips } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest, fetchAllSlipsRequest, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeOpenSlipsRequest, fetchAllVibeReviewSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
 import ModifyMembers, { MemberWithRole } from "@/components/group/ModifyMembers";
@@ -113,8 +113,9 @@ const GroupPage = () => {
   const searchParams = useSearchParams();
   const groupId = params.groupId as string;
   const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
-  const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slips>([]);
+  const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slip[]>([]);
   const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
+  const [leaderboardPage, setLeaderboardPage] = useState(1);
 
   type TabId = (typeof BASE_TABS)[number]["id"];
 
@@ -215,9 +216,10 @@ const GroupPage = () => {
     leaveMessage,
     leaveLoading,
     ArchiveLeaderboardList,
-    archivedLeaderboard: ArchivedLeaderboardObject
+    archivedLeaderboard: ArchivedLeaderboardObject,
+    hasMoreLeaderboard,
   } = useSelector((state: GroupSelector) => state.group);
-  const { slips: slipList, openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews } = useSelector((state: RootState) => state.slip);
+  const { slips: slipList, openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews, loading: slipLoader } = useSelector((state: RootState) => state.slip);
   const { picks: pickList, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
   const rawGroup = useSelector((state: GroupSelector) => state.group.group);
   const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -630,6 +632,18 @@ const GroupPage = () => {
     }
   };
 
+  const handleLoadMoreLeaderboard = () => {
+    if (!group?.id || !selectedLeaderboard?.id) return;
+    const nextPage = leaderboardPage + 1;
+    setLeaderboardPage(nextPage);
+    dispatch(fetchLeaderboardRequest({
+      groupId: group.id,
+      leaderboard_id: selectedLeaderboard.id,
+      page: nextPage,
+      limit: 5
+    }));
+  };
+
   useEffect(() => {
     if (activeTab === "leaderboard" && !archivedLeaderboardId) {
       const defaultLeaderboard = groupLeaderboards.find((l) => l.isDefault && l.status === "ACTIVE")
@@ -637,6 +651,7 @@ const GroupPage = () => {
         setActiveLeaderboardId(defaultLeaderboard?.id)
       }
     }
+    setLeaderboardPage(1);
   }, [groupLeaderboards, activeTab, archivedLeaderboardId]);
 
   useEffect(() => {
@@ -767,14 +782,19 @@ const GroupPage = () => {
 
   useEffect(() => {
     if (group?.id && selectedLeaderboard?.id && (activeTab === "leaderboard" || activeTab === "settings") && !archivedLeaderboardId) {
-      dispatch(fetchLeaderboardRequest({ groupId: group?.id, leaderboard_id: selectedLeaderboard?.id }));
+      setLeaderboardPage(1);
+      dispatch(fetchLeaderboardRequest({
+        groupId: group?.id,
+        leaderboard_id: selectedLeaderboard?.id,
+        page: 1,
+        limit: 5
+      }));
     }
   }, [selectedLeaderboard?.id, dispatch, group?.id, activeTab, archivedLeaderboardId]);
 
   useEffect(() => {
     if (activeTab === "leaderboard" && group?.id) {
       dispatch(fetchAllSlipsRequest({ group_id: group?.id }));
-      // dispatch(fetchLeaderboardRequest({ groupId: group?.id, leaderboard_id: selectedLeaderboard?.id ? selectedLeaderboard?.id : undefined }));
     }
     if (activeTab === "settings" && group?.id) {
       dispatch(fetchGroupByIdRequest({ groupId: group?.id }));
@@ -1255,6 +1275,9 @@ const GroupPage = () => {
                 leaderboardName={selectedLeaderboard.name}
                 currentUserId={currentUser?.userId}
                 leaderboardSlips={leaderboardSlipsList}
+                onLoadMore={handleLoadMoreLeaderboard}
+                hasMore={hasMoreLeaderboard}
+                loadingMore={loadingLeaderboard}
               />
             ) : (
               <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">

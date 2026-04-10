@@ -213,3 +213,17 @@ body {
     transform: translateY(-6px);
   }
 }
+
+@keyframes shine {
+  0% {
+    left: -120%;
+  }
+
+  100% {
+    left: 120%;
+  }
+}
+
+.animate-shine {
+  animation: shine 3s linear infinite;
+}

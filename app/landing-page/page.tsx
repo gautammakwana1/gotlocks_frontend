@@ -14,6 +14,9 @@ import { displayNameGradientStyle } from "@/lib/styles/text";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import ForgotPasswordModal from "@/components/modals/ForgotPasswordModal";
 import { EyeClosed, EyeIcon } from "lucide-react";
+import Image from "next/image";
+import AuthLegalNotice from "@/components/ui/AuthLegalNotic";
+import { motion } from "framer-motion";
 
 const LandingPage = () => {
   const router = useRouter();
@@ -125,16 +128,83 @@ const LandingPage = () => {
   return (
     <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-10 pb-20 text-white">
       <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
-        <h1
-          className="allow-caps text-5xl font-extrabold text-transparent bg-clip-text"
-          style={{
-            ...displayNameGradientStyle,
-            backgroundImage: `linear-gradient(130deg, ${COLORS.ACCENT} 0%, ${COLORS.ACCENT} 100%)`,
-            color: COLORS.ACCENT,
-          }}
-        >
-          {APP_NAME.toLowerCase()}
-        </h1>
+        {/* <Image
+          src="/goat_throw_animation_1.svg"
+          alt=""
+          aria-hidden="true"
+          width={60}
+          height={60}
+          className="h-35 w-35 object-contain sm:h-50 sm:w-50"
+          priority
+        /> */}
+        {/* <Logo3D /> */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <h1
+            className="allow-caps text-5xl font-extrabold text-transparent bg-clip-text"
+            style={{
+              ...displayNameGradientStyle,
+              backgroundImage: `linear-gradient(130deg, ${COLORS.ACCENT} 0%, ${COLORS.ACCENT} 100%)`,
+              color: COLORS.ACCENT,
+            }}
+          >
+            {APP_NAME.toLowerCase()}
+          </h1>
+          <div className="relative flex items-center justify-center">
+            {/* Radar */}
+            <span className="absolute w-20 h-20 border border-[#00ff99]/40 rounded-full animate-ping" />
+            {/* Glow */}
+            <div className="absolute w-30 h-30 rounded-full
+              bg-gradient-to-r 
+              from-[#00ff99] 
+              via-[#00e5ff] 
+              to-[#7c3aed] 
+              blur-2xl 
+              opacity-50 
+              animate-pulse"
+            />
+            {/* Logo */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{
+                opacity: 1,
+                scale: [1, 1.08, 1], // zoom in → zoom out
+              }}
+              transition={{
+                opacity: { duration: 0.6 },
+                scale: {
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                },
+              }}
+              className="relative flex items-center justify-center"
+            >
+              <Image
+                src="/logocolorblackborder.svg"
+                alt=""
+                aria-hidden="true"
+                width={52}
+                height={50}
+                className="h-12 w-12 object-contain sm:h-[52px] sm:w-[52px] select-none"
+                priority
+                draggable={false}
+              />
+
+              {/* Shine */}
+              <div className="absolute inset-0 rounded-full h-[52px] w-[50px] overflow-hidden pointer-events-none">
+                <div
+                  className="absolute w-[20%] h-full 
+                    bg-gradient-to-r 
+                    from-transparent 
+                    via-white/40 
+                    to-transparent
+                    skew-x-[-20deg]
+                    animate-shine"
+                />
+              </div>
+            </motion.div>
+          </div>
+        </div>
       </div>
 
       <div className="flex w-full max-w-md flex-col gap-4 rounded-3xl border border-white/10 bg-black/60 p-6 shadow-xl backdrop-blur">
@@ -158,13 +228,6 @@ const LandingPage = () => {
           sign in with username
         </button>
 
-        {/* TODO Phase 2:
-            - Trigger Supabase Google OAuth sign-in.
-            - After OAuth succeeds, check if the profile has a username.
-            - If missing, route to a dedicated "Set Username" screen so the user chooses a unique handle (stored as User.name).
-            - Persist the username/profile in Supabase, then redirect into the main app.
-            - If the username already exists, skip onboarding and drop them into their groups list.
-        */}
         <button
           type="button"
           onClick={handleGoogleAuth}
@@ -228,6 +291,8 @@ const LandingPage = () => {
             {errors && (
               <span className="text-xs font-medium text-red-400">{errors}</span>
             )}
+
+            <AuthLegalNotice />
 
             <button
               type="submit"

@@ -10,10 +10,13 @@ import { useToast } from "@/lib/state/ToastContext";
 import { RootState } from "@/lib/interfaces/interfaces";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import CustomDatePicker from "@/components/ui/CustomDatePicker";
+import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 
 const SetUsernamePage = () => {
     const router = useRouter();
     const dispatch = useAppDispatch();
+    const currentUser = useCurrentUser();
     const { setToast } = useToast();
 
     const [username, setUsername] = useState("");
@@ -23,6 +26,12 @@ const SetUsernamePage = () => {
     const { error: authError, profileUpdateMessage, loading } = useSelector(
         (state: RootState) => state.user
     );
+
+    useEffect(() => {
+        if (currentUser?.username) {
+            router.replace("/home");
+        }
+    }, [router, currentUser]);
 
     useEffect(() => {
         // Check if we have a valid session to even be here
@@ -70,6 +79,36 @@ const SetUsernamePage = () => {
         }
         if (!dob) {
             setError("Date of birth is required.");
+            return false;
+        }
+
+        const birthDate = new Date(dob);
+        const today = new Date();
+
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+
+        if (
+            monthDiff < 0 ||
+            (monthDiff === 0 && today.getDate() < birthDate.getDate())
+        ) {
+            age--;
+        }
+
+        if (age < 13) {
+            setError("You must be at least 13 years old to refgister.");
+            return false;
+        }
+
+        const containsNameRestricted = checkAnyRestrictedWords(username);
+        if (containsNameRestricted) {
+            setError("Username contains inappropriate language.");
+            return false;
+        }
+
+        const containsReserveWords = checkForReservedWords(username);
+        if (containsReserveWords) {
+            setError("Username contains reserved words.");
             return false;
         }
 

@@ -27,7 +27,10 @@ type Props = {
     currentUserId?: string;
     leaderboardId: string;
     leaderboardName?: string;
-    leaderboardSlips: Slips;
+    leaderboardSlips: Slip[];
+    onLoadMore?: () => void;
+    hasMore?: boolean;
+    loadingMore?: boolean;
 };
 
 // const glowClassesForCumulative = (cumulative: number) => {
@@ -519,6 +522,9 @@ export const LeaderboardGrid = ({
     leaderboardName,
     leaderboardId,
     leaderboardSlips,
+    onLoadMore,
+    hasMore,
+    loadingMore,
 }: Props) => {
     const isMobile = useIsMobile();
     const scrollerRef = useRef<HTMLDivElement>(null);
@@ -805,6 +811,22 @@ export const LeaderboardGrid = ({
                     </div>
                 </div>
             </div>
+
+            {hasMore && (
+                <div className="flex justify-center pt-2">
+                    <button
+                        onClick={onLoadMore}
+                        disabled={loadingMore}
+                        className="flex h-10 w-full max-w-xs items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-6 text-xs font-semibold text-slate-200 transition-all hover:border-white/20 hover:bg-white/10 disabled:opacity-50"
+                    >
+                        {loadingMore ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                        ) : (
+                            "Show more ranking"
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     )
 }

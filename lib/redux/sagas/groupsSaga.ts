@@ -24,6 +24,7 @@ import type {
 	EnableSecondaryLeaderboardPayload,
 	FetchArchivedLeaderBoardsPayload,
 	FetchArchivedLeaderBoardListPayload,
+	LeaderboardData,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -166,17 +167,17 @@ function* handleConfirmDeleteGroup(action: PayloadAction<ConfirmDeletePayload>):
 
 function* handleFetchLeaderboard(action: PayloadAction<LeaderboardPayload | undefined>): SagaIterator {
 	try {
-		const { groupId = "", leaderboard_id } = action.payload || {};
+		const { groupId = "", leaderboard_id, page = 1, limit = 10 } = action.payload || {};
 
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.get,
 			`${API_BASE_URL}/group/leaderboard`,
 			{
-				params: { groupId, leaderboard_id }
+				params: { groupId, leaderboard_id, page, limit }
 			}
 		);
 		const payload = response.data as { data?: unknown };
-		yield put(fetchLeaderboardSuccess(payload.data));
+		yield put(fetchLeaderboardSuccess(payload.data as LeaderboardData));
 	} catch (error: unknown) {
 		yield put(fetchLeaderboardFailure(getErrorMessage(error, "Leaderboard Fetching Failed")))
 	}

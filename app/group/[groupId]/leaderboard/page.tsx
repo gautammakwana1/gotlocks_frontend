@@ -7,8 +7,6 @@ import { displayNameGradientStyle } from "@/lib/styles/text";
 import { Group, GroupSelector, League } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { GroupDataShape } from "../page";
-import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
-import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 
 const hasNestedGroup = (
@@ -41,18 +39,6 @@ export type Leaderboard = {
     sportScope?: League | string | null;
 };
 
-export const mockLeaderboards: Leaderboard[] = [
-    {
-        id: "lb-main-g1",
-        groupId: "g1",
-        name: "Main Leaderboard",
-        status: "ACTIVE",
-        isDefault: true,
-        createdAt: new Date().toISOString(),
-        sportScope: null,
-    },
-];
-
 const GroupLeaderboardPage = () => {
     const dispatch = useDispatch();
     const params = useParams<{ groupId: string }>();
@@ -64,8 +50,8 @@ const GroupLeaderboardPage = () => {
 
     useEffect(() => {
         if (!params.groupId || !currentUser) return;
-        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-        dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
+        // dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
+        // dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
     }, [params.groupId, currentUser, dispatch]);
 
     useEffect(() => {

@@ -1,6 +1,7 @@
 import { JAGGED_CLIP_PATH } from "@/lib/constants";
 import { SlipCard } from "./SlipCard";
-import { Slip } from "@/lib/interfaces/interfaces";
+import { RootState, Slip } from "@/lib/interfaces/interfaces";
+import { useSelector } from "react-redux";
 
 type Props = {
     title: string;
@@ -21,6 +22,9 @@ export const SlipCategorySection = ({
     layout = "grid",
     hasMore = false,
 }: Props) => {
+
+    const { loading } = useSelector((state: RootState) => state.slip);
+
     const isList = layout === "list";
     const emptyLabel = emptyCopy ?? "No slips yet — create one to get started.";
 
@@ -72,16 +76,8 @@ export const SlipCategorySection = ({
                     ))}
                 </div>
             )}
-            {hasMore && (
-                // <div className="flex items-center justify-center">
-                //     <button
-                //         onClick={onLoadMore}
-                //         className="group relative flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-6 py-1 text-xs font-medium text-gray-300 transition-all hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-50 active:scale-95"
-                //     >
-                //         <div className="absolute inset-0 rounded-full bg-emerald-500/20 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
-                //         <span className="relative">Load More</span>
-                //     </button>
-                // </div>
+
+            {hasMore && !loading && (
                 <div className="w-full">
                     <button
                         type="button"
@@ -91,6 +87,25 @@ export const SlipCategorySection = ({
                         show more
                     </button>
                 </div>
+            )}
+
+            {loading && (
+                <>
+                    <style>
+                        {`
+                            @keyframes notifBounce {
+                                0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+                                50%       { transform: translateY(-8px); animation-timing-function: cubic-bezier(0,0,0.2,1); }
+                            }
+                            .notif-dot { animation: notifBounce 0.9s infinite; }
+                        `}
+                    </style>
+                    <div className="flex items-center justify-center gap-2 px-5 py-4 sm:px-6">
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "0ms" }} />
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "160ms" }} />
+                        <span className="notif-dot h-2 w-2 rounded-full bg-white/40" style={{ animationDelay: "320ms" }} />
+                    </div>
+                </>
             )}
         </section>
     );

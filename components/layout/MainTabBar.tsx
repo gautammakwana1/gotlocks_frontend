@@ -21,7 +21,9 @@ const HIDDEN_ROUTES = [
     "/cag-explained",
     "/cag-form",
     "/auth/set-username",
-    "/auth/callback"
+    "/auth/callback",
+    "/terms-and-conditions",
+    "/privacy-policy"
 ];
 
 const isRouteHidden = (pathname: string | null) => {
