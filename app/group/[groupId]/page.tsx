@@ -708,8 +708,8 @@ const GroupPage = () => {
       nextErrors.name = "Group name is required.";
     }
 
-    if (editGroupName.length > 15) {
-      nextErrors.name = "Group name must be 15 characters or less.";
+    if (editGroupName.length > 25) {
+      nextErrors.name = "Group name must be 25 characters or less.";
     }
 
     if (editGroupDescription.length > 50) {

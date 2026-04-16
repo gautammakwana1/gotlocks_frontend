@@ -3,9 +3,9 @@
 import { JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils/date";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBAOdds, NBASchedules, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBAOdds, NBASchedules, NBASchedulesWithOdds, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { cleatNbaPickValidateMessage, fetchDraftkingsNBAOddsRequest, fetchFanduelNBAOddsRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
+import { cleatNbaPickValidateMessage, fetchDraftkingsNBAOddsRequest, fetchFanduelNBAOddsRequest, fetchNBAScheduleByTimezoneRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import FootballAnimation from "../animations/FootballAnimation";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
@@ -406,7 +406,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: NBASchedules[],
+    snapshot: NBASchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -439,7 +439,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NBASchedules[],
+    snapshot: NBASchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -477,7 +477,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NBASchedules[],
+    scheduleSnapshot: NBASchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -496,6 +496,34 @@ const buildMergedGameOptions = (
         a.date.localeCompare(b.date)
     );
 };
+
+const mergeNBASchedules = (
+    scheduledWithOdds: NBASchedulesWithOdds[] | null | undefined,
+    allSchedules: NBASchedules[] | null | undefined
+): NBASchedulesWithOdds[] => {
+    const mergedMap = new Map<string, NBASchedulesWithOdds>();
+
+    // Rule 1: Use Matches with Odds First
+    scheduledWithOdds?.forEach((match) => {
+        mergedMap.set(match.id, match);
+    });
+
+    // Rule 2: Add Missing Matches
+    allSchedules?.forEach((match) => {
+        if (!mergedMap.has(match.id)) {
+            mergedMap.set(match.id, {
+                ...match,
+                odds: [], // Set odds: []
+            });
+        }
+    });
+
+    // Rule 3: Avoid Duplicate Matches - Map ensures uniqueness by id
+    return Array.from(mergedMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+    );
+};
+
 
 type DateFilterOption = {
     key: string;
@@ -1336,11 +1364,11 @@ export const NbaPickBuilder = ({
         [reviewTierScoringMode]
     );
 
-    const [nbaMatchSchedules, setNBAMatchSchedules] = useState<NBASchedules[]>([]);
+    const [nbaMatchSchedules, setNBAMatchSchedules] = useState<NBASchedulesWithOdds[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { nbaSchedules, fanduelNbaOdds, draftkingNbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
+    const { nbaSchedulesWithOdds, nbaSchedules, fanduelNbaOdds, draftkingNbaOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
 
     const currentPick = useMemo(() => {
         if (initialPick) return initialPick;
@@ -1362,16 +1390,19 @@ export const NbaPickBuilder = ({
             dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
         }
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
+
     useEffect(() => {
-        if (nbaSchedules?.events?.length) {
-            const events = nbaSchedules.events;
-
-            setNBAMatchSchedules(events);
-
-            // Always compute and set explicitly (true OR false)
-            // const anyLive = events.some(e => e.live === true);
-            // setIsAnyLiveMatch(anyLive);
+        if (activeDateKey) {
+            dispatch(fetchNBAScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: false, is_range: false }));
         }
+    }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
+
+    useEffect(() => {
+        const mergedEvents = mergeNBASchedules(nbaSchedulesWithOdds?.events, nbaSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setNBAMatchSchedules(mergedEvents);
+        }
+
         if (fanduelNbaOdds?.events?.length) {
             const activeEvent = activeGameId
                 ? fanduelNbaOdds.events.find(e => e.id === activeGameId)
@@ -1381,7 +1412,8 @@ export const NbaPickBuilder = ({
         } else if (fanduelNbaOdds?.updated) {
             setOddsData([]);
         }
-    }, [nbaSchedules, fanduelNbaOdds, activeGameId]);
+    }, [nbaSchedulesWithOdds, nbaSchedules, fanduelNbaOdds, activeGameId]);
+
 
     useEffect(() => {
         if (fanduelNbaOdds?.events?.length && draftkingNbaOdds?.events?.length) {
@@ -4158,7 +4190,7 @@ export const NbaPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="flex text-xs text-gray-500 gap-2">
-                                <span>Updated {formatDateTime(nbaSchedules?.updated)}</span>
+                                <span>Updated {formatDateTime(nbaSchedulesWithOdds?.updated)}</span>
                                 {/* {activeGame.live && (
                                     <span className="flex items-center gap-1 text-red-500 font-medium">
                                         <span className="relative flex h-3 w-3">

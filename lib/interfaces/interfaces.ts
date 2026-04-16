@@ -1347,7 +1347,23 @@ export type SportsBookObject = {
     name: string;
 }
 
+export type NFLSchedulesWithOdds = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+    odds: OddsObject[];
+    updated?: string;
+}
+
 export type NFLSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+}
+
+export type NBASchedulesWithOdds = {
     id: string;
     teams: TeamsObject,
     date: string;
@@ -1361,11 +1377,25 @@ export type NBASchedules = {
     teams: TeamsObject,
     date: string;
     live: boolean;
+}
+
+export type NCAABSchedulesWithOdds = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
     odds: OddsObject[];
     updated?: string;
 }
 
 export type NCAABSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+}
+
+export type NHLSchedulesWithOdds = {
     id: string;
     teams: TeamsObject,
     date: string;
@@ -1379,11 +1409,25 @@ export type NHLSchedules = {
     teams: TeamsObject,
     date: string;
     live: boolean;
+}
+
+export type SoccerSchedulesWithOdds = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
     odds: OddsObject[];
     updated?: string;
 }
 
 export type SoccerSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+}
+
+export type MLBSchedulesWithOdds = {
     id: string;
     teams: TeamsObject,
     date: string;
@@ -1397,8 +1441,6 @@ export type MLBSchedules = {
     teams: TeamsObject,
     date: string;
     live: boolean;
-    odds: OddsObject[];
-    updated?: string;
 }
 
 export type OddSelectionObject = {
@@ -1624,9 +1666,13 @@ export type TouchDownPropsObject = {
 }
 
 export type NFLState = {
-    nflSchedules: {
+    nflSchedulesWithOdds: {
         updated: string;
         league: LeagueObject;
+        events: NFLSchedulesWithOdds[];
+    } | null,
+    nflSchedules: {
+        updated: string;
         events: NFLSchedules[];
     } | null,
     nflOdds: NFLOdds | null;
@@ -1694,9 +1740,13 @@ export type SocialState = {
 }
 
 export type NBAState = {
-    nbaSchedules: {
+    nbaSchedulesWithOdds: {
         updated: string;
         league: LeagueObject;
+        events: NBASchedulesWithOdds[];
+    } | null,
+    nbaSchedules: {
+        updated: string;
         events: NBASchedules[];
     } | null,
     fanduelNbaOdds: NBAOdds | null;
@@ -1710,9 +1760,13 @@ export type NBAState = {
 };
 
 export type NCAABState = {
-    ncaabSchedules: {
+    ncaabSchedulesWithOdds: {
         updated: string;
         league: LeagueObject;
+        events: NCAABSchedulesWithOdds[];
+    } | null,
+    ncaabSchedules: {
+        updated: string;
         events: NCAABSchedules[];
     } | null,
     ncaabOdds: NCAABOdds | null;
@@ -1727,9 +1781,13 @@ export type NCAABState = {
 };
 
 export type NHLState = {
-    nhlSchedules: {
+    nhlSchedulesWithOdds: {
         updated: string;
         league: LeagueObject;
+        events: NHLSchedulesWithOdds[];
+    } | null,
+    nhlSchedules: {
+        updated: string;
         events: NHLSchedules[];
     } | null,
     nhlOdds: NHLOdds | null;
@@ -1742,10 +1800,20 @@ export type NHLState = {
 };
 
 export type SoccerState = {
+    englandPremierLeagueSchedulesWithOdds: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedulesWithOdds[];
+    } | null,
     englandPremierLeagueSchedules: {
         updated: string;
         league: LeagueObject;
         events: SoccerSchedules[];
+    } | null,
+    germanyBundesligaSchedulesWithOdds: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedulesWithOdds[];
     } | null,
     germanyBundesligaSchedules: {
         updated: string;
@@ -1765,9 +1833,13 @@ export type SoccerState = {
 };
 
 export type MLBState = {
-    mlbSchedules: {
+    mlbSchedulesWithOdds: {
         updated: string;
         league: LeagueObject;
+        events: MLBSchedulesWithOdds[];
+    } | null,
+    mlbSchedules: {
+        updated: string;
         events: MLBSchedules[];
     } | null,
     mlbOdds: MLBOdds | null;

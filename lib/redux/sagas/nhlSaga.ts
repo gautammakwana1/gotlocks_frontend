@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import { FetchNHLOddsPayload, FetchNHLSchedulePayload, ValidateMyNHLPickPayload } from "@/lib/interfaces/interfaces";
-import { fetchNHLOddsFailure, fetchNHLOddsRequest, fetchNHLOddsSuccess, fetchNHLScheduleFailure, fetchNHLScheduleRequest, fetchNHLScheduleSuccess, nhlPickValidateFailure, nhlPickValidateRequest, nhlPickValidateSuccess } from "../slices/nhlSlice";
+import { fetchNHLOddsFailure, fetchNHLOddsRequest, fetchNHLOddsSuccess, fetchNHLScheduleByTimezoneFailure, fetchNHLScheduleByTimezoneRequest, fetchNHLScheduleByTimezoneSuccess, fetchNHLScheduleFailure, fetchNHLScheduleRequest, fetchNHLScheduleSuccess, nhlPickValidateFailure, nhlPickValidateRequest, nhlPickValidateSuccess } from "../slices/nhlSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -36,6 +36,24 @@ function* handleFetchNHLSchedule(action: PayloadAction<FetchNHLSchedulePayload |
         yield put(fetchNHLScheduleSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchNHLScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+};
+
+function* handleFetchNHLScheduleByTimezone(action: PayloadAction<FetchNHLSchedulePayload | undefined>): SagaIterator {
+    try {
+        const { is_pick_of_day, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/nhl/schedules-for-all-tz`,
+            {
+                params: { is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchNHLScheduleByTimezoneSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchNHLScheduleByTimezoneFailure(getErrorMessage(error, "Schedules Fetch Failed")));
     }
 };
 
@@ -77,4 +95,5 @@ export default function* nhlSaga() {
     yield takeLatest(fetchNHLScheduleRequest.type, handleFetchNHLSchedule);
     yield takeLatest(fetchNHLOddsRequest.type, handleFetchNHLOdds);
     yield takeLatest(nhlPickValidateRequest.type, handleValidateNHLPick);
+    yield takeLatest(fetchNHLScheduleByTimezoneRequest.type, handleFetchNHLScheduleByTimezone);
 };

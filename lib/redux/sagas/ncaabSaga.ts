@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import { FetchNCAABOddsPayload, FetchNCAABSchedulePayload, ValidateMyNCAABPickPayload } from "@/lib/interfaces/interfaces";
-import { fetchDraftkingsNCAABOddsFailure, fetchDraftkingsNCAABOddsRequest, fetchDraftkingsNCAABOddsSuccess, fetchFanduelNCAABOddsFailure, fetchFanduelNCAABOddsRequest, fetchFanduelNCAABOddsSuccess, fetchNCAABOddsFailure, fetchNCAABOddsRequest, fetchNCAABOddsSuccess, fetchNCAABScheduleFailure, fetchNCAABScheduleRequest, fetchNCAABScheduleSuccess, ncaabPickValidateFailure, ncaabPickValidateRequest, ncaabPickValidateSuccess } from "../slices/ncaabSlice";
+import { fetchDraftkingsNCAABOddsFailure, fetchDraftkingsNCAABOddsRequest, fetchDraftkingsNCAABOddsSuccess, fetchFanduelNCAABOddsFailure, fetchFanduelNCAABOddsRequest, fetchFanduelNCAABOddsSuccess, fetchNCAABOddsFailure, fetchNCAABOddsRequest, fetchNCAABOddsSuccess, fetchNCAABScheduleByTimezoneFailure, fetchNCAABScheduleByTimezoneRequest, fetchNCAABScheduleByTimezoneSuccess, fetchNCAABScheduleFailure, fetchNCAABScheduleRequest, fetchNCAABScheduleSuccess, ncaabPickValidateFailure, ncaabPickValidateRequest, ncaabPickValidateSuccess } from "../slices/ncaabSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -36,6 +36,24 @@ function* handleFetchNCAABSchedule(action: PayloadAction<FetchNCAABSchedulePaylo
         yield put(fetchNCAABScheduleSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchNCAABScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+};
+
+function* handleFetchNCAABScheduleByTimezone(action: PayloadAction<FetchNCAABSchedulePayload | undefined>): SagaIterator {
+    try {
+        const { is_pick_of_day, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/ncaab/schedules-for-all-tz`,
+            {
+                params: { is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchNCAABScheduleByTimezoneSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchNCAABScheduleByTimezoneFailure(getErrorMessage(error, "Schedules Fetch Failed")));
     }
 };
 
@@ -115,4 +133,5 @@ export default function* ncaabSaga() {
     yield takeLatest(ncaabPickValidateRequest.type, handleValidateNCAABPick);
     yield takeLatest(fetchFanduelNCAABOddsRequest.type, handleFetchFanduelNCAABOdds);
     yield takeLatest(fetchDraftkingsNCAABOddsRequest.type, handleFetchDraftkingsNCAABOdds);
+    yield takeLatest(fetchNCAABScheduleByTimezoneRequest.type, handleFetchNCAABScheduleByTimezone);
 };

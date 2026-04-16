@@ -80,8 +80,8 @@ const CagFormPage = () => {
       nextErrors.name = "Group name is required.";
     }
 
-    if (form.name.length > 15) {
-      nextErrors.name = "Group name must be 15 characters or less.";
+    if (form.name.length > 25) {
+      nextErrors.name = "Group name must be 25 characters or less.";
     }
 
     if (form.description.length > 50) {

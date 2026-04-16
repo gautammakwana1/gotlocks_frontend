@@ -5,6 +5,7 @@ const initialState: NCAABState = {
     loading: false,
     error: null,
     message: null,
+    ncaabSchedulesWithOdds: null,
     ncaabSchedules: null,
     ncaabOdds: null,
     fanduelNcaabOdds: null,
@@ -25,13 +26,31 @@ const ncaabSlice = createSlice({
         },
         fetchNCAABScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.ncaabSchedules = action.payload.schedule;
+            state.ncaabSchedulesWithOdds = action.payload.schedule;
         },
         fetchNCAABScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchNCAABScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchNCAABScheduleByTimezoneRequest: (state, action: PayloadAction<FetchNCAABSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchNCAABScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.ncaabSchedules = action.payload.schedule;
+        },
+        fetchNCAABScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchNCAABScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -137,6 +156,10 @@ export const {
     fetchDraftkingsNCAABOddsSuccess,
     fetchDraftkingsNCAABOddsFailure,
     clearFetchDraftkingsNCAABOddsMessage,
+    fetchNCAABScheduleByTimezoneRequest,
+    fetchNCAABScheduleByTimezoneSuccess,
+    fetchNCAABScheduleByTimezoneFailure,
+    clearFetchNCAABScheduleByTimezoneMessage,
 } = ncaabSlice.actions;
 
 export default ncaabSlice.reducer;

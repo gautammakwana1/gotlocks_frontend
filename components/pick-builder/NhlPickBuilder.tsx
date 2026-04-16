@@ -19,10 +19,10 @@ import {
     parseAmericanOdds,
     TierIndex,
 } from "@/lib/utils/scoring";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NHLOdds, NHLSchedules, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NHLOdds, NHLSchedules, NHLSchedulesWithOdds, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
-import { clearNhlPickValidateMessage, fetchNHLOddsRequest, fetchNHLScheduleRequest, nhlPickValidateRequest } from "@/lib/redux/slices/nhlSlice";
+import { clearNhlPickValidateMessage, fetchNHLOddsRequest, fetchNHLScheduleByTimezoneRequest, fetchNHLScheduleRequest, nhlPickValidateRequest } from "@/lib/redux/slices/nhlSlice";
 import FootballAnimation from "../animations/FootballAnimation";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
@@ -442,7 +442,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: NHLSchedules[],
+    snapshot: NHLSchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -476,7 +476,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NHLSchedules[],
+    snapshot: NHLSchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -514,7 +514,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NHLSchedules[],
+    scheduleSnapshot: NHLSchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -530,6 +530,33 @@ const buildMergedGameOptions = (
         existingIds
     );
     return [...oddsOptions, ...scheduleOptions].sort((a, b) =>
+        a.date.localeCompare(b.date)
+    );
+};
+
+const mergeNHLSchedules = (
+    scheduledWithOdds: NHLSchedulesWithOdds[] | null | undefined,
+    allSchedules: NHLSchedules[] | null | undefined
+): NHLSchedulesWithOdds[] => {
+    const mergedMap = new Map<string, NHLSchedulesWithOdds>();
+
+    // Rule 1: Use Matches with Odds First
+    scheduledWithOdds?.forEach((match) => {
+        mergedMap.set(match.id, match);
+    });
+
+    // Rule 2: Add Missing Matches
+    allSchedules?.forEach((match) => {
+        if (!mergedMap.has(match.id)) {
+            mergedMap.set(match.id, {
+                ...match,
+                odds: [], // Set odds: []
+            });
+        }
+    });
+
+    // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
+    return Array.from(mergedMap.values()).sort((a, b) =>
         a.date.localeCompare(b.date)
     );
 };
@@ -1199,26 +1226,28 @@ export const NhlPickBuilder = ({
         reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
-    const [nhlMatchSchedules, setNHLMatchSchedules] = useState<NHLSchedules[]>([]);
+    const [nhlMatchSchedules, setNHLMatchSchedules] = useState<NHLSchedulesWithOdds[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { nhlSchedules, nhlOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nhl);
+    const { nhlSchedulesWithOdds, nhlSchedules, nhlOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nhl);
 
     useEffect(() => {
         dispatch(fetchNHLScheduleRequest({ is_pick_of_day: true, is_range: false }));
     }, [dispatch]);
 
     useEffect(() => {
-        if (Array.isArray(nhlSchedules?.events) && nhlSchedules?.events?.length) {
-            const events = nhlSchedules.events;
-
-            setNHLMatchSchedules(events);
-
-            // Always compute and set explicitly (true OR false)
-            // const anyLive = events.some(e => e.live === true);
-            // setIsAnyLiveMatch(anyLive);
+        if (activeDateKey) {
+            dispatch(fetchNHLScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
         }
+    }, [dispatch, activeDateKey]);
+
+    useEffect(() => {
+        const mergedEvents = mergeNHLSchedules(nhlSchedulesWithOdds?.events, nhlSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setNHLMatchSchedules(mergedEvents);
+        }
+
         if (nhlOdds?.events?.length) {
             const activeEvent = activeGameId
                 ? nhlOdds.events.find(e => e.id === activeGameId)
@@ -1228,7 +1257,7 @@ export const NhlPickBuilder = ({
         } else if (nhlOdds?.updated) {
             setOddsData([]);
         }
-    }, [nhlSchedules, nhlOdds, activeGameId]);
+    }, [nhlSchedulesWithOdds, nhlSchedules, nhlOdds, activeGameId]);
 
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
@@ -3623,7 +3652,7 @@ export const NhlPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="flex text-xs text-gray-500 gap-2">
-                                <span>Updated {formatDateTime(nhlSchedules?.updated)}</span>
+                                <span>Updated {formatDateTime(nhlSchedulesWithOdds?.updated)}</span>
                                 {/* {activeGame.live && (
                                     <span className="flex items-center gap-1 text-red-500 font-medium">
                                         <span className="relative flex h-2 w-2">

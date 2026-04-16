@@ -5,6 +5,7 @@ const initialState: MLBState = {
     loading: false,
     error: null,
     message: null,
+    mlbSchedulesWithOdds: null,
     mlbSchedules: null,
     mlbOdds: null,
     validateLoading: false,
@@ -23,13 +24,31 @@ const mlbSlice = createSlice({
         },
         fetchMLBScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.mlbSchedules = action.payload.schedule;
+            state.mlbSchedulesWithOdds = action.payload.schedule;
         },
         fetchMLBScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchMLBScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchMLBScheduleByTimezoneRequest: (state, action: PayloadAction<FetchMLBSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchMLBScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.mlbSchedules = action.payload.schedule;
+        },
+        fetchMLBScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchMLBScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -87,6 +106,10 @@ export const {
     mlbPickValidateSuccess,
     mlbPickValidateFailure,
     clearMlbPickValidateMessage,
+    fetchMLBScheduleByTimezoneRequest,
+    fetchMLBScheduleByTimezoneSuccess,
+    fetchMLBScheduleByTimezoneFailure,
+    clearFetchMLBScheduleByTimezoneMessage,
 } = mlbSlice.actions;
 
 export default mlbSlice.reducer;

@@ -215,7 +215,7 @@ const LandingPage = () => {
           className="w-full rounded-2xl border border-white/15 px-4 py-3 text-base font-semibold uppercase tracking-wide text-white transition hover:border-white/35 hover:bg-white/5"
           aria-expanded={showManualSignIn}
         >
-          sign in with username
+          sign in with email
         </button>
 
         {/* <button
@@ -230,7 +230,7 @@ const LandingPage = () => {
           <form className="mt-2 flex flex-col gap-3" onSubmit={handleManualSubmit}>
             <div className="flex flex-col gap-1">
               <label htmlFor="email" className="text-xs uppercase text-gray-400">
-                email
+                email/username
               </label>
               <input
                 id="email"

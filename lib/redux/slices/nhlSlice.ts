@@ -5,6 +5,7 @@ const initialState: NHLState = {
     loading: false,
     error: null,
     message: null,
+    nhlSchedulesWithOdds: null,
     nhlSchedules: null,
     nhlOdds: null,
     validateLoading: false,
@@ -23,13 +24,31 @@ const nhlSlice = createSlice({
         },
         fetchNHLScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.nhlSchedules = action.payload.schedule;
+            state.nhlSchedulesWithOdds = action.payload.schedule;
         },
         fetchNHLScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchNHLScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchNHLScheduleByTimezoneRequest: (state, action: PayloadAction<FetchNHLSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchNHLScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.nhlSchedules = action.payload.schedule;
+        },
+        fetchNHLScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchNHLScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -87,6 +106,10 @@ export const {
     nhlPickValidateSuccess,
     nhlPickValidateFailure,
     clearNhlPickValidateMessage,
+    fetchNHLScheduleByTimezoneRequest,
+    fetchNHLScheduleByTimezoneSuccess,
+    fetchNHLScheduleByTimezoneFailure,
+    clearFetchNHLScheduleByTimezoneMessage,
 } = nhlSlice.actions;
 
 export default nhlSlice.reducer;

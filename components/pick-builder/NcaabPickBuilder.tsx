@@ -19,10 +19,10 @@ import {
     parseAmericanOdds,
     TierIndex,
 } from "@/lib/utils/scoring";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NCAABOdds, NCAABSchedules, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NCAABOdds, NCAABSchedules, NCAABSchedulesWithOdds, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
-import { clearNcaabPickValidateMessage, fetchDraftkingsNCAABOddsRequest, fetchFanduelNCAABOddsRequest, fetchNCAABScheduleRequest, ncaabPickValidateRequest } from "@/lib/redux/slices/ncaabSlice";
+import { clearNcaabPickValidateMessage, fetchDraftkingsNCAABOddsRequest, fetchFanduelNCAABOddsRequest, fetchNCAABScheduleByTimezoneRequest, fetchNCAABScheduleRequest, ncaabPickValidateRequest } from "@/lib/redux/slices/ncaabSlice";
 import FootballAnimation from "../animations/FootballAnimation";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
@@ -343,7 +343,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: NCAABSchedules[],
+    snapshot: NCAABSchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -377,7 +377,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NCAABSchedules[],
+    snapshot: NCAABSchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -415,7 +415,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NCAABSchedules[],
+    scheduleSnapshot: NCAABSchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -431,6 +431,33 @@ const buildMergedGameOptions = (
         existingIds
     );
     return [...oddsOptions, ...scheduleOptions].sort((a, b) =>
+        a.date.localeCompare(b.date)
+    );
+};
+
+const mergeNCAABSchedules = (
+    scheduledWithOdds: NCAABSchedulesWithOdds[] | null | undefined,
+    allSchedules: NCAABSchedules[] | null | undefined
+): NCAABSchedulesWithOdds[] => {
+    const mergedMap = new Map<string, NCAABSchedulesWithOdds>();
+
+    // Rule 1: Use Matches with Odds First
+    scheduledWithOdds?.forEach((match) => {
+        mergedMap.set(match.id, match);
+    });
+
+    // Rule 2: Add Missing Matches
+    allSchedules?.forEach((match) => {
+        if (!mergedMap.has(match.id)) {
+            mergedMap.set(match.id, {
+                ...match,
+                odds: [], // Set odds: []
+            });
+        }
+    });
+
+    // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
+    return Array.from(mergedMap.values()).sort((a, b) =>
         a.date.localeCompare(b.date)
     );
 };
@@ -1135,26 +1162,28 @@ export const NcaabPickBuilder = ({
         reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
-    const [ncaabMatchSchedules, setNCAABMatchSchedules] = useState<NCAABSchedules[]>([]);
+    const [ncaabMatchSchedules, setNCAABMatchSchedules] = useState<NCAABSchedulesWithOdds[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { ncaabSchedules, fanduelNcaabOdds, draftkingNcaabOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.ncaab);
+    const { ncaabSchedulesWithOdds, ncaabSchedules, fanduelNcaabOdds, draftkingNcaabOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.ncaab);
 
     useEffect(() => {
         dispatch(fetchNCAABScheduleRequest({ is_pick_of_day: true, is_range: false }));
     }, [dispatch]);
 
     useEffect(() => {
-        if (Array.isArray(ncaabSchedules?.events) && ncaabSchedules?.events?.length) {
-            const events = ncaabSchedules.events;
-
-            setNCAABMatchSchedules(events);
-
-            // Always compute and set explicitly (true OR false)
-            // const anyLive = events.some(e => e.live === true);
-            // setIsAnyLiveMatch(anyLive);
+        if (activeDateKey) {
+            dispatch(fetchNCAABScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
         }
+    }, [dispatch, activeDateKey]);
+
+    useEffect(() => {
+        const mergedEvents = mergeNCAABSchedules(ncaabSchedulesWithOdds?.events, ncaabSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setNCAABMatchSchedules(mergedEvents);
+        }
+
         if (fanduelNcaabOdds?.events?.length) {
             const activeEvent = activeGameId
                 ? fanduelNcaabOdds.events.find(e => e.id === activeGameId)
@@ -1164,7 +1193,7 @@ export const NcaabPickBuilder = ({
         } else if (fanduelNcaabOdds?.updated) {
             setOddsData([]);
         }
-    }, [ncaabSchedules, fanduelNcaabOdds, activeGameId]);
+    }, [ncaabSchedulesWithOdds, ncaabSchedules, fanduelNcaabOdds, activeGameId]);
 
     useEffect(() => {
         if (fanduelNcaabOdds?.events?.length && draftkingNcaabOdds?.events?.length) {
@@ -3525,7 +3554,7 @@ export const NcaabPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="flex text-xs text-gray-500 gap-2">
-                                <span>Updated {formatDateTime(ncaabSchedules?.updated)}</span>
+                                <span>Updated {formatDateTime(ncaabSchedulesWithOdds?.updated)}</span>
                                 {/* {activeGame.live && (
                                     <span className="flex items-center gap-1 text-red-500 font-medium">
                                         <span className="relative flex h-3 w-3">

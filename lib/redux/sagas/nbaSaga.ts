@@ -4,7 +4,7 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { fetchDraftkingsNBAOddsFailure, fetchDraftkingsNBAOddsRequest, fetchDraftkingsNBAOddsSuccess, fetchFanduelNBAOddsFailure, fetchFanduelNBAOddsRequest, fetchFanduelNBAOddsSuccess, fetchNBAScheduleFailure, fetchNBAScheduleRequest, fetchNBAScheduleSuccess, nbaPickValidateFailure, nbaPickValidateRequest, nbaPickValidateSuccess } from "../slices/nbaSlice";
+import { fetchDraftkingsNBAOddsFailure, fetchDraftkingsNBAOddsRequest, fetchDraftkingsNBAOddsSuccess, fetchFanduelNBAOddsFailure, fetchFanduelNBAOddsRequest, fetchFanduelNBAOddsSuccess, fetchNBAScheduleByTimezoneFailure, fetchNBAScheduleByTimezoneRequest, fetchNBAScheduleByTimezoneSuccess, fetchNBAScheduleFailure, fetchNBAScheduleRequest, fetchNBAScheduleSuccess, nbaPickValidateFailure, nbaPickValidateRequest, nbaPickValidateSuccess } from "../slices/nbaSlice";
 import { FetchNBAOddsPayload, FetchNBASchedulePayload, ValidateMyNBAPickPayload } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -36,6 +36,24 @@ function* handleFetchNBASchedule(action: PayloadAction<FetchNBASchedulePayload |
         yield put(fetchNBAScheduleSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchNBAScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+};
+
+function* handleFetchNBAScheduleByTimezone(action: PayloadAction<FetchNBASchedulePayload | undefined>): SagaIterator {
+    try {
+        const { pick_deadline, result_deadline, is_pick_of_day, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/nba/schedules-for-all-tz`,
+            {
+                params: { pick_deadline, result_deadline, is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchNBAScheduleByTimezoneSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchNBAScheduleByTimezoneFailure(getErrorMessage(error, "Schedules Fetch Failed")));
     }
 };
 
@@ -96,4 +114,5 @@ export default function* nbaSaga() {
     yield takeLatest(fetchFanduelNBAOddsRequest.type, handleFetchFanduelNBAOdds);
     yield takeLatest(fetchDraftkingsNBAOddsRequest.type, handleFetchDraftkingsNBAOdds);
     yield takeLatest(nbaPickValidateRequest.type, handleValidateNBAPick);
+    yield takeLatest(fetchNBAScheduleByTimezoneRequest.type, handleFetchNBAScheduleByTimezone);
 };

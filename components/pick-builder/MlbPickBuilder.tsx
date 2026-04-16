@@ -35,10 +35,10 @@ import {
 } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex, User } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, MLBSchedulesWithOdds, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex, User } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
-import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
+import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleByTimezoneRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import FootballAnimation from "../animations/FootballAnimation";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
@@ -474,7 +474,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: MLBSchedules[],
+    snapshot: MLBSchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -508,7 +508,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: MLBSchedules[],
+    snapshot: MLBSchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -546,7 +546,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: MLBSchedules[],
+    scheduleSnapshot: MLBSchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -565,6 +565,34 @@ const buildMergedGameOptions = (
         a.date.localeCompare(b.date)
     );
 };
+
+const mergeMLBSchedules = (
+    scheduledWithOdds: MLBSchedulesWithOdds[] | null | undefined,
+    allSchedules: MLBSchedules[] | null | undefined
+): MLBSchedulesWithOdds[] => {
+    const mergedMap = new Map<string, MLBSchedulesWithOdds>();
+
+    // Rule 1: Use Matches with Odds First
+    scheduledWithOdds?.forEach((match) => {
+        mergedMap.set(match.id, match);
+    });
+
+    // Rule 2: Add Missing Matches
+    allSchedules?.forEach((match) => {
+        if (!mergedMap.has(match.id)) {
+            mergedMap.set(match.id, {
+                ...match,
+                odds: [], // Set odds: []
+            });
+        }
+    });
+
+    // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
+    return Array.from(mergedMap.values()).sort((a, b) =>
+        a.date.localeCompare(b.date)
+    );
+};
+
 
 type DateFilterOption = {
     key: string;
@@ -1479,26 +1507,28 @@ export const MlbPickBuilder = ({
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
 
-    const [nhlMatchSchedules, setNHLMatchSchedules] = useState<MLBSchedules[]>([]);
+    const [mlbMatchSchedules, setMLBMatchSchedules] = useState<MLBSchedulesWithOdds[]>([]);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
 
-    const { mlbSchedules, mlbOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.mlb);
+    const { mlbSchedulesWithOdds, mlbSchedules, mlbOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.mlb);
 
     useEffect(() => {
         dispatch(fetchMLBScheduleRequest({ is_pick_of_day: true, is_range: false }));
     }, [dispatch]);
 
     useEffect(() => {
-        if (Array.isArray(mlbSchedules?.events) && mlbSchedules?.events?.length) {
-            const events = mlbSchedules.events;
-
-            setNHLMatchSchedules(events);
-
-            // Always compute and set explicitly (true OR false)
-            // const anyLive = events.some(e => e.live === true);
-            // setIsAnyLiveMatch(anyLive);
+        if (activeDateKey) {
+            dispatch(fetchMLBScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: false, is_range: false }));
         }
+    }, [dispatch, activeDateKey]);
+
+    useEffect(() => {
+        const mergedEvents = mergeMLBSchedules(mlbSchedulesWithOdds?.events, mlbSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setMLBMatchSchedules(mergedEvents);
+        }
+
         if (mlbOdds?.events?.length) {
             const activeEvent = activeGameId
                 ? mlbOdds.events.find(e => e.id === activeGameId)
@@ -1508,7 +1538,8 @@ export const MlbPickBuilder = ({
         } else if (mlbOdds?.updated) {
             setOddsData([]);
         }
-    }, [mlbSchedules, mlbOdds, activeGameId]);
+    }, [mlbSchedulesWithOdds, mlbSchedules, mlbOdds, activeGameId]);
+
 
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
@@ -1526,10 +1557,10 @@ export const MlbPickBuilder = ({
     );
 
     const games = useMemo<GameOption[]>(() => {
-        if (!nhlMatchSchedules) return [];
-        return buildMergedGameOptions(oddsData, nhlMatchSchedules, activeGameId);
-        // }, [nhlMatchSchedules, oddsData, nhlOdds?.updated, activeGameId]);
-    }, [nhlMatchSchedules, oddsData, activeGameId]);
+        if (!mlbMatchSchedules) return [];
+        return buildMergedGameOptions(oddsData, mlbMatchSchedules, activeGameId);
+        // }, [mlbMatchSchedules, oddsData, nhlOdds?.updated, activeGameId]);
+    }, [mlbMatchSchedules, oddsData, activeGameId]);
     const upcomingGames = useMemo(() => {
         const base = games.filter((game) => !game.live && !isPast(game.date));
         if (!enforceEligibilityWindow) {
@@ -4220,7 +4251,7 @@ export const MlbPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="text-xs text-gray-500 gap-2">
-                                Updated {formatDateTime(mlbSchedules?.updated)}
+                                Updated {formatDateTime(mlbSchedulesWithOdds?.updated)}
                             </p>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">

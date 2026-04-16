@@ -5,6 +5,7 @@ const initialState: NBAState = {
     loading: false,
     error: null,
     message: null,
+    nbaSchedulesWithOdds: null,
     nbaSchedules: null,
     fanduelNbaOdds: null,
     draftkingNbaOdds: null,
@@ -24,13 +25,31 @@ const nbaSlice = createSlice({
         },
         fetchNBAScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.nbaSchedules = action.payload.schedule;
+            state.nbaSchedulesWithOdds = action.payload.schedule;
         },
         fetchNBAScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         cleatFetchNBAScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchNBAScheduleByTimezoneRequest: (state, action: PayloadAction<FetchNBASchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchNBAScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.nbaSchedules = action.payload.schedule;
+        },
+        fetchNBAScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        cleatFetchNBAScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -112,6 +131,10 @@ export const {
     nbaPickValidateSuccess,
     nbaPickValidateFailure,
     cleatNbaPickValidateMessage,
+    fetchNBAScheduleByTimezoneRequest,
+    fetchNBAScheduleByTimezoneSuccess,
+    fetchNBAScheduleByTimezoneFailure,
+    cleatFetchNBAScheduleByTimezoneMessage,
 } = nbaSlice.actions;
 
 export default nbaSlice.reducer;

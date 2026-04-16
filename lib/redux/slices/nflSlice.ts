@@ -2,6 +2,7 @@ import { FetchLiveNFLOddsPayload, FetchNFLSchedulePayload, FetchPassingPropsPlay
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: NFLState = {
+    nflSchedulesWithOdds: null,
     nflSchedules: null,
     nflOdds: null,
     nflPassingProps: null,
@@ -29,13 +30,31 @@ const nflSlice = createSlice({
         },
         fetchLiveNFLScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.nflSchedules = action.payload.schedule;
+            state.nflSchedulesWithOdds = action.payload.schedule;
         },
         fetchLiveNFLScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         cleatFetchLiveNFLScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchLiveNFLScheduleByTimezoneRequest: (state, action: PayloadAction<FetchNFLSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchLiveNFLScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.nflSchedules = action.payload.schedule;
+        },
+        fetchLiveNFLScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        cleatFetchLiveNFLScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -181,6 +200,10 @@ export const {
     validateMyNFLPickSuccess,
     validateMyNFLPickFailure,
     clearValidateMyNFLPickMessage,
+    fetchLiveNFLScheduleByTimezoneRequest,
+    fetchLiveNFLScheduleByTimezoneSuccess,
+    fetchLiveNFLScheduleByTimezoneFailure,
+    cleatFetchLiveNFLScheduleByTimezoneMessage,
 } = nflSlice.actions;
 
 export default nflSlice.reducer;

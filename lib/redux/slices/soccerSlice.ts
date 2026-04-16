@@ -5,7 +5,9 @@ const initialState: SoccerState = {
     loading: false,
     error: null,
     message: null,
+    englandPremierLeagueSchedulesWithOdds: null,
     englandPremierLeagueSchedules: null,
+    germanyBundesligaSchedulesWithOdds: null,
     germanyBundesligaSchedules: null,
     fanduelEnglandPremierLeagueOdds: null,
     draftkingEnglandPremierLeagueOdds: null,
@@ -29,13 +31,31 @@ const soccerSlice = createSlice({
         },
         fetchSoccerEnglandPremierLeagueScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.englandPremierLeagueSchedules = action.payload.schedule;
+            state.englandPremierLeagueSchedulesWithOdds = action.payload.schedule;
         },
         fetchSoccerEnglandPremierLeagueScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchSoccerEnglandPremierLeagueScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest: (state, action: PayloadAction<FetchSoccerEnglandPremierLeagueSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchSoccerEnglandPremierLeagueScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.englandPremierLeagueSchedules = action.payload.schedule;
+        },
+        fetchSoccerEnglandPremierLeagueScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchSoccerEnglandPremierLeagueScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -106,13 +126,31 @@ const soccerSlice = createSlice({
         },
         fetchSoccerGermanyBundesligaScheduleSuccess: (state, action) => {
             state.loading = false;
-            state.germanyBundesligaSchedules = action.payload.schedule;
+            state.germanyBundesligaSchedulesWithOdds = action.payload.schedule;
         },
         fetchSoccerGermanyBundesligaScheduleFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
         },
         clearFetchSoccerGermanyBundesligaScheduleMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        fetchSoccerGermanyBundesligaScheduleByTimezoneRequest: (state, action: PayloadAction<FetchSoccerGermanyBundesligaSchedulePayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchSoccerGermanyBundesligaScheduleByTimezoneSuccess: (state, action) => {
+            state.loading = false;
+            state.germanyBundesligaSchedules = action.payload.schedule;
+        },
+        fetchSoccerGermanyBundesligaScheduleByTimezoneFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchSoccerGermanyBundesligaScheduleByTimezoneMessage: (state) => {
             state.error = null;
             state.message = null;
         },
@@ -210,6 +248,14 @@ export const {
     soccerGermanyBundesligaPickValidateSuccess,
     soccerGermanyBundesligaPickValidateFailure,
     clearSoccerGermanyBundesligaPickValidateMessage,
+    fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest,
+    fetchSoccerEnglandPremierLeagueScheduleByTimezoneSuccess,
+    fetchSoccerEnglandPremierLeagueScheduleByTimezoneFailure,
+    clearFetchSoccerEnglandPremierLeagueScheduleByTimezoneMessage,
+    fetchSoccerGermanyBundesligaScheduleByTimezoneRequest,
+    fetchSoccerGermanyBundesligaScheduleByTimezoneSuccess,
+    fetchSoccerGermanyBundesligaScheduleByTimezoneFailure,
+    clearFetchSoccerGermanyBundesligaScheduleByTimezoneMessage,
 } = soccerSlice.actions;
 
 export default soccerSlice.reducer;

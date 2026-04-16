@@ -5,7 +5,7 @@ import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type { FetchLiveNFLOddsPayload, FetchNFLSchedulePayload, FetchPassingPropsPlayersPayload, FetchReceivingPropsPlayersPayload, FetchRushingPropsPlayersPayload, FetchTouchDownPropsPlayersPayload, ValidateMyPickPayload } from "@/lib/interfaces/interfaces";
-import { fetchLiveNFLScheduleFailure, fetchLiveNFLScheduleRequest, fetchLiveNFLScheduleSuccess, fetchLiveOddsFailure, fetchLiveOddsRequest, fetchLiveOddsSuccess, fetchPassingPropsPlayersFailure, fetchPassingPropsPlayersRequest, fetchPassingPropsPlayersSuccess, fetchReceivingPropsPlayersFailure, fetchReceivingPropsPlayersRequest, fetchReceivingPropsPlayersSuccess, fetchRushingPropsPlayersFailure, fetchRushingPropsPlayersRequest, fetchRushingPropsPlayersSuccess, fetchTouchDownPropsPlayersFailure, fetchTouchDownPropsPlayersRequest, fetchTouchDownPropsPlayersSuccess, validateMyNFLPickFailure, validateMyNFLPickRequest, validateMyNFLPickSuccess } from "../slices/nflSlice";
+import { fetchLiveNFLScheduleByTimezoneFailure, fetchLiveNFLScheduleByTimezoneRequest, fetchLiveNFLScheduleByTimezoneSuccess, fetchLiveNFLScheduleFailure, fetchLiveNFLScheduleRequest, fetchLiveNFLScheduleSuccess, fetchLiveOddsFailure, fetchLiveOddsRequest, fetchLiveOddsSuccess, fetchPassingPropsPlayersFailure, fetchPassingPropsPlayersRequest, fetchPassingPropsPlayersSuccess, fetchReceivingPropsPlayersFailure, fetchReceivingPropsPlayersRequest, fetchReceivingPropsPlayersSuccess, fetchRushingPropsPlayersFailure, fetchRushingPropsPlayersRequest, fetchRushingPropsPlayersSuccess, fetchTouchDownPropsPlayersFailure, fetchTouchDownPropsPlayersRequest, fetchTouchDownPropsPlayersSuccess, validateMyNFLPickFailure, validateMyNFLPickRequest, validateMyNFLPickSuccess } from "../slices/nflSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -36,6 +36,24 @@ function* handleFetchLiveNFLSchedule(action: PayloadAction<FetchNFLSchedulePaylo
         yield put(fetchLiveNFLScheduleSuccess(payload.data));
     } catch (error: unknown) {
         yield put(fetchLiveNFLScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+}
+
+function* handleFetchLiveNFLScheduleByTimezone(action: PayloadAction<FetchNFLSchedulePayload | undefined>): SagaIterator {
+    try {
+        const { is_pick_of_day = false, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/nfl/schedules-for-all-tz`,
+            {
+                params: { is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchLiveNFLScheduleByTimezoneSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchLiveNFLScheduleByTimezoneFailure(getErrorMessage(error, "Schedules Fetch Failed")));
     }
 }
 
@@ -151,4 +169,5 @@ export default function* nflSaga() {
     yield takeLatest(fetchRushingPropsPlayersRequest.type, handleFetchRushingPropsPlayers);
     yield takeLatest(fetchTouchDownPropsPlayersRequest.type, handleFetchTouchDownPropsPlayers);
     yield takeLatest(validateMyNFLPickRequest.type, handleValidateMyPick);
+    yield takeLatest(fetchLiveNFLScheduleByTimezoneRequest.type, handleFetchLiveNFLScheduleByTimezone);
 };

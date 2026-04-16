@@ -8,8 +8,8 @@ import {
     eligibleWindowEnd,
     filterEligibleGames,
 } from "@/lib/utils/games";
-import { AltPropsTableRow, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NFLOdds, NFLSchedules, OddsBlazeOdd, OddsBlazePlayer, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TdScorerColumn, TdScorerRow, TierIndex } from "@/lib/interfaces/interfaces";
-import { clearValidateMyNFLPickMessage, fetchLiveNFLScheduleRequest, fetchLiveOddsRequest, validateMyNFLPickRequest } from "@/lib/redux/slices/nflSlice";
+import { AltPropsTableRow, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NFLOdds, NFLSchedules, NFLSchedulesWithOdds, OddsBlazeOdd, OddsBlazePlayer, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TdScorerColumn, TdScorerRow, TierIndex } from "@/lib/interfaces/interfaces";
+import { clearValidateMyNFLPickMessage, fetchLiveNFLScheduleByTimezoneRequest, fetchLiveNFLScheduleRequest, fetchLiveOddsRequest, validateMyNFLPickRequest } from "@/lib/redux/slices/nflSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
@@ -258,7 +258,7 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildNflGameOptions = (
-    snapshot: NFLSchedules[],
+    snapshot: NFLSchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -292,7 +292,7 @@ const buildNflGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NFLSchedules[],
+    snapshot: NFLSchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -331,7 +331,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NFLSchedules[],
+    scheduleSnapshot: NFLSchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildNflGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -347,6 +347,33 @@ const buildMergedGameOptions = (
         existingIds
     );
     return [...oddsOptions, ...scheduleOptions].sort((a, b) =>
+        a.date.localeCompare(b.date)
+    );
+};
+
+const mergeNFLSchedules = (
+    scheduledWithOdds: NFLSchedulesWithOdds[] | null | undefined,
+    allSchedules: NFLSchedules[] | null | undefined
+): NFLSchedulesWithOdds[] => {
+    const mergedMap = new Map<string, NFLSchedulesWithOdds>();
+
+    // Rule 1: Use Matches with Odds First
+    scheduledWithOdds?.forEach((match) => {
+        mergedMap.set(match.id, match);
+    });
+
+    // Rule 2: Add Missing Matches
+    allSchedules?.forEach((match) => {
+        if (!mergedMap.has(match.id)) {
+            mergedMap.set(match.id, {
+                ...match,
+                odds: [], // Set odds: []
+            });
+        }
+    });
+
+    // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
+    return Array.from(mergedMap.values()).sort((a, b) =>
         a.date.localeCompare(b.date)
     );
 };
@@ -589,12 +616,12 @@ const findMainTeamOdd = (game: GameOption, market: string, teamName: string) =>
         (odd) => odd.market === market && odd.main && matchesTeamName(odd, teamName)
     );
 
-// const findMainTeamNFLOdds = (game: NFLSchedules, market: string, teamName: string) =>
+// const findMainTeamNFLOdds = (game: NFLSchedulesWithOdds, market: string, teamName: string) =>
 //     game.odds.find(
 //         (odd) => odd.market === market && odd.main && matchesTeamName(odd, teamName)
 //     );
 
-// const findMainTeamTotalNFLOdds = (game: NFLSchedules, side: "Over" | "Under") =>
+// const findMainTeamTotalNFLOdds = (game: NFLSchedulesWithOdds, side: "Over" | "Under") =>
 //     game.odds.find(
 //         (odd) =>
 //             odd.market === "Total Points" &&
@@ -1148,8 +1175,8 @@ export const NflPickBuilder = ({
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
 
-    const [nflMatchSchedules, setNFLMatchSchedules] = useState<NFLSchedules[]>([]);
-    const [selectedMatch, setSelectedMatch] = useState<NFLSchedules | GameOption>();
+    const [nflMatchSchedules, setNFLMatchSchedules] = useState<NFLSchedulesWithOdds[]>([]);
+    const [selectedMatch, setSelectedMatch] = useState<NFLSchedulesWithOdds | GameOption>();
     const [activeGameId, setActiveGameId] = useState<string | null>(null);
     const [oddsData, setOddsData] = useState<OddsObject[]>([]);
     const [nflOddsData, setNflOddsData] = useState<NFLOdds>();
@@ -1175,7 +1202,7 @@ export const NflPickBuilder = ({
         return resolved ? tierMetaFromIndex(resolved) : undefined;
     };
 
-    const { nflSchedules, nflOdds, validPickError, validPickMessage, loading, validateLoading } = useSelector((state: RootState) => state.nfl);
+    const { nflSchedulesWithOdds, nflSchedules, nflOdds, validPickError, validPickMessage, loading, validateLoading } = useSelector((state: RootState) => state.nfl);
 
     useEffect(() => {
         if (slip?.results_deadline_at && slip?.pick_deadline_at) {
@@ -1186,6 +1213,12 @@ export const NflPickBuilder = ({
             dispatch(fetchLiveNFLScheduleRequest({ is_pick_of_day: true }));
         }
     }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
+
+    useEffect(() => {
+        if (activeDateKey) {
+            dispatch(fetchLiveNFLScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: false }));
+        }
+    }, [dispatch, activeDateKey]);
 
     // useEffect(() => {
     //     if (!selectedMatch?.id || !selectedMatch.live) return;
@@ -1205,8 +1238,9 @@ export const NflPickBuilder = ({
     // }, [selectedMatch?.id, selectedMatch?.live, dispatch]);
 
     useEffect(() => {
-        if (Array.isArray(nflSchedules?.events) && nflSchedules?.events?.length) {
-            setNFLMatchSchedules(nflSchedules?.events);
+        const mergedEvents = mergeNFLSchedules(nflSchedulesWithOdds?.events, nflSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setNFLMatchSchedules(mergedEvents);
         }
         if (nflOdds) {
             setNflOddsData(nflOdds)
@@ -1220,7 +1254,7 @@ export const NflPickBuilder = ({
         } else if (nflOdds?.updated) {
             setOddsData([]);
         }
-    }, [nflSchedules, nflOdds, activeGameId]);
+    }, [nflSchedulesWithOdds, nflSchedules, nflOdds, activeGameId]);
 
     // useEffect(() => {
     //     if (typeof window === "undefined") return;
@@ -1619,7 +1653,7 @@ export const NflPickBuilder = ({
         }
     };
 
-    const handleGameChoice = (game: GameOption | NFLSchedules) => {
+    const handleGameChoice = (game: GameOption | NFLSchedulesWithOdds) => {
         setSelection({
             scope: "GAME_LINE",
             gameId: game.id,
@@ -3613,7 +3647,7 @@ export const NflPickBuilder = ({
                             )}
                         </div>
                         <p className="text-xs text-gray-500">
-                            Updated {formatDateTime(nflSchedules?.updated)}
+                            Updated {formatDateTime(nflSchedulesWithOdds?.updated)}
                         </p>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
