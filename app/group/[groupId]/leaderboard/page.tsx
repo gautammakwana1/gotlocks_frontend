@@ -51,7 +51,6 @@ const GroupLeaderboardPage = () => {
     useEffect(() => {
         if (!params.groupId || !currentUser) return;
         // dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-        // dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
     }, [params.groupId, currentUser, dispatch]);
 
     useEffect(() => {

@@ -355,8 +355,6 @@ const TAB_ORDER = [
 
 type TabId = (typeof TAB_ORDER)[number];
 
-const VISIBLE_TABS = TAB_ORDER;
-
 const TAB_LABELS: Record<TabId, string> = {
     GAME_LINES: "Game lines",
     QUICK_BETS: "Quick bets",
@@ -404,87 +402,6 @@ const TAB_SOURCE_PRIORITY: TabId[] = [
     "GAME_LINES",
     "BLOCKS",
 ];
-
-// const TAB_ORDER = [
-//     "GAME_LINES",
-//     "PERIOD_LINES",
-//     "PLAYER_GOALS",
-//     "PLAYER_POINTS",
-//     "PLAYER_SHOTS",
-//     "PLAYER_SAVES",
-//     "GOALSCORERS",
-//     "QUICK_BETS",
-// ];
-
-// type TabId = (typeof TAB_ORDER)[number];
-
-// const VISIBLE_TABS: TabId[] = TAB_ORDER;
-
-// const TAB_LABELS: Record<TabId, string> = {
-//     GAME_LINES: "Game lines",
-//     PERIOD_LINES: "Period lines",
-//     PLAYER_GOALS: "Player goals",
-//     PLAYER_POINTS: "Player points",
-//     PLAYER_SHOTS: "Shots on goal",
-//     PLAYER_SAVES: "Player saves",
-//     GOALSCORERS: "Goal scorers",
-//     QUICK_BETS: "Quick bets",
-// };
-
-// const TAB_MARKETS: Record<TabId, string[]> = {
-//     GAME_LINES: [
-//         "Moneyline",
-//         "Moneyline 3-Way",
-//         "Puck Line",
-//         "Total Goals",
-//         "Home Team Total Goals",
-//         "Away Team Total Goals",
-//     ],
-//     PERIOD_LINES: [
-//         "1st Period Moneyline",
-//         "1st Period Puck Line",
-//         "1st Period Total Goals",
-//         "1st Period Home Team Total Goals",
-//         "1st Period Away Team Total Goals",
-//         "2nd Period Puck Line",
-//         "2nd Period Total Goals",
-//         "2nd Period 1st 5 Minutes Total Goals",
-//         "3rd Period Puck Line",
-//         "3rd Period Total Goals",
-//         "3rd Period 1st 5 Minutes Total Goals",
-//     ],
-//     PLAYER_GOALS: [
-//         "Player Goals",
-//         "1st Period Player Goals",
-//         "2nd Period Player Goals",
-//         "3rd Period Player Goals",
-//     ],
-//     PLAYER_POINTS: ["Player Points", "Player Assists", "Player Power Play Points"],
-//     PLAYER_SHOTS: ["Player Shots On Goal"],
-//     PLAYER_SAVES: [
-//         "Player Saves",
-//         "1st Period Player Saves",
-//         "2nd Period Player Saves",
-//         "3rd Period Player Saves",
-//     ],
-//     GOALSCORERS: [
-//         "First Goalscorer",
-//         "Second Goalscorer",
-//         "Third Goalscorer",
-//         "Home Team First Goalscorer",
-//         "Away Team First Goalscorer",
-//     ],
-//     QUICK_BETS: [
-//         "First Team To Score 3-Way",
-//         "Both Teams To Score",
-//         "Both Teams To Score 2 Goals",
-//         "1st 5 Minutes Total Goals",
-//     ],
-// };
-
-// const QUICK_BET_MARKETS = TAB_MARKETS.QUICK_BETS.filter(
-//     (market) => !NON_QUICK_BET_MARKETS.has(market)
-// );
 
 const GAME_LINE_MAIN_MARKETS = new Set<string>([
     "Moneyline",
@@ -1452,12 +1369,12 @@ export const NhlPickBuilder = ({
 
     useEffect(() => {
         if (!validateLoading && validatePickMessage) {
-            setToast({
-                id: Date.now(),
-                type: "success",
-                message: validatePickMessage,
-                duration: 3000
-            });
+            // setToast({
+            //     id: Date.now(),
+            //     type: "success",
+            //     message: validatePickMessage,
+            //     duration: 3000
+            // });
             dispatch(clearNhlPickValidateMessage());
         }
         if (!validateLoading && validatePickError) {
@@ -1534,6 +1451,23 @@ export const NhlPickBuilder = ({
         marketMap.forEach((list) => list.sort(compareOddsByLine));
         return marketMap;
     }, [activeGame, activeTab, search]);
+
+    const visibleTabs = useMemo(() => {
+        return TAB_ORDER.filter((tab) => {
+            if (["ASSISTS", "BLOCKS", "GOALIE"].includes(tab)) {
+                const markets = TAB_MARKETS[tab];
+                if (!markets || markets.length === 0) return false;
+                return !!activeGame?.odds.some((odd) => markets.includes(odd.market));
+            }
+            return true;
+        });
+    }, [activeGame, TAB_ORDER, TAB_MARKETS]);
+
+    useEffect(() => {
+        if (activeTab !== "GAME_LINES" && !visibleTabs.includes(activeTab)) {
+            setActiveTab("GAME_LINES");
+        }
+    }, [activeTab, visibleTabs]);
 
     const buildDraftPick = useCallback(
         (odd: OddsObject, game: GameOption): DraftPick => {
@@ -1992,9 +1926,10 @@ export const NhlPickBuilder = ({
 
         const eventGroups = new Map<string, typeof entries>();
         entries.forEach((entry) => {
-            const group = eventGroups.get(entry.leg.eventId) ?? [];
+            const groupKey = `${entry.leg.sport ?? "sport"}:${entry.leg.eventId}`;
+            const group = eventGroups.get(groupKey) ?? [];
             group.push(entry);
-            eventGroups.set(entry.leg.eventId, group);
+            eventGroups.set(groupKey, group);
         });
 
         const groups: Array<
@@ -2037,12 +1972,10 @@ export const NhlPickBuilder = ({
                         : null;
 
                 groups.push({
-                    id: `same-game-${group[0].leg.eventId}`,
+                    id: `same-game-${group[0].leg.sport ?? "sport"}-${group[0].leg.eventId}`,
                     label: group[0].leg.matchup ?? "Same game combo",
                     oddsLabel: groupOddsLabel,
-                    validationCopy: groupPricing.requiresCustomPricing && groupOddsValue === null
-                        ? "These picks require custom pricing."
-                        : null,
+                    validationCopy: null,
                     items: group.map((entry) => entry.reviewItem),
                     tierLine: groupTierLine,
                     tierCard: resolveReviewSheetTierCardAppearance(
@@ -3162,9 +3095,7 @@ export const NhlPickBuilder = ({
         hasMultiSelection && parlayPricing.hasInvalidComboLegs;
     const comboValidationCopy = comboHasInvalidSelections
         ? "Selections cannot be combined"
-        : parlayPricing.requiresCustomPricing && comboOddsValue === null
-            ? "These picks require custom pricing."
-            : null;
+        : null;
     const comboValidationReasons = comboHasInvalidSelections
         ? parlayPricing.invalidComboReasons
         : [];
@@ -3718,7 +3649,7 @@ export const NhlPickBuilder = ({
                             id="game-prop-details-tabs-container"
                             className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0"
                         >
-                            {VISIBLE_TABS.map((tab) => {
+                            {visibleTabs.map((tab) => {
                                 const active = tab === activeTab;
                                 return (
                                     <button
@@ -3885,6 +3816,13 @@ export const NhlPickBuilder = ({
                                 const mainPointsRows = isMainPlayerPoints
                                     ? buildMainPointsRows(odds, activeGame)
                                     : [];
+                                const isSingleOverHalfMarket =
+                                    isTableMarket &&
+                                    hasOver &&
+                                    !hasUnder &&
+                                    !showTable &&
+                                    simpleRows.length > 0 &&
+                                    simpleRows.every((row) => row.line === 0.5);
                                 const sectionKey = `${activeTab}-${market}`;
                                 const collapsed = isSectionCollapsed(sectionKey, index === 0);
                                 const { rows: visibleSimpleRows } = getVisibleCategoryRows(
@@ -3920,7 +3858,7 @@ export const NhlPickBuilder = ({
 
                                         {!collapsed && (
                                             <>
-                                                {isTableMarket && (hasOver || hasUnder) ? (
+                                                {isTableMarket && hasOver && hasUnder ? (
                                                     <div className="mt-4 flex flex-wrap items-center gap-2">
                                                         {["Over", "Under"].map((side) => {
                                                             if (side === "Over" && !hasOver) return null;
@@ -3959,17 +3897,24 @@ export const NhlPickBuilder = ({
                                                                 <div
                                                                     className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
                                                                     style={{
-                                                                        gridTemplateColumns:
-                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                        gridTemplateColumns: isSingleOverHalfMarket
+                                                                            ? "minmax(0,1fr) var(--table-chip-width)"
+                                                                            : "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
                                                                     }}
                                                                 >
                                                                     <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
                                                                         Player
                                                                     </div>
-                                                                    <div className="px-3 py-2 text-center">
-                                                                        {activeSide} line
-                                                                    </div>
-                                                                    <div className="px-3 py-2 text-center">Odds</div>
+                                                                    {isSingleOverHalfMarket ? (
+                                                                        <div className="px-3 py-2 text-center">Over</div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="px-3 py-2 text-center">
+                                                                                {activeSide} line
+                                                                            </div>
+                                                                            <div className="px-3 py-2 text-center">Odds</div>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                                 {visibleSimpleRows.map((row, rowIndex) => {
                                                                     const isSelected = isOddSelected(row.odd);
@@ -3986,8 +3931,9 @@ export const NhlPickBuilder = ({
                                                                                 : "hover:bg-white/[0.02]"
                                                                                 } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                                                             style={{
-                                                                                gridTemplateColumns:
-                                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                                gridTemplateColumns: isSingleOverHalfMarket
+                                                                                    ? "minmax(0,1fr) var(--table-chip-width)"
+                                                                                    : "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
                                                                             }}
                                                                         >
                                                                             <div
@@ -4003,16 +3949,29 @@ export const NhlPickBuilder = ({
                                                                                     {row.teamLabel}
                                                                                 </p>
                                                                             </div>
-                                                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                                                                {row.line ?? "-"}
-                                                                            </div>
-                                                                            <div className="flex justify-center px-3 py-3">
-                                                                                {renderTableOddsBox(
-                                                                                    row.odd ? formatOdds(row.odd.price) : "-",
-                                                                                    isSelected,
-                                                                                    !row.odd
-                                                                                )}
-                                                                            </div>
+                                                                            {isSingleOverHalfMarket ? (
+                                                                                <div className="flex justify-center px-3 py-3">
+                                                                                    {renderLineOddsBox(
+                                                                                        formatNumberLine(row.line),
+                                                                                        row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                        isSelected,
+                                                                                        !row.odd
+                                                                                    )}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <div className="px-3 py-2.5 text-center text-xs text-gray-300">
+                                                                                        {row.line ?? "-"}
+                                                                                    </div>
+                                                                                    <div className="flex justify-center px-3 py-3">
+                                                                                        {renderTableOddsBox(
+                                                                                            row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                            isSelected,
+                                                                                            !row.odd
+                                                                                        )}
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
                                                                         </button>
                                                                     );
                                                                 })}

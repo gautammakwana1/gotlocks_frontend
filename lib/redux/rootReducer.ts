@@ -1,4 +1,4 @@
-import { combineReducers } from "@reduxjs/toolkit";
+import { AnyAction, combineReducers, Reducer } from "@reduxjs/toolkit";
 import authReducer from "./slices/authSlice";
 import groupsReducer from "./slices/groupsSlice";
 import slipReducer from "./slices/slipSlice";
@@ -14,8 +14,9 @@ import feedbackReducer from "./slices/feedbackSlice";
 import notificationReducer from "./slices/notificationSlice";
 import mlbReducer from "./slices/mlbSlice";
 import socialReducer from "./slices/socialSlice";
+import soccerReducer from "./slices/soccerSlice";
 
-export const rootReducer = combineReducers({
+const appReducer = combineReducers({
 	user: authReducer,
 	group: groupsReducer,
 	slip: slipReducer,
@@ -31,6 +32,16 @@ export const rootReducer = combineReducers({
 	notifications: notificationReducer,
 	mlb: mlbReducer,
 	social: socialReducer,
+	soccer: soccerReducer,
 });
 
-export type RootReducer = ReturnType<typeof rootReducer>;
+export const rootReducer: Reducer = (state: ReturnType<typeof appReducer> | undefined, action: AnyAction) => {
+	if (action.type === "user/logout") {
+		// When logout is dispatched, reset state to undefined
+		// This forces combineReducers to use the initial state for every slice
+		state = undefined;
+	}
+	return appReducer(state, action);
+};
+
+export type RootReducer = ReturnType<typeof appReducer>;

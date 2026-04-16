@@ -348,7 +348,7 @@ export function PickReviewSheet({
                                     </span>
                                   )}
                                   <p
-                                    className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                    className="mt-1 min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
                                     title={item.description}
                                   >
                                     {pickLine}
@@ -500,7 +500,7 @@ export function PickReviewSheet({
                                                 </span>
                                               )}
                                               <p
-                                                className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                                className="mt-1 min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
                                                 title={item.description}
                                               >
                                                 {pickLine}

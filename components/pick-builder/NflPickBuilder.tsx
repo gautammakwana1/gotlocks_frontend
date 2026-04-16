@@ -1242,12 +1242,12 @@ export const NflPickBuilder = ({
 
     useEffect(() => {
         if (!validateLoading && validPickMessage) {
-            setToast({
-                id: Date.now(),
-                type: "success",
-                message: validPickMessage,
-                duration: 3000
-            });
+            // setToast({
+            //     id: Date.now(),
+            //     type: "success",
+            //     message: validPickMessage,
+            //     duration: 3000
+            // });
             dispatch(clearValidateMyNFLPickMessage());
         }
         if (!validateLoading && validPickError) {
@@ -2366,9 +2366,10 @@ export const NflPickBuilder = ({
 
         const eventGroups = new Map<string, typeof entries>();
         entries.forEach((entry) => {
-            const group = eventGroups.get(entry.leg.eventId) ?? [];
+            const groupKey = `${entry.leg.sport ?? "sport"}:${entry.leg.eventId}`;
+            const group = eventGroups.get(groupKey) ?? [];
             group.push(entry);
-            eventGroups.set(entry.leg.eventId, group);
+            eventGroups.set(groupKey, group);
         });
 
         const groups: Array<
@@ -2412,12 +2413,10 @@ export const NflPickBuilder = ({
                         : null;
 
                 groups.push({
-                    id: `same-game-${group[0].leg.eventId}`,
+                    id: `same-game-${group[0].leg.sport ?? "sport"}-${group[0].leg.eventId}`,
                     label: group[0].leg.matchup ?? "Same game combo",
                     oddsLabel: groupOddsLabel,
-                    validationCopy: groupPricing.requiresCustomPricing && groupOddsValue === null
-                        ? "These picks require custom pricing."
-                        : null,
+                    validationCopy: null,
                     items: group.map((entry) => entry.reviewItem),
                     tierLine: groupTierLine,
                     tierCard: resolveReviewSheetTierCardAppearance(
@@ -4755,9 +4754,7 @@ export const NflPickBuilder = ({
             hasMultiSelection && parlayPricing.hasInvalidComboLegs;
         const comboValidationCopy = comboHasInvalidSelections
             ? "Selections cannot be combined"
-            : parlayPricing.requiresCustomPricing && comboOddsValue === null
-                ? "These picks require custom pricing."
-                : null;
+            : null;
         const comboValidationReasons = comboHasInvalidSelections
             ? parlayPricing.invalidComboReasons
             : [];

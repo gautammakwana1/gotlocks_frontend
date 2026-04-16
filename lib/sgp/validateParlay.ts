@@ -47,6 +47,22 @@ export type ParlayLeg = SlipLeg & {
     | "2nd Quarter"
     | "3rd Quarter"
     | "4th Quarter"
+    | "1st Period"
+    | "2nd Period"
+    | "3rd Period"
+    | "1st Inning"
+    | "2nd Inning"
+    | "3rd Inning"
+    | "4th Inning"
+    | "5th Inning"
+    | "6th Inning"
+    | "7th Inning"
+    | "8th Inning"
+    | "9th Inning"
+    | "1st 3 Innings"
+    | "1st 5 Innings"
+    | "1st 7 Innings"
+    | "Live Segment"
     | "Full Game";
 };
 
@@ -71,12 +87,34 @@ const parseBookIdsFromLink = (link: string) => {
 
 const timeScopeFromMarket = (market: string): SlipTimeScope => {
     const trimmed = market.trim();
+    if (trimmed.startsWith("1st 3 Innings")) return "first_three_innings";
+    if (trimmed.startsWith("1st 5 Innings")) return "first_five_innings";
+    if (trimmed.startsWith("1st 7 Innings")) return "first_seven_innings";
     if (trimmed.startsWith("1st Half")) return "first_half";
     if (trimmed.startsWith("2nd Half")) return "second_half";
     if (trimmed.startsWith("1st Quarter")) return "first_quarter";
     if (trimmed.startsWith("2nd Quarter")) return "second_quarter";
     if (trimmed.startsWith("3rd Quarter")) return "third_quarter";
     if (trimmed.startsWith("4th Quarter")) return "fourth_quarter";
+    if (trimmed.startsWith("1st Period")) return "first_period";
+    if (trimmed.startsWith("2nd Period")) return "second_period";
+    if (trimmed.startsWith("3rd Period")) return "third_period";
+    if (trimmed.startsWith("1st Inning")) return "first_inning";
+    if (trimmed.startsWith("2nd Inning")) return "second_inning";
+    if (trimmed.startsWith("3rd Inning")) return "third_inning";
+    if (trimmed.startsWith("4th Inning")) return "fourth_inning";
+    if (trimmed.startsWith("5th Inning")) return "fifth_inning";
+    if (trimmed.startsWith("6th Inning")) return "sixth_inning";
+    if (trimmed.startsWith("7th Inning")) return "seventh_inning";
+    if (trimmed.startsWith("8th Inning")) return "eighth_inning";
+    if (trimmed.startsWith("9th Inning")) return "ninth_inning";
+    if (
+        trimmed.startsWith("1st 3 Minutes") ||
+        trimmed.startsWith("1st 5 Minutes") ||
+        trimmed.startsWith("1st 10 Minutes")
+    ) {
+        return "live_segment";
+    }
     return "full_game";
 };
 
@@ -87,13 +125,29 @@ const periodKeyFromTimeScope = (timeScope: SlipTimeScope): ParlayLeg["periodKey"
     if (timeScope === "second_quarter") return "2nd Quarter";
     if (timeScope === "third_quarter") return "3rd Quarter";
     if (timeScope === "fourth_quarter") return "4th Quarter";
+    if (timeScope === "first_period") return "1st Period";
+    if (timeScope === "second_period") return "2nd Period";
+    if (timeScope === "third_period") return "3rd Period";
+    if (timeScope === "first_inning") return "1st Inning";
+    if (timeScope === "second_inning") return "2nd Inning";
+    if (timeScope === "third_inning") return "3rd Inning";
+    if (timeScope === "fourth_inning") return "4th Inning";
+    if (timeScope === "fifth_inning") return "5th Inning";
+    if (timeScope === "sixth_inning") return "6th Inning";
+    if (timeScope === "seventh_inning") return "7th Inning";
+    if (timeScope === "eighth_inning") return "8th Inning";
+    if (timeScope === "ninth_inning") return "9th Inning";
+    if (timeScope === "first_three_innings") return "1st 3 Innings";
+    if (timeScope === "first_five_innings") return "1st 5 Innings";
+    if (timeScope === "first_seven_innings") return "1st 7 Innings";
+    if (timeScope === "live_segment") return "Live Segment";
     return "Full Game";
 };
 
 const marketFamilyFromMarket = (market: string) =>
     market
         .replace(
-            /^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\s+/i,
+            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\s+/i,
             ""
         )
         .replace(/^Alt\s+/i, "")
@@ -103,7 +157,7 @@ const marketScopePrefixFromMarket = (market: string) => {
     const match = market
         .trim()
         .match(
-            /^(1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\b/i
+            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\b/i
         );
     return match?.[1] ?? "";
 };
@@ -165,6 +219,19 @@ const buildLegDisplayName = (odd: OddsOdd) => {
 
 const statTypeFromMarket = (market: string) => {
     const token = normalizeText(marketFamilyFromMarket(market));
+    if (token.includes("both teams to score")) return "both_teams_to_score";
+    if (token.includes("draw no bet")) return "draw_no_bet";
+    if (token.includes("double chance")) return "double_chance";
+    if (token.includes("first team to score")) return "first_team_to_score";
+    if (token.includes("last team to score")) return "last_team_to_score";
+    if (token.includes("correct score")) return "correct_score";
+    if (token.includes("shots on target")) return "shots_on_target";
+    if (token.includes("player shots")) return "shots";
+    if (token.includes("player goals")) return "goals";
+    if (token.includes("corners odd/even")) return "corners_odd_even";
+    if (token.includes("corners")) return "corners";
+    if (token.includes("goals")) return "goals";
+    if (token.includes("handicap")) return "spread";
     if (token.includes("points + rebounds + assists")) return "points_rebounds_assists";
     if (token.includes("points + rebounds")) return "points_rebounds";
     if (token.includes("points + assists")) return "points_assists";
@@ -175,6 +242,8 @@ const statTypeFromMarket = (market: string) => {
     if (token.includes("assists")) return "assists";
     if (token.includes("steals")) return "steals";
     if (token.includes("blocks")) return "blocks";
+    if (token.includes("puck line")) return "spread";
+    if (token.includes("run line")) return "spread";
     if (token.includes("moneyline")) return "moneyline";
     if (token.includes("spread")) return "spread";
     if (token.includes("team total")) return "team_total";
@@ -188,7 +257,18 @@ const statTypeFromMarket = (market: string) => {
 
 const outcomeFamilyFromMarket = (market: string) => {
     const token = normalizeText(marketFamilyFromMarket(market));
+    if (token.includes("moneyline 3-way")) return "moneyline_3way";
+    if (token.includes("draw no bet")) return "draw_no_bet";
+    if (token.includes("double chance")) return "double_chance";
+    if (token.includes("both teams to score")) return "both_teams_to_score";
+    if (token.includes("first team to score")) return "first_team_to_score";
+    if (token.includes("last team to score")) return "last_team_to_score";
+    if (token.includes("correct score")) return "exact_score";
+    if (token.includes("handicap")) return "spread";
+    if (token.includes("corners odd/even")) return "odd_even";
     if (token.includes("moneyline")) return "moneyline";
+    if (token.includes("puck line")) return "spread";
+    if (token.includes("run line")) return "spread";
     if (token.includes("spread")) return "spread";
     if (token.includes("team total")) return "team_total";
     if (token.includes("total")) return "game_total";
@@ -211,14 +291,23 @@ const selectionMatchesTeam = (selectionName: string, team: OddsTeam) => {
 const resolveTeamContext = (event: OddsEvent, odd: OddsOdd) => {
     const selectionName = odd.selection?.name ?? odd.name;
     const marketName = normalizeText(odd.market);
-    if (selectionMatchesTeam(selectionName, event.teams.home)) {
+    const matchesHome = selectionMatchesTeam(selectionName, event.teams.home);
+    const matchesAway = selectionMatchesTeam(selectionName, event.teams.away);
+    if (matchesHome && matchesAway) {
+        return {
+            teamId: undefined,
+            opponentTeamId: undefined,
+            side: undefined,
+        };
+    }
+    if (matchesHome) {
         return {
             teamId: event.teams.home.id,
             opponentTeamId: event.teams.away.id,
             side: "home" as SlipSide,
         };
     }
-    if (selectionMatchesTeam(selectionName, event.teams.away)) {
+    if (matchesAway) {
         return {
             teamId: event.teams.away.id,
             opponentTeamId: event.teams.home.id,
@@ -254,7 +343,12 @@ const sideFromSelection = (event: OddsEvent, odd: OddsOdd, marketFamily: string)
 
     if (
         marketFamily.toLowerCase().includes("moneyline") ||
-        marketFamily.toLowerCase().includes("spread")
+        marketFamily.toLowerCase().includes("draw no bet") ||
+        marketFamily.toLowerCase().includes("double chance") ||
+        marketFamily.toLowerCase().includes("handicap") ||
+        marketFamily.toLowerCase().includes("spread") ||
+        marketFamily.toLowerCase().includes("puck line") ||
+        marketFamily.toLowerCase().includes("run line")
     ) {
         return resolveTeamContext(event, odd).side;
     }
@@ -270,7 +364,12 @@ const entityTypeFromOdd = (event: OddsEvent, odd: OddsOdd, marketFamily: string)
     if (
         teamContext.teamId &&
         (marketFamily.toLowerCase().includes("moneyline") ||
+            marketFamily.toLowerCase().includes("draw no bet") ||
+            marketFamily.toLowerCase().includes("double chance") ||
+            marketFamily.toLowerCase().includes("handicap") ||
             marketFamily.toLowerCase().includes("spread") ||
+            marketFamily.toLowerCase().includes("puck line") ||
+            marketFamily.toLowerCase().includes("run line") ||
             marketFamily.toLowerCase().includes("team total"))
     ) {
         return "team";
@@ -321,7 +420,8 @@ export const normalizeOddToLeg = (event: OddsEvent, odd: OddsOdd): ParlayLeg => 
         statType,
         timeScope,
         side,
-        selection: odd.selection?.name ?? odd.name,
+        selection:
+            normalizeText(marketFamily).includes("correct score") ? odd.name : odd.selection?.name ?? odd.name,
         line: odd.selection?.line ?? undefined,
         altLine: odd.main ? null : odd.selection?.line ?? null,
         impliedBy: [],

@@ -1,5 +1,6 @@
-import { Pick, PickResult, Slip } from "../interfaces/interfaces";
+import { ArchiveLeaderboardSlip, Pick, PickResult, Slip } from "../interfaces/interfaces";
 
+export type SlipLike = Slip | ArchiveLeaderboardSlip;
 
 export const normalizePickResult = (
     result: PickResult | null | undefined
@@ -8,15 +9,15 @@ export const normalizePickResult = (
 export const isPickResultPending = (result: PickResult | null | undefined) =>
     normalizePickResult(result) === "pending";
 
-const getSlipDeadlineTime = (slip: Slip): number | null => {
+const getSlipDeadlineTime = (slip: SlipLike): number | null => {
     const timestamp = new Date(slip.pick_deadline_at).getTime();
     return Number.isFinite(timestamp) ? timestamp : null;
 };
 
-export const isSlipFinal = (slip?: Slip | null): boolean =>
+export const isSlipFinal = (slip?: SlipLike | null): boolean =>
     Boolean(slip && slip.status === "final");
 
-export const isSlipTimeLocked = (slip?: Slip | null, now = Date.now()): boolean => {
+export const isSlipTimeLocked = (slip?: SlipLike | null, now = Date.now()): boolean => {
     if (!slip || isSlipFinal(slip)) return false;
     const deadline = getSlipDeadlineTime(slip);
     if (deadline === null) return false;
@@ -24,17 +25,17 @@ export const isSlipTimeLocked = (slip?: Slip | null, now = Date.now()): boolean 
 };
 
 export const canUserEditSlipPicks = (
-    slip?: Slip | null,
+    slip?: SlipLike | null,
     now = Date.now()
 ): boolean => Boolean(slip && !isSlipFinal(slip) && !isSlipTimeLocked(slip, now));
 
 export const canCommissionerReview = (
-    slip?: Slip | null,
+    slip?: SlipLike | null,
     now = Date.now()
 ): boolean => Boolean(slip && !isSlipFinal(slip) && isSlipTimeLocked(slip, now));
 
-export const hasAutoGraded = (slip?: Slip | null): boolean =>
-    Boolean(slip?.graded_at);
+export const hasAutoGraded = (slip?: SlipLike | null): boolean =>
+    Boolean((slip as Slip)?.graded_at);
 
 export const areAllPicksResolved = (picks?: Pick[]): boolean => {
     if (!picks?.length) return false;

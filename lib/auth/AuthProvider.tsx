@@ -42,9 +42,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
                 const storedUser = getLocalStorage<CurrentUser>("currentUser");
-                if (storedUser) setUser(storedUser);
+                if (storedUser) {
+                    setUser((prev) => {
+                        if (prev && prev.userId === storedUser.userId) {
+                            return prev;
+                        }
+                        return storedUser;
+                    });
+                }
             } else if (event === 'SIGNED_OUT') {
                 setUser(null);
+                setIsLoading(false);
             }
         });
 

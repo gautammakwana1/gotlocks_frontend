@@ -27,6 +27,11 @@ import type {
 	ArchiveLeaderboardList,
 	LeaderboardData,
 	PaginationMetadata,
+	Members,
+	FetchGroupMembersPayload,
+	MembersData,
+	FetchMyGroupsPayload,
+	GroupObject,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -36,6 +41,7 @@ type GroupState = {
 	summary: GroupSummary | null;
 	archivedLeaderboard: ArchivedLeaderboard | null;
 	ArchiveLeaderboardList: ArchiveLeaderboardList | null;
+	members: Members | null;
 	session: SessionState | null;
 	hasSeenIntro: boolean;
 	loading: boolean;
@@ -50,6 +56,10 @@ type GroupState = {
 	leaveMessage: string | null;
 	hasMoreLeaderboard: boolean;
 	leaderboardPagination?: PaginationMetadata;
+	loadingMembers: boolean;
+	membersPagination?: PaginationMetadata;
+	hasMore: boolean;
+	myGroups: GroupObject[] | null;
 };
 
 const initialState: GroupState = {
@@ -59,6 +69,7 @@ const initialState: GroupState = {
 	summary: null,
 	archivedLeaderboard: null,
 	ArchiveLeaderboardList: null,
+	members: null,
 	session: null,
 	hasSeenIntro: false,
 	loading: false,
@@ -72,6 +83,9 @@ const initialState: GroupState = {
 	leaveLoading: false,
 	leaveMessage: null,
 	hasMoreLeaderboard: false,
+	loadingMembers: false,
+	hasMore: false,
+	myGroups: null,
 };
 
 const groupSlice = createSlice({
@@ -112,6 +126,32 @@ const groupSlice = createSlice({
 			state.error = action.payload;
 		},
 		clearFetchAllGroupMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchMyGroupsRequest: (state, action: PayloadAction<FetchMyGroupsPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchMyGroupsSuccess: (state, action: PayloadAction<{ groups: GroupObject[], page: number, hasMore: boolean }>) => {
+			state.loading = false;
+			const { groups, page, hasMore } = action.payload;
+			state.hasMore = hasMore;
+			if (page === 1) {
+				state.myGroups = groups;
+			} else {
+				const existingIds = new Set(state.myGroups?.map(p => p.id) || []);
+				const newUniquePicks = groups.filter(g => !existingIds.has(g.id));
+				state.myGroups = [...(state.myGroups || []), ...newUniquePicks];
+			}
+		},
+		fetchMyGroupFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchMyGroupMessage(state) {
 			state.error = null;
 			state.message = null;
 		},
@@ -455,6 +495,35 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		fetchGroupMembersByGroupIdRequest: (state, action: PayloadAction<FetchGroupMembersPayload>) => {
+			void action;
+			state.loadingMembers = true;
+			state.error = null;
+		},
+		fetchGroupMembersByGroupIdSuccess: (state, action: PayloadAction<MembersData>) => {
+			state.loadingMembers = false;
+			const { members, pagination } = action.payload || {};
+			const page = pagination?.page || 1;
+
+			if (page === 1) {
+				state.members = members;
+			} else {
+				state.members = [
+					...(state.members || []),
+					...(members || []),
+				];
+			}
+			state.membersPagination = pagination;
+		},
+		fetchGroupMembersByGroupIdFailure: (state, action) => {
+			state.loadingMembers = false;
+			state.error = action.payload;
+		},
+		clearFetchGroupMembersByGroupIdMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -536,6 +605,14 @@ export const {
 	enableSecondaryLeaderboardSuccess,
 	enableSecondaryLeaderboardFailure,
 	clearEnableSecondaryLeaderboardMessage,
+	fetchGroupMembersByGroupIdRequest,
+	fetchGroupMembersByGroupIdSuccess,
+	fetchGroupMembersByGroupIdFailure,
+	clearFetchGroupMembersByGroupIdMessage,
+	fetchMyGroupsRequest,
+	fetchMyGroupsSuccess,
+	fetchMyGroupFailure,
+	clearFetchMyGroupMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

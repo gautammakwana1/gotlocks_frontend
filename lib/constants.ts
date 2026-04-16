@@ -1,3 +1,5 @@
+import { League } from "./interfaces/interfaces";
+
 export const APP_NAME = "gotLocks?"
 export const TAGLINE = "trust your gut. 🔒 it in. climb the rankings."
 
@@ -595,3 +597,5 @@ export const USERNAME_RESERVED_WORD = [
 
 export const MINIMUM_PICK_POINTS = -100;
 export const MAXIMUM_PICK_POINTS = 100;
+
+export const FALLBACK_LEAGUE: League = "Soccer";

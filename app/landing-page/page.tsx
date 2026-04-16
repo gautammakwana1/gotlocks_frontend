@@ -128,16 +128,61 @@ const LandingPage = () => {
   return (
     <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-10 pb-20 text-white">
       <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
-        {/* <Image
-          src="/goat_throw_animation_1.svg"
-          alt=""
-          aria-hidden="true"
-          width={60}
-          height={60}
-          className="h-35 w-35 object-contain sm:h-50 sm:w-50"
-          priority
-        /> */}
-        {/* <Logo3D /> */}
+        <div className="relative flex items-center justify-center">
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{
+              opacity: 1,
+              scale: [1, 1.08, 1],
+            }}
+            transition={{
+              opacity: { duration: 0.6 },
+              scale: {
+                duration: 2.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+            }}
+            className="relative flex items-center justify-center"
+          >
+            <Image
+              src="/logocolorblackborder.svg"
+              alt=""
+              aria-hidden="true"
+              width={52}
+              height={50}
+              className="h-30 w-30 object-contain sm:h-[108px] sm:w-[108px] select-none"
+              priority
+              draggable={false}
+            />
+
+            {/* Shine */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                maskImage: "url(/logocolorblackborder.svg)",
+                WebkitMaskImage: "url(/logocolorblackborder.svg)",
+                maskSize: "contain",
+                WebkitMaskSize: "contain",
+                maskRepeat: "no-repeat",
+                WebkitMaskRepeat: "no-repeat",
+                maskPosition: "center",
+                WebkitMaskPosition: "center",
+              }}
+            >
+              <div
+                className="absolute w-[40%] h-full 
+                  bg-gradient-to-r 
+                  from-transparent 
+                  via-white/50 
+                  to-transparent
+                  skew-x-[-25deg]
+                  animate-shine"
+              />
+            </div>
+          </motion.div>
+        </div>
         <div className="flex items-center gap-3 sm:gap-4">
           <h1
             className="allow-caps text-5xl font-extrabold text-transparent bg-clip-text"
@@ -149,61 +194,6 @@ const LandingPage = () => {
           >
             {APP_NAME.toLowerCase()}
           </h1>
-          <div className="relative flex items-center justify-center">
-            {/* Radar */}
-            <span className="absolute w-20 h-20 border border-[#00ff99]/40 rounded-full animate-ping" />
-            {/* Glow */}
-            <div className="absolute w-30 h-30 rounded-full
-              bg-gradient-to-r 
-              from-[#00ff99] 
-              via-[#00e5ff] 
-              to-[#7c3aed] 
-              blur-2xl 
-              opacity-50 
-              animate-pulse"
-            />
-            {/* Logo */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{
-                opacity: 1,
-                scale: [1, 1.08, 1], // zoom in → zoom out
-              }}
-              transition={{
-                opacity: { duration: 0.6 },
-                scale: {
-                  duration: 2.5,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                },
-              }}
-              className="relative flex items-center justify-center"
-            >
-              <Image
-                src="/logocolorblackborder.svg"
-                alt=""
-                aria-hidden="true"
-                width={52}
-                height={50}
-                className="h-12 w-12 object-contain sm:h-[52px] sm:w-[52px] select-none"
-                priority
-                draggable={false}
-              />
-
-              {/* Shine */}
-              <div className="absolute inset-0 rounded-full h-[52px] w-[50px] overflow-hidden pointer-events-none">
-                <div
-                  className="absolute w-[20%] h-full 
-                    bg-gradient-to-r 
-                    from-transparent 
-                    via-white/40 
-                    to-transparent
-                    skew-x-[-20deg]
-                    animate-shine"
-                />
-              </div>
-            </motion.div>
-          </div>
         </div>
       </div>
 
@@ -228,13 +218,13 @@ const LandingPage = () => {
           sign in with username
         </button>
 
-        <button
+        {/* <button
           type="button"
           onClick={handleGoogleAuth}
           className="w-full rounded-2xl border border-white/15 px-4 py-3 text-base font-semibold uppercase tracking-wide text-white transition hover:border-white/35 hover:bg-white/5"
         >
           sign in with Google
-        </button>
+        </button> */}
 
         {showManualSignIn && (
           <form className="mt-2 flex flex-col gap-3" onSubmit={handleManualSubmit}>

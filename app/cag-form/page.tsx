@@ -222,7 +222,7 @@ const CagFormPage = () => {
               <button
                 type="button"
                 onClick={handleCreate}
-                disabled={!form.name.trim()}
+                disabled={!form.name.trim() || loading}
                 className="self-start rounded-2xl bg-emerald-500/25 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/35 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 create group

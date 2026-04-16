@@ -4,11 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { Feed, FeedSelector, Members } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllActivitiesRequest } from "@/lib/redux/slices/activitySlice";
-import FootballAnimation from "../animations/FootballAnimation";
+import ActivitiesSkeleton from "./ActivitiesSkeleton";
 
 type Props = {
   groupId?: string;
-  users: Members;
 };
 
 const formatTime = (iso: string) =>
@@ -19,7 +18,7 @@ const formatTime = (iso: string) =>
     minute: "2-digit",
   });
 
-export const FeedTab = ({ users, groupId }: Props) => {
+export const FeedTab = ({ groupId }: Props) => {
   const dispatch = useDispatch();
 
   const { feed, loading } = useSelector((state: FeedSelector) => state.feed);
@@ -56,14 +55,8 @@ export const FeedTab = ({ users, groupId }: Props) => {
 
   const totalPages = Math.ceil(total / limit);
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-        <div className="w-48 max-w-[70vw] sm:w-60">
-          <FootballAnimation />
-        </div>
-      </div>
-    )
+  if (loading && !activities.length) {
+    return <ActivitiesSkeleton />
   }
 
   return (
@@ -92,19 +85,13 @@ export const FeedTab = ({ users, groupId }: Props) => {
           No activity yet — picks will appear here as soon as they’re made.
         </div>
       ) : (sorted.map((event) => {
-        const actor =
-          !event.user_id
-            ? "System"
-            : users.find((user) => user.user_id === event.user_id)?.profiles?.username ??
-            "Unknown";
-
         return (
           <div
             key={event.id}
             className="flex flex-col gap-2 rounded-3xl border border-white/10 bg-black/60 p-5 shadow-inner"
           >
             <div className="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
-              <span>{actor}</span>
+              <span>{event.profiles?.username ?? "Unknown"}</span>
               <time dateTime={event.created_at}>
                 {formatTime(event.created_at)}
               </time>

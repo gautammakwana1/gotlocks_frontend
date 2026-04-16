@@ -22,7 +22,7 @@ import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
-import { assignToSecondaryLeaderboardRequest, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import Image from "next/image";
 import { getPickPoints, GROUP_CAP_POINTS, GROUP_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
@@ -131,7 +131,7 @@ const SlipDetailsPage = () => {
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
     const activeSlip = group?.active_slip ?? null;
     const members = useMemo(() => group?.members ?? [], [group?.members]);
-    const { slips, loading: slipLoader, message: slipMessage, error: slipError } = useSelector((state: RootState) => state.slip);
+    const { slips, loading: slipLoader, message: slipMessage, error: slipError, deleteLoading, deleteMessage, deleteError } = useSelector((state: RootState) => state.slip);
     const { picks: pickList, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
     const {
         leaderboard: leaderboardData,
@@ -300,6 +300,32 @@ const SlipDetailsPage = () => {
             dispatch(clearUpdateSlipsMessage());
         }
     }, [setToast, slipLoader, slipMessage, slipError, dispatch, params.groupId]);
+
+    useEffect(() => {
+        if (!deleteLoading && deleteMessage) {
+            setToast({
+                id: Date.now(),
+                type: "success",
+                message: deleteMessage,
+                duration: 3000,
+            })
+            dispatch(clearDeleteSlipMessage());
+            if (params.groupId) {
+                router.replace(`/group/${params.groupId}?tab=slips`);
+            } else {
+                router.replace('/fantasy');
+            }
+        }
+        if (!deleteLoading && deleteError) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: deleteError,
+                duration: 3000,
+            })
+            dispatch(clearDeleteSlipMessage());
+        }
+    }, [setToast, deleteLoading, deleteMessage, deleteError, dispatch, params.groupId]);
 
     useEffect(() => {
         if (!slip) return;
@@ -639,7 +665,6 @@ const SlipDetailsPage = () => {
             dispatch(deleteSlipRequest({ slip_id: slip.id }));
         }
         setIsDeleteSlipModalOpen(false);
-        router.replace(`/group/${group.id}?tab=slips`);
     };
 
     const handleDeadlineSave = (event: FormEvent) => {
@@ -1373,7 +1398,7 @@ const SlipDetailsPage = () => {
                                                 <ActionButton
                                                     label="Auto grade"
                                                     onClick={handleAutoGrade}
-                                                    disabled={!canAutoGrade}
+                                                    disabled={!canAutoGrade || pickLoader}
                                                     className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-emerald-400/40 bg-gradient-to-br from-emerald-500/30 via-emerald-400/10 to-black/40 px-3 py-2 text-[11px] text-emerald-100 hover:border-emerald-300/70 hover:text-white"
                                                 />
                                                 <ActionButton

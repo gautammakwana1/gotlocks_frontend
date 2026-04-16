@@ -7,7 +7,7 @@ import { GroupDataShape } from "../../../page";
 import { Group, GroupSelector, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest } from "@/lib/redux/slices/slipSlice";
+import { clearUpdateSlipsMessage, deleteSlipRequest, fetchSlipByIdRequest } from "@/lib/redux/slices/slipSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";

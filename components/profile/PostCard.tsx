@@ -46,7 +46,7 @@ const PICK_RESULT_ACCENTS = {
         text: "text-amber-100",
     },
     pending: {
-        text: "text-slate-200",
+        text: "text-cyan-200",
     },
 } as const;
 

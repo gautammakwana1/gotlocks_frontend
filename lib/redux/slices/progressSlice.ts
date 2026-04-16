@@ -3,10 +3,12 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: ProgressState = {
     loading: false,
+    hasSeenIntro: true,
     error: null,
     message: null,
     progress: null,
     picksCount: null,
+    slipsCount: null,
 };
 
 const progressSlice = createSlice({
@@ -20,6 +22,9 @@ const progressSlice = createSlice({
         fetchMyProgressSuccess: (state, action) => {
             state.loading = false;
             state.progress = action.payload.progress;
+            state.picksCount = action.payload.picksCount;
+            state.slipsCount = action.payload.slipsCount;
+            state.hasSeenIntro = action.payload.hasSeenIntro;
         },
         fetchMyProgressFailure: (state, action) => {
             state.loading = false;
@@ -39,6 +44,8 @@ const progressSlice = createSlice({
             state.loading = false;
             state.progress = action.payload.progress;
             state.picksCount = action.payload.picksCount;
+            state.slipsCount = action.payload.slipsCount;
+            state.hasSeenIntro = action.payload.hasSeenIntro;
         },
         fetchProgressByUserIdFailure: (state, action) => {
             state.loading = false;

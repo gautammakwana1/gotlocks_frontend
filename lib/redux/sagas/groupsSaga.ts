@@ -1,7 +1,7 @@
 import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
@@ -25,6 +25,11 @@ import type {
 	FetchArchivedLeaderBoardsPayload,
 	FetchArchivedLeaderBoardListPayload,
 	LeaderboardData,
+	FetchGroupMembersPayload,
+	MembersData,
+	FetchMyGroupsPayload,
+	GroupObject,
+	FetchGroupsPaginationPayload,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -71,6 +76,26 @@ function* handleFetchAllGroups(action: PayloadAction<FetchGroupsParams | undefin
 	}
 }
 
+function* handleFetchMyGroups(action: PayloadAction<FetchMyGroupsPayload | undefined>): SagaIterator {
+	try {
+		const { page = 1, limit = 10 } = action.payload || {};
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/my-groups`,
+			{
+				params: { page, limit }
+			}
+		);
+		const payload = response.data as { data?: { groups: GroupObject[], pagination: FetchGroupsPaginationPayload } };
+		const groups = payload.data?.groups ?? [];
+		const pagination = payload.data?.pagination;
+		yield put(fetchMyGroupsSuccess({ groups, page, hasMore: pagination?.hasMore ?? groups.length === limit }));
+	} catch (error: unknown) {
+		yield put(fetchMyGroupFailure(getErrorMessage(error, "Group Fetching Failed")))
+	}
+}
+
 function* handleFetchGroupById(action: PayloadAction<FetchGroupByIdPayload | undefined>): SagaIterator {
 	try {
 		const { groupId = "" } = action.payload || {};
@@ -96,7 +121,6 @@ function* handleJoinedGroupByInviteCode(action: PayloadAction<InviteCodePayload 
 			{ invite_code }
 		);
 		yield put(joinedGroupByInviteCodeSuccess(response.data));
-		yield put(fetchAllGroupsRequest({}));
 	} catch (error: unknown) {
 		yield put(joinedGroupByInviteCodeFailure(getErrorMessage(error, "Joined Group By Id Failed!")));
 	}
@@ -322,8 +346,8 @@ function* handleGroupLeaving(action: PayloadAction<LeaveGroupPayload>): SagaIter
 				params: { group_id }
 			}
 		);
-		const payload = response.data as { data?: unknown };
-		yield put(leaveGroupSuccess(payload.data));
+		const payload = response.data as { data?: unknown, message: string };
+		yield put(leaveGroupSuccess(payload));
 	} catch (error: unknown) {
 		yield put(leaveGroupFailure(getErrorMessage(error, "Leave Group Failed!")));
 	}
@@ -341,6 +365,24 @@ function* handleEnableSecondaryLeaderboard(action: PayloadAction<EnableSecondary
 		yield put(fetchGroupByIdRequest({ groupId: action.payload.group_id }));
 	} catch (error: unknown) {
 		yield put(enableSecondaryLeaderboardFailure(getErrorMessage(error, "Enable Secondary Leaderboard Failed!")));
+	}
+}
+
+function* handleFetchGroupMembersByGroupId(action: PayloadAction<FetchGroupMembersPayload>): SagaIterator {
+	try {
+		const { group_id = "", page = 1, limit = 10 } = action.payload || {};
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/members/${group_id}`,
+			{
+				params: { page, limit }
+			}
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchGroupMembersByGroupIdSuccess(payload.data as MembersData));
+	} catch (error: unknown) {
+		yield put(fetchGroupMembersByGroupIdFailure(getErrorMessage(error, "Fetching Group Members Failed")));
 	}
 }
 
@@ -364,4 +406,6 @@ export default function* groupSaga() {
 	yield takeLatest(leaveGroupRequest.type, handleGroupLeaving);
 	yield takeLatest(updateLeaderboardToArchivedRequest.type, handleUpdateLeaderboardToArchived);
 	yield takeLatest(enableSecondaryLeaderboardRequest.type, handleEnableSecondaryLeaderboard);
+	yield takeLatest(fetchGroupMembersByGroupIdRequest.type, handleFetchGroupMembersByGroupId);
+	yield takeLatest(fetchMyGroupsRequest.type, handleFetchMyGroups);
 };

@@ -7,12 +7,12 @@ import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { logout } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage, removeLocalStorage } from "@/lib/utils/jwtUtils";
 import { COLORS } from "@/lib/constants";
-import { clearFetchAllGroupMessage } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { CircleDollarSignIcon, LogOutIcon, MessageSquareMoreIcon, Settings } from "lucide-react";
 import Image from "next/image";
+import OnboardingModal from "../modals/OnboardingModal";
 
 type AuthUserPayload = {
   data?: {
@@ -39,6 +39,7 @@ export const TopNav = () => {
   const dispatch = useAppDispatch();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   const { setToast } = useToast();
 
@@ -52,16 +53,15 @@ export const TopNav = () => {
     return HIDDEN_ROUTES.has(pathname);
   }, [pathname]);
 
-  const handleLogOut = useCallback(() => {
+  const handleLogOut = useCallback(async () => {
     try {
-      removeLocalStorage(`sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF}-auth-token`);
-      removeLocalStorage("currentUser");
-      removeLocalStorage("accessToken");
-      removeLocalStorage("refresh_token");
-      removeLocalStorage("userId");
-      removeLocalStorage("provider");
+      // 1. Terminate Supabase session
+      const { supabase } = await import("@/lib/supabaseClient");
+      supabase.auth.signOut();
 
+      // 3. Dispatch global logout to reset Redux state
       dispatch(logout());
+
       setToast({
         id: Date.now(),
         type: "success",
@@ -70,7 +70,6 @@ export const TopNav = () => {
       });
 
       router.push("/landing-page");
-      dispatch(clearFetchAllGroupMessage());
     } catch (error) {
       setToast({
         id: Date.now(),
@@ -206,6 +205,17 @@ export const TopNav = () => {
                 <span>global points shop</span>
                 <CircleDollarSignIcon size={18} className="text-orange-400 transition-transform duration-300 group-hover:[transform:rotate(180deg)_scale(1.2)]" />
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setOnboardingOpen(true);
+                }}
+                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
+              >
+                <span>tutorial</span>
+                <span aria-hidden>🔒</span>
+              </button>
               <Link
                 href="/feedback"
                 className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
@@ -231,6 +241,11 @@ export const TopNav = () => {
           </div>
         </div>
       )}
+
+      <OnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+      />
     </>
   );
 };

@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearLeaveGroupMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
-import { clearCreatePickMessage, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { archiveLeaderBoardObject, Group, GroupSelector, Leaderboard, LeaderboardList, leaderboardSlip, Picks, RootState, Slip, Slips } from "@/lib/interfaces/interfaces";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
+import { archiveLeaderBoardObject, ArchiveLeaderboardSlip, Group, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
-import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest, fetchAllSlipsRequest, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeOpenSlipsRequest, fetchAllVibeReviewSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
-import ModifyMembers, { MemberWithRole } from "@/components/group/ModifyMembers";
+import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeOpenSlipsRequest, fetchAllVibeReviewSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
+import ModifyMembers from "@/components/group/ModifyMembers";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
 import SlipCategorySection from "@/components/slips/SlipCategorySection";
@@ -19,9 +18,11 @@ import BackButton from "@/components/ui/BackButton";
 import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGroupModal";
 import { PlusIcon, X } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { ChatIcon, ChevronIcon, ChevronUpDownIcon, EditIcon, EditPencilIcon, FeedIcon, LeaderboardIcon, MembersIcon, SettingIcon, SlipIcon } from "@/components/ui/SvgIcons";
+import LeaderboardSkeleton from "@/components/leaderboard/LeaderboardSkeleton";
+import SlipsSkeleton from "@/components/slips/SlipsSkeleton";
+import MembersSkeleton from "@/components/group/MembersSkeleton";
 
 interface FormErrors {
   name?: string;
@@ -112,8 +113,10 @@ const GroupPage = () => {
   const params = useParams();
   const searchParams = useSearchParams();
   const groupId = params.groupId as string;
+  const fetchedGroupId = useRef<string | null>(null);
   const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
   const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slip[]>([]);
+  const [archivedLeaderboardSlipsList, setArchivedLeaderboardSlipsList] = useState<ArchiveLeaderboardSlip[]>([]);
   const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
   const [leaderboardPage, setLeaderboardPage] = useState(1);
 
@@ -198,8 +201,6 @@ const GroupPage = () => {
     setFinalPage(1);
   }, [slipTab]);
   const [archiveLeaderboardData, setArchiveLeaderboardData] = useState<Leaderboard[]>([]);
-  // const [showFootballOverlay, setShowFootballOverlay] = useState(false);
-  // const overlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const leaderboardMenuRef = useRef<HTMLDivElement>(null);
 
@@ -213,30 +214,31 @@ const GroupPage = () => {
     error: errorMessage,
     deleteLoading,
     deleteMessage,
-    leaveMessage,
-    leaveLoading,
     ArchiveLeaderboardList,
     archivedLeaderboard: ArchivedLeaderboardObject,
     hasMoreLeaderboard,
+    loadingMembers,
   } = useSelector((state: GroupSelector) => state.group);
-  const { slips: slipList, openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews, loading: slipLoader } = useSelector((state: RootState) => state.slip);
-  const { picks: pickList, loading: pickLoader, message: pickMessage } = useSelector((state: RootState) => state.pick);
+  const { openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews, loading: slipLoader } = useSelector((state: RootState) => state.slip);
   const rawGroup = useSelector((state: GroupSelector) => state.group.group);
   const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
 
   useEffect(() => {
     if (!groupId || !currentUser) return;
+    if (fetchedGroupId.current === groupId) return;
 
     dispatch(fetchGroupByIdRequest({ groupId }));
-    dispatch(fetchAllLeaderboardsRequest({ group_id: groupId }));
-    dispatch(fetchArchivedLeaderboardListRequest({ groupId: groupId }));
-  }, [groupId, currentUser, dispatch])
+    fetchedGroupId.current = groupId;
+  }, [groupId, currentUser, dispatch]);
 
   useEffect(() => {
     if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.leaderboard)) {
-      setArchiveLeaderboardData(ArchivedLeaderboardObject.leaderboard)
+      setArchiveLeaderboardData(ArchivedLeaderboardObject.leaderboard);
     }
-  }, [ArchivedLeaderboardObject])
+    if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.slips)) {
+      setArchivedLeaderboardSlipsList(ArchivedLeaderboardObject.slips);
+    }
+  }, [ArchivedLeaderboardObject]);
 
   const isCommissioner =
     !!group && !!currentUser && group.created_by === currentUser.userId;
@@ -245,12 +247,6 @@ const GroupPage = () => {
 
   const activeSlip = group?.active_slip ?? null;
   const members = useMemo(() => group?.members ?? [], [group?.members]);
-
-  const slips: Slips = useMemo(() => {
-    if (!group?.id || !Array.isArray(slipList) || !slipList?.length) return [];
-
-    return slipList;
-  }, [slipList, group?.id]);
 
   const tabs = useMemo(
     () =>
@@ -289,39 +285,20 @@ const GroupPage = () => {
     normalizeTab(searchParams.get("tab"))
   );
 
-  const leaderboardSlips = slips.filter((slip) => slip.isGraded && slip.slip_type === "fantasy");
-  const vibeSlips = slips.filter((slip) => !slip.isGraded && slip.slip_type === "vibe");
-  const isLockedSlip = (slip: (typeof slips)[number]) =>
-    !isSlipFinal(slip) && isSlipTimeLocked(slip);
-  const isOpenSlip = (slip: (typeof slips)[number]) =>
-    !isSlipFinal(slip) && !isSlipTimeLocked(slip);
-  // const leaderboardActiveSlips = leaderboardSlips.filter(isOpenSlip);
+  useEffect(() => {
+    if (!groupId) return;
+    if (activeTab === "leaderboard" || activeTab === "settings") {
+      dispatch(fetchAllLeaderboardsRequest({ group_id: groupId }));
+      dispatch(fetchArchivedLeaderboardListRequest({ groupId: groupId }));
+    }
+  }, [dispatch, groupId, activeTab]);
+
   const leaderboardActiveSlips = openSlips;
-  // const leaderboardLockedSlips = leaderboardSlips.filter(isLockedSlip);
   const leaderboardLockedSlips = reviewSlips;
-  // const leaderboardCompletedSlips = leaderboardSlips.filter(isSlipFinal);
   const leaderboardCompletedSlips = finalizeSlips;
   const vibeActiveSlips = openSlips;
   const vibeLockedSlips = reviewSlips;
   const vibeCompletedSlips = finalizeSlips;
-
-  const gradedFinalSlips = slips.filter(
-    (slip) => slip.isGraded && slip.status === "final"
-  );
-  const gradedSlipIds = useMemo(
-    () => new Set(gradedFinalSlips.map((slip) => slip.id)),
-    [gradedFinalSlips]
-  );
-
-  const picks: Picks = useMemo(() => {
-    if (!activeSlip?.id || !Array.isArray(pickList) || !pickList?.length) return [];
-    return pickList;
-  }, [pickList, activeSlip?.id]);
-
-  const gradedPicks = useMemo(
-    () => picks.filter((pick) => gradedSlipIds.has(pick.id)),
-    [gradedSlipIds, picks]
-  );
 
   const tabParam = searchParams.get("tab");
   useEffect(() => {
@@ -337,9 +314,6 @@ const GroupPage = () => {
 
   useEffect(() => {
     return () => {
-      // if (overlayTimeoutRef.current) {
-      //   clearTimeout(overlayTimeoutRef.current);
-      // }
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
@@ -361,18 +335,12 @@ const GroupPage = () => {
     () => groupLeaderboards.filter((board) => board.status === "ACTIVE"),
     [groupLeaderboards]
   );
-  const archivedLeaderboards = useMemo(
-    () => groupLeaderboards.filter((board) => board.status === "ARCHIVED"),
-    [groupLeaderboards]
-  );
+
   const visibleActiveLeaderboards = useMemo(
     () => visibleLeaderboards.filter((board) => board.status === "ACTIVE"),
     [visibleLeaderboards]
   );
-  const activeSideLeaderboards = useMemo(
-    () => activeLeaderboards.filter((board) => !board.isDefault),
-    [activeLeaderboards]
-  );
+
   const activeMainLeaderboard = useMemo(
     () => activeLeaderboards.find((board) => board.isDefault) ?? null,
     [activeLeaderboards]
@@ -384,13 +352,7 @@ const GroupPage = () => {
         .sort((a, b) => a.created_at.localeCompare(b.created_at)),
     [activeLeaderboards]
   );
-  const sortedActiveLeaderboards = useMemo(() => {
-    const defaultBoard = activeLeaderboards.find((board) => board.isDefault);
-    const sides = activeLeaderboards
-      .filter((board) => !board.isDefault)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return defaultBoard ? [defaultBoard, ...sides] : sides;
-  }, [activeLeaderboards]);
+
   const sortedActiveLeaderboardsForView = useMemo(() => {
     const defaultBoard = visibleActiveLeaderboards.find((board) => board.isDefault);
     const sides = visibleActiveLeaderboards
@@ -398,16 +360,7 @@ const GroupPage = () => {
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
     return defaultBoard ? [defaultBoard, ...sides] : sides;
   }, [visibleActiveLeaderboards]);
-  const sortedArchivedLeaderboards = useMemo(
-    () =>
-      [...archivedLeaderboards].sort((a, b) => {
-        const dateA = a?.archived_at ?? a.created_at;
-        const dateB = b?.archived_at ?? b.created_at;
 
-        return dateB.localeCompare(dateA);
-      }),
-    [archivedLeaderboards]
-  );
   const selectedLeaderboard = useMemo(
     () =>
       visibleLeaderboards.find((board) => board.id === activeLeaderboardId) ??
@@ -415,57 +368,11 @@ const GroupPage = () => {
       null,
     [activeLeaderboardId, visibleLeaderboards]
   );
-  const archivedLeaderboard = useMemo(
-    () =>
-      groupLeaderboards.find((board) => board.id === archivedLeaderboardId) ?? null,
-    [archivedLeaderboardId, groupLeaderboards]
-  );
+
   const editingLeaderboard = useMemo(
     () =>
       groupLeaderboards.find((board) => board.id === editingLeaderboardId) ?? null,
     [editingLeaderboardId, groupLeaderboards]
-  );
-  const selectedLeaderboardSlips = useMemo(() => {
-    if (!selectedLeaderboard?.id || !Array.isArray(slips) || slips.length === 0) {
-      return [];
-    }
-
-    const leaderboardId = selectedLeaderboard.id;
-
-    return slips.filter((slip) =>
-      slip.isGraded === true &&
-      // status === "final" &&
-      // isSlipFinal(slip) &&
-      Array.isArray(slip.leaderboard_ids) &&
-      slip.leaderboard_ids.includes(leaderboardId)
-    );
-  }, [selectedLeaderboard?.id, slips]);
-
-  const activeLeaderboardIds = useMemo(
-    () => new Set(activeLeaderboards.map((board) => board.id)),
-    [activeLeaderboards]
-  );
-  const hasOpenSlipOnActiveBoards = useMemo(() => {
-    if (!slips?.length || !activeLeaderboardIds?.size) return false;
-
-    return slips.some((slip) =>
-      !isSlipFinal(slip) &&
-      Array.isArray(slip.leaderboard_ids) &&
-      slip.leaderboard_ids.some((id) => activeLeaderboardIds.has(id))
-    );
-  }, [slips, activeLeaderboardIds]);
-
-  const hasOpenSlipForLeaderboard = useCallback(
-    (leaderboardId: string) => {
-      if (!leaderboardId || !slips?.length) return false;
-
-      return slips.some((slip) =>
-        !isSlipFinal(slip) &&
-        Array.isArray(slip.leaderboard_ids) &&
-        slip.leaderboard_ids.includes(leaderboardId)
-      );
-    },
-    [slips]
   );
 
   const handleSelectArchivedLeaderboard = (boardId: string, archivedId: string) => {
@@ -477,15 +384,6 @@ const GroupPage = () => {
   }
 
   const sideLimitReached = activeSecondaryLeaderboards.length >= 2;
-
-  const membersWithRoles: MemberWithRole[] = useMemo(
-    () =>
-      members.map((member) => ({
-        ...member,
-        isOwner: member.user_id === group?.created_by,
-      })),
-    [group?.created_by, members]
-  );
 
   const confirmationCode = useMemo(() => {
     if (!group?.id) return "";
@@ -551,28 +449,32 @@ const GroupPage = () => {
   };
 
   const handleSlipSelect = (slipId?: string) => {
-    if (!group) return;
-    const target = slips.find((slip) => slip.id === slipId);
-    if (!target) return;
-    const basePath = `/group/${group.id}/slips/${target.id}`;
-    if (target.status === "final") {
+    if (!group || !slipId) return;
+
+    const slipOpen = openSlips?.find(
+      (slip) => slip.id === slipId
+    );
+
+    const slipInReview = reviewSlips?.find(
+      (slip) => slip.id === slipId
+    );
+
+    const finalSlip = finalizeSlips?.find(
+      (slip) => slip.id === slipId
+    );
+
+    if (!slipOpen && !slipInReview && !finalSlip) return;
+    const basePath = `/group/${group.id}/slips/${slipId}`;
+
+    if (finalSlip?.status === "final") {
       router.push(`${basePath}/results`);
       return;
     }
     router.push(basePath);
   };
 
-  // const showOverlayBriefly = () => {
-  //   setShowFootballOverlay(true);
-  //   if (overlayTimeoutRef.current) {
-  //     clearTimeout(overlayTimeoutRef.current);
-  //   }
-  //   overlayTimeoutRef.current = setTimeout(() => setShowFootballOverlay(false), 800);
-  // };
-
   const handleCreateSlipNavigation = () => {
     if (!group) return;
-    // showOverlayBriefly();
     if (navigationTimeoutRef.current) {
       clearTimeout(navigationTimeoutRef.current);
     }
@@ -659,11 +561,7 @@ const GroupPage = () => {
       setEditingLeaderboardId(null);
       setLeaderboardNameDraft("");
     }
-    // if (activeSlip?.id && (activeTab === "slips" || activeTab === "settings")) {
-    if (activeSlip?.id && (activeTab === "settings")) {
-      dispatch(fetchAllPicksRequest({ slip_id: activeSlip?.id }))
-    }
-  }, [dispatch, activeSlip, activeTab]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (secondaryLeaderboardsEnabled) {
@@ -719,18 +617,6 @@ const GroupPage = () => {
   }, [showLeaderboardMenu]);
 
   useEffect(() => {
-    if (!pickLoader && pickMessage) {
-      setToast({
-        id: Date.now(),
-        type: "success",
-        message: pickMessage,
-        duration: 3000,
-      });
-      dispatch(fetchAllPicksRequest({ slip_id: activeSlip?.id }));
-      dispatch(clearCreatePickMessage());
-    }
-  }, [pickLoader, pickMessage, setToast, dispatch, activeSlip?.id]);
-  useEffect(() => {
     if (!loading && groupMessage) {
       setToast({
         id: Date.now(),
@@ -759,17 +645,7 @@ const GroupPage = () => {
       dispatch(clearConfirmDeleteGroupMessage());
       router.replace("/fantasy");
     }
-    if (!leaveLoading && leaveMessage) {
-      setToast({
-        id: Date.now(),
-        type: "success",
-        message: leaveMessage,
-        duration: 3000,
-      });
-      dispatch(clearLeaveGroupMessage());
-      router.replace("/fantasy");
-    }
-  }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, leaveLoading, leaveMessage, router, errorMessage]);
+  }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, router, errorMessage]);
 
   useEffect(() => {
     if (!loading && !groupData && currentUser) {
@@ -780,8 +656,14 @@ const GroupPage = () => {
     }
   }, [loading, groupData, router, currentUser]);
 
+  // Fetch specific leaderboard data
   useEffect(() => {
-    if (group?.id && selectedLeaderboard?.id && (activeTab === "leaderboard" || activeTab === "settings") && !archivedLeaderboardId) {
+    if (
+      group?.id &&
+      selectedLeaderboard?.id &&
+      (activeTab === "leaderboard" || activeTab === "settings") &&
+      !archivedLeaderboardId
+    ) {
       setLeaderboardPage(1);
       dispatch(fetchLeaderboardRequest({
         groupId: group?.id,
@@ -790,17 +672,11 @@ const GroupPage = () => {
         limit: 5
       }));
     }
-  }, [selectedLeaderboard?.id, dispatch, group?.id, activeTab, archivedLeaderboardId]);
+  }, [group?.id, selectedLeaderboard?.id, activeTab, archivedLeaderboardId, dispatch]);
 
+  // Fetch granular slips for "Slips" tab
   useEffect(() => {
-    if (activeTab === "leaderboard" && group?.id) {
-      dispatch(fetchAllSlipsRequest({ group_id: group?.id }));
-    }
-    if (activeTab === "settings" && group?.id) {
-      dispatch(fetchGroupByIdRequest({ groupId: group?.id }));
-    }
     if (activeTab === "slips" && group?.id) {
-      dispatch(fetchAllSlipsRequest({ group_id: group?.id }));
       if (slipTab === "vibe") {
         dispatch(fetchAllVibeOpenSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
         dispatch(fetchAllVibeReviewSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
@@ -811,7 +687,7 @@ const GroupPage = () => {
         dispatch(fetchAllFinalizedSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
       }
     }
-  }, [dispatch, activeTab, group?.id, selectedLeaderboard?.id, slipTab]);
+  }, [group?.id, activeTab, slipTab, dispatch]);
 
   useEffect(() => {
     if (Array.isArray(leaderboardData?.leaderboard)) {
@@ -1096,7 +972,7 @@ const GroupPage = () => {
     </div>
   );
 
-  if (loading || loadingLeaderboard || !currentUser) {
+  if ((loading && !group) || !currentUser) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
         <div className="w-48 max-w-[70vw] sm:w-60">
@@ -1257,20 +1133,19 @@ const GroupPage = () => {
                   )}
                 </div>
                 <span>
-                  {selectedLeaderboardSlips.length
-                    ? `${selectedLeaderboardSlips.length} leaderboard slips`
+                  {leaderboardSlipsList.length
+                    ? `${leaderboardSlipsList.length} leaderboard slips`
                     : "No leaderboard slips yet"}
                 </span>
               </div>
             </div>
 
-            {selectedLeaderboard ? (
+            {loadingLeaderboard ? (
+              <LeaderboardSkeleton />
+            ) : selectedLeaderboard ? (
               <LeaderboardGrid
                 group={group}
-                slips={selectedLeaderboardSlips}
-                users={members}
-                picks={gradedPicks}
-                leaderboard={leaderboardList}
+                leaderboard={archivedLeaderboardId ? archiveLeaderboardData : leaderboardList}
                 leaderboardId={selectedLeaderboard.id}
                 leaderboardName={selectedLeaderboard.name}
                 currentUserId={currentUser?.userId}
@@ -1278,6 +1153,8 @@ const GroupPage = () => {
                 onLoadMore={handleLoadMoreLeaderboard}
                 hasMore={hasMoreLeaderboard}
                 loadingMore={loadingLeaderboard}
+                isArchived={!!archivedLeaderboardId}
+                archivedLeaderboardSlips={archivedLeaderboardSlipsList}
               />
             ) : (
               <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
@@ -1315,139 +1192,149 @@ const GroupPage = () => {
         )}
 
         {activeTab === "slips" && (
-          <div className="space-y-6 pt-2">
-            <button
-              type="button"
-              onClick={handleCreateSlipNavigation}
-              className={createSlipButtonClass}
-            >
-              <div>
-                <p className="text-sm font-semibold text-white">Create a new slip</p>
-              </div>
-              <span
-                className={createSlipIconClass}
-                aria-hidden
-              >
-                <PlusIcon />
-              </span>
-            </button>
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  choose slip type
-                </div>
-                <div className="inline-flex items-center gap-4">
-                  {(["leaderboard", "vibe"] as const).map((tab) => {
-                    const isActive = slipTab === tab;
-                    return (
-                      <button
-                        key={tab}
-                        type="button"
-                        onClick={() => setSlipTab(tab)}
-                        className={`border-b-2 pb-1 text-[11px] font-semibold uppercase tracking-wide transition ${isActive
-                          ? "border-white text-white"
-                          : "border-transparent text-gray-400 hover:border-white/40 hover:text-white"
-                          }`}
-                      >
-                        {tab === "leaderboard" ? "leaderboard slips" : "vibe slips"}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+          <>
+            {slipLoader ? (
+              <SlipsSkeleton />
+            ) : (
+              <div className="space-y-6 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCreateSlipNavigation}
+                  className={createSlipButtonClass}
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-white">Create a new slip</p>
+                  </div>
+                  <span
+                    className={createSlipIconClass}
+                    aria-hidden
+                  >
+                    <PlusIcon />
+                  </span>
+                </button>
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      choose slip type
+                    </div>
+                    <div className="inline-flex items-center gap-4">
+                      {(["leaderboard", "vibe"] as const).map((tab) => {
+                        const isActive = slipTab === tab;
+                        return (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setSlipTab(tab)}
+                            className={`border-b-2 pb-1 text-[11px] font-semibold uppercase tracking-wide transition ${isActive
+                              ? "border-white text-white"
+                              : "border-transparent text-gray-400 hover:border-white/40 hover:text-white"
+                              }`}
+                          >
+                            {tab === "leaderboard" ? "leaderboard slips" : "vibe slips"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {slipTab === "leaderboard" ? (
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    <span className="text-xs font-normal normal-case text-gray-500">
-                      Count toward leaderboards
-                    </span>
-                  </div>
-                  <SlipCategorySection
-                    title="open for picks"
-                    slips={leaderboardActiveSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreOpen}
-                    layout="grid"
-                    emptyCopy="No leaderboard slips open yet — create one to kick things off."
-                    hasMore={hasMoreOpens}
-                  />
-                  <SlipCategorySection
-                    title="slips in review"
-                    slips={leaderboardLockedSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreReview}
-                    layout="grid"
-                    emptyCopy="No locked leaderboard slips right now."
-                    hasMore={hasMoreReviews}
-                  />
-                  <SlipCategorySection
-                    title="finalized slips"
-                    slips={leaderboardCompletedSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreFinal}
-                    layout="grid"
-                    emptyCopy="No finalized leaderboard slips yet."
-                    hasMore={hasMoreFinalizes}
-                  />
-                </section>
-              ) : (
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    <span className="text-xs font-normal normal-case text-gray-500">
-                      XP only
-                    </span>
-                  </div>
-                  <SlipCategorySection
-                    title="open for picks"
-                    slips={vibeActiveSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreOpen}
-                    layout="grid"
-                    emptyCopy="No vibe slips open yet — drop one to set the tone."
-                    hasMore={hasMoreOpens}
-                  />
-                  <SlipCategorySection
-                    title="slips in review"
-                    slips={vibeLockedSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreReview}
-                    layout="grid"
-                    emptyCopy="No locked vibe slips right now."
-                    hasMore={hasMoreReviews}
-                  />
-                  <SlipCategorySection
-                    title="finalized slips"
-                    slips={vibeCompletedSlips || []}
-                    onSelect={handleSlipSelect}
-                    onLoadMore={handleLoadMoreFinal}
-                    layout="grid"
-                    emptyCopy="No finalized vibe slips yet."
-                    hasMore={hasMoreFinalizes}
-                  />
-                </section>
-              )}
-            </div>
-          </div>
+                  {slipTab === "leaderboard" ? (
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <span className="text-xs font-normal normal-case text-gray-500">
+                          Count toward leaderboards
+                        </span>
+                      </div>
+                      <SlipCategorySection
+                        title="open for picks"
+                        slips={leaderboardActiveSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreOpen}
+                        layout="grid"
+                        emptyCopy="No leaderboard slips open yet — create one to kick things off."
+                        hasMore={hasMoreOpens}
+                      />
+                      <SlipCategorySection
+                        title="slips in review"
+                        slips={leaderboardLockedSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreReview}
+                        layout="grid"
+                        emptyCopy="No locked leaderboard slips right now."
+                        hasMore={hasMoreReviews}
+                      />
+                      <SlipCategorySection
+                        title="finalized slips"
+                        slips={leaderboardCompletedSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreFinal}
+                        layout="grid"
+                        emptyCopy="No finalized leaderboard slips yet."
+                        hasMore={hasMoreFinalizes}
+                      />
+                    </section>
+                  ) : (
+                    <section className="space-y-4">
+                      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        <span className="text-xs font-normal normal-case text-gray-500">
+                          XP only
+                        </span>
+                      </div>
+                      <SlipCategorySection
+                        title="open for picks"
+                        slips={vibeActiveSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreOpen}
+                        layout="grid"
+                        emptyCopy="No vibe slips open yet — drop one to set the tone."
+                        hasMore={hasMoreOpens}
+                      />
+                      <SlipCategorySection
+                        title="slips in review"
+                        slips={vibeLockedSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreReview}
+                        layout="grid"
+                        emptyCopy="No locked vibe slips right now."
+                        hasMore={hasMoreReviews}
+                      />
+                      <SlipCategorySection
+                        title="finalized slips"
+                        slips={vibeCompletedSlips || []}
+                        onSelect={handleSlipSelect}
+                        onLoadMore={handleLoadMoreFinal}
+                        layout="grid"
+                        emptyCopy="No finalized vibe slips yet."
+                        hasMore={hasMoreFinalizes}
+                      />
+                    </section>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {activeTab === "members" && (
           <div className="space-y-4 pt-2">
-            <ModifyMembers
-              currentUser={currentUser}
-              members={membersWithRoles}
-              onRemoveMember={handleRemoveMember}
-              onMakeCommissioner={handleTransferCommissioner}
-              onLeaveGroup={handleLeaveGroup}
-              leavingGroup={leavingGroup}
-            />
+            {loadingMembers && !members.length ? (
+              <MembersSkeleton />
+            ) : (
+              <ModifyMembers
+                currentUser={currentUser}
+                onRemoveMember={handleRemoveMember}
+                onMakeCommissioner={handleTransferCommissioner}
+                onLeaveGroup={handleLeaveGroup}
+                leavingGroup={leavingGroup}
+                groupId={groupId}
+              />
+            )}
           </div>
         )}
 
         {activeTab === "feed" && (
           <div className="space-y-4 pt-2">
             <div className="rounded-3xl border border-white/10 bg-black/60 p-5 text-sm text-gray-300 shadow-lg">
-              <FeedTab users={members} groupId={group?.id} />
+              <FeedTab groupId={group?.id} />
             </div>
           </div>
         )}
@@ -1527,7 +1414,7 @@ const GroupPage = () => {
                                 leaderboardName: activeMainLeaderboard.name,
                               })
                             }
-                            disabled={hasOpenSlipOnActiveBoards}
+                            disabled={activeMainLeaderboard.hasAnyOpenSlips}
                             className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Archive & restart
@@ -1569,7 +1456,7 @@ const GroupPage = () => {
                           </div>
                         </div>
                       )}
-                      {hasOpenSlipOnActiveBoards && (
+                      {activeMainLeaderboard.hasAnyOpenSlips && (
                         <p className="mt-3 text-xs text-amber-200">
                           Finalize or delete any open slips in order to archive and restart
                         </p>
@@ -1673,7 +1560,7 @@ const GroupPage = () => {
                   {activeSecondaryLeaderboards.length ? (
                     <div className="grid grid-cols-1 gap-3">
                       {activeSecondaryLeaderboards.map((board) => {
-                        const blockedReason = hasOpenSlipForLeaderboard(board.id)
+                        const blockedReason = board.hasAnyOpenSlips
                           ? "You have open slips still running in this leaderboard."
                           : null;
                         return (
@@ -1712,7 +1599,7 @@ const GroupPage = () => {
                                       leaderboardName: board.name,
                                     })
                                   }
-                                  disabled={Boolean(blockedReason)}
+                                  disabled={Boolean(blockedReason) || board.hasAnyOpenSlips}
                                   className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   Archive
@@ -2107,14 +1994,13 @@ const GroupPage = () => {
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <LeaderboardGrid
                 group={group}
-                slips={selectedLeaderboardSlips}
-                users={members}
-                picks={gradedPicks}
                 leaderboardId={ArchivedLeaderboardObject.leaderboard_id}
                 leaderboardName={ArchivedLeaderboardObject.label}
                 currentUserId={currentUser?.userId}
                 leaderboard={archiveLeaderboardData}
                 leaderboardSlips={leaderboardSlipsList}
+                archivedLeaderboardSlips={archivedLeaderboardSlipsList}
+                isArchived={true}
               />
             </div>
           </div>

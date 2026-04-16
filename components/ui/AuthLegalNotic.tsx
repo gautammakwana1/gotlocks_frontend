@@ -9,7 +9,7 @@ const PRIVACY_HREF = "/privacy-policy";
 export const AuthLegalNotice = () => {
     return (
         <p className="text-left text-xs leading-6 text-gray-400">
-            By continuing you agree to {APP_NAME}&apos;s{" "}
+            By continuing you agree to {APP_NAME.toLowerCase()}&apos;s{" "}
             <Link
                 href={TERMS_HREF}
                 className="font-medium text-white underline decoration-white/30 underline-offset-4 transition hover:text-emerald-200 hover:decoration-emerald-200"

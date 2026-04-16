@@ -3,14 +3,14 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { Group } from "@/lib/interfaces/interfaces";
+import { Group, GroupObject } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearJoinedGroupByInviteCodeMessage, fetchMyGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import FootballAnimation from "@/components/animations/FootballAnimation";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
+import GroupsTabSkeleton from "./GroupsTabSkeleton";
 
 type GroupSliceState = {
     group: {
@@ -23,6 +23,8 @@ type GroupSliceState = {
     joinLoading: boolean;
     error: string | null;
     message: string | null;
+    hasMore: boolean;
+    myGroups: GroupObject[] | null;
 };
 
 type RootState = {
@@ -40,26 +42,27 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
     const dispatch = useDispatch();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
+    const [page, setPage] = useState(1);
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [joinOpen, setJoinOpen] = useState(false);
     const [showScoringModal, setShowScoringModal] = useState(false);
-
-    const { group, joinLoading, message, error, loading: groupLoading } = useSelector((state: RootState) => state.group);
+    const { joinLoading, message, error, loading: groupLoading, myGroups, hasMore } = useSelector((state: RootState) => state.group);
 
     useEffect(() => {
-        dispatch(fetchAllGroupsRequest({}));
+        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
     }, [dispatch]);
 
     useEffect(() => {
-        if (!joinLoading && message && group) {
+        if (!joinLoading && message) {
             setToast({
                 id: Date.now(),
                 type: "success",
                 message: message,
                 duration: 3000,
             });
-            dispatch(fetchAllGroupsRequest({}));
+            setPage(1);
+            dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
         }
         if (!joinLoading && error) {
             setToast({
@@ -70,24 +73,24 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
             })
         }
         dispatch(clearJoinedGroupByInviteCodeMessage());
-    }, [setToast, dispatch, joinLoading, message, error, router, group]);
+    }, [setToast, dispatch, joinLoading, message, error, router]);
 
     const sortedGroups = useMemo(() => {
-        if (!group?.data?.groups) return [];
+        if (!Array.isArray(myGroups) || !myGroups.length) return [];
 
-        const groups = group.data.groups;
+        const groups = myGroups;
 
         if (!currentUser?.userId) return groups;
 
         const commissionerGroups = groups.filter(
-            (g: Group) => g.created_by === currentUser.userId
+            (g: GroupObject) => g.created_by === currentUser.userId
         );
         const memberGroups = groups.filter(
-            (g: Group) => g.created_by !== currentUser.userId
+            (g: GroupObject) => g.created_by !== currentUser.userId
         );
 
         return [...commissionerGroups, ...memberGroups];
-    }, [group?.data?.groups, currentUser?.userId]);
+    }, [myGroups, currentUser?.userId]);
 
     const openJoinModal = () => {
         setJoinOpen(true);
@@ -117,14 +120,14 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
         closeJoinModal();
     };
 
-    if (groupLoading || !currentUser) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
-        )
+    const handleLoadMore = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        dispatch(fetchMyGroupsRequest({ page: nextPage, limit: 10 }));
+    };
+
+    if (groupLoading && (!myGroups || page === 1)) {
+        return <GroupsTabSkeleton />
     }
 
     return (
@@ -199,7 +202,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                     {group.description || "Run slips, share picks, and climb the table together."}
                                 </p>
                                 <div className="text-xs uppercase tracking-wide text-gray-400">
-                                    <span>{group?.members?.length} members</span>
+                                    <span>{group?.member_count} members</span>
                                 </div>
                             </button>
                         );
@@ -234,11 +237,27 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                     {group.description || "Run slips, share picks, and climb the table together."}
                                 </p>
                                 <div className="text-xs uppercase tracking-wide text-gray-400">
-                                    <span>{group?.members?.length} members</span>
+                                    <span>{group?.member_count} members</span>
                                 </div>
                             </button>
                         );
                     })}
+                </div>
+            )}
+
+            {hasMore && (
+                <div className="flex justify-center pt-2">
+                    <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={groupLoading}
+                        className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-semibold text-gray-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {groupLoading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                        ) : null}
+                        Show more
+                    </button>
                 </div>
             )}
 

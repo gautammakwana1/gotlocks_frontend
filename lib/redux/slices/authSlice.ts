@@ -610,6 +610,23 @@ const authSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		completeIntroRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		completeIntroSuccess: (state, action) => {
+			state.loading = false;
+		},
+		completeIntroFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearCompleteIntroMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -726,6 +743,10 @@ export const {
 	deleteAccountSuccess,
 	deleteAccountFailure,
 	clearDeleteAccountMessage,
+	completeIntroRequest,
+	completeIntroSuccess,
+	completeIntroFailure,
+	clearCompleteIntroMessage,
 	logout,
 	completeIntro,
 	resetProfile,

@@ -179,7 +179,7 @@ describe("quoteSlipOdds", () => {
         );
     });
 
-    it("falls back to no quote for unsupported same-game sports", () => {
+    it("returns estimated NHL odds for valid same-game player combos", () => {
         const nhlFirst = makePlayerLeg({
             id: "nhl-points",
             sport: "NHL",
@@ -200,10 +200,138 @@ describe("quoteSlipOdds", () => {
         });
 
         const quote = quoteSlipOdds([nhlFirst, nhlSecond]);
+        const independent = combineParlayOdds([nhlFirst, nhlSecond]);
 
         expect(quote.pricing.requiresCustomPricing).toBe(true);
-        expect(quote.isEstimated).toBe(false);
-        expect(quote.americanOdds).toBeNull();
+        expect(quote.isEstimated).toBe(true);
+        expect(quote.americanOdds).not.toBeNull();
+        expect(independent).not.toBeNull();
+        expect(americanToProbability(quote.americanOdds as number)).toBeGreaterThan(
+            americanToProbability(independent as number)
+        );
+    });
+
+    it("returns estimated MLB odds for valid same-game player combos", () => {
+        const hits = makePlayerLeg({
+            id: "mlb-hits",
+            sport: "MLB",
+            marketType: "Player Hits",
+            marketFamily: "Player Hits",
+            statType: "hits",
+            eventId: "event-mlb",
+            price: "-125",
+        });
+        const totalBases = makePlayerLeg({
+            id: "mlb-total-bases",
+            sport: "MLB",
+            marketType: "Player Total Bases",
+            marketFamily: "Player Total Bases",
+            statType: "total_bases",
+            eventId: "event-mlb",
+            price: "-105",
+        });
+
+        const quote = quoteSlipOdds([hits, totalBases]);
+
+        expect(quote.pricing.requiresCustomPricing).toBe(true);
+        expect(quote.isEstimated).toBe(true);
+        expect(quote.americanOdds).not.toBeNull();
+    });
+
+    it("returns estimated NFL odds for valid same-game player combos", () => {
+        const passingYards = makePlayerLeg({
+            id: "nfl-pass-yards",
+            sport: "NFL",
+            marketType: "Player Passing Yards",
+            marketFamily: "Player Passing Yards",
+            statType: "pass_yards",
+            eventId: "event-nfl",
+            price: "-115",
+        });
+        const completions = makePlayerLeg({
+            id: "nfl-pass-completions",
+            sport: "NFL",
+            marketType: "Player Passing Completions",
+            marketFamily: "Player Passing Completions",
+            statType: "pass_completions",
+            eventId: "event-nfl",
+            price: "-105",
+        });
+
+        const quote = quoteSlipOdds([passingYards, completions]);
+
+        expect(quote.pricing.requiresCustomPricing).toBe(true);
+        expect(quote.isEstimated).toBe(true);
+        expect(quote.americanOdds).not.toBeNull();
+    });
+
+    it("returns estimated NCAAB odds for valid same-game player combos", () => {
+        const points = makePlayerLeg({
+            id: "ncaab-points",
+            sport: "NCAAB",
+            marketType: "Player Points",
+            marketFamily: "Player Points",
+            statType: "points",
+            eventId: "event-ncaab",
+            price: "-110",
+        });
+        const rebounds = makePlayerLeg({
+            id: "ncaab-rebounds",
+            sport: "NCAAB",
+            marketType: "Player Rebounds",
+            marketFamily: "Player Rebounds",
+            statType: "rebounds",
+            eventId: "event-ncaab",
+            price: "-105",
+        });
+
+        const quote = quoteSlipOdds([points, rebounds]);
+
+        expect(quote.pricing.requiresCustomPricing).toBe(true);
+        expect(quote.isEstimated).toBe(true);
+        expect(quote.americanOdds).not.toBeNull();
+    });
+
+    it("returns estimated Soccer odds for valid same-game player combos", () => {
+        const goals = makePlayerLeg({
+            id: "soccer-goals",
+            sport: "Germany Bundesliga",
+            marketType: "Player Goals",
+            marketFamily: "Player Goals",
+            statType: "goals",
+            eventId: "event-soccer",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            playerId: "player-9",
+            entityId: "player-9",
+            line: 0.5,
+            price: "+125",
+        });
+        const shotsOnTarget = makePlayerLeg({
+            id: "soccer-shots-on-target",
+            sport: "Germany Bundesliga",
+            marketType: "Player Shots On Target",
+            marketFamily: "Player Shots On Target",
+            statType: "shots_on_target",
+            eventId: "event-soccer",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            playerId: "player-9",
+            entityId: "player-9",
+            line: 0.5,
+            price: "-110",
+        });
+
+        const quote = quoteSlipOdds([goals, shotsOnTarget]);
+        const independent = combineParlayOdds([goals, shotsOnTarget]);
+
+        expect(quote.pricing.requiresCustomPricing).toBe(true);
+        expect(quote.isEstimated).toBe(true);
+        expect(quote.americanOdds).not.toBeNull();
+        expect(independent).not.toBeNull();
+        expect(americanToProbability(quote.americanOdds as number)).toBeGreaterThan(
+            americanToProbability(independent as number)
+        );
     });
 
     it("does not quote invalid combos", () => {

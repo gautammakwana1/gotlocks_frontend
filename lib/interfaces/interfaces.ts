@@ -317,21 +317,29 @@ export type AuthSelector = {
 }
 
 export type GroupState = {
-    error: string | null;
     group: Group | null;
-    message: string | null;
-    loading: boolean;
-    loadingLeaderboard: boolean;
-    leaderboard?: LeaderboardData | null;
+    leaderboard: LeaderboardData | null;
     leaderboardList: LeaderboardList | null;
+    summary: GroupSummary | null;
     archivedLeaderboard: ArchivedLeaderboard | null;
     ArchiveLeaderboardList: ArchiveLeaderboardList | null;
-    deleteMessage: string | null;
+    members: Members | null;
+    session: SessionState | null;
+    hasSeenIntro: boolean;
+    loading: boolean;
+    joinLoading: boolean;
+    loadingLeaderboard: boolean;
+    loadingArchivedLeaderboard: boolean;
     deleteLoading: boolean;
     leaveLoading: boolean;
+    error: string | null;
+    message: string | null;
+    deleteMessage: string | null;
     leaveMessage: string | null;
     hasMoreLeaderboard: boolean;
     leaderboardPagination?: PaginationMetadata;
+    loadingMembers: boolean;
+    membersPagination?: PaginationMetadata;
 }
 
 export type GroupSelector = {
@@ -360,7 +368,8 @@ export type Member = {
     joined_at?: string;
     profiles?: {
         username?: string;
-        user_id?: string;
+        id?: string;
+        email?: string;
         profile_image?: string;
         [key: string]: unknown;
     };
@@ -378,12 +387,30 @@ export type GroupResponse = {
 
 export type CreateGroupPayload = Group;
 
+export type GroupObject = {
+    id: string;
+    name: string;
+    invite_code: string;
+    description: string;
+    member_count: number;
+    created_by: string;
+    current_user_member: {
+        joined_at: string;
+        role: string;
+    }
+}
+
 export type FetchGroupsParams = {
     page?: number;
     limit?: number;
     sort_by?: string;
     sort_order?: "asc" | "desc";
     search?: string;
+};
+
+export type FetchMyGroupsPayload = {
+    page: number;
+    limit: number;
 };
 
 export type FetchGroupByIdPayload = {
@@ -422,6 +449,17 @@ export type UpdateLeaderboardToArchivedPayload = {
 
 export type LeaveGroupPayload = {
     group_id: string;
+};
+
+export type FetchGroupMembersPayload = {
+    group_id: string;
+    page?: number;
+    limit?: number;
+};
+
+export type MembersData = {
+    members: Members;
+    pagination: PaginationMetadata;
 };
 
 export type EnableSecondaryLeaderboardPayload = {
@@ -656,6 +694,9 @@ export type SlipState = {
     hasMoreOpens: boolean;
     hasMoreReviews: boolean;
     hasMoreFinalizes: boolean;
+    deleteLoading: boolean;
+    deleteMessage: string | null;
+    deleteError: string | null;
 };
 
 export type PickState = {
@@ -731,6 +772,13 @@ export type Feed = {
     action: string;
     meta?: Record<string, unknown>;
     created_at: string;
+    profiles?: {
+        id: string;
+        username: string;
+        full_name: string;
+        profile_image?: string;
+        [key: string]: unknown;
+    };
 };
 
 export type Feeds = Feed[];
@@ -939,6 +987,7 @@ export type RootState = {
     feedback: FeedbackState;
     notifications: NotificationsState;
     social: SocialState;
+    soccer: SoccerState;
 };
 
 export type UpdateGroupPayload = {
@@ -1146,6 +1195,18 @@ export type FetchNHLSchedulePayload = {
     is_range: boolean;
 };
 
+export type FetchSoccerEnglandPremierLeagueSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
+export type FetchSoccerGermanyBundesligaSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
 export type FetchMLBSchedulePayload = {
     is_pick_of_day: boolean;
     date?: string;
@@ -1172,6 +1233,16 @@ export type FetchNCAABOddsPayload = {
 };
 
 export type FetchNHLOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchSoccerEnglandPremierLeagueOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchSoccerGermanyBundesligaOddsPayload = {
     match_id: string;
     is_live: boolean;
 };
@@ -1214,6 +1285,18 @@ export type ValidateMyNCAABPickPayload = {
 };
 
 export type ValidateMyNHLPickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
+};
+
+export type ValidateMySoccerEnglandPremierLeaguePickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
+};
+
+export type ValidateMySoccerGermanyBundesligaPickPayload = {
     external_pick_key: string;
     match_id: string;
     is_live: boolean;
@@ -1300,6 +1383,15 @@ export type NHLSchedules = {
     updated?: string;
 }
 
+export type SoccerSchedules = {
+    id: string;
+    teams: TeamsObject,
+    date: string;
+    live: boolean;
+    odds: OddsObject[];
+    updated?: string;
+}
+
 export type MLBSchedules = {
     id: string;
     teams: TeamsObject,
@@ -1373,6 +1465,13 @@ export type NCAABOdds = {
 }
 
 export type NHLOdds = {
+    updated: string;
+    league: LeagueObject;
+    sportsbook: SportsBookObject;
+    events: OddsData[];
+}
+
+export type SoccerOdds = {
     updated: string;
     league: LeagueObject;
     sportsbook: SportsBookObject;
@@ -1563,12 +1662,19 @@ export type PicksCount = {
     pending: number,
 }
 
+export type SlipsCount = {
+    open_slip: number,
+    final_slip: number,
+}
+
 export type ProgressState = {
     loading: boolean,
     error: string | null,
     message: string | null,
     progress: Progress | null,
     picksCount: PicksCount | null,
+    slipsCount: SlipsCount | null,
+    hasSeenIntro: boolean;
 }
 
 export type SearchUsers = {
@@ -1627,6 +1733,29 @@ export type NHLState = {
         events: NHLSchedules[];
     } | null,
     nhlOdds: NHLOdds | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
+    validateLoading: boolean;
+    validatePickMessage: string | null;
+    validatePickError: string | null;
+};
+
+export type SoccerState = {
+    englandPremierLeagueSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedules[];
+    } | null,
+    germanyBundesligaSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedules[];
+    } | null,
+    fanduelEnglandPremierLeagueOdds: SoccerOdds | null;
+    draftkingEnglandPremierLeagueOdds: SoccerOdds | null;
+    fanduelGermanyBundesligaOdds: SoccerOdds | null;
+    draftkingGermanyBundesligaOdds: SoccerOdds | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -1865,6 +1994,7 @@ export type LeaderboardList = {
     isDefault: boolean;
     created_at: string;
     archived_at?: string;
+    hasAnyOpenSlips: boolean;
 };
 
 export type ReactionKey =
@@ -2002,6 +2132,22 @@ export type ParlayLeg = {
     | "2nd Quarter"
     | "3rd Quarter"
     | "4th Quarter"
+    | "1st Period"
+    | "2nd Period"
+    | "3rd Period"
+    | "1st Inning"
+    | "2nd Inning"
+    | "3rd Inning"
+    | "4th Inning"
+    | "5th Inning"
+    | "6th Inning"
+    | "7th Inning"
+    | "8th Inning"
+    | "9th Inning"
+    | "1st 3 Innings"
+    | "1st 5 Innings"
+    | "1st 7 Innings"
+    | "Live Segment"
     | "Full Game";
 };
 

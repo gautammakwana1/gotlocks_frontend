@@ -319,6 +319,35 @@ describe("validateSlip", () => {
         expect(result.pairDecisions[0]?.status).toBe("valid_parlay_leg");
     });
 
+    it("does not treat shared event ids across sports as the same game", () => {
+        const nbaLeg = makePlayerLeg({
+            id: "nba-leg",
+            sport: "NBA",
+            eventId: "shared-event",
+            marketType: "Player Points",
+            marketFamily: "Player Points",
+            statType: "points",
+        });
+        const mlbLeg = makePlayerLeg({
+            id: "mlb-leg",
+            sport: "MLB",
+            eventId: "shared-event",
+            marketType: "Player Hits",
+            marketFamily: "Player Hits",
+            statType: "hits",
+            teamId: "team-c",
+            opponentTeamId: "team-d",
+            playerId: "player-2",
+            entityId: "player-2",
+        });
+
+        const result = validateSlip([nbaLeg, mlbLeg]);
+
+        expect(result.overallStatus).toBe("valid");
+        expect(result.customPricingGroups).toEqual([]);
+        expect(result.pairDecisions[0]?.status).toBe("valid_parlay_leg");
+    });
+
     it("routes full-game and partial-game derivatives to custom pricing", () => {
         const fullGameOver = makeGameLeg({ id: "full-game-over", timeScope: "full_game", line: 220.5 });
         const firstHalfOver = makeGameLeg({
@@ -351,6 +380,138 @@ describe("validateSlip", () => {
         const result = validateSlip([underTwenty, underFifteen]);
         expect(result.nonIncrementalLegIds).toContain("under-20-5");
         expect(result.effectiveLegs.map((leg) => leg.id)).toEqual(["under-15-5"]);
+    });
+
+    it("blocks mutually exclusive soccer result outcomes", () => {
+        const homeWin = makeTeamLeg({
+            id: "soccer-home-win",
+            sport: "Germany Bundesliga",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            entityId: "eve",
+            marketType: "Moneyline 3-Way",
+            marketFamily: "Moneyline 3-Way",
+            outcomeFamily: "moneyline_3way",
+            statType: "moneyline",
+            side: "home",
+            selection: "Everton",
+            line: undefined,
+        });
+        const draw = makeGameLeg({
+            id: "soccer-draw",
+            sport: "Germany Bundesliga",
+            marketType: "Moneyline 3-Way",
+            marketFamily: "Moneyline 3-Way",
+            outcomeFamily: "moneyline_3way",
+            statType: "moneyline",
+            side: undefined,
+            selection: "Draw",
+            line: undefined,
+        });
+
+        const result = validateSlip([homeWin, draw]);
+        expect(result.overallStatus).toBe("blocked");
+        expect(result.blockedLegIds).toEqual(expect.arrayContaining(["soccer-home-win", "soccer-draw"]));
+    });
+
+    it("blocks BTTS yes against under 1.5 total goals", () => {
+        const bttsYes = makeGameLeg({
+            id: "btts-yes",
+            sport: "Soccer",
+            marketType: "Both Teams To Score",
+            marketFamily: "Both Teams To Score",
+            outcomeFamily: "both_teams_to_score",
+            statType: "both_teams_to_score",
+            side: "yes",
+            selection: "Yes",
+            line: undefined,
+        });
+        const underOneHalf = makeGameLeg({
+            id: "under-1-5",
+            sport: "Soccer",
+            marketType: "Total Goals",
+            marketFamily: "Total Goals",
+            outcomeFamily: "game_total",
+            statType: "goals",
+            side: "Under",
+            selection: "Under",
+            line: 1.5,
+        });
+
+        const result = validateSlip([bttsYes, underOneHalf]);
+        expect(result.overallStatus).toBe("blocked");
+        expect(result.blockedLegIds).toEqual(expect.arrayContaining(["btts-yes", "under-1-5"]));
+    });
+
+    it("treats exact score as implying the matching soccer moneyline", () => {
+        const correctScore = makeGameLeg({
+            id: "correct-score",
+            sport: "Soccer",
+            entityType: "game",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            marketType: "Correct Score",
+            marketFamily: "Correct Score",
+            outcomeFamily: "exact_score",
+            statType: "correct_score",
+            selection: "Everton 2-1",
+            line: undefined,
+        });
+        const homeWin = makeTeamLeg({
+            id: "home-win",
+            sport: "Soccer",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            entityId: "eve",
+            marketType: "Moneyline 3-Way",
+            marketFamily: "Moneyline 3-Way",
+            outcomeFamily: "moneyline_3way",
+            statType: "moneyline",
+            side: "home",
+            selection: "Everton",
+            line: undefined,
+        });
+
+        const result = validateSlip([correctScore, homeWin]);
+        expect(result.blockedLegIds).toHaveLength(0);
+        expect(result.nonIncrementalLegIds).toContain("home-win");
+        expect(result.effectiveLegs.map((leg) => leg.id)).toEqual(["correct-score"]);
+    });
+
+    it("blocks soccer player goals overs against the same-team under 0.5 total", () => {
+        const playerGoal = makePlayerLeg({
+            id: "player-goal",
+            sport: "Soccer",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            playerId: "player-9",
+            entityId: "player-9",
+            marketType: "Player Goals",
+            marketFamily: "Player Goals",
+            outcomeFamily: "player_prop",
+            statType: "goals",
+            side: "Over",
+            selection: "Over",
+            line: 0.5,
+        });
+        const teamUnder = makeTeamLeg({
+            id: "team-under",
+            sport: "Soccer",
+            teamId: "eve",
+            opponentTeamId: "liv",
+            entityId: "eve",
+            marketType: "Team Total Goals",
+            marketFamily: "Team Total Goals",
+            outcomeFamily: "team_total",
+            statType: "goals",
+            side: "Under",
+            selection: "Under",
+            line: 0.5,
+        });
+
+        const result = validateSlip([playerGoal, teamUnder]);
+        expect(result.overallStatus).toBe("blocked");
+        expect(result.blockedLegIds).toEqual(expect.arrayContaining(["player-goal", "team-under"]));
     });
 });
 

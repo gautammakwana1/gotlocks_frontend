@@ -15,6 +15,9 @@ const initialState: SlipState = {
     hasMoreOpens: false,
     hasMoreReviews: false,
     hasMoreFinalizes: false,
+    deleteLoading: false,
+    deleteMessage: null,
+    deleteError: null,
 };
 
 const slipSlice = createSlice({
@@ -290,20 +293,20 @@ const slipSlice = createSlice({
 
         deleteSlipRequest: (state, action: PayloadAction<DeleteSlipPayload>) => {
             void action;
-            state.loading = true;
-            state.error = null;
+            state.deleteLoading = true;
+            state.deleteError = null;
         },
         deleteSlipSuccess: (state, action) => {
-            state.loading = false;
-            state.message = action.payload?.message;
+            state.deleteLoading = false;
+            state.deleteMessage = action.payload?.message;
         },
         deleteSlipFailure: (state, action) => {
-            state.loading = false;
-            state.error = action.payload;
+            state.deleteLoading = false;
+            state.deleteError = action.payload;
         },
         clearDeleteSlipMessage(state) {
-            state.error = null;
-            state.message = null;
+            state.deleteError = null;
+            state.deleteMessage = null;
         },
 
         reOpenSlipRequest: (state, action: PayloadAction<ReOpenSlipPayload>) => {

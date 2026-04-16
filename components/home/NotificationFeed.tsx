@@ -119,7 +119,7 @@ const NotificationsFeed = ({
             {notifications.map((notification, index) => {
                 const isLast = index === notifications.length - 1;
                 const actor = notification.sender ?? null;
-                const actorLabel = actor?.username ?? actor?.full_name ?? "gotLocks";
+                const actorLabel = actor?.username ?? actor?.full_name ?? "gotlocks";
                 const initials = buildInitials(actorLabel);
                 const request = notification.follow_request_id ?? undefined;
                 const requestPending =

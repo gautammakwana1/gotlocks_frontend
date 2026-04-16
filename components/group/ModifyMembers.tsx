@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CurrentUser, Member } from "@/lib/interfaces/interfaces";
+import { useEffect, useMemo, useState } from "react";
+import { CurrentUser, GroupSelector, Member, RootState } from "@/lib/interfaces/interfaces";
 import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { useDispatch, useSelector } from "react-redux";
+import { useToast } from "@/lib/state/ToastContext";
+import { clearLeaveGroupMessage, fetchGroupMembersByGroupIdRequest } from "@/lib/redux/slices/groupsSlice";
+import { useRouter } from "next/navigation";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -16,7 +20,7 @@ export type MemberWithRole = Member & {
 
 type Props = {
     currentUser: CurrentUser | null;
-    members: MemberWithRole[];
+    // members: MemberWithRole[];
     onRemoveMember: (
         userId: string
     ) => Promise<{ success: boolean; error?: string }>;
@@ -25,6 +29,7 @@ type Props = {
     ) => Promise<{ success: boolean; error?: string }>;
     onLeaveGroup?: () => void;
     leavingGroup?: boolean;
+    groupId: string;
 };
 
 type ActionState = {
@@ -188,25 +193,78 @@ const MemberCard = ({
 
 export const ModifyMembers = ({
     currentUser,
-    members,
     onRemoveMember,
     onMakeCommissioner,
     onLeaveGroup,
     leavingGroup,
+    groupId,
 }: Props) => {
+    const router = useRouter();
+    const { setToast } = useToast();
+    const dispatch = useDispatch();
     const [actionState, setActionState] = useState<Record<string, ActionState>>({});
     const [pendingAction, setPendingAction] = useState<
         { member: MemberWithRole; kind: "remove" | "promote" | "leave" } | null
     >(null);
     const [confirming, setConfirming] = useState(false);
 
-    const canManage = useMemo(
-        () =>
-            members.some(
-                (member) => member.user_id === currentUser?.userId && member.role === "commissioner"
-            ),
-        [currentUser?.userId, members]
-    );
+    const { members: groupMembers, loadingMembers, membersPagination, leaveLoading, leaveMessage } = useSelector((state: GroupSelector) => state.group);
+    const group = useSelector((state: GroupSelector) => state.group.group);
+
+    useEffect(() => {
+        if (!groupId) return;
+
+        dispatch(
+            fetchGroupMembersByGroupIdRequest({
+                group_id: groupId,
+                page: 1,
+                limit: 12,
+            })
+        );
+    }, [groupId, dispatch]);
+
+    useEffect(() => {
+        if (!leaveLoading && leaveMessage) {
+            setToast({
+                id: Date.now(),
+                type: "success",
+                message: leaveMessage,
+                duration: 3000,
+            });
+            dispatch(clearLeaveGroupMessage());
+            router.replace("/fantasy");
+        }
+    }, [leaveLoading, dispatch, leaveMessage]);
+
+    const handleLoadMore = () => {
+        if (!groupId || !membersPagination || loadingMembers) return;
+        if (membersPagination.page >= membersPagination.total_pages) return;
+
+        dispatch(
+            fetchGroupMembersByGroupIdRequest({
+                group_id: groupId,
+                page: membersPagination.page + 1,
+                limit: 12,
+            })
+        );
+    };
+
+    const displayMembers = useMemo(() => {
+        const source = groupMembers && groupMembers.length > 0 ? groupMembers : [];
+        return source.map((member) => ({
+            ...member,
+            isOwner: member.user_id === group?.created_by,
+        }));
+    }, [groupMembers, group?.created_by]);
+
+    const canManage = useMemo(() => {
+        const source = groupMembers && groupMembers.length > 0 ? groupMembers : [];
+        return source.some(
+            (member) =>
+                member.user_id === currentUser?.userId &&
+                member.role === "commissioner"
+        );
+    }, [currentUser?.userId, groupMembers]);
 
     const updateActionState = (memberId: string, updates: Partial<ActionState>) => {
         setActionState((prev) => ({
@@ -297,11 +355,11 @@ export const ModifyMembers = ({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {members.map((member) => {
+                {displayMembers.map((member) => {
                     const state = member?.user_id ? actionState[member?.user_id] : {};
                     const isCommissioner = member.role === "commissioner";
                     const isOwner = Boolean(member.isOwner ?? isCommissioner);
-                    const isSelf = member.id === currentUser?.userId;
+                    const isSelf = member.user_id === currentUser?.userId;
 
                     const disableRemove = !canManage || isOwner || isSelf;
                     const disablePromote = !canManage || isCommissioner;
@@ -398,6 +456,19 @@ export const ModifyMembers = ({
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {membersPagination && membersPagination.page < membersPagination.total_pages && (
+                <div className="flex justify-center pt-4">
+                    <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={loadingMembers}
+                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-xs font-semibold uppercase tracking-widest text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {loadingMembers ? "Loading..." : "Show more members"}
+                    </button>
                 </div>
             )}
 

@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { getLevelProgress } from "@/lib/utils/progression";
-import { AppNotification, Group, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
+import { AppNotification, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
-import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearJoinedGroupByInviteCodeMessage, fetchMyGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
@@ -18,6 +18,8 @@ import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
 import { MembersIcon, RightArrowIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
+import OnboardingModal from "../modals/OnboardingModal";
+import { completeIntroRequest } from "@/lib/redux/slices/authSlice";
 
 type GroupSliceState = {
     group: {
@@ -31,6 +33,8 @@ type GroupSliceState = {
     joinLoading: boolean;
     error: string | null;
     message: string | null;
+    hasMore: boolean;
+    myGroups: GroupObject[] | null;
 };
 
 type GroupRootState = {
@@ -129,15 +133,17 @@ const HomeTab = () => {
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
     const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
     const [page, setPage] = useState(1);
+    const [groupPage, setGroupPage] = useState(1);
     const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
     const [showScrollTop, setShowScrollTop] = useState(false);
+    const [showOnboarding, setShowOnboarding] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
-    const { group, joinLoading, message, error } = useSelector((state: GroupRootState) => state.group);
+    const { joinLoading, message, error, hasMore: myGroupsHasMore, myGroups, loading: groupLoading } = useSelector((state: GroupRootState) => state.group);
     const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
-    const { progress, picksCount } = useSelector((state: RootState) => state.progress);
-    const { notification, loading: notificationLoader, error: notificaitonErr, message: notificaitonMsg } = useSelector((state: RootState) => state.notifications);
+    const { progress, picksCount, slipsCount, hasSeenIntro, loading: progerssLoading } = useSelector((state: RootState) => state.progress);
+    const { notification } = useSelector((state: RootState) => state.notifications);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -145,7 +151,7 @@ const HomeTab = () => {
     }, [dispatch, limit]);
 
     useEffect(() => {
-        dispatch(fetchAllGroupsRequest({}));
+        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
         dispatch(fetchNotificationListRequest({}));
         fetchData(1);
         if (currentUserId) {
@@ -159,6 +165,10 @@ const HomeTab = () => {
         dispatch(clearFetchAllGlobalPostPicksMessage());
         fetchData(1, page * limit);
     }, [pickLoader, pickMessage, dispatch, page, limit, fetchData]);
+
+    useEffect(() => {
+        setShowOnboarding(!hasSeenIntro);
+    }, [hasSeenIntro]);
 
     useEffect(() => {
         if (Array.isArray(notification)) {
@@ -199,14 +209,15 @@ const HomeTab = () => {
     }, [pickLoader, hasMore, page, fetchData]);
 
     useEffect(() => {
-        if (!joinLoading && message && group) {
+        if (!joinLoading && message) {
             setToast({
                 id: Date.now(),
                 type: "success",
                 message: message,
                 duration: 3000,
             });
-            dispatch(fetchAllGroupsRequest({}));
+            setGroupPage(1);
+            dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
         }
         if (!joinLoading && error) {
             setToast({
@@ -217,7 +228,14 @@ const HomeTab = () => {
             })
         }
         dispatch(clearJoinedGroupByInviteCodeMessage());
-    }, [setToast, dispatch, joinLoading, message, error, router, group]);
+    }, [setToast, dispatch, joinLoading, message, error, router]);
+
+    const handleLoadMoreGroups = useCallback(() => {
+        if (groupLoading || !myGroupsHasMore) return;
+        const nextGroupPage = groupPage + 1;
+        setGroupPage(nextGroupPage);
+        dispatch(fetchMyGroupsRequest({ page: nextGroupPage, limit: 10 }));
+    }, [groupLoading, myGroupsHasMore, groupPage, dispatch]);
 
     const displayHandle = currentUser?.username ?? "Member";
     const { level, xpIntoLevel, xpToNext } = getLevelProgress(
@@ -228,33 +246,33 @@ const HomeTab = () => {
     const winRate = picksCount?.win && picksCount?.total ? (picksCount.win / picksCount.total * 100) : 0;
 
     const sortedGroups = useMemo(() => {
-        if (!group?.data?.groups) return [];
+        if (!Array.isArray(myGroups) || !myGroups.length) return [];
 
-        const groups = group.data.groups;
+        const groups = myGroups;
 
         if (!currentUser?.userId) return groups;
 
         const commissionerGroups = groups.filter(
-            (g: Group) => g.created_by === currentUser.userId
+            (g: GroupObject) => g.created_by === currentUser.userId
         );
         const memberGroups = groups.filter(
-            (g: Group) => g.created_by !== currentUser.userId
+            (g: GroupObject) => g.created_by !== currentUser.userId
         );
 
         return [...commissionerGroups, ...memberGroups];
-    }, [group?.data?.groups, currentUser?.userId]);
+    }, [myGroups, currentUser?.userId]);
 
-    const openSlips = useMemo(
-        () => sortedGroups?.reduce(
-            (total, group) => total + (group?.open_slip ?? 0),
-            0
-        ) ?? 0,
-        [sortedGroups]
-    );
     const orderedGroups = useMemo(
         () => [...sortedGroups].reverse(),
         [sortedGroups]
     );
+
+    useEffect(() => {
+        if (activeLeagueIndex >= orderedGroups.length - 2 && myGroupsHasMore && !groupLoading) {
+            handleLoadMoreGroups();
+        }
+    }, [activeLeagueIndex, orderedGroups.length, myGroupsHasMore, groupLoading, handleLoadMoreGroups]);
+
     const carouselGroups = useMemo(
         () =>
             orderedGroups.length > 1
@@ -537,6 +555,13 @@ const HomeTab = () => {
         dispatch(clearAllNotificationRequest({}));
     }, [dispatch]);
 
+    const handleCompleteIntro = () => {
+        setShowOnboarding(false);
+        if (!hasSeenIntro) {
+            dispatch(completeIntroRequest({}));
+        }
+    };
+
     const stats: StatDefinition[] = [
         {
             label: "Leagues",
@@ -544,7 +569,7 @@ const HomeTab = () => {
         },
         {
             label: "Active slips",
-            value: String(openSlips),
+            value: String(slipsCount?.open_slip ?? 0),
         },
         {
             label: "Global points",
@@ -685,7 +710,7 @@ const HomeTab = () => {
                                                         "Run slips, share picks, and climb the table together."}
                                                 </p>
                                                 <span className="text-[9px] uppercase tracking-[0.16em] text-gray-400">
-                                                    {group.members?.length} members
+                                                    {group.member_count} members
                                                 </span>
                                             </button>
                                         ))}
@@ -744,7 +769,7 @@ const HomeTab = () => {
                                                     "Run slips, share picks, and climb the table together."}
                                             </p>
                                             <span className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
-                                                {group.members?.length} members
+                                                {group.member_count} members
                                             </span>
                                         </button>
                                     ))}
@@ -834,6 +859,9 @@ const HomeTab = () => {
                     )}
                 </div>
             </section>
+            {showOnboarding && (
+                <OnboardingModal open={showOnboarding} onClose={handleCompleteIntro} />
+            )}
             {joinOpen && (
                 <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">
                     <form onSubmit={handleJoin} className="space-y-4 text-center">

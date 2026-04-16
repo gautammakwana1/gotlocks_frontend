@@ -2,17 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BuiltPickPayload, Group, PickSliceState, PickType, Slip, SlipSliceState, SlipState } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, Group, GroupObject, PickSliceState, PickType, Slip, SlipState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { isGameEligible } from "@/lib/utils/games";
 import PickBuilderShell from "@/components/pick-builder/PickBuilderShell";
-import { fetchAllGroupsRequest } from "@/lib/redux/slices/groupsSlice";
-import { formatDateTime } from "@/lib/utils/date";
+import { fetchMyGroupsRequest } from "@/lib/redux/slices/groupsSlice";
+import { formatDateTime, toLocalDateKeyFromUTC } from "@/lib/utils/date";
 import { clearCreatePostPickMessage, createPickRequest, createPostPickRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { canUserEditSlipPicks } from "@/lib/slips/state";
+import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
 
 type GroupSliceState = {
     group: {
@@ -25,6 +26,8 @@ type GroupSliceState = {
     joinLoading: boolean;
     error: string | null;
     message: string | null;
+    hasMore: boolean;
+    myGroups: GroupObject[] | null;
 };
 
 type RootState = {
@@ -86,15 +89,18 @@ const PickBuilderClientPage = () => {
     const [flowStage, setFlowStage] = useState<FlowStage>("choose");
     const [builderIntent, setBuilderIntent] = useState<BuilderIntent | null>(null);
     const [hasHandledIntent, setHasHandledIntent] = useState(false);
+    const [page, setPage] = useState(1);
     const lastIntentRef = useRef<string | null>(null);
     const intentParam = searchParams.get("intent");
 
-    const { group } = useSelector((state: RootState) => state.group);
+    const { myGroups, hasMore, loading: groupLoading } = useSelector((state: RootState) => state.group);
     const { loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
     const { slips: slipList } = useSelector((state: RootState) => state.slip);
 
     useEffect(() => {
-        dispatch(fetchAllGroupsRequest({}));
+        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+        const todayDateKey = toLocalDateKeyFromUTC(new Date().toISOString());
+        dispatch(fetchLeaguesCountsRequest({ date: todayDateKey }));
     }, [dispatch]);
 
     const slips: Slip[] = useMemo(() => {
@@ -134,21 +140,21 @@ const PickBuilderClientPage = () => {
     }, [dispatch, pickMessage, pickError, pickLoader, setToast]);
 
     const sortedGroups = useMemo(() => {
-        if (!group?.data?.groups) return [];
+        if (!Array.isArray(myGroups) || !myGroups.length) return [];
 
-        const groups = group.data.groups;
+        const groups = myGroups;
 
         if (!currentUser?.userId) return groups;
 
         const commissionerGroups = groups.filter(
-            (g: Group) => g.created_by === currentUser.userId
+            (g: GroupObject) => g.created_by === currentUser.userId
         );
         const memberGroups = groups.filter(
-            (g: Group) => g.created_by !== currentUser.userId
+            (g: GroupObject) => g.created_by !== currentUser.userId
         );
 
         return [...commissionerGroups, ...memberGroups];
-    }, [group?.data?.groups, currentUser?.userId]);
+    }, [myGroups, currentUser?.userId]);
 
     // const destinations = useMemo(() => {
     //     const sportKey = normalizeSport(completedPick?.sport);
@@ -285,6 +291,12 @@ const PickBuilderClientPage = () => {
         openDestinationSheet(payload);
     };
 
+    const handleLoadMore = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        dispatch(fetchMyGroupsRequest({ page: nextPage, limit: 10 }));
+    };
+
     const renderChooseGrid = () => {
         const pickCardClasses =
             "flex h-[10rem] flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6";
@@ -367,12 +379,28 @@ const PickBuilderClientPage = () => {
                             <div>
                                 <p className="text-sm font-semibold text-white">{group.name}</p>
                                 <p className="text-xs uppercase tracking-wide text-gray-400">
-                                    {`${group?.members?.length ?? 0} member${(group?.members?.length ?? 0) === 1 ? "" : "s"}`}
+                                    {`${group?.member_count ?? 0} member${(group?.member_count ?? 0) === 1 ? "" : "s"}`}
                                 </p>
                             </div>
                             <span className="text-xs font-semibold text-emerald-100">Go to slips</span>
                         </button>
                     ))}
+                </div>
+            )}
+
+            {hasMore && (
+                <div className="flex justify-center pt-2">
+                    <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={groupLoading}
+                        className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-semibold text-gray-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {groupLoading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                        ) : null}
+                        Show more
+                    </button>
                 </div>
             )}
         </div>

@@ -5,11 +5,11 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchAllGroupsRequest } from "@/lib/redux/slices/groupsSlice";
+import { fetchMyGroupsRequest } from "@/lib/redux/slices/groupsSlice";
 import { useRouter } from "next/navigation";
 import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/redux/slices/authSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { AuthSliceState, Group } from "@/lib/interfaces/interfaces";
+import { AuthSliceState, Group, GroupObject } from "@/lib/interfaces/interfaces";
 import { ArrowLeft } from "lucide-react";
 
 type GroupSliceState = {
@@ -23,6 +23,8 @@ type GroupSliceState = {
     joinLoading: boolean;
     error: string | null;
     message: string | null;
+    hasMore: boolean;
+    myGroups: GroupObject[] | null;
 };
 
 type RootState = {
@@ -43,12 +45,13 @@ const DeleteAccountPage = () => {
     const [acknowledged, setAcknowledged] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [hasStartedDeleteFlow, setHasStartedDeleteFlow] = useState(false);
+    const [page, setPage] = useState(1);
 
-    const { group, loading: groupLoading } = useSelector((state: RootState) => state.group);
+    const { loading: groupLoading, myGroups, hasMore } = useSelector((state: RootState) => state.group);
     const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
 
     useEffect(() => {
-        dispatch(fetchAllGroupsRequest({}));
+        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
     }, [dispatch]);
 
     useEffect(() => {
@@ -60,8 +63,12 @@ const DeleteAccountPage = () => {
                 duration: 3000
             });
             dispatch(clearDeleteAccountMessage());
-            dispatch(logout());
-            router.replace("/landing-page");
+            (async () => {
+                const { supabase } = await import("@/lib/supabaseClient");
+                await supabase.auth.signOut();
+                dispatch(logout());
+                router.replace("/landing-page");
+            })();
         }
         if (!authLoader && authError) {
             setToast({
@@ -74,21 +81,16 @@ const DeleteAccountPage = () => {
         }
     }, [dispatch, authLoader, authMessage]);
 
-    const groupsData = group?.data?.groups || [];
-
     const { commissionerGroups, memberGroups } = useMemo(() => {
-        if (!currentUser?.userId) {
-            return {
-                sortedGroups: groupsData,
-                commissionerGroups: [],
-                memberGroups: [],
-            };
-        }
+        if (!Array.isArray(myGroups) || !myGroups.length || !currentUser?.userId) return {
+            commissionerGroups: [],
+            memberGroups: [],
+        };
 
-        const commissioner: Group[] = [];
-        const member: Group[] = [];
+        const commissioner: GroupObject[] = [];
+        const member: GroupObject[] = [];
 
-        groupsData.forEach((g) => {
+        myGroups.forEach((g) => {
             (g.created_by === currentUser.userId
                 ? commissioner
                 : member
@@ -99,7 +101,7 @@ const DeleteAccountPage = () => {
             commissionerGroups: commissioner,
             memberGroups: member,
         };
-    }, [groupsData, currentUser?.userId]);
+    }, [myGroups, currentUser?.userId]);
 
     if (!currentUser) return null;
 
@@ -157,7 +159,13 @@ const DeleteAccountPage = () => {
         dispatch(deleteAccountRequest({}));
     };
 
-    if (groupLoading) {
+    const handleLoadMore = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        dispatch(fetchMyGroupsRequest({ page: nextPage, limit: 10 }));
+    };
+
+    if (groupLoading && (!myGroups || page === 1)) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="w-48 max-w-[70vw] sm:w-60">
                 <FootballAnimation />
@@ -233,7 +241,7 @@ const DeleteAccountPage = () => {
                                                 {group.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {group?.members?.length ?? 0} members · invite code {group.invite_code}
+                                                {group?.member_count ?? 0} members · invite code {group.invite_code}
                                             </p>
                                         </div>
                                         <Link
@@ -269,7 +277,7 @@ const DeleteAccountPage = () => {
                                                 {group.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {group?.members?.length ?? 0} members · invite code {group.invite_code}
+                                                {group?.member_count ?? 0} members · invite code {group.invite_code}
                                             </p>
                                         </div>
                                         <Link
@@ -281,6 +289,22 @@ const DeleteAccountPage = () => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {hasMore && (
+                        <div className="flex justify-center pt-2">
+                            <button
+                                type="button"
+                                onClick={handleLoadMore}
+                                disabled={groupLoading}
+                                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-semibold text-gray-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {groupLoading ? (
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                                ) : null}
+                                Show more
+                            </button>
                         </div>
                     )}
 

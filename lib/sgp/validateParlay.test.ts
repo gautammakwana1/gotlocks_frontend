@@ -178,4 +178,61 @@ describe("normalizeOddToLeg", () => {
 
         expect(leg.displayName).toBe("Houston Rockets +3.5 1st Half Spread");
     });
+
+    it("normalizes run and puck style line markets as spread-like team outcomes", () => {
+        const leg = normalizeOddToLeg(
+            makeEvent(),
+            makeOdd({
+                market: "1st Period Puck Line",
+                name: "Houston Rockets +1.5",
+                selection: { name: "Houston Rockets", line: 1.5 },
+            })
+        );
+
+        expect(leg.entityType).toBe("team");
+        expect(leg.outcomeFamily).toBe("spread");
+        expect(leg.side).toBe("home");
+        expect(leg.timeScope).toBe("first_period");
+    });
+
+    it("normalizes soccer handicap as a team spread leg", () => {
+        const leg = normalizeOddToLeg(
+            {
+                ...makeEvent(),
+                teams: {
+                    away: { id: "eve", name: "Everton", abbreviation: "EVE" },
+                    home: { id: "liv", name: "Liverpool", abbreviation: "LIV" },
+                },
+            },
+            makeOdd({
+                market: "Handicap",
+                name: "Everton +1.5",
+                selection: { name: "Everton", line: 1.5 },
+            })
+        );
+
+        expect(leg.entityType).toBe("team");
+        expect(leg.outcomeFamily).toBe("spread");
+        expect(leg.side).toBe("away");
+    });
+
+    it("preserves soccer correct score selections from the odd name", () => {
+        const leg = normalizeOddToLeg(
+            {
+                ...makeEvent(),
+                teams: {
+                    away: { id: "eve", name: "Everton", abbreviation: "EVE" },
+                    home: { id: "liv", name: "Liverpool", abbreviation: "LIV" },
+                },
+            },
+            makeOdd({
+                market: "Correct Score",
+                name: "Everton 2-1",
+                selection: { name: "Everton" },
+            })
+        );
+
+        expect(leg.outcomeFamily).toBe("exact_score");
+        expect(leg.selection).toBe("Everton 2-1");
+    });
 });

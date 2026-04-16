@@ -7,12 +7,12 @@ import {
     useRef,
     useState,
 } from "react";
-import { DifficultyLabel, Group, Leaderboard, leaderboardSlip, Member, Pick, PickResult, Slip, Slips, TierIndex } from "@/lib/interfaces/interfaces";
+import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, Slips, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { getGroupTierColor, getGroupTierName, getTierMetaForPick, GROUP_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/utils/date";
-import { isSlipFinal, isSlipTimeLocked } from "@/lib/slips/state";
+import { isSlipFinal, isSlipTimeLocked, SlipLike } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
@@ -20,56 +20,17 @@ import { generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 
 type Props = {
     group: Group | null;
-    slips: Slips;
-    users: Member[];
-    picks: Pick[];
     leaderboard: Leaderboard[];
     currentUserId?: string;
     leaderboardId: string;
     leaderboardName?: string;
     leaderboardSlips: Slip[];
+    archivedLeaderboardSlips: ArchiveLeaderboardSlip[];
     onLoadMore?: () => void;
     hasMore?: boolean;
     loadingMore?: boolean;
+    isArchived: boolean;
 };
-
-// const glowClassesForCumulative = (cumulative: number) => {
-//     if (cumulative < 0) {
-//         return {
-//             cardGlow: "from-rose-500/25 via-rose-500/12 to-transparent",
-//             ring: "ring-rose-300/70 shadow-[0_0_30px_rgba(244,63,94,0.25)]",
-//             mobileTint: "border-rose-300/40 bg-rose-500/[0.08]",
-//         };
-//     }
-//     if (cumulative > 0) {
-//         return {
-//             cardGlow: "from-emerald-500/25 via-emerald-500/10 to-transparent",
-//             ring: "ring-emerald-300/70 shadow-[0_0_30px_rgba(16,185,129,0.25)]",
-//             mobileTint: "border-emerald-300/40 bg-emerald-500/[0.07]",
-//         };
-//     }
-//     return {
-//         cardGlow: "from-white/20 via-white/10 to-transparent",
-//         ring: "ring-white/30 shadow-[0_0_28px_rgba(255,255,255,0.18)]",
-//         mobileTint: "border-white/20 bg-white/[0.06]",
-//     };
-// };
-
-// export const useIsMobile = () => {
-//     const [isMobile, setIsMobile] = useState(false);
-
-//     useEffect(() => {
-//         const mql = window.matchMedia("(max-width: 639px)");
-//         const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
-
-//         setIsMobile(mql.matches);
-//         mql.addEventListener("change", onChange);
-
-//         return () => mql.removeEventListener("change", onChange);
-//     }, []);
-
-//     return isMobile;
-// };
 
 const resultMeta = (pick_result?: PickResult) => {
     const result = pick_result ?? "pending";
@@ -170,7 +131,6 @@ const pickTierMeta = (pick?: { odds_bracket: string, slip_points: number, pick_d
     };
 };
 
-// const computeResultPoints = (pick?: Pick) => getPickPoints(pick, "groupLeaderboard");
 const computeResultPoints = (pick_difficulty_label?: DifficultyLabel | null, result?: string, points?: number, odds_bracket?: string) => {
     if (!result || !points) return 0;
     if (result === "loss") return LOSS_PICK_POINTS;
@@ -328,7 +288,7 @@ const SlipCellCard = ({
     fallbackMatchup,
 }: {
     pick?: leaderboardSlip;
-    slip: Slip;
+    slip: SlipLike;
     isOwnerCell: boolean;
     groupId?: string;
     isMobile: boolean;
@@ -516,15 +476,16 @@ const SlipCellCard = ({
 
 export const LeaderboardGrid = ({
     group,
-    slips,
     leaderboard,
     currentUserId,
     leaderboardName,
     leaderboardId,
     leaderboardSlips,
+    archivedLeaderboardSlips,
     onLoadMore,
     hasMore,
     loadingMore,
+    isArchived,
 }: Props) => {
     const isMobile = useIsMobile();
     const scrollerRef = useRef<HTMLDivElement>(null);
@@ -574,23 +535,25 @@ export const LeaderboardGrid = ({
     const STICKY_WIDTH = Math.max(PLAYER_CARD_W, RANK_COL_W);
 
     const gradedSlips = useMemo(
-        () =>
-            slips
-                .filter(
-                    (slip) =>
-                        // slip.group_id === group?.id && slip.isGraded && slip.status === "final" && slip.slip_type === "fantasy"
-                        slip.group_id === group?.id && slip.isGraded && slip.slip_type === "fantasy"
-                ),
-        [group?.id, slips]
+        () => {
+            if (isArchived) {
+                return archivedLeaderboardSlips;
+            }
+            return leaderboardSlips.filter(
+                (slip) =>
+                    slip.group_id === group?.id && slip.isGraded && slip.slip_type === "fantasy"
+            );
+        },
+        [group?.id, leaderboardSlips, isArchived, archivedLeaderboardSlips]
     );
     const leaderboardAllSlips = useMemo(
-        () =>
-            slips
-                .filter(
-                    (slip) =>
-                        slip.group_id === group?.id && slip.isGraded && slip.slip_type === "fantasy"
-                ),
-        [group?.id, slips]
+        () => {
+            if (isArchived) {
+                return archivedLeaderboardSlips;
+            }
+            return leaderboardSlips;
+        },
+        [isArchived, archivedLeaderboardSlips, leaderboardSlips]
     );
 
     const groupMembers = useMemo(() => {
@@ -615,33 +578,9 @@ export const LeaderboardGrid = ({
         scrollerRef.current?.scrollTo({ left: 0, behavior: "auto" });
     }, [leaderboardId]);
 
-    // useLayoutEffect(() => {
-    //     const node = containerRef.current;
-    //     if (!node) return;
-
-    //     measureWidth();
-    //     const observer =
-    //         typeof ResizeObserver !== "undefined"
-    //             ? new ResizeObserver(() => measureWidth())
-    //             : null;
-
-    //     window.addEventListener("resize", measureWidth);
-    //     observer?.observe(node);
-
-    //     return () => {
-    //         window.removeEventListener("resize", measureWidth);
-    //         observer?.disconnect();
-    //     };
-    // }, [measureWidth]);
-
-    // useLayoutEffect(() => {
-    //     const raf = requestAnimationFrame(() => measureWidth());
-    //     return () => cancelAnimationFrame(raf);
-    // }, [leaderboardId, measureWidth]);
-
     const label = leaderboardName ?? "Leaderboard";
 
-    const showStandingsNote = leaderboardAllSlips.length < 0 && gradedSlips.length === 0;
+    const showStandingsNote = leaderboardAllSlips.length > 0 && gradedSlips.length === 0;
 
     if (!groupMembers?.length) {
         return (

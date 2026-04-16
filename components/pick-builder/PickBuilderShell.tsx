@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, Members, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, GroupObject, League, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import NbaPickBuilder from "./NbaPickBuilder";
 import NflPickBuilder from "./NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
@@ -18,6 +18,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
 import { ReviewSheetState } from "./reviewSheetState";
 import MlbPickBuilder from "./MlbPickBuilder";
+import FootballAnimation from "../animations/FootballAnimation";
+import { FALLBACK_LEAGUE } from "@/lib/constants";
+import SoccerPickBuilder from "./SoccerPickBuilder";
+import { toLocalDateKeyFromUTC } from "@/lib/utils/date";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -33,9 +37,7 @@ type SlipBuilderContext = {
 
 type StandaloneBuilderContext = {
     mode: "standalone";
-    group?: (Group & {
-        members?: Members;
-    })[];
+    group?: GroupObject[];
     slip: Slip[];
     currentUser: CurrentUser | null;
     intent?: "post";
@@ -236,9 +238,10 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     const [hasManualLeagueSelection, setHasManualLeagueSelection] = useState(false);
     const [hasAutoSelectedLeague, setHasAutoSelectedLeague] = useState(false);
 
-    const { leagueCounts } = useSelector((state: RootState) => state.league);
+    const { leagueCounts, loading } = useSelector((state: RootState) => state.league);
 
     useEffect(() => {
+        // const todayDateKey = toLocalDateKeyFromUTC(new Date().toISOString());
         if (activeDateKey) {
             dispatch(fetchLeaguesCountsRequest({ date: activeDateKey }));
         }
@@ -255,6 +258,9 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     }, [props.initialLeague, context]);
 
     const sortedLeagues = useMemo(() => {
+        if (!leagues.length) {
+            return [FALLBACK_LEAGUE];
+        }
         const filtered = [...leagues].filter((l) => {
             const count = leagueCounts?.[l] ?? 0;
             if (leagues.length > 1) {
@@ -262,6 +268,10 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
             }
             return count > 0 || l === initialLeagueBasis;
         });
+
+        if (!filtered.length) {
+            return [FALLBACK_LEAGUE];
+        }
 
         return filtered.sort((a, b) => {
             const countA = leagueCounts?.[a] ?? 0;
@@ -754,6 +764,63 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
             }
         }
 
+        if (activeLeague === "Soccer") {
+            if (context.mode === "slip") {
+                return (
+                    <SoccerPickBuilder
+                        sport={activeLeague}
+                        group={context.group}
+                        slip={context.slip}
+                        currentUser={context.currentUser}
+                        picks={context.picks}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCancel={onDismiss}
+                        isCommissioner={context.isCommissioner}
+                        showCurrentPick={context.showCurrentPick}
+                        enforceEligibilityWindow
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+
+            if (standaloneGroup && standaloneSlip) {
+                return (
+                    <SoccerPickBuilder
+                        sport={activeLeague}
+                        group={standaloneGroup}
+                        slip={standaloneSlip}
+                        currentUser={context.currentUser}
+                        picks={[]}
+                        initialPick={context.initialPick}
+                        onSave={handleComplete}
+                        onCreatePostPick={context.onCreatePostPick}
+                        onPostToSlip={context.onPostToSlip}
+                        onCancel={onDismiss}
+                        isCommissioner
+                        showCurrentPick
+                        builderMode={context.intent}
+                        enforceEligibilityWindow={false}
+                        draftPick={draftPick}
+                        onDraftPickChange={setDraftPick}
+                        activeDateKey={activeDateKey}
+                        onDateChange={handleDateChange}
+                        allowAutoDateAdvance={!hasManualDateSelection}
+                        hideDateControls
+                        onDateOptionsChange={handleDateOptionsChange}
+                        {...sharedParlayProps}
+                    />
+                );
+            }
+        }
+
         return (
             <StubLeagueBuilder
                 league={activeLeague}
@@ -765,7 +832,15 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         );
     })();
 
-    if (allowedLeagues.length === 0) return null;
+    if (loading) {
+        return (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="w-48 max-w-[70vw] sm:w-60">
+                    <FootballAnimation />
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-4">

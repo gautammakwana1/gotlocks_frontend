@@ -232,7 +232,7 @@ const FeedList = ({
                                 onClick={() => handleViewProfile(item.user_id)}
                                 className="group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5"
                             >
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-emerald-100">
+                                <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-emerald-100">
                                     {profileImg ? (
                                         <Image
                                             src={profileImg}
@@ -357,9 +357,9 @@ const FeedList = ({
                                                 {!showComboLegs && (
                                                     <>
                                                         <div className="mt-3 h-px w-full bg-white/10" />
-                                                        <div className="mt-3 flex min-w-0 items-start justify-between gap-3">
-                                                            <div className="min-w-0 flex flex-1 items-start gap-2">
-                                                                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                        <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
+                                                            <div className="min-w-0 flex flex-1 items-center gap-2">
+                                                                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
                                                                 <div className="min-w-0 flex-1">
                                                                     {detailCategoryLabel && (
                                                                         <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
@@ -380,7 +380,7 @@ const FeedList = ({
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-col items-end gap-1 pt-2">
-                                                                <span className="text-[11px] font-semibold text-slate-100">
+                                                                <span className="text-[11px] font-semibold text-cyan-200">
                                                                     {oddsCopy}
                                                                 </span>
                                                             </div>

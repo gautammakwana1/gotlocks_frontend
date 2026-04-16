@@ -133,7 +133,6 @@ const SocialPage = () => {
         setPage(1);
         setHasMore(true);
         fetchDataByTab(1);
-        dispatch(fetchFollowingListRequest());
     }, [activeTab, forYouScope, topHitsScope, dispatch]);
 
     useEffect(() => {
@@ -323,7 +322,7 @@ const SocialPage = () => {
                                 }}
                                 className="group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5"
                             >
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-emerald-100">
+                                <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-emerald-100">
                                     {profileImg ? (
                                         <Image
                                             src={profileImg}
@@ -580,6 +579,11 @@ const SocialPage = () => {
         </div>
     );
 
+    const handleUserSearch = () => {
+        dispatch(fetchFollowingListRequest());
+        setIsUserSearchOpen(true);
+    }
+
     if (!currentUser) {
         return (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -601,7 +605,7 @@ const SocialPage = () => {
                             {renderTabButton("top-hits", "winners")}
                             <button
                                 type="button"
-                                onClick={() => setIsUserSearchOpen(true)}
+                                onClick={handleUserSearch}
                                 aria-label="Search members"
                                 className={`flex h-8 w-8 shrink-0 items-center justify-center transition sm:h-9 sm:w-9 ${isUserSearchOpen
                                     ? "text-white"

@@ -8,6 +8,21 @@ export type SlipTimeScope =
     | "second_quarter"
     | "third_quarter"
     | "fourth_quarter"
+    | "first_period"
+    | "second_period"
+    | "third_period"
+    | "first_inning"
+    | "second_inning"
+    | "third_inning"
+    | "fourth_inning"
+    | "fifth_inning"
+    | "sixth_inning"
+    | "seventh_inning"
+    | "eighth_inning"
+    | "ninth_inning"
+    | "first_three_innings"
+    | "first_five_innings"
+    | "first_seven_innings"
     | "live_segment";
 
 export type SlipSide = "Over" | "Under" | "home" | "away" | "yes" | "no";
@@ -103,6 +118,17 @@ type NormalizedThreshold = {
     operator: "Over" | "Under" | null;
 };
 
+type SoccerResultState = "home" | "draw" | "away";
+type OutcomeResolutionValue = "win" | "lose" | "void";
+type SoccerResultResolution = Record<SoccerResultState, OutcomeResolutionValue>;
+type ParsedSoccerScore = {
+    teamGoals: number;
+    opponentGoals: number;
+    totalGoals: number;
+    bothTeamsScore: boolean;
+    result: "team" | "draw" | "opponent";
+};
+
 const NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
 const POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
 
@@ -114,10 +140,14 @@ export const DEFAULT_VALIDATION_CONFIG: ValidationConfig = {
 
 const mutuallyExclusiveOutcomeFamilies = new Set([
     "exact_score",
+    "moneyline_3way",
+    "both_teams_to_score",
     "first_basket",
     "first_field_goal",
+    "first_team_to_score",
     "first_touchdown_scorer",
     "first_goal_scorer",
+    "last_team_to_score",
 ]);
 
 const normalizeText = (value?: string | null) =>
@@ -159,10 +189,25 @@ const resolveTimeScope = (leg: SlipLeg): SlipTimeScope => leg.timeScope ?? "full
 const resolveMarketFamily = (leg: SlipLeg) =>
     normalizeText(leg.marketFamily || leg.marketType);
 
+const resolveSportKey = (leg: SlipLeg) => normalizeText(leg.league || leg.sport);
+
 const resolveStatType = (leg: SlipLeg) => {
     if (leg.statType) return normalizeText(leg.statType);
 
     const token = resolveMarketFamily(leg);
+    if (token.includes("both teams to score")) return "both_teams_to_score";
+    if (token.includes("draw no bet")) return "draw_no_bet";
+    if (token.includes("double chance")) return "double_chance";
+    if (token.includes("first team to score")) return "first_team_to_score";
+    if (token.includes("last team to score")) return "last_team_to_score";
+    if (token.includes("correct score")) return "correct_score";
+    if (token.includes("shots on target")) return "shots_on_target";
+    if (token.includes("player shots")) return "shots";
+    if (token.includes("player goals")) return "goals";
+    if (token.includes("corners odd/even")) return "corners_odd_even";
+    if (token.includes("corners")) return "corners";
+    if (token.includes("goals")) return "goals";
+    if (token.includes("handicap")) return "spread";
     if (token.includes("points + rebounds + assists")) return "points_rebounds_assists";
     if (token.includes("points + rebounds")) return "points_rebounds";
     if (token.includes("points + assists")) return "points_assists";
@@ -178,6 +223,8 @@ const resolveStatType = (leg: SlipLeg) => {
     if (token.includes("rush yards")) return "rush_yards";
     if (token.includes("receiving yards")) return "receiving_yards";
     if (token.includes("hits")) return "hits";
+    if (token.includes("puck line")) return "spread";
+    if (token.includes("run line")) return "spread";
     if (token.includes("moneyline")) return "moneyline";
     if (token.includes("spread")) return "spread";
     if (token.includes("team total")) return "team_total";
@@ -192,7 +239,18 @@ const resolveOutcomeFamily = (leg: SlipLeg) => {
     if (leg.outcomeFamily) return normalizeText(leg.outcomeFamily);
 
     const token = resolveMarketFamily(leg);
+    if (token.includes("moneyline 3-way")) return "moneyline_3way";
+    if (token.includes("draw no bet")) return "draw_no_bet";
+    if (token.includes("double chance")) return "double_chance";
+    if (token.includes("both teams to score")) return "both_teams_to_score";
+    if (token.includes("first team to score")) return "first_team_to_score";
+    if (token.includes("last team to score")) return "last_team_to_score";
+    if (token.includes("correct score")) return "exact_score";
+    if (token.includes("handicap")) return "spread";
+    if (token.includes("corners odd/even")) return "odd_even";
     if (token.includes("moneyline")) return "moneyline";
+    if (token.includes("puck line")) return "spread";
+    if (token.includes("run line")) return "spread";
     if (token.includes("spread")) return "spread";
     if (token.includes("team total")) return "team_total";
     if (token.includes("total")) return "game_total";
@@ -276,6 +334,312 @@ const normalizeThreshold = (leg: SlipLeg): NormalizedThreshold => {
                     ? "Over"
                     : null,
     };
+};
+
+const SOCCER_RESULT_STATES: SoccerResultState[] = ["home", "draw", "away"];
+
+const isSoccerLeg = (leg: SlipLeg) => {
+    const sportKey = resolveSportKey(leg);
+    if (
+        sportKey === "soccer" ||
+        sportKey.includes("premier league") ||
+        sportKey.includes("bundesliga")
+    ) {
+        return true;
+    }
+
+    const family = resolveOutcomeFamily(leg);
+    return (
+        family === "moneyline_3way" ||
+        family === "draw_no_bet" ||
+        family === "double_chance" ||
+        family === "both_teams_to_score" ||
+        family === "first_team_to_score" ||
+        family === "last_team_to_score" ||
+        family === "exact_score"
+    );
+};
+
+const soccerSelectionToken = (leg: SlipLeg) => normalizeText(leg.selection);
+
+const buildSoccerResultResolution = (leg: SlipLeg): SoccerResultResolution | null => {
+    if (!isSoccerLeg(leg)) return null;
+
+    const family = resolveOutcomeFamily(leg);
+    const side = resolveComparableSide(leg);
+    const selection = soccerSelectionToken(leg);
+
+    if (family === "moneyline_3way" || family === "moneyline") {
+        if (selection.includes("draw")) {
+            return { home: "lose", draw: "win", away: "lose" };
+        }
+        if (side === "home") {
+            return { home: "win", draw: "lose", away: "lose" };
+        }
+        if (side === "away") {
+            return { home: "lose", draw: "lose", away: "win" };
+        }
+    }
+
+    if (family === "draw_no_bet") {
+        if (leg.teamId && side === "home") {
+            return { home: "win", draw: "void", away: "lose" };
+        }
+        if (leg.teamId && side === "away") {
+            return { home: "lose", draw: "void", away: "win" };
+        }
+    }
+
+    if (family === "double_chance") {
+        if (selection.includes("draw")) {
+            if (leg.teamId && side === "home") {
+                return { home: "win", draw: "win", away: "lose" };
+            }
+            if (leg.teamId && side === "away") {
+                return { home: "lose", draw: "win", away: "win" };
+            }
+        }
+
+        if (!selection.includes("draw")) {
+            return { home: "win", draw: "lose", away: "win" };
+        }
+    }
+
+    return null;
+};
+
+const soccerResolutionsEqual = (
+    left: SoccerResultResolution,
+    right: SoccerResultResolution
+) =>
+    SOCCER_RESULT_STATES.every((state) => left[state] === right[state]);
+
+const soccerPairCanCash = (
+    left: SoccerResultResolution,
+    right: SoccerResultResolution
+) =>
+    SOCCER_RESULT_STATES.some((state) => {
+        const leftOutcome = left[state];
+        const rightOutcome = right[state];
+        return (
+            leftOutcome !== "lose" &&
+            rightOutcome !== "lose" &&
+            (leftOutcome === "win" || rightOutcome === "win")
+        );
+    });
+
+const soccerResolutionImplies = (
+    source: SoccerResultResolution,
+    target: SoccerResultResolution
+) =>
+    SOCCER_RESULT_STATES.every(
+        (state) => source[state] !== "win" || target[state] !== "lose"
+    );
+
+const parseSoccerScore = (leg: SlipLeg): ParsedSoccerScore | null => {
+    if (!isSoccerLeg(leg) || resolveOutcomeFamily(leg) !== "exact_score") return null;
+
+    const match = leg.selection?.match(/(\d+)\s*-\s*(\d+)/);
+    if (!match) return null;
+
+    const teamGoals = Number(match[1]);
+    const opponentGoals = Number(match[2]);
+    if (!Number.isFinite(teamGoals) || !Number.isFinite(opponentGoals)) return null;
+
+    return {
+        teamGoals,
+        opponentGoals,
+        totalGoals: teamGoals + opponentGoals,
+        bothTeamsScore: teamGoals > 0 && opponentGoals > 0,
+        result:
+            teamGoals === opponentGoals
+                ? "draw"
+                : teamGoals > opponentGoals
+                    ? "team"
+                    : "opponent",
+    };
+};
+
+const legOutcomeAgainstSoccerScore = (
+    leg: SlipLeg,
+    scoreLeg: SlipLeg
+): OutcomeResolutionValue | null => {
+    const score = parseSoccerScore(scoreLeg);
+    if (!score || !isSameEvent(leg, scoreLeg)) return null;
+    if (resolveTimeScope(leg) !== resolveTimeScope(scoreLeg)) return null;
+
+    const family = resolveOutcomeFamily(leg);
+    const side = resolveComparableSide(leg);
+    const threshold = normalizeThreshold(leg);
+    const selection = soccerSelectionToken(leg);
+
+    if (family === "both_teams_to_score") {
+        if (side === "yes") return score.bothTeamsScore ? "win" : "lose";
+        if (side === "no") return score.bothTeamsScore ? "lose" : "win";
+        return null;
+    }
+
+    if (family === "game_total") {
+        if (threshold.value === null || threshold.operator === null) return null;
+        return threshold.operator === "Over"
+            ? score.totalGoals > threshold.value
+                ? "win"
+                : "lose"
+            : score.totalGoals < threshold.value
+                ? "win"
+                : "lose";
+    }
+
+    if (family === "team_total") {
+        if (threshold.value === null || threshold.operator === null) return null;
+        const relevantGoals =
+            leg.teamId && scoreLeg.teamId && leg.teamId === scoreLeg.teamId
+                ? score.teamGoals
+                : leg.teamId && scoreLeg.opponentTeamId && leg.teamId === scoreLeg.opponentTeamId
+                    ? score.opponentGoals
+                    : null;
+        if (relevantGoals === null) return null;
+        return threshold.operator === "Over"
+            ? relevantGoals > threshold.value
+                ? "win"
+                : "lose"
+            : relevantGoals < threshold.value
+                ? "win"
+                : "lose";
+    }
+
+    if (family === "moneyline_3way" || family === "moneyline") {
+        if (selection.includes("draw")) return score.result === "draw" ? "win" : "lose";
+        if (leg.teamId && scoreLeg.teamId && leg.teamId === scoreLeg.teamId) {
+            return score.result === "team" ? "win" : "lose";
+        }
+        if (leg.teamId && scoreLeg.opponentTeamId && leg.teamId === scoreLeg.opponentTeamId) {
+            return score.result === "opponent" ? "win" : "lose";
+        }
+        return null;
+    }
+
+    if (family === "draw_no_bet") {
+        if (score.result === "draw") return "void";
+        if (leg.teamId && scoreLeg.teamId && leg.teamId === scoreLeg.teamId) {
+            return score.result === "team" ? "win" : "lose";
+        }
+        if (leg.teamId && scoreLeg.opponentTeamId && leg.teamId === scoreLeg.opponentTeamId) {
+            return score.result === "opponent" ? "win" : "lose";
+        }
+        return null;
+    }
+
+    if (family === "double_chance") {
+        if (!selection.includes("draw")) {
+            return score.result === "draw" ? "lose" : "win";
+        }
+        if (leg.teamId && scoreLeg.teamId && leg.teamId === scoreLeg.teamId) {
+            return score.result === "team" || score.result === "draw" ? "win" : "lose";
+        }
+        if (leg.teamId && scoreLeg.opponentTeamId && leg.teamId === scoreLeg.opponentTeamId) {
+            return score.result === "opponent" || score.result === "draw" ? "win" : "lose";
+        }
+        return null;
+    }
+
+    return null;
+};
+
+const soccerPlayerGoalsMinimum = (leg: SlipLeg) => {
+    if (!isSoccerLeg(leg)) return null;
+    if (leg.entityType !== "player" || resolveStatType(leg) !== "goals") return null;
+    const threshold = normalizeThreshold(leg);
+    if (threshold.value === null || threshold.operator !== "Over") return null;
+    return Math.floor(threshold.value) + 1;
+};
+
+const soccerBttsThresholdImplication = (sourceLeg: SlipLeg, targetLeg: SlipLeg) => {
+    if (!isSoccerLeg(sourceLeg) || !isSoccerLeg(targetLeg)) return null;
+    if (!isSameEvent(sourceLeg, targetLeg)) return null;
+    if (resolveTimeScope(sourceLeg) !== resolveTimeScope(targetLeg)) return null;
+    if (resolveOutcomeFamily(sourceLeg) !== "both_teams_to_score") return null;
+    if (resolveComparableSide(sourceLeg) !== "yes") return null;
+    if (resolveOutcomeFamily(targetLeg) !== "game_total") return null;
+
+    const threshold = normalizeThreshold(targetLeg);
+    if (threshold.value === null || threshold.operator !== "Over") return false;
+    return threshold.value < 2;
+};
+
+const soccerBttsContradiction = (leftLeg: SlipLeg, rightLeg: SlipLeg) => {
+    if (!isSoccerLeg(leftLeg) || !isSoccerLeg(rightLeg)) return null;
+    if (!isSameEvent(leftLeg, rightLeg)) return null;
+    if (resolveTimeScope(leftLeg) !== resolveTimeScope(rightLeg)) return null;
+    if (resolveOutcomeFamily(leftLeg) !== "both_teams_to_score") return null;
+    if (resolveComparableSide(leftLeg) !== "yes") return null;
+
+    const family = resolveOutcomeFamily(rightLeg);
+    if (family === "game_total") {
+        const threshold = normalizeThreshold(rightLeg);
+        if (threshold.value === null || threshold.operator !== "Under") return false;
+        return threshold.value < 2;
+    }
+
+    if (family === "team_total") {
+        const threshold = normalizeThreshold(rightLeg);
+        if (threshold.value === null || threshold.operator !== "Under") return false;
+        return threshold.value < 1;
+    }
+
+    return false;
+};
+
+const soccerPlayerGoalsImpliesTotal = (sourceLeg: SlipLeg, targetLeg: SlipLeg) => {
+    const minimumGoals = soccerPlayerGoalsMinimum(sourceLeg);
+    if (minimumGoals === null) return null;
+    if (!isSameEvent(sourceLeg, targetLeg)) return null;
+    if (resolveTimeScope(sourceLeg) !== resolveTimeScope(targetLeg)) return null;
+
+    const family = resolveOutcomeFamily(targetLeg);
+    const threshold = normalizeThreshold(targetLeg);
+    if (threshold.value === null || threshold.operator !== "Over") return false;
+
+    if (family === "game_total") {
+        return minimumGoals > threshold.value;
+    }
+
+    if (
+        family === "team_total" &&
+        sourceLeg.teamId &&
+        targetLeg.teamId &&
+        sourceLeg.teamId === targetLeg.teamId
+    ) {
+        return minimumGoals > threshold.value;
+    }
+
+    return null;
+};
+
+const soccerPlayerGoalsContradictsTotal = (sourceLeg: SlipLeg, targetLeg: SlipLeg) => {
+    const minimumGoals = soccerPlayerGoalsMinimum(sourceLeg);
+    if (minimumGoals === null) return null;
+    if (!isSameEvent(sourceLeg, targetLeg)) return null;
+    if (resolveTimeScope(sourceLeg) !== resolveTimeScope(targetLeg)) return null;
+
+    const family = resolveOutcomeFamily(targetLeg);
+    const threshold = normalizeThreshold(targetLeg);
+    if (threshold.value === null || threshold.operator !== "Under") return false;
+
+    if (family === "game_total") {
+        return minimumGoals > threshold.value;
+    }
+
+    if (
+        family === "team_total" &&
+        sourceLeg.teamId &&
+        targetLeg.teamId &&
+        sourceLeg.teamId === targetLeg.teamId
+    ) {
+        return minimumGoals > threshold.value;
+    }
+
+    return null;
 };
 
 export const compareThresholds = (legA: SlipLeg, legB: SlipLeg) => {
@@ -392,7 +756,15 @@ const buildDecision = (
     pricingEffect,
 });
 
-export const isSameEvent = (legA: SlipLeg, legB: SlipLeg) => legA.eventId === legB.eventId;
+export const isSameEvent = (legA: SlipLeg, legB: SlipLeg) => {
+    if (legA.eventId !== legB.eventId) return false;
+
+    const sportKeyA = resolveSportKey(legA);
+    const sportKeyB = resolveSportKey(legB);
+    if (sportKeyA && sportKeyB && sportKeyA !== sportKeyB) return false;
+
+    return true;
+};
 
 export const isSameEntity = (legA: SlipLeg, legB: SlipLeg) =>
     isSameEvent(legA, legB) &&
@@ -406,6 +778,18 @@ export const isSameStatContext = (legA: SlipLeg, legB: SlipLeg) =>
     resolveStatType(legA) === resolveStatType(legB);
 
 export const isExactDuplicate = (legA: SlipLeg, legB: SlipLeg) => {
+    if (isSameEvent(legA, legB) && resolveTimeScope(legA) === resolveTimeScope(legB)) {
+        const soccerResolutionA = buildSoccerResultResolution(legA);
+        const soccerResolutionB = buildSoccerResultResolution(legB);
+        if (
+            soccerResolutionA !== null &&
+            soccerResolutionB !== null &&
+            soccerResolutionsEqual(soccerResolutionA, soccerResolutionB)
+        ) {
+            return true;
+        }
+    }
+
     if (isSameStatContext(legA, legB)) {
         const thresholdA = normalizeThreshold(legA);
         const thresholdB = normalizeThreshold(legB);
@@ -432,6 +816,25 @@ export const isExactDuplicate = (legA: SlipLeg, legB: SlipLeg) => {
 
 export const isDirectContradiction = (legA: SlipLeg, legB: SlipLeg) => {
     if (!isSameEvent(legA, legB)) return false;
+
+    if (resolveTimeScope(legA) === resolveTimeScope(legB)) {
+        const soccerResolutionA = buildSoccerResultResolution(legA);
+        const soccerResolutionB = buildSoccerResultResolution(legB);
+        if (
+            soccerResolutionA !== null &&
+            soccerResolutionB !== null &&
+            !soccerPairCanCash(soccerResolutionA, soccerResolutionB)
+        ) {
+            return true;
+        }
+
+        if (legOutcomeAgainstSoccerScore(legA, legB) === "lose") return true;
+        if (legOutcomeAgainstSoccerScore(legB, legA) === "lose") return true;
+        if (soccerBttsContradiction(legA, legB) === true) return true;
+        if (soccerBttsContradiction(legB, legA) === true) return true;
+        if (soccerPlayerGoalsContradictsTotal(legA, legB) === true) return true;
+        if (soccerPlayerGoalsContradictsTotal(legB, legA) === true) return true;
+    }
 
     const comparableSideA = resolveComparableSide(legA);
     const comparableSideB = resolveComparableSide(legB);
@@ -474,6 +877,31 @@ export const isMutuallyExclusive = (legA: SlipLeg, legB: SlipLeg) => {
 };
 
 export const doesLegImply = (sourceLeg: SlipLeg, targetLeg: SlipLeg) => {
+    if (isSameEvent(sourceLeg, targetLeg) && resolveTimeScope(sourceLeg) === resolveTimeScope(targetLeg)) {
+        const soccerResolutionSource = buildSoccerResultResolution(sourceLeg);
+        const soccerResolutionTarget = buildSoccerResultResolution(targetLeg);
+        if (
+            soccerResolutionSource !== null &&
+            soccerResolutionTarget !== null &&
+            !soccerResolutionsEqual(soccerResolutionSource, soccerResolutionTarget) &&
+            soccerResolutionImplies(soccerResolutionSource, soccerResolutionTarget)
+        ) {
+            return true;
+        }
+
+        if (legOutcomeAgainstSoccerScore(targetLeg, sourceLeg) === "win") {
+            return true;
+        }
+
+        if (soccerBttsThresholdImplication(sourceLeg, targetLeg) === true) {
+            return true;
+        }
+
+        if (soccerPlayerGoalsImpliesTotal(sourceLeg, targetLeg) === true) {
+            return true;
+        }
+    }
+
     if (isSameStatContext(sourceLeg, targetLeg)) {
         const intervalA = getStatOutcomeInterval(sourceLeg);
         const intervalB = getStatOutcomeInterval(targetLeg);

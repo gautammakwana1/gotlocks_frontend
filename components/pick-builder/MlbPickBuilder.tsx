@@ -175,6 +175,27 @@ type TotalLineEntry = {
     under?: OddsBlazeOdd;
 };
 
+type TeamTotalRunsLineData = {
+    teamId: string;
+    teamName: string;
+    teamAbbr: string;
+    lines: number[];
+    map: Map<number, TotalLineEntry>;
+    preferredLine: number | null;
+};
+
+type MarketSpreadLineData = {
+    lines: number[];
+    map: Map<number, SpreadLineEntry>;
+    preferredLine: number | null;
+};
+
+type MarketTotalLineData = {
+    lines: number[];
+    map: Map<number, TotalLineEntry>;
+    preferredLine: number | null;
+};
+
 type MainLineOdds = {
     spreadAway?: OddsBlazeOdd;
     spreadHome?: OddsBlazeOdd;
@@ -301,42 +322,37 @@ const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapsho
     };
 };
 
-const HITS_MARKETS = [
+const BATTER_PROP_MARKETS = [
+    "Player Home Runs",
     "Player Hits",
+    "Player Total Bases",
+    "Player RBIs",
+    "Player Stolen Bases",
+    "Player Hits + Runs + RBIs",
+    "Player Runs",
     "Player Singles",
     "Player Doubles",
     "Player Triples",
+    "Player Batting Walks",
+    "Player Batting Strikeouts",
 ];
 
-const TOTAL_BASES_MARKETS = ["Player Total Bases"];
-
-const RBI_MARKETS = ["Player RBIs"];
-
-const RUNS_MARKETS = ["Player Runs"];
-
-const POWER_SPEED_MARKETS = ["Player Home Runs", "Player Stolen Bases"];
-
-const BATTER_DISCIPLINE_MARKETS = ["Player Batting Strikeouts"];
-
-const BATTER_PROP_MARKETS = [
-    ...HITS_MARKETS,
-    ...TOTAL_BASES_MARKETS,
-    ...RBI_MARKETS,
-    ...RUNS_MARKETS,
-    ...POWER_SPEED_MARKETS,
-    ...BATTER_DISCIPLINE_MARKETS,
-];
+const BATTER_SPECIAL_MARKETS = ["First Home Run"];
 
 const PITCHER_PROP_MARKETS = [
     "Player Strikeouts",
-    "Player Outs",
     "Player Hits Allowed",
+    "Player Earned Runs",
     "Player Walks Allowed",
+    "Player Outs",
 ];
 
-const COMBINED_PLAYER_PROP_MARKETS = ["Player Hits + Runs + RBIs"];
-
-const TEAM_PROP_MARKETS = ["Team Total Runs", "Team Total Runs Odd/Even"];
+const TEAM_PROP_MARKETS = [
+    "Team Total Runs",
+    "Team Total Runs Odd/Even",
+    "Team Total Home Runs",
+    "Total Home Runs",
+];
 
 const FIRST_INNING_MARKETS = [
     "1st Inning Moneyline 3-Way",
@@ -379,16 +395,17 @@ const MAIN_OVER_UNDER_MARKETS = new Set<string>([
     "Player Hits + Runs + RBIs",
     "Player Strikeouts",
     "Player Batting Strikeouts",
+    "Player Batting Walks",
     "Player Outs",
     "Player Hits Allowed",
     "Player Walks Allowed",
+    "Player Earned Runs",
 ]);
 
 const TAB_ORDER = [
     "GAME_LINES",
     "BATTER_PROPS",
     "PITCHER_PROPS",
-    "COMBINED_PLAYER_PROPS",
     "TEAM_PROPS",
     "FIRST_INNING",
     "INNINGS",
@@ -402,17 +419,15 @@ const TAB_LABELS: Record<TabId, string> = {
     GAME_LINES: "Game lines",
     BATTER_PROPS: "Batter props",
     PITCHER_PROPS: "Pitcher props",
-    COMBINED_PLAYER_PROPS: "Combined player props",
     TEAM_PROPS: "Team props",
     FIRST_INNING: "1st Inning",
     INNINGS: "Innings",
 };
 
 const TAB_MARKETS: Record<TabId, string[]> = {
-    GAME_LINES: ["Moneyline", "Run Line", "Total Runs"],
-    BATTER_PROPS: BATTER_PROP_MARKETS,
+    GAME_LINES: ["Moneyline", "Run Line", "Total Runs", "No-Hitter?"],
+    BATTER_PROPS: [...BATTER_PROP_MARKETS, ...BATTER_SPECIAL_MARKETS],
     PITCHER_PROPS: PITCHER_PROP_MARKETS,
-    COMBINED_PLAYER_PROPS: COMBINED_PLAYER_PROP_MARKETS,
     TEAM_PROPS: TEAM_PROP_MARKETS,
     FIRST_INNING: FIRST_INNING_MARKETS,
     INNINGS: INNINGS_MARKETS,
@@ -420,7 +435,6 @@ const TAB_MARKETS: Record<TabId, string[]> = {
 
 const TAB_SOURCE_PRIORITY: TabId[] = [
     "PITCHER_PROPS",
-    "COMBINED_PLAYER_PROPS",
     "BATTER_PROPS",
     "TEAM_PROPS",
     "FIRST_INNING",
@@ -443,7 +457,6 @@ const tabForOdd = (odd: OddsBlazeOdd): TabId => {
 
 const TABLE_MARKETS = new Set<string>([
     ...BATTER_PROP_MARKETS,
-    ...COMBINED_PLAYER_PROP_MARKETS,
     ...PITCHER_PROP_MARKETS,
 ]);
 
@@ -1261,6 +1274,118 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption): PairedPropR
         });
 };
 
+const buildTeamTotalRunsLineData = (
+    odds: SelectedOdd[],
+    game: GameOption
+): { away: TeamTotalRunsLineData; home: TeamTotalRunsLineData } => {
+    const buildTeamData = (
+        teamId: string,
+        teamName: string,
+        teamAbbr: string
+    ): TeamTotalRunsLineData => {
+        const map = new Map<number, TotalLineEntry>();
+        let preferredLine: number | null = null;
+
+        odds.forEach(({ odd }) => {
+            if (odd.market !== "Team Total Runs") return;
+            const oddTeamId = teamIdFromOdd(odd, game);
+            const side = odd.selection?.side?.toLowerCase();
+            const line = odd.selection?.line;
+            if (oddTeamId !== teamId) return;
+            if (line === undefined || (side !== "over" && side !== "under")) return;
+
+            const entry = map.get(line) ?? {};
+            if (side === "over") entry.over = odd;
+            if (side === "under") entry.under = odd;
+            if (odd.main) preferredLine = line;
+            map.set(line, entry);
+        });
+
+        const lines = Array.from(map.keys()).sort((a, b) => a - b);
+        return {
+            teamId,
+            teamName,
+            teamAbbr,
+            lines,
+            map,
+            preferredLine: preferredLine ?? lines[0] ?? null,
+        };
+    };
+
+    return {
+        away: buildTeamData(game.awayTeamId, game.awayTeam, game.awayAbbr),
+        home: buildTeamData(game.homeTeamId, game.homeTeam, game.homeAbbr),
+    };
+};
+
+const buildMarketSpreadLineData = (
+    odds: SelectedOdd[],
+    game: GameOption
+): MarketSpreadLineData => {
+    const map = new Map<number, SpreadLineEntry>();
+    const lineSet = new Set<number>();
+    let preferredLine: number | null = null;
+
+    odds.forEach(({ odd }) => {
+        const line = odd.selection?.line;
+        if (line === undefined) return;
+        lineSet.add(line);
+        const entry = map.get(line) ?? {};
+        const teamId = teamIdFromOdd(odd, game);
+        if (teamId === game.homeTeamId) {
+            entry.home = odd;
+            if (odd.main) preferredLine = line;
+        }
+        if (teamId === game.awayTeamId) {
+            entry.away = odd;
+            if (odd.main) preferredLine = -line;
+        }
+        map.set(line, entry);
+    });
+
+    const lines = Array.from(lineSet.values())
+        .filter((line) => map.get(line)?.home && map.get(-line)?.away)
+        .sort((a, b) => a - b);
+
+    return {
+        lines,
+        map,
+        preferredLine:
+            preferredLine !== null && lines.includes(preferredLine)
+                ? preferredLine
+                : pickClosestLine(lines, preferredLine ?? undefined),
+    };
+};
+
+const buildMarketTotalLineData = (odds: SelectedOdd[]): MarketTotalLineData => {
+    const map = new Map<number, TotalLineEntry>();
+    let preferredLine: number | null = null;
+
+    odds.forEach(({ odd }) => {
+        const line = odd.selection?.line;
+        if (line === undefined) return;
+        const entry = map.get(line) ?? {};
+        const side = odd.selection?.side?.toLowerCase();
+        if (side === "over") entry.over = odd;
+        if (side === "under") entry.under = odd;
+        if (odd.main) preferredLine = line;
+        map.set(line, entry);
+    });
+
+    const lines = Array.from(map.keys())
+        .filter((line) => map.get(line)?.over && map.get(line)?.under)
+        .sort((a, b) => a - b);
+
+    return {
+        lines,
+        map,
+        preferredLine:
+            preferredLine !== null && lines.includes(preferredLine)
+                ? preferredLine
+                : pickClosestLine(lines, preferredLine ?? undefined),
+    };
+};
+
 export const MlbPickBuilder = ({
     sport,
     slip,
@@ -1297,6 +1422,15 @@ export const MlbPickBuilder = ({
     );
     const [expandedCategoryRows, setExpandedCategoryRows] = useState<
         Record<string, boolean>
+    >({});
+    const [teamTotalRunLines, setTeamTotalRunLines] = useState<
+        Record<string, number | null>
+    >({});
+    const [marketLineSelections, setMarketLineSelections] = useState<
+        Record<string, number | null>
+    >({});
+    const [dualLineSides, setDualLineSides] = useState<
+        Record<string, "over" | "under">
     >({});
     const [selected, setSelected] = useState<SelectedOdd | null>(null);
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
@@ -1509,12 +1643,12 @@ export const MlbPickBuilder = ({
 
     useEffect(() => {
         if (!validateLoading && validatePickMessage) {
-            setToast({
-                id: Date.now(),
-                type: "success",
-                message: validatePickMessage,
-                duration: 3000
-            });
+            // setToast({
+            //     id: Date.now(),
+            //     type: "success",
+            //     message: validatePickMessage,
+            //     duration: 3000
+            // });
             dispatch(clearMlbPickValidateMessage());
         }
         if (!validateLoading && validatePickError) {
@@ -2020,9 +2154,10 @@ export const MlbPickBuilder = ({
 
         const eventGroups = new Map<string, typeof entries>();
         entries.forEach((entry) => {
-            const group = eventGroups.get(entry.leg.eventId) ?? [];
+            const groupKey = `${entry.leg.sport ?? "sport"}:${entry.leg.eventId}`;
+            const group = eventGroups.get(groupKey) ?? [];
             group.push(entry);
-            eventGroups.set(entry.leg.eventId, group);
+            eventGroups.set(groupKey, group);
         });
 
         const groups: Array<
@@ -2065,12 +2200,10 @@ export const MlbPickBuilder = ({
                         : null;
 
                 groups.push({
-                    id: `same-game-${group[0].leg.eventId}`,
+                    id: `same-game-${group[0].leg.sport ?? "sport"}-${group[0].leg.eventId}`,
                     label: group[0].leg.matchup ?? "Same game combo",
                     oddsLabel: groupOddsLabel,
-                    validationCopy: groupPricing.requiresCustomPricing && groupOddsValue === null
-                        ? "These picks require custom pricing."
-                        : null,
+                    validationCopy: null,
                     items: group.map((entry) => entry.reviewItem),
                     tierLine: groupTierLine,
                     tierCard: resolveReviewSheetTierCardAppearance(
@@ -2259,6 +2392,41 @@ export const MlbPickBuilder = ({
             ...prev,
             [key]: !(prev[key] ?? false),
         }));
+    };
+
+    const getDualLineSide = (key: string) => dualLineSides[key] ?? "over";
+
+    const setDualLineSide = (key: string, side: "over" | "under") => {
+        setDualLineSides((prev) => {
+            if (prev[key] === side) return prev;
+            return { ...prev, [key]: side };
+        });
+    };
+
+    const getTeamTotalRunLine = (
+        key: string,
+        lines: number[],
+        preferred: number | null
+    ) => resolveLineSelection(lines, teamTotalRunLines[key] ?? null, preferred ?? undefined);
+
+    const setTeamTotalRunLine = (key: string, line: number) => {
+        setTeamTotalRunLines((prev) => {
+            if (prev[key] === line) return prev;
+            return { ...prev, [key]: line };
+        });
+    };
+
+    const getMarketLineSelection = (
+        key: string,
+        lines: number[],
+        preferred: number | null
+    ) => resolveLineSelection(lines, marketLineSelections[key] ?? null, preferred ?? undefined);
+
+    const setMarketLineSelection = (key: string, line: number) => {
+        setMarketLineSelections((prev) => {
+            if (prev[key] === line) return prev;
+            return { ...prev, [key]: line };
+        });
     };
 
     const getVisibleCategoryRows = <T,>(rows: T[], key: string) => {
@@ -2732,7 +2900,7 @@ export const MlbPickBuilder = ({
         const showSidePrefix = sides.has("over") && sides.has("under");
         const getOddCardLabel = (odd: OddsBlazeOdd) => {
             if (odd.player) return odd.player.name;
-            if (odd.market.includes("Total Runs") && !odd.market.includes("Team Total Runs")) {
+            if (odd.selection?.side && !odd.selection?.name) {
                 return odd.market;
             }
             return odd.selection?.name ?? odd.name ?? "Selection";
@@ -3071,108 +3239,129 @@ export const MlbPickBuilder = ({
         if (!activeGame) return null;
         if (table.rows.length === 0) return null;
         const { rows: visibleRows } = getVisibleCategoryRows(table.rows, sectionKey);
+        const activeSide = getDualLineSide(sectionKey);
+        const activeSideLabel = activeSide === "over" ? "Over" : "Under";
 
         const renderSideScroller = (
             lines: number[],
             lineMap: Map<number, OddsBlazeOdd>,
             scrollerKey: string
-        ) => (
-            <div className="relative min-w-0 overflow-hidden rounded-2xl">
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
-                <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
-                <PropRowScroller
-                    scrollerKey={scrollerKey}
-                    lines={lines}
-                    renderChip={(line) => {
-                        const odd = lineMap.get(line);
-                        const isSelected = isOddSelected(odd);
-                        const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                        return (
-                            <button
-                                key={`${scrollerKey}-${line}`}
-                                type="button"
-                                data-line={line}
-                                onClick={() => odd && handleSelectOdd(odd, activeGame)}
-                                disabled={!odd || locked}
-                                className={`${tableOddsBoxClasses(
-                                    isSelected,
-                                    !odd
-                                )} ${!odd ? "cursor-not-allowed" : ""}`}
-                            >
-                                <div className="flex flex-col items-center leading-tight">
-                                    <span
-                                        className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
-                                            }`}
-                                    >
-                                        {formatLineLabel(line)}
-                                    </span>
-                                    <span
-                                        className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
-                                            }`}
-                                    >
-                                        {oddsLabel}
-                                    </span>
-                                </div>
-                            </button>
-                        );
-                    }}
-                />
-            </div>
-        );
+        ) => {
+            if (lines.length === 0) return null;
+
+            return (
+                <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                    <PropRowScroller
+                        scrollerKey={scrollerKey}
+                        lines={lines}
+                        renderChip={(line) => {
+                            const odd = lineMap.get(line);
+                            const isSelected = isOddSelected(odd);
+                            const oddsLabel = odd ? formatOdds(odd.price) : "-";
+                            return (
+                                <button
+                                    key={`${scrollerKey}-${line}`}
+                                    type="button"
+                                    data-line={line}
+                                    onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                    disabled={!odd || locked}
+                                    className={`${tableOddsBoxClasses(
+                                        isSelected,
+                                        !odd
+                                    )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                >
+                                    <div className="flex flex-col items-center leading-tight">
+                                        <span
+                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                }`}
+                                        >
+                                            {formatLineLabel(line)}
+                                        </span>
+                                        <span
+                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                }`}
+                                        >
+                                            {oddsLabel}
+                                        </span>
+                                    </div>
+                                </button>
+                            );
+                        }}
+                    />
+                </div>
+            );
+        };
 
         return (
             <>
-                <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
-                    <div className="min-w-[720px] text-xs text-white">
+                <div className="mt-4 -mx-5 sm:-mx-6">
+                    <div className="text-xs text-white">
                         <div
-                            className="grid items-center gap-3 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                            style={{
-                                gridTemplateColumns:
-                                    "minmax(140px,190px) minmax(220px,1fr) minmax(220px,1fr)",
-                            }}
+                            className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)] sm:px-6"
                         >
-                            <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>Player</div>
-                            <div className="px-3 py-2 text-center">Over lines</div>
-                            <div className="px-3 py-2 text-center">Under lines</div>
+                            <div className="pl-0 pr-3 py-2">Player</div>
+                            <div className="flex items-center justify-between gap-3 py-2">
+                                <span>{activeSideLabel} lines</span>
+                                <div className="inline-flex rounded-full border border-white/10 bg-black/50 p-1">
+                                    {(["over", "under"] as const).map((side) => {
+                                        const isActive = side === activeSide;
+                                        return (
+                                            <button
+                                                key={`${sectionKey}-${side}`}
+                                                type="button"
+                                                onClick={() => setDualLineSide(sectionKey, side)}
+                                                className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${isActive
+                                                    ? "bg-emerald-500/20 text-emerald-100"
+                                                    : "text-slate-300 hover:text-white"
+                                                    }`}
+                                            >
+                                                {side}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                         {visibleRows.map((row, rowIndex) => {
                             const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                            const rowHasSelection =
-                                row.overAvailableLines.some((line) => isOddSelected(row.overLines.get(line))) ||
-                                row.underAvailableLines.some((line) =>
-                                    isOddSelected(row.underLines.get(line))
-                                );
+                            const visibleLines =
+                                activeSide === "over" ? row.overAvailableLines : row.underAvailableLines;
+                            const visibleLineMap =
+                                activeSide === "over" ? row.overLines : row.underLines;
+                            const lineCount =
+                                activeSide === "over" ? row.overLineCount : row.underLineCount;
+                            const rowHasSelection = visibleLines.some((line) =>
+                                isOddSelected(visibleLineMap.get(line))
+                            );
+                            const lineCountLabel = `${lineCount} line${lineCount === 1 ? "" : "s"}`;
+
                             return (
                                 <div
                                     key={`${market}-${row.player.id}`}
-                                    className={`grid items-center gap-3 border-b border-white/5 ${rowBand}`}
-                                    style={{
-                                        gridTemplateColumns:
-                                            "minmax(140px,190px) minmax(220px,1fr) minmax(220px,1fr)",
-                                    }}
+                                    className={`border-b border-white/5 px-5 py-3 sm:px-6 ${rowBand}`}
                                 >
-                                    <div
-                                        className={scrollerStickyColumnRowClasses(
-                                            rowIndex % 2 === 1,
-                                            rowHasSelection
-                                        )}
+                                    <div className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]"
                                     >
-                                        <p className="text-sm font-semibold text-white">{row.player.name}</p>
-                                        <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
-                                    </div>
-                                    <div className="px-3 py-3">
-                                        {renderSideScroller(
-                                            row.overAvailableLines,
-                                            row.overLines,
-                                            `${sectionKey}-over-${row.player.id}`
-                                        )}
-                                    </div>
-                                    <div className="px-3 py-3">
-                                        {renderSideScroller(
-                                            row.underAvailableLines,
-                                            row.underLines,
-                                            `${sectionKey}-under-${row.player.id}`
-                                        )}
+                                        <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                            <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
+                                                {row.player.name}
+                                            </p>
+                                            <p className="mt-1 text-[11px] leading-tight text-gray-400 sm:text-xs">
+                                                {row.teamLabel}
+                                                {row.teamLabel ? " · " : ""}
+                                                {lineCountLabel}
+                                                {rowHasSelection ? " · selected" : ""}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            {renderSideScroller(
+                                                visibleLines,
+                                                visibleLineMap,
+                                                `${sectionKey}-${activeSide}-${row.player.id}`
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -3187,10 +3376,13 @@ export const MlbPickBuilder = ({
     const renderSingleSideSimplePropTable = (
         rows: SimplePropRow[],
         market: string,
-        sectionKey: string
+        sectionKey: string,
+        sideLabel: "Over" | "Under"
     ) => {
         if (!activeGame) return null;
         const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
+        const useCombinedOverColumn =
+            sideLabel === "Over" && rows.every((row) => row.line !== undefined);
 
         return (
             <>
@@ -3199,14 +3391,20 @@ export const MlbPickBuilder = ({
                         <div
                             className="grid text-xs uppercase tracking-wide text-gray-400"
                             style={{
-                                gridTemplateColumns:
-                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                gridTemplateColumns: useCombinedOverColumn
+                                    ? "minmax(0,1fr) var(--table-chip-width)"
+                                    : "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
                             }}
                         >
                             <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>Player</div>
-                            <div className="px-3 py-2 text-center">Line</div>
-                            <div className="px-3 py-2 text-center">Odds</div>
-                        </div>
+                            {useCombinedOverColumn ? (
+                                <div className="px-3 py-2 text-center">{sideLabel}</div>
+                            ) : (
+                                <>
+                                    <div className="px-3 py-2 text-center">Line</div>
+                                    <div className="px-3 py-2 text-center">Odds</div>
+                                </>
+                            )}                        </div>
                         {visibleRows.map((row, rowIndex) => {
                             const isSelected = isOddSelected(row.odd);
                             const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
@@ -3221,8 +3419,9 @@ export const MlbPickBuilder = ({
                                         : "hover:bg-white/[0.02]"
                                         } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                     style={{
-                                        gridTemplateColumns:
-                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                        gridTemplateColumns: useCombinedOverColumn
+                                            ? "minmax(0,1fr) var(--table-chip-width)"
+                                            : "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
                                     }}
                                 >
                                     <div
@@ -3234,16 +3433,29 @@ export const MlbPickBuilder = ({
                                         <p className="text-sm font-semibold text-white">{row.player.name}</p>
                                         <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
                                     </div>
-                                    <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                        {formatNumberLine(row.line)}
-                                    </div>
-                                    <div className="flex justify-center px-3 py-3">
-                                        {renderTableOddsBox(
-                                            row.odd ? formatOdds(row.odd.price) : "-",
-                                            isSelected,
-                                            !row.odd
-                                        )}
-                                    </div>
+                                    {useCombinedOverColumn ? (
+                                        <div className="flex justify-center px-3 py-3">
+                                            {renderLineOddsBox(
+                                                formatNumberLine(row.line),
+                                                row.odd ? formatOdds(row.odd.price) : "-",
+                                                isSelected,
+                                                !row.odd
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
+                                                {formatNumberLine(row.line)}
+                                            </div>
+                                            <div className="flex justify-center px-3 py-3">
+                                                {renderTableOddsBox(
+                                                    row.odd ? formatOdds(row.odd.price) : "-",
+                                                    isSelected,
+                                                    !row.odd
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
                                 </button>
                             );
                         })}
@@ -3251,6 +3463,120 @@ export const MlbPickBuilder = ({
                 </div>
                 {renderCategoryRowsToggle(sectionKey, rows.length)}
             </>
+        );
+    };
+
+    const renderTeamTotalRunsSection = (
+        odds: SelectedOdd[],
+        sectionKey: string
+    ) => {
+        if (!activeGame) return null;
+        const data = buildTeamTotalRunsLineData(odds, activeGame);
+        const teams = [data.away, data.home].filter((team) => team.lines.length > 0);
+
+        if (teams.length === 0) {
+            return (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
+                    No team total runs lines available for this matchup yet.
+                </div>
+            );
+        }
+
+        return (
+            <div className="mt-4 space-y-5">
+                {teams.map((team) => {
+                    const lineKey = `${sectionKey}-${team.teamId}`;
+                    const resolvedLine = getTeamTotalRunLine(
+                        lineKey,
+                        team.lines,
+                        team.preferredLine
+                    );
+                    const lineEntry =
+                        resolvedLine !== null ? team.map.get(resolvedLine) : undefined;
+                    const rows: SimpleMarketRow[] = [
+                        {
+                            id: `${lineKey}-over`,
+                            label:
+                                resolvedLine !== null
+                                    ? `Over ${formatNumberLine(resolvedLine)}`
+                                    : "Over",
+                            sublabel: team.teamAbbr,
+                            odd: lineEntry?.over,
+                        },
+                        {
+                            id: `${lineKey}-under`,
+                            label:
+                                resolvedLine !== null
+                                    ? `Under ${formatNumberLine(resolvedLine)}`
+                                    : "Under",
+                            sublabel: team.teamAbbr,
+                            odd: lineEntry?.under,
+                        },
+                    ];
+
+                    return (
+                        <div key={lineKey} className="space-y-3">
+                            {renderSimpleMarketTable(rows, {
+                                headerLabel: team.teamName,
+                                className: "mt-0 -mx-5 sm:-mx-6",
+                            })}
+                            <LineScroller
+                                lines={team.lines}
+                                activeLine={resolvedLine}
+                                onSelect={(line) => setTeamTotalRunLine(lineKey, line)}
+                                locked={locked}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    const renderLineBasedRunLineSection = (
+        odds: SelectedOdd[],
+        sectionKey: string,
+        market: string
+    ) => {
+        if (!activeGame) return null;
+        const data = buildMarketSpreadLineData(odds, activeGame);
+        const lineKey = `${sectionKey}-line`;
+        const resolvedLine = getMarketLineSelection(
+            lineKey,
+            data.lines,
+            data.preferredLine
+        );
+
+        return renderAlternateSpreadSection(
+            data,
+            resolvedLine,
+            (line) => setMarketLineSelection(lineKey, line),
+            {
+                emptyMessage: `No ${market.toLowerCase()} lines available for this matchup yet.`,
+            }
+        );
+    };
+
+    const renderLineBasedTotalRunsSection = (
+        odds: SelectedOdd[],
+        sectionKey: string,
+        market: string
+    ) => {
+        const data = buildMarketTotalLineData(odds);
+        const lineKey = `${sectionKey}-line`;
+        const resolvedLine = getMarketLineSelection(
+            lineKey,
+            data.lines,
+            data.preferredLine
+        );
+
+        return renderAlternateTotalSection(
+            data,
+            resolvedLine,
+            (line) => setMarketLineSelection(lineKey, line),
+            {
+                emptyMessage: `No ${market.toLowerCase()} lines available for this matchup yet.`,
+            }
         );
     };
 
@@ -3407,9 +3733,7 @@ export const MlbPickBuilder = ({
         hasMultiSelection && parlayPricing.hasInvalidComboLegs;
     const comboValidationCopy = comboHasInvalidSelections
         ? "Selections cannot be combined"
-        : parlayPricing.requiresCustomPricing && comboOddsValue === null
-            ? "These picks require custom pricing."
-            : null;
+        : null;
     const comboValidationReasons = comboHasInvalidSelections
         ? parlayPricing.invalidComboReasons
         : [];
@@ -4055,8 +4379,7 @@ export const MlbPickBuilder = ({
                                 if (odds.length === 0 || !activeGame) return null;
 
                                 const sides = new Set(
-                                    odds
-                                        .map((item) => item.odd.selection?.side?.toLowerCase())
+                                    odds.map((item) => item.odd.selection?.side?.toLowerCase())
                                         .filter(Boolean) as string[]
                                 );
                                 const hasOver = sides.has("over");
@@ -4097,6 +4420,14 @@ export const MlbPickBuilder = ({
                                 const mainPointsRows = isMainPlayerPoints
                                     ? buildMainPointsRows(odds, activeGame)
                                     : [];
+                                const isInningRunLineMarket =
+                                    !isTableMarket &&
+                                    (activeTab === "FIRST_INNING" || activeTab === "INNINGS") &&
+                                    market.endsWith("Run Line");
+                                const isInningTotalRunsMarket =
+                                    !isTableMarket &&
+                                    (activeTab === "FIRST_INNING" || activeTab === "INNINGS") &&
+                                    market.endsWith("Total Runs");
                                 const sectionKey = `${activeTab}-${market}`;
                                 const collapsed = isSectionCollapsed(sectionKey, index === 0);
 
@@ -4143,7 +4474,18 @@ export const MlbPickBuilder = ({
                                                         emptyMessage: "No lines available for this market yet.",
                                                     })
                                                 ) : isTableMarket ? (
-                                                    renderSingleSideSimplePropTable(simpleRows, market, sectionKey)
+                                                    renderSingleSideSimplePropTable(
+                                                        simpleRows,
+                                                        market,
+                                                        sectionKey,
+                                                        singleSide as "Over" | "Under"
+                                                    )
+                                                ) : market === "Team Total Runs" ? (
+                                                    renderTeamTotalRunsSection(odds, sectionKey)
+                                                ) : isInningRunLineMarket ? (
+                                                    renderLineBasedRunLineSection(odds, sectionKey, market)
+                                                ) : isInningTotalRunsMarket ? (
+                                                    renderLineBasedTotalRunsSection(odds, sectionKey, market)
                                                 ) : (
                                                     renderOddCards(odds)
                                                 )}
