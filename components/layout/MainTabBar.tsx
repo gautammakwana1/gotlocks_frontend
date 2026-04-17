@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { JSX } from "react";
+import { SlipIcon } from "../ui/SvgIcons";
 
 type TabIconProps = { className?: string };
 
@@ -188,7 +189,7 @@ export const MainTabBar = () => {
                 id: "builder",
                 label: "picks",
                 href: "/pick-builder",
-                icon: SparkIcon,
+                icon: SlipIcon,
                 matchers: ["/pick-builder"],
             },
         ],

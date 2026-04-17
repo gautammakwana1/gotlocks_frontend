@@ -12,8 +12,9 @@ import { clearCreatePostPickMessage, createPickRequest, createPostPickRequest } 
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { canUserEditSlipPicks } from "@/lib/slips/state";
+import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 type GroupSliceState = {
     group: {
@@ -476,6 +477,21 @@ const PickBuilderClientPage = () => {
             });
             return;
         }
+
+        // const slipConflictAnalysis = analyzeSlipPayloadAgainstPicks(
+        //     picks.filter((pick) => pick.slipId === targetSlip.id),
+        //     completedPick
+        // );
+        // if (slipConflictAnalysis.duplicates.length > 0) {
+        //     setToast({
+        //         id: Date.now(),
+        //         type: "error",
+        //         message: getSlipConflictMessage("duplicate"),
+        //         duration: 3000
+        //     });
+        //     return;
+        // }
+
         dispatch(createPickRequest({
             slip_id: targetSlip.id,
             description: completedPick.description,
@@ -506,6 +522,18 @@ const PickBuilderClientPage = () => {
             sport: completedPick.sport,
         }))
         setShowDestination(false);
+        // const slipWarningMessages = slipShowsConflictWarnings(targetSlip)
+        //     ? getSlipConflictWarningMessages(slipConflictAnalysis)
+        //     : [];
+        // setToast({
+        //     id: Date.now(),
+        //     type: slipWarningMessages.length > 0 ? "info" : "success",
+        //     message:
+        //         slipWarningMessages.length > 0
+        //             ? `Pick posted to slip. ${slipWarningMessages[0]}`
+        //             : "Pick posted to slip.",
+        //     duration: 3000
+        // });
     };
 
     if (!currentUser) return null;

@@ -15,7 +15,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
 import FootballAnimation from "../animations/FootballAnimation";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierForLabel, getTierMetaForPick, parseAmericanOdds } from "@/lib/utils/scoring";
-import { canUserEditSlipPicks } from "@/lib/slips/state";
+import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
 import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
@@ -23,6 +23,7 @@ import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 type BookOdds = {
     book?: string;
@@ -1840,8 +1841,9 @@ export const NflPickBuilder = ({
                         gameId: leg.eventId,
                         market: leg.market,
                         playerId: leg.playerId,
+                        teamId: leg.teamId,
                         side: leg.side ? (leg.side.toUpperCase() as PickSide) : undefined,
-                        scope: leg.marketKey,
+                        scope: leg.playerId ? "PLAYER_PROP" : "GAME_LINE",
                         threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
                         external_pick_key: leg.id,
@@ -2067,6 +2069,23 @@ export const NflPickBuilder = ({
             })),
         });
     }, [activeDraft]);
+    const slipConflictAnalysis = useMemo(
+        () =>
+            activeDraft
+                ? analyzeSlipPayloadAgainstPicks(picks, activeDraft, {
+                    ignorePickId: initialPick?.id,
+                })
+                : { duplicates: [], warnings: [] },
+        [activeDraft, initialPick?.id, picks]
+    );
+    const conflictWarningsEnabled = slipShowsConflictWarnings(slip);
+    const slipWarningMessages = useMemo(
+        () =>
+            conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipConflictAnalysis)
+                : [],
+        [conflictWarningsEnabled, slipConflictAnalysis]
+    );
     const lastDraftKeyRef = useRef<string>("");
 
     useEffect(() => {
@@ -3116,6 +3135,57 @@ export const NflPickBuilder = ({
         });
     };
 
+    const buildPreviewPayload = (
+        odd: OddsBlazeOdd,
+        game: GameOption,
+        market: PickMarket
+    ): BuiltPickPayload | null => {
+        const previewSelection: BuilderSelection = {
+            oddId: odd.id,
+            scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
+            market,
+            gameId: game.id,
+            teamId: odd.player ? undefined : teamIdFromOdd(odd, game),
+            playerId: odd.player?.id,
+            side: pickSideFromSelection(odd.selection?.side),
+            threshold: odd.selection?.line,
+        };
+        const summary = buildSummary(
+            previewSelection,
+            gameOptions,
+            playerLookup,
+            odd,
+            pick?.description
+        ).trim();
+        if (!summary || summary === "Ready to build a pick") return null;
+
+        const americanOdds = parseAmericanOdds(odd.price);
+        const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
+        const oddsLabel = formatOdds(americanOdds ?? odd.price);
+        const selectionMeta: PickSelectionMeta = {
+            scope: previewSelection.scope,
+            market: previewSelection.market,
+            gameId: previewSelection.gameId,
+            gameStartTime: game.date,
+            matchup: `${game.away_team} @ ${game.home_team}`,
+            teamId: previewSelection.teamId,
+            playerId: previewSelection.playerId,
+            side: previewSelection.side,
+            threshold: previewSelection.threshold,
+        };
+
+        return {
+            sport,
+            description: summary,
+            odds_bracket: oddsLabel === "—" ? null : oddsLabel,
+            difficulty_label: slip.isGraded ? null : tierMeta ? tierLabelFromTier(tierMeta.tier) : null,
+            buildMode: "ODDS",
+            points: tierMeta?.points,
+            selection: selectionMeta,
+            sourceTab: resolveNflSourceTab(previewSelection),
+        };
+    };
+
     const handleEditParlayLeg = (leg: ParlayLeg) => {
         const context = findLegContext(leg);
         if (!context) return;
@@ -3278,7 +3348,42 @@ export const NflPickBuilder = ({
                 })
                 return;
             }
+            if (cachedReviewItem) {
+                const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(
+                    picks,
+                    cachedReviewItem.payload,
+                    { ignorePickId: initialPick?.id }
+                );
+                if (slipSelectionAnalysis.duplicates.length > 0) {
+                    setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+                    return;
+                }
+                const slipSelectionMessages = conflictWarningsEnabled
+                    ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+                    : [];
+                if (slipSelectionMessages.length > 0) {
+                    setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+                }
+            }
             setParlayLegs((prev) => [...prev, incomingLeg]);
+        }
+
+        const previewPayload =
+            isParlayMode && !skipParlay ? null : buildPreviewPayload(odd, game, market);
+        if (previewPayload) {
+            const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, previewPayload, {
+                ignorePickId: initialPick?.id,
+            });
+            if (slipSelectionAnalysis.duplicates.length > 0) {
+                setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+                return;
+            }
+            const slipSelectionMessages = conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+                : [];
+            if (slipSelectionMessages.length > 0) {
+                setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+            }
         }
 
         applySelection(odd, game, market);
@@ -4839,6 +4944,7 @@ export const NflPickBuilder = ({
                 comboHasInvalidSelections={comboHasInvalidSelections}
                 comboValidationCopy={comboValidationCopy}
                 comboValidationReasons={comboValidationReasons}
+                slipWarningMessages={slipWarningMessages}
                 comboOddsLabel={comboOddsLabel}
                 comboReviewItems={comboReviewItems}
                 sameGameComboGroups={sameGameComboGroups}

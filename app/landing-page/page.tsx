@@ -218,6 +218,10 @@ const LandingPage = () => {
           sign in with email
         </button>
 
+        {!showManualSignIn && (
+          <AuthLegalNotice />
+        )}
+
         {/* <button
           type="button"
           onClick={handleGoogleAuth}

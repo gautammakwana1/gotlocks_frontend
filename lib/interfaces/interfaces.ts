@@ -15,6 +15,8 @@ export type BuildMode = "ODDS";
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
+export type SlipConflictWarningMode = "competition" | "group_combo";
+
 export type TierIndex =
     | 1
     | 2
@@ -169,6 +171,7 @@ export type Slip = {
     name: string;
     sports?: string[];
     isGraded: boolean;
+    conflict_warning_mode?: SlipConflictWarningMode;
     pick_limit: number | "unlimited";
     betLink?: string | null;
     pick_deadline_at: string;
@@ -197,6 +200,7 @@ export type Pick = {
     result: PickResult;
     points: number;
     bonus?: number;
+    awardedPoints?: number;
     updated_at?: string;
     scope?: PickScope;
     market?: PickMarket;
@@ -219,6 +223,7 @@ export type Pick = {
     pick_type?: string;
     external_pick_key?: string;
     confidence?: ConfidenceLevel;
+    xpAwarded?: number;
     source_tab?: string;
     is_combo?: boolean;
     legs?: PickLeg[];
@@ -659,6 +664,11 @@ export type FetchPickOfDayByUserIdPayload = {
 export type ReactionPickOfDayPayload = {
     pick_id: string;
     action: string;
+};
+
+export type UpdateSlipConflictModePayload = {
+    slip_id: string;
+    conflictWarningMode: string;
 };
 
 export type UpdateSlipPayload = {
@@ -2190,6 +2200,7 @@ export type ParlayLeg = {
     sgp: string;
     bookMarketId: string;
     bookSelectionId: string;
+    teamId?: string;
     playerId?: string;
     line?: number;
     side?: "Over" | "Under" | "home" | "away" | "yes" | "no";

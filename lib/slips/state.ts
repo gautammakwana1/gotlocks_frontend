@@ -1,4 +1,4 @@
-import { ArchiveLeaderboardSlip, Pick, PickResult, Slip } from "../interfaces/interfaces";
+import { ArchiveLeaderboardSlip, Pick, PickResult, Slip, SlipConflictWarningMode } from "../interfaces/interfaces";
 
 export type SlipLike = Slip | ArchiveLeaderboardSlip;
 
@@ -16,6 +16,13 @@ const getSlipDeadlineTime = (slip: SlipLike): number | null => {
 
 export const isSlipFinal = (slip?: SlipLike | null): boolean =>
     Boolean(slip && slip.status === "final");
+
+export const getSlipConflictWarningMode = (
+    slip?: Slip | null
+): SlipConflictWarningMode => slip?.conflict_warning_mode ?? "group_combo";
+
+export const slipShowsConflictWarnings = (slip?: Slip | null): boolean =>
+    getSlipConflictWarningMode(slip) === "group_combo";
 
 export const isSlipTimeLocked = (slip?: SlipLike | null, now = Date.now()): boolean => {
     if (!slip || isSlipFinal(slip)) return false;

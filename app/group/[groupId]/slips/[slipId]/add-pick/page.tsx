@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
-import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
+import { canUserEditSlipPicks, isSlipFinal, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -12,6 +12,7 @@ import { createPickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pick
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import { GroupDataShape } from "../../../page";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 const hasNestedGroup = (
     value: GroupDataShape
@@ -116,6 +117,12 @@ const SlipAddPickPage = () => {
     }
 
     const handleSavePick = (payload: BuiltPickPayload) => {
+        const slipConflictAnalysis = analyzeSlipPayloadAgainstPicks(slipPicks, payload);
+        if (slipConflictAnalysis.duplicates.length > 0) {
+            setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+            return;
+        }
+
         dispatch(createPickRequest({
             slip_id: slip.id,
             description: payload.description,
@@ -145,6 +152,18 @@ const SlipAddPickPage = () => {
             matchup: payload.matchup,
             match_date: payload.match_date ? new Date(payload.match_date) : undefined,
         }))
+        // const slipWarningMessages = slipShowsConflictWarnings(slip)
+        //     ? getSlipConflictWarningMessages(slipConflictAnalysis)
+        //     : [];
+        // setToast({
+        //     id: Date.now(),
+        //     type: slipWarningMessages.length > 0 ? "info" : "success",
+        //     message:
+        //         slipWarningMessages.length > 0
+        //             ? `Pick added to slip. ${slipWarningMessages[0]}`
+        //             : "Pick added to slip.",
+        //     duration: 3000
+        // });
         router.replace(returnPath);
     };
 

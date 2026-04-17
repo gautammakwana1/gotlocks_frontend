@@ -17,7 +17,7 @@ import { clearAllNotificationRequest, fetchNotificationListRequest, markNotifica
 import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
-import { MembersIcon, RightArrowIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
+import { MembersIcon, RightArrowIcon, SlipIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
 import OnboardingModal from "../modals/OnboardingModal";
 import { completeIntroRequest } from "@/lib/redux/slices/authSlice";
 
@@ -79,23 +79,17 @@ const ActionCard = ({ action }: { action: ActionDefinition }) => (
     <button
         type="button"
         onClick={action.onClick}
-        className={`group relative overflow-hidden rounded-3xl border px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5 ${action.featured
-            ? "border-emerald-300/60 bg-emerald-500/15"
-            : "border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10"
-            }`}
+        className="group relative overflow-hidden rounded-[18px] border border-white/10 bg-gradient-to-br from-amber-400/20 via-black/60 to-black/30 px-3 py-3 text-left shadow-sm transition hover:border-amber-300/60 hover:bg-amber-400/12 sm:px-4 sm:py-4 lg:px-5 lg:py-5"
     >
         <div
             aria-hidden
-            className={`pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full blur-3xl transition ${action.featured
-                ? "bg-emerald-400/30"
-                : "bg-white/10 group-hover:bg-white/20"
-                }`}
+            className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full opacity-0 blur-3xl"
         />
         <div className="relative flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold text-white sm:text-sm">
                 {action.label}
             </p>
-            <div className={action.featured ? "text-emerald-100" : "text-gray-200"}>
+            <div className="text-amber-100 transition group-hover:text-amber-50">
                 {action.icon}
             </div>
         </div>
@@ -611,14 +605,14 @@ const HomeTab = () => {
             href: "/pick-builder",
             onClick: () => router.push("/pick-builder"),
             icon: (
-                <SparkIcon />
+                <SlipIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" stroke="currentColor" fill="none" strokeWidth="1.5" aria-hidden={true} />
             ),
         },
     ];
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
-            <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-black/80 bg-gradient-to-br from-black/80 via-black/50 to-emerald-900/20 p-4 shadow-2xl shadow-black/40 sm:p-6 lg:p-8 animate-[homeFadeUp_0.7s_ease-out_both]">
+            <section className="relative overflow-hidden rounded-[18px] border border-white/10 bg-black/80 bg-gradient-to-br from-black/80 via-black/50 to-emerald-900/20 p-4 shadow-2xl shadow-black/40 sm:p-6 lg:p-8 animate-[homeFadeUp_0.7s_ease-out_both]">
                 <div
                     aria-hidden
                     className="pointer-events-none absolute -top-24 right-[-10%] h-56 w-56 rounded-full bg-emerald-400/25 blur-3xl animate-[homeFloat_12s_ease-in-out_infinite]"
@@ -676,7 +670,7 @@ const HomeTab = () => {
                             </button>
                         </div>
                         {sortedGroups.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-4 text-[11px] text-gray-300 sm:p-5 sm:text-sm">
+                            <div className="rounded-[18px] border border-dashed border-white/20 bg-white/5 p-4 text-[11px] text-gray-300 sm:p-5 sm:text-sm">
                                 You are not in any leagues yet. Start one to get the vibe going.
                             </div>
                         ) : (
@@ -693,7 +687,7 @@ const HomeTab = () => {
                                                 onClick={() => router.push(`/group/${group.id}`)}
                                                 className="min-w-full snap-center flex flex-col gap-2 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
                                             >
-                                                <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.12em] text-gray-400">
+                                                <div className="flex items-center justify-between text-[18px] uppercase tracking-[0.12em] text-gray-400">
                                                     <span>League</span>
                                                     <span className="text-[9px] text-gray-300">
                                                         code {group.invite_code}
@@ -750,7 +744,7 @@ const HomeTab = () => {
                                             key={group.id}
                                             type="button"
                                             onClick={() => router.push(`/group/${group.id}`)}
-                                            className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
+                                            className="flex flex-col gap-3 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
                                         >
                                             <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-gray-400">
                                                 <span>League</span>

@@ -57,6 +57,7 @@ type Props = {
   comboHasInvalidSelections: boolean;
   comboValidationCopy: string | null;
   comboValidationReasons: string[];
+  slipWarningMessages?: string[];
   comboOddsLabel: string | null;
   comboReviewItems: ReviewSheetItem[];
   sameGameComboGroups: SameGameComboReviewGroup[];
@@ -134,6 +135,7 @@ export function PickReviewSheet({
   comboHasInvalidSelections,
   comboValidationCopy,
   comboValidationReasons,
+  slipWarningMessages = [],
   comboOddsLabel,
   comboReviewItems,
   sameGameComboGroups,
@@ -282,6 +284,20 @@ export function PickReviewSheet({
 
             {isOpen && (
               <div className="border-t border-white/10 px-4 pb-5 pt-0 overflow-y-auto max-h-[500px] custom-scrollbar sm:max-h-[350px]" >
+                {slipWarningMessages.length > 0 && (
+                  <div className="-mx-4 border-x-0 border-y border-amber-400/30 bg-amber-950/35 px-4 py-4">
+                    <p className="text-xs uppercase tracking-wide text-amber-200/80">
+                      Slip warning
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {slipWarningMessages.map((message) => (
+                        <p key={message} className="text-[12px] font-semibold text-amber-100">
+                          {message}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {hasMultiSelection ? (
                   <div className="flex flex-col gap-2" >
                     <div

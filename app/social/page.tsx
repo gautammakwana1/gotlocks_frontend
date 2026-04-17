@@ -23,7 +23,7 @@ type SocialTab = "top-hits" | "for-you" | "following";
 const resultTone = (result: PickResult | null | undefined) => {
     switch (result) {
         case "win":
-            return "border-emerald-300/60 bg-emerald-500/15 text-emerald-100";
+            return "border-amber-300/70 bg-amber-400/15 text-amber-100";
         case "loss":
             return "border-red-400/60 bg-red-500/15 text-red-100";
         case "void":
@@ -90,6 +90,21 @@ const FEED_CARD_EST_HEIGHT = 220;
 const feedScrollStyle = {
     "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
 } as CSSProperties;
+const WINNING_POST_CARD_TONE =
+    "border border-[#c4ab78]/62 border-b-[3px] border-b-[#9e7840] bg-[radial-gradient(circle_at_top_right,rgba(255,231,165,0.06),transparent_24%),linear-gradient(180deg,rgba(255,248,220,0.035),rgba(255,255,255,0.02)_16%,rgba(255,255,255,0.025)_82%,rgba(217,119,6,0.03))] shadow-[inset_0_1px_0_rgba(255,248,220,0.18),inset_0_-2px_0_rgba(120,85,25,0.28),inset_0_0_0_1px_rgba(181,140,61,0.22),0_2px_10px_rgba(0,0,0,0.18)]";
+
+const WinningHeaderArt = () => (
+    <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-12 overflow-hidden rounded-t-[11px] opacity-[0.16] [mask-image:linear-gradient(to_bottom,black,transparent)]"
+        style={{
+            backgroundImage: "url('/winning-card-lock-bg.svg')",
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "center 18%",
+            backgroundSize: "cover",
+        }}
+    />
+);
 
 const SocialPage = () => {
     const router = useRouter();
@@ -307,6 +322,7 @@ const SocialPage = () => {
                 const userReaction = item.reaction ?? undefined;
                 const upActive = userReaction === "up";
                 const downActive = userReaction === "down";
+                const isWinningPost = item.result === "win";
 
                 return (
                     <div
@@ -439,7 +455,13 @@ const SocialPage = () => {
                                         </div>
                                     </div>
 
-                                    <div className="order-1 flex-1 rounded-xl border border-white/10 bg-white/[0.04] p-3 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] sm:order-2">
+                                    <div
+                                        className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
+                                            ? WINNING_POST_CARD_TONE
+                                            : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
+                                            }`}
+                                    >
+                                        {isWinningPost && <WinningHeaderArt />}
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 flex-1">
                                                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -450,7 +472,9 @@ const SocialPage = () => {
                                                         <div className="mt-3 h-px w-full bg-white/10" />
                                                         <div className="mt-3 flex min-w-0 items-start justify-between gap-3">
                                                             <div className="min-w-0 flex flex-1 items-start gap-2">
-                                                                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                                <span
+                                                                    className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                                />
                                                                 <div className="min-w-0 flex-1">
                                                                     {detailCategoryLabel && (
                                                                         <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
@@ -458,7 +482,7 @@ const SocialPage = () => {
                                                                         </span>
                                                                     )}
                                                                     <p
-                                                                        className="mt-1 min-w-0 text-[12px] font-semibold leading-snug text-cyan-200"
+                                                                        className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}
                                                                         title={displayPick}
                                                                     >
                                                                         {pickLine}
@@ -505,14 +529,18 @@ const SocialPage = () => {
                                                                 className="flex items-start justify-between gap-3"
                                                             >
                                                                 <div className="min-w-0 flex items-start gap-2">
-                                                                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                                                                    <span
+                                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                                    />
                                                                     <div className="min-w-0">
                                                                         {legCategory && (
                                                                             <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
                                                                                 {legCategory}
                                                                             </span>
                                                                         )}
-                                                                        <p className="min-w-0 text-[12px] font-semibold leading-snug text-cyan-200">
+                                                                        <p
+                                                                            className={`min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}
+                                                                        >
                                                                             {legPickLine}
                                                                         </p>
                                                                         {legMeta && (

@@ -11,7 +11,7 @@ export const LeaderboardIcon = (props: IconProps) => (
 );
 
 export const SlipIcon = (props: IconProps) => (
-    <svg viewBox="0 0 24 24" {...props}>
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...props}>
         <path d="M7 5h10a2 2 0 0 1 2 2v12l-3-2-3 2-3-2-3 2V7a2 2 0 0 1 2-2Z" />
         <path d="M9 9h6m-6 4h4" strokeLinecap="round" />
     </svg>

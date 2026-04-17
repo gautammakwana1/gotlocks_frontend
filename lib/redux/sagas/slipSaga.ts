@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllFinalizedSlipsFailure, fetchAllFinalizedSlipsRequest, fetchAllFinalizedSlipsSuccess, fetchAllOpenSlipsFailure, fetchAllOpenSlipsRequest, fetchAllOpenSlipsSuccess, fetchAllReviewSlipsFailure, fetchAllReviewSlipsRequest, fetchAllReviewSlipsSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchAllVibeFinalizedSlipsFailure, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeFinalizedSlipsSuccess, fetchAllVibeOpenSlipsFailure, fetchAllVibeOpenSlipsRequest, fetchAllVibeOpenSlipsSuccess, fetchAllVibeReviewSlipsFailure, fetchAllVibeReviewSlipsRequest, fetchAllVibeReviewSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
+import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllFinalizedSlipsFailure, fetchAllFinalizedSlipsRequest, fetchAllFinalizedSlipsSuccess, fetchAllOpenSlipsFailure, fetchAllOpenSlipsRequest, fetchAllOpenSlipsSuccess, fetchAllReviewSlipsFailure, fetchAllReviewSlipsRequest, fetchAllReviewSlipsSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchAllVibeFinalizedSlipsFailure, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeFinalizedSlipsSuccess, fetchAllVibeOpenSlipsFailure, fetchAllVibeOpenSlipsRequest, fetchAllVibeOpenSlipsSuccess, fetchAllVibeReviewSlipsFailure, fetchAllVibeReviewSlipsRequest, fetchAllVibeReviewSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipConflictModeFailure, updateSlipConflictModeRequest, updateSlipConflictModeSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPaginationPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPaginationPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest } from "../slices/groupsSlice";
 
 type ApiErrorResponse = {
@@ -334,6 +334,20 @@ function* handleFetchAllVibeFinalizedSlips(action: PayloadAction<FetchFinalizeSl
     }
 }
 
+function* handleUpdateSlipConflictMode(action: PayloadAction<UpdateSlipConflictModePayload | undefined>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.patch,
+            `${API_BASE_URL}/slip/conflict-warning-mode`,
+            action.payload
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(updateSlipConflictModeSuccess(payload));
+    } catch (error: unknown) {
+        yield put(updateSlipConflictModeFailure(getErrorMessage(error, "Update Slip conflict failed")));
+    }
+}
+
 export default function* slipSaga() {
     yield takeLatest(createSlipRequest.type, handleCreateSlip);
     yield takeLatest(fetchAllSlipsRequest.type, handleFetchAllSlips);
@@ -354,4 +368,5 @@ export default function* slipSaga() {
     yield takeLatest(fetchAllVibeOpenSlipsRequest.type, handleFetchAllVibeOpenSlips);
     yield takeLatest(fetchAllVibeReviewSlipsRequest.type, handleFetchAllVibeReviewSlips);
     yield takeLatest(fetchAllVibeFinalizedSlipsRequest.type, handleFetchAllVibeFinalizedSlips);
+    yield takeLatest(updateSlipConflictModeRequest.type, handleUpdateSlipConflictMode);
 };

@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, Slips, SlipState, StartNewContestPayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, SessionState, Slip, Slips, SlipState, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: SlipState = {
     slip: null,
@@ -423,6 +423,24 @@ const slipSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        updateSlipConflictModeRequest: (state, action: PayloadAction<UpdateSlipConflictModePayload>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        updateSlipConflictModeSuccess: (state, action) => {
+            state.loading = false;
+            state.message = action.payload?.message;
+        },
+        updateSlipConflictModeFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearUpdateSlipConflictModeMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -503,6 +521,10 @@ export const {
     fetchAllVibeFinalizedSlipsSuccess,
     fetchAllVibeFinalizedSlipsFailure,
     clearFetchAllVibeFinalizedSlipsMessage,
+    updateSlipConflictModeRequest,
+    updateSlipConflictModeSuccess,
+    updateSlipConflictModeFailure,
+    clearUpdateSlipConflictModeMessage,
 } = slipSlice.actions;
 
 export default slipSlice.reducer;

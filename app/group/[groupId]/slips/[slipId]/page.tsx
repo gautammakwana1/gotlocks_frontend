@@ -22,14 +22,14 @@ import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
-import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import Image from "next/image";
 import { getPickPoints, GROUP_CAP_POINTS, GROUP_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
 import { X } from "lucide-react";
 import PickListCard from "@/components/slips/PickListCard";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { canCommissionerReview, canFinalize, canUserEditSlipPicks, isSlipFinal, isSlipTimeLocked, normalizePickResult } from "@/lib/slips/state";
+import { canCommissionerReview, canFinalize, canUserEditSlipPicks, getSlipConflictWarningMode, isSlipFinal, isSlipTimeLocked, normalizePickResult, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { createPortal } from "react-dom";
 import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
@@ -37,6 +37,7 @@ import { checkAnyRestrictedWords, generateProfileImageUrl, useIsMobile } from "@
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
+import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
 
 interface FormErrors {
     name?: string;
@@ -221,12 +222,37 @@ const SlipDetailsPage = () => {
     const [isDeleteSlipOpen, setIsDeleteSlipOpen] = useState(false);
     const [isDeleteSlipModalOpen, setIsDeleteSlipModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isSlipModeInfoOpen, setIsSlipModeInfoOpen] = useState(false);
 
     const slipPicks = useMemo<Pick[]>(() => {
         if (!pickList) return [];
         if (!Array.isArray(pickList) || !slip?.id) return [];
         return pickList.filter(pick => pick.slip_id === slip.id);
     }, [pickList, slip?.id]);
+
+    const slipConflictAnalysis = useMemo(
+        () => analyzeSlipPicks(slipPicks),
+        [slipPicks]
+    );
+    const warningModeEnabled = slipShowsConflictWarnings(slip);
+    const slipConflictIssues = useMemo(
+        () => [
+            ...slipConflictAnalysis.duplicates,
+            ...(warningModeEnabled ? slipConflictAnalysis.warnings : []),
+        ],
+        [slipConflictAnalysis, warningModeEnabled]
+    );
+    const hasVisibleConflictWarnings =
+        warningModeEnabled && slipConflictAnalysis.warnings.length > 0;
+
+    const userLabelById = useMemo(
+        () =>
+            new Map(
+                members.map((user) => [user.user_id, user.profiles?.username ?? "Member"])
+            ),
+        [members]
+    );
+
     const scoringMode = slip?.isGraded ? "groupLeaderboard" : "global";
 
     const userPicks = useMemo(
@@ -338,6 +364,7 @@ const SlipDetailsPage = () => {
         setIsFinalizeModalOpen(false);
         setIsSecondaryAssignOpen(false);
         setIsDeleteSlipModalOpen(false);
+        setIsSlipModeInfoOpen(false);
         setIsSlateWindowDropdownOpen(false);
     }, [slip]);
 
@@ -555,6 +582,8 @@ const SlipDetailsPage = () => {
     const canRenameSlip = isCommissioner || (!slip.isGraded && isCreator);
     const canEditDeadlines =
         (isCommissioner || (!slip.isGraded && isCreator)) && canManagePicks;
+    const canEditWarningMode =
+        (isCommissioner || (!slip.isGraded && isCreator)) && canManagePicks;
     const canAssignSecondaryLeaderboard =
         isCommissioner &&
         secondaryLeaderboardsEnabled &&
@@ -606,6 +635,7 @@ const SlipDetailsPage = () => {
         : totalPossibleLabel;
     const deadlineLabel = pickDeadlinePassed ? "Locked at" : "Pick deadline";
     const deadlineVariant = pickDeadlinePassed ? "alert" : "default";
+    const currentWarningMode = getSlipConflictWarningMode(slip);
     const userMember = members.find(
         m => m.user_id === currentUser.userId
     );
@@ -672,6 +702,13 @@ const SlipDetailsPage = () => {
         if (!canEditDeadlines) return;
         if (slip.id && group.id) {
             dispatch(updateSlipsRequest({ group_id: group.id, slip_id: slip.id, pick_deadline_at: pickDeadlineDraft, windowDays: activeWindowDays }));
+        }
+    };
+
+    const handleWarningModeChange = (nextMode: "competition" | "group_combo") => {
+        if (!canEditWarningMode || currentWarningMode === nextMode) return;
+        if (slip.id && nextMode) {
+            dispatch(updateSlipConflictModeRequest({ slip_id: slip.id, conflictWarningMode: nextMode }));
         }
     };
 
@@ -1146,8 +1183,78 @@ const SlipDetailsPage = () => {
                                             </div>
                                         )}
                                     </section>
+
+                                    {slipConflictIssues.length > 0 && (
+                                        <section className="space-y-3">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-semibold text-white">Slip checks</p>
+                                                    {canEditWarningMode && hasVisibleConflictWarnings && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveTab("actions")}
+                                                            className="text-[11px] font-medium text-amber-200 transition hover:text-amber-100"
+                                                        >
+                                                            turn off?
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <span className="text-[11px] uppercase tracking-wide text-gray-400">
+                                                    {slipConflictIssues.length} flagged
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {slipConflictIssues.map((issue) => {
+                                                    const isDuplicate = issue.type === "duplicate";
+                                                    const issueLabel = isDuplicate
+                                                        ? "Duplicate pick"
+                                                        : issue.type === "contradiction"
+                                                            ? "Contradictory picks"
+                                                            : "Overlapping picks";
+                                                    const detail = isDuplicate
+                                                        ? "This exact selection appears more than once on the slip."
+                                                        : issue.type === "contradiction"
+                                                            ? "These selections push against each other on the same market."
+                                                            : "these selections cover the same outcome space and should be reviewed";
+                                                    const tone = isDuplicate
+                                                        ? "border-rose-400/30 bg-rose-950/25 text-rose-100"
+                                                        : "border-amber-400/30 bg-amber-950/25 text-amber-100";
+                                                    const leftOwner = issue.left.userId
+                                                        ? userLabelById.get(issue.left.userId) ?? "Member"
+                                                        : "Member";
+                                                    const rightOwner = issue.right.userId
+                                                        ? userLabelById.get(issue.right.userId) ?? "Member"
+                                                        : "Member";
+
+                                                    return (
+                                                        <div key={issue.key} className={`rounded-2xl border p-3 ${tone}`}>
+                                                            <p className="text-[11px] font-semibold uppercase tracking-wide">
+                                                                {issueLabel}
+                                                            </p>
+                                                            <div className="mt-2 space-y-1">
+                                                                <p className="text-xs font-semibold">
+                                                                    {leftOwner}: {extractPickLine(issue.left.description)}
+                                                                </p>
+                                                                <p className="text-xs font-semibold">
+                                                                    {rightOwner}: {extractPickLine(issue.right.description)}
+                                                                </p>
+                                                                <p
+                                                                    className={`pt-1 text-[11px] ${issue.type === "overlap" ? "text-red-200" : "opacity-80"
+                                                                        }`}
+                                                                >
+                                                                    {detail}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    )}
                                 </div>
                             )}
+
 
                             {activeTab === "actions" && showActionsTab && (
                                 <div className="space-y-5">
@@ -1294,6 +1401,67 @@ const SlipDetailsPage = () => {
                                             <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-gray-400">
                                                 <p className="font-semibold uppercase tracking-wide text-gray-300">Slip basics</p>
                                                 <p>Only the creator or commissioner can rename the slip or edit deadlines.</p>
+                                            </div>
+                                        )}
+
+                                        {canEditWarningMode && <div className="h-px w-full bg-white/10" />}
+
+                                        {canEditWarningMode && (
+                                            <div className="space-y-3 rounded-2xl border border-white/10 bg-black/40 p-4">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-xs uppercase tracking-wide text-gray-400">Slip mode</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsSlipModeInfoOpen((prev) => !prev)}
+                                                            className="flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
+                                                            aria-label="How slip mode works"
+                                                            aria-expanded={isSlipModeInfoOpen}
+                                                        >
+                                                            i
+                                                        </button>
+                                                    </div>
+                                                    {isSlipModeInfoOpen && (
+                                                        <p className="text-xs text-gray-500">
+                                                            Group Combo+ mode shows overlapping and contradictory same-slip pick
+                                                            warnings inside the builder and on the slip. Competition mode hides those
+                                                            warnings.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="inline-flex w-full rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+                                                    {[
+                                                        {
+                                                            id: "group_combo" as const,
+                                                            label: "Group Combo+",
+                                                            detail: "Warnings on",
+                                                        },
+                                                        {
+                                                            id: "competition" as const,
+                                                            label: "Competition",
+                                                            detail: "Warnings off",
+                                                        },
+                                                    ].map((option) => {
+                                                        const isActive = currentWarningMode === option.id;
+                                                        return (
+                                                            <button
+                                                                key={option.id}
+                                                                type="button"
+                                                                onClick={() => handleWarningModeChange(option.id)}
+                                                                aria-pressed={isActive}
+                                                                className={`flex flex-1 flex-col items-start rounded-[14px] px-3 py-2 text-left transition ${isActive
+                                                                    ? "bg-emerald-500/15 text-white shadow-[inset_0_0_0_1px_rgba(110,231,183,0.4)]"
+                                                                    : "text-gray-300 hover:bg-white/[0.06] hover:text-white"
+                                                                    }`}
+                                                            >
+                                                                <p className="text-xs font-semibold leading-tight">{option.label}</p>
+                                                                <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                                                                    {option.detail}
+                                                                </p>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
                                         )}
 

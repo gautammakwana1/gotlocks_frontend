@@ -10,7 +10,7 @@ import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { CircleDollarSignIcon, LogOutIcon, MessageSquareMoreIcon, Settings } from "lucide-react";
+import { CircleDollarSignIcon, Lock, LockKeyhole, LogOutIcon, MessageSquareMoreIcon, Settings, Unlock } from "lucide-react";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
 
@@ -211,10 +211,24 @@ export const TopNav = () => {
                   setMenuOpen(false);
                   setOnboardingOpen(true);
                 }}
-                className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
+                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
               >
                 <span>tutorial</span>
-                <span aria-hidden>🔒</span>
+                <div className="relative w-[18px] h-[18px]">
+
+                  {/* Locked Icon (default) */}
+                  <Lock
+                    size={18}
+                    className="absolute text-violet-400 transition-all duration-300 group-hover:opacity-0 group-hover:rotate-[-90deg]"
+                  />
+
+                  {/* Unlock Icon (hover) */}
+                  <Unlock
+                    size={18}
+                    className="absolute text-violet-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:rotate-0"
+                  />
+
+                </div>
               </button>
               <Link
                 href="/feedback"

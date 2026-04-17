@@ -10,7 +10,7 @@ import type {
     CachedReviewData,
     ReviewSheetState,
 } from "@/components/pick-builder/reviewSheetState";
-import { canUserEditSlipPicks } from "@/lib/slips/state";
+import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { formatDateTime, isPast } from "@/lib/utils/date";
 import {
     DEFAULT_ELIGIBLE_WINDOW_DAYS,
@@ -45,6 +45,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleRequest, soccerEnglandPremierLeaguePickValidateRequest, soccerGermanyBundesligaPickValidateRequest } from "@/lib/redux/slices/soccerSlice";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 type OddsBlazeTeam = {
     id: string;
@@ -648,24 +649,36 @@ const buildPickDescription = (odd: OddsObject, game: GameOption) => {
     return withMatchupDescription(matchup ?? ``, `${odd.name} ${odd.market}`.trim());
 };
 
-const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMeta => ({
-    scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
-    market: odd.market,
-    gameId: game.id,
-    gameStartTime: game.date,
-    teamId: odd.player ? odd.player.team.id : teamIdFromOdd(odd, game),
-    playerId: odd.player?.id,
-    side: normalizeSide(odd.selection?.side),
-    threshold: odd.selection?.line,
-    home_team: game.homeTeam,
-    home_abbr: game.homeAbbr,
-    away_team: game.awayTeam,
-    away_abbr: game.awayAbbr,
-    external_pick_key: odd.id,
-    matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
-    match_date: game.date,
-    sport: "Soccer"
-});
+const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMeta => {
+    const teamId = odd.player ? odd.player.team.id : teamIdFromOdd(odd, game);
+    const inferredTeamSide =
+        !odd.player && !odd.selection?.side && teamId
+            ? teamId === game.homeTeamId
+                ? "home"
+                : teamId === game.awayTeamId
+                    ? "away"
+                    : undefined
+            : undefined;
+
+    return {
+        scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
+        market: odd.market,
+        gameId: game.id,
+        gameStartTime: game.date,
+        teamId,
+        playerId: odd.player?.id,
+        side: normalizeSide(odd.selection?.side) ?? inferredTeamSide,
+        threshold: odd.selection?.line,
+        home_team: game.homeTeam,
+        home_abbr: game.homeAbbr,
+        away_team: game.awayTeam,
+        away_abbr: game.awayAbbr,
+        external_pick_key: odd.id,
+        matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
+        match_date: game.date,
+        sport: "Soccer"
+    };
+};
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
     if (!pick?.selection?.gameId || !pick.selection.market) return null;
@@ -1260,9 +1273,10 @@ export const SoccerPickBuilder = ({
                     selection: {
                         gameId: leg.eventId,
                         market: leg.market,
+                        teamId: leg.teamId,
                         playerId: leg.playerId,
                         side: normalizeSide(leg.side),
-                        scope: leg.marketKey,
+                        scope: leg.playerId ? "PLAYER_PROP" : "GAME_LINE",
                         threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
                         matchup: matchup ?? undefined,
@@ -1366,6 +1380,25 @@ export const SoccerPickBuilder = ({
             legs: payload.legs?.map((leg) => leg.selection ?? null) ?? [],
         });
     }, [activeDraft]);
+
+    const slipConflictAnalysis = useMemo(
+        () =>
+            activeDraft
+                ? analyzeSlipPayloadAgainstPicks(picks, activeDraft, {
+                    ignorePickId: initialPick?.id,
+                })
+                : { duplicates: [], warnings: [] },
+        [activeDraft, initialPick?.id, picks]
+    );
+    const conflictWarningsEnabled = slipShowsConflictWarnings(slip);
+    const slipWarningMessages = useMemo(
+        () =>
+            conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipConflictAnalysis)
+                : [],
+        [conflictWarningsEnabled, slipConflictAnalysis]
+    );
+
     const lastDraftKeyRef = useRef<string>("");
     const lastConfidenceSeedKeyRef = useRef<string>("");
 
@@ -1836,22 +1869,49 @@ export const SoccerPickBuilder = ({
                 });
                 return;
             }
+            const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, legDraft, {
+                ignorePickId: initialPick?.id,
+            });
+            if (slipSelectionAnalysis.duplicates.length > 0) {
+                setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+                return;
+            }
+            const slipSelectionMessages = conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+                : [];
+            if (slipSelectionMessages.length > 0) {
+                setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+            }
             setParlayLegs((prev) => [...prev, incomingLeg]);
             onDraftPickChange?.(legDraft);
             setSelected({ odd, game });
             return;
         }
+        if (!forceSelect && selected?.odd.id === odd.id) {
+            setSelected(null);
 
-        setSelected((prev) => {
-            if (!forceSelect && prev?.odd.id === odd.id) {
-                if (draftPick?.source === sport) {
-                    onDraftPickChange?.(null);
-                }
-                return null;
+            if (draftPick?.source === sport) {
+                onDraftPickChange?.(null);
             }
-            onDraftPickChange?.(buildDraftPick(odd, game));
-            return { odd, game };
+            return;
+        }
+        const nextDraft = buildDraftPick(odd, game);
+
+        const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, nextDraft, {
+            ignorePickId: initialPick?.id,
         });
+        if (slipSelectionAnalysis.duplicates.length > 0) {
+            setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+            return;
+        }
+        const slipSelectionMessages = conflictWarningsEnabled
+            ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+            : [];
+        if (slipSelectionMessages.length > 0) {
+            setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+        }
+        onDraftPickChange?.(nextDraft);
+        setSelected({ odd, game });
     };
 
     const isSectionCollapsed = (key: string, defaultOpen = true) =>
@@ -2787,6 +2847,7 @@ export const SoccerPickBuilder = ({
                 comboHasInvalidSelections={comboHasInvalidSelections}
                 comboValidationCopy={comboValidationCopy}
                 comboValidationReasons={comboValidationReasons}
+                slipWarningMessages={slipWarningMessages}
                 comboOddsLabel={comboOddsLabel}
                 comboReviewItems={comboReviewItems}
                 sameGameComboGroups={sameGameComboGroups}

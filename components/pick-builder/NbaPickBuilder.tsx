@@ -11,7 +11,7 @@ import FootballAnimation from "../animations/FootballAnimation";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierMetaForPick, parseAmericanOdds, TierIndex } from "@/lib/utils/scoring";
-import { canUserEditSlipPicks } from "@/lib/slips/state";
+import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
@@ -19,6 +19,7 @@ import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } f
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 type GameOption = {
     id: string;
@@ -730,24 +731,36 @@ const buildPickDescription = (
     return `${odd.market} - ${odd.name}`;
 };
 
-const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionMeta => ({
-    scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
-    market: odd.market,
-    gameId: game.id,
-    gameStartTime: game.date,
-    teamId: odd.player ? odd.player.team.id : teamIdFromOdd(odd, game),
-    playerId: odd.player?.id,
-    side: normalizeSide(odd.selection?.side),
-    threshold: odd.selection?.line,
-    home_team: game.homeTeam,
-    home_abbr: game.homeAbbr,
-    away_team: game.awayTeam,
-    away_abbr: game.awayAbbr,
-    external_pick_key: odd.id,
-    matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
-    match_date: game.date,
-    sport: "NBA"
-});
+const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionMeta => {
+    const teamId = odd.player ? odd.player.team.id : teamIdFromOdd(odd, game);
+    const inferredTeamSide =
+        !odd.player && !odd.selection?.side && teamId
+            ? teamId === game.homeTeamId
+                ? "home"
+                : teamId === game.awayTeamId
+                    ? "away"
+                    : undefined
+            : undefined;
+
+    return {
+        scope: odd.player ? "PLAYER_PROP" : "GAME_LINE",
+        market: odd.market,
+        gameId: game.id,
+        gameStartTime: game.date,
+        teamId,
+        playerId: odd.player?.id,
+        side: normalizeSide(odd.selection?.side) ?? inferredTeamSide,
+        threshold: odd.selection?.line,
+        home_team: game.homeTeam,
+        home_abbr: game.homeAbbr,
+        away_team: game.awayTeam,
+        away_abbr: game.awayAbbr,
+        external_pick_key: odd.id,
+        matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
+        match_date: game.date,
+        sport: "NBA"
+    }
+};
 
 const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
     if (!pick?.selection?.gameId || !pick.selection.market) return null;
@@ -1774,9 +1787,10 @@ export const NbaPickBuilder = ({
                     selection: {
                         gameId: leg.eventId,
                         market: leg.market,
+                        teamId: leg.teamId,
                         playerId: leg.playerId,
                         side: normalizeSide(leg.side),
-                        scope: leg.marketKey,
+                        scope: leg.playerId ? "PLAYER_PROP" : "GAME_LINE",
                         threshold: leg.line ?? undefined,
                         gameStartTime: startTime,
                         external_pick_key: leg.id,
@@ -1873,6 +1887,23 @@ export const NbaPickBuilder = ({
             legs: payload.legs?.map((leg) => leg.selection ?? null) ?? [],
         });
     }, [activeDraft]);
+    const slipConflictAnalysis = useMemo(
+        () =>
+            activeDraft
+                ? analyzeSlipPayloadAgainstPicks(picks, activeDraft, {
+                    ignorePickId: initialPick?.id,
+                })
+                : { duplicates: [], warnings: [] },
+        [activeDraft, initialPick?.id, picks]
+    );
+    const conflictWarningsEnabled = slipShowsConflictWarnings(slip);
+    const slipWarningMessages = useMemo(
+        () =>
+            conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipConflictAnalysis)
+                : [],
+        [conflictWarningsEnabled, slipConflictAnalysis]
+    );
     const lastDraftKeyRef = useRef<string>("");
     const lastConfidenceSeedKeyRef = useRef<string>("");
 
@@ -2363,6 +2394,19 @@ export const NbaPickBuilder = ({
                 })
                 return;
             }
+            const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, legDraft, {
+                ignorePickId: initialPick?.id,
+            });
+            if (slipSelectionAnalysis.duplicates.length > 0) {
+                setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+                return;
+            }
+            const slipSelectionMessages = conflictWarningsEnabled
+                ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+                : [];
+            if (slipSelectionMessages.length > 0) {
+                setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+            }
             setParlayLegs((prev) => [...prev, incomingLeg]);
             // const nextDraft = buildDraftPick(odd, game);
             onDraftPickChange?.(legDraft);
@@ -2379,6 +2423,19 @@ export const NbaPickBuilder = ({
         }
         const nextDraft = buildDraftPick(odd, game, { displayLineOverride });
 
+        const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, nextDraft, {
+            ignorePickId: initialPick?.id,
+        });
+        if (slipSelectionAnalysis.duplicates.length > 0) {
+            setToast({ id: Date.now(), type: "error", message: getSlipConflictMessage("duplicate"), duration: 3000 });
+            return;
+        }
+        const slipSelectionMessages = conflictWarningsEnabled
+            ? getSlipConflictWarningMessages(slipSelectionAnalysis)
+            : [];
+        if (slipSelectionMessages.length > 0) {
+            setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
+        }
         onDraftPickChange?.(nextDraft);
         setSelected({ odd, game, displayLineOverride });
     };
@@ -3508,6 +3565,7 @@ export const NbaPickBuilder = ({
             comboHasInvalidSelections={comboHasInvalidSelections}
             comboValidationCopy={comboValidationCopy}
             comboValidationReasons={comboValidationReasons}
+            slipWarningMessages={slipWarningMessages}
             comboOddsLabel={comboOddsLabel}
             comboReviewItems={comboReviewItems}
             sameGameComboGroups={sameGameComboGroups}

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -16,7 +17,9 @@ import { isSlipFinal, isSlipTimeLocked, SlipLike } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
 import { UserIcon } from "../layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
-import { generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
+import { generateProfileImageUrl, getMemberInitials, useIsMobile } from "@/lib/utils/helpers";
+import { getProfilePath } from "@/lib/utils/profileNavigation";
+import { useRouter } from "next/navigation";
 
 type Props = {
     group: Group | null;
@@ -180,6 +183,7 @@ const RankCell = ({
     profile_image,
     username,
     user_id,
+    currentUserId,
 }: {
     cumulative: number;
     rank: number;
@@ -187,9 +191,11 @@ const RankCell = ({
     profile_image: string | undefined;
     username: string | undefined;
     user_id: string;
+    currentUserId: string | undefined;
 }) => {
+    const router = useRouter();
     const [imgError, setImgError] = useState(false);
-    const displayName = username ?? user_id ?? "Member";
+    const displayName = username ?? "Member";
     const profileImg = generateProfileImageUrl(profile_image);
     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
 
@@ -203,11 +209,23 @@ const RankCell = ({
     const hasValidImage =
         profile_image && !imgError;
 
+    const userInitial = getMemberInitials(displayName);
+
+    const handleViewProfile = useCallback(
+        (userId: string) => {
+            if (currentUserId && userId) {
+                router.push(getProfilePath(userId, currentUserId));
+            }
+        },
+        [currentUserId, router]
+    );
+
     return (
         < div className="flex w-full items-start pt-[14px]" >
             <div className="relative inline-flex">
                 <div
-                    className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize}`}
+                    className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer`}
+                    onClick={() => handleViewProfile(user_id)}
                 >
                     {profileImg && hasValidImage ? (
                         <Image
@@ -222,7 +240,9 @@ const RankCell = ({
                             onError={() => setImgError(true)}
                         />
                     ) : (
-                        <UserIcon className="h-6 w-6 text-white/80 sm:h-9 sm:w-9" />
+                        <div className="flex items-center justify-center text-white/80 text-[12px] sm:text-[18px]" >
+                            <span>{userInitial}</span>
+                        </div>
                     )}
                 </div>
                 <div
@@ -650,6 +670,7 @@ export const LeaderboardGrid = ({
                                                     profile_image={profile_image}
                                                     username={username}
                                                     user_id={user_id}
+                                                    currentUserId={currentUserId}
                                                 />
                                                 <PlayerCard
                                                     cumulative={cumulative_points}
