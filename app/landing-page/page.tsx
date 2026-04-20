@@ -128,6 +128,59 @@ const LandingPage = () => {
   return (
     <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-10 pb-20 text-white">
       <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
+        <div className="relative flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{
+              opacity: 1,
+              scale: [1, 1.08, 1],
+            }}
+            transition={{
+              opacity: { duration: 0.6 },
+              scale: {
+                duration: 2.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+            }}
+            className="relative flex items-center justify-center"
+          >
+            <Image
+              src="/mainblueblack.svg"
+              alt=""
+              aria-hidden="true"
+              width={52}
+              height={52}
+              className="h-25 w-25 object-contain sm:h-[120px] sm:w-[120px] select-none"
+              priority
+              draggable={false}
+            />
+
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                maskImage: "url(/logocolorblackborder.svg)",
+                WebkitMaskImage: "url(/logocolorblackborder.svg)",
+                maskSize: "contain",
+                WebkitMaskSize: "contain",
+                maskRepeat: "no-repeat",
+                WebkitMaskRepeat: "no-repeat",
+                maskPosition: "center",
+                WebkitMaskPosition: "center",
+              }}
+            >
+              <div
+                className="absolute w-[30%] h-full 
+                  bg-gradient-to-r 
+                  from-transparent 
+                  via-white/50 
+                  to-transparent
+                  skew-x-[-25deg]
+                  animate-shine"
+              />
+            </div>
+          </motion.div>
+        </div>
         <div className="flex items-center gap-3 sm:gap-4 select-none">
           <h1>
             <Image
@@ -140,59 +193,6 @@ const LandingPage = () => {
               draggable={"false"}
             />
           </h1>
-          <div className="relative flex items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{
-                opacity: 1,
-                scale: [1, 1.08, 1],
-              }}
-              transition={{
-                opacity: { duration: 0.6 },
-                scale: {
-                  duration: 2.5,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                },
-              }}
-              className="relative flex items-center justify-center"
-            >
-              <Image
-                src="/mainblueblack.svg"
-                alt=""
-                aria-hidden="true"
-                width={52}
-                height={50}
-                className="h-12 w-12 object-contain sm:h-[52px] sm:w-[52px] select-none"
-                priority
-                draggable={false}
-              />
-
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  maskImage: "url(/logocolorblackborder.svg)",
-                  WebkitMaskImage: "url(/logocolorblackborder.svg)",
-                  maskSize: "contain",
-                  WebkitMaskSize: "contain",
-                  maskRepeat: "no-repeat",
-                  WebkitMaskRepeat: "no-repeat",
-                  maskPosition: "center",
-                  WebkitMaskPosition: "center",
-                }}
-              >
-                <div
-                  className="absolute w-[20%] h-full 
-                  bg-gradient-to-r 
-                  from-transparent 
-                  via-white/50 
-                  to-transparent
-                  skew-x-[-25deg]
-                  animate-shine"
-                />
-              </div>
-            </motion.div>
-          </div>
         </div>
       </div>
 
