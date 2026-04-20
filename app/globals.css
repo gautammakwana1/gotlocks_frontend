@@ -12,8 +12,16 @@
   --nav-border: rgba(255, 255, 255, 0.05);
   --card-bg: #0b0b0b;
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.18);
-  --brand: #2ee88f;
-  --brand-soft: rgba(46, 232, 143, 0.12);
+  --brand: #60a5fa;
+  --brand-soft: rgba(96, 165, 250, 0.14);
+  --brand-strong: #3b82f6;
+  --brand-highlight: #93c5fd;
+  --brand-text: #dbeafe;
+  --brand-text-soft: rgba(191, 219, 254, 0.84);
+  --brand-border: rgba(125, 211, 252, 0.46);
+  --brand-border-strong: rgba(147, 197, 253, 0.72);
+  --brand-shadow: rgba(59, 130, 246, 0.24);
+  --brand-caret: #93c5fd;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
   --jagged-valley: 12px;
@@ -46,7 +54,7 @@ body {
 }
 
 *:focus-visible {
-  outline: 2px solid #00ff99;
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -63,7 +71,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 255, 153, 0.35);
+  background-color: rgba(96, 165, 250, 0.35);
   border-radius: 9999px;
 }
 
@@ -111,16 +119,8 @@ body {
   }
 }
 
-@keyframes homeFloat {
-
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-
-  50% {
-    transform: translate3d(0, -14px, 0);
-  }
+.ui-fade-up-in {
+  animation: homeFadeUp 220ms ease-out;
 }
 
 .scrollbar-hide {
@@ -132,6 +132,136 @@ body {
   width: 0;
   height: 0;
   display: none;
+}
+
+.ui-input-accent {
+  caret-color: var(--brand-caret);
+}
+
+.ui-input-accent:focus {
+  border-color: var(--brand-border-strong);
+}
+
+.ui-accent-card {
+  background-image: linear-gradient(135deg,
+      rgba(59, 130, 246, 0.2),
+      rgba(15, 23, 42, 0.62) 54%,
+      rgba(0, 0, 0, 0.28));
+  box-shadow: 0 18px 46px -28px rgba(59, 130, 246, 0.2);
+}
+
+.ui-accent-card:hover {
+  border-color: rgba(125, 211, 252, 0.62);
+  background-image: linear-gradient(135deg,
+      rgba(59, 130, 246, 0.28),
+      rgba(15, 23, 42, 0.66) 54%,
+      rgba(0, 0, 0, 0.3));
+  box-shadow: 0 18px 46px -24px rgba(59, 130, 246, 0.42);
+}
+
+.ui-accent-card-icon {
+  color: var(--brand-text);
+  transition: color 150ms ease;
+}
+
+.group:hover .ui-accent-card-icon,
+.ui-accent-card:hover .ui-accent-card-icon {
+  color: #eff6ff;
+}
+
+.ui-accent-button {
+  border: 1px solid rgba(125, 211, 252, 0.5);
+  background-image: linear-gradient(135deg,
+      rgba(59, 130, 246, 0.26),
+      rgba(15, 23, 42, 0.58) 58%,
+      rgba(0, 0, 0, 0.24));
+  color: var(--brand-text);
+}
+
+.ui-accent-button:hover {
+  border-color: rgba(147, 197, 253, 0.76);
+  color: #fff;
+  background-image: linear-gradient(135deg,
+      rgba(59, 130, 246, 0.34),
+      rgba(15, 23, 42, 0.62) 58%,
+      rgba(0, 0, 0, 0.24));
+}
+
+.ui-accent-button-solid {
+  background-color: rgba(59, 130, 246, 0.8);
+  color: #eff6ff;
+}
+
+.ui-accent-button-solid:hover {
+  background-color: rgba(59, 130, 246, 0.92);
+}
+
+.ui-accent-badge {
+  border: 1px solid rgba(125, 211, 252, 0.38);
+  background-color: rgba(59, 130, 246, 0.14);
+  color: var(--brand-text);
+}
+
+.ui-accent-badge-strong {
+  border: 1px solid rgba(125, 211, 252, 0.5);
+  background-color: rgba(59, 130, 246, 0.18);
+  color: var(--brand-text);
+}
+
+.ui-accent-text {
+  color: var(--brand-text);
+}
+
+.ui-accent-text-soft {
+  color: var(--brand-text-soft);
+}
+
+.ui-accent-hover-text {
+  transition: color 150ms ease;
+}
+
+.ui-accent-hover-text:hover {
+  color: var(--brand-text);
+}
+
+.ui-accent-outline-hover {
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.ui-accent-outline-hover:hover {
+  border-color: rgba(125, 211, 252, 0.6);
+  color: #fff;
+  background-color: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 12px 32px -20px rgba(59, 130, 246, 0.34);
+}
+
+.ui-accent-pressed {
+  border-color: rgba(147, 197, 253, 0.7);
+  background-color: rgba(59, 130, 246, 0.18);
+  color: var(--brand-text);
+}
+
+.ui-accent-menu-surface {
+  background-image: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.05),
+      rgba(0, 0, 0, 0.82));
+  box-shadow: 0 24px 48px -24px rgba(59, 130, 246, 0.24);
+}
+
+.ui-accent-link {
+  transition:
+    color 150ms ease,
+    text-decoration-color 150ms ease;
+}
+
+.ui-accent-link:hover {
+  color: var(--brand-text);
+  text-decoration-color: rgba(147, 197, 253, 0.72);
 }
 
 .matchup-detail .rounded-2xl,

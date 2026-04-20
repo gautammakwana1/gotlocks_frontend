@@ -300,7 +300,7 @@ const PickBuilderClientPage = () => {
 
     const renderChooseGrid = () => {
         const pickCardClasses =
-            "flex h-[10rem] flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6";
+            "flex h-[10rem] flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6";
         const disabledPickCardClasses =
             "flex h-[10rem] cursor-not-allowed flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left opacity-60 shadow-lg shadow-black/30 sm:p-6";
 
@@ -312,7 +312,7 @@ const PickBuilderClientPage = () => {
                     className={pickCardClasses}
                 >
                     <div className="space-y-2">
-                        <p className="text-xs uppercase tracking-wide text-emerald-200">
+                        <p className="text-xs uppercase tracking-wide text-sky-200">
                             Make picks for groups
                         </p>
                         <p className="text-sm text-gray-200">
@@ -327,7 +327,7 @@ const PickBuilderClientPage = () => {
                     className={pickCardClasses}
                 >
                     <div className="space-y-2">
-                        <p className="text-xs uppercase tracking-wide text-emerald-200">Post a pick</p>
+                        <p className="text-xs uppercase tracking-wide text-sky-200">Post a pick</p>
                         <p className="text-sm text-gray-200">
                             Post straight picks or combo posts to the global feed.
                         </p>
@@ -341,7 +341,7 @@ const PickBuilderClientPage = () => {
                     className={disabledPickCardClasses}
                 >
                     <div className="space-y-2">
-                        <p className="text-xs uppercase tracking-wide text-emerald-200">
+                        <p className="text-xs uppercase tracking-wide text-sky-200">
                             Make picks for badges
                         </p>
                         <p className="text-sm text-gray-200">
@@ -375,7 +375,7 @@ const PickBuilderClientPage = () => {
                             key={group.id}
                             type="button"
                             onClick={() => router.push(`/group/${group.id}?tab=slips`)}
-                            className="flex items-center justify-between rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-3 text-left transition hover:border-emerald-300/50 hover:text-white"
+                            className="flex items-center justify-between rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-3 text-left transition hover:border-sky-300/50 hover:text-white"
                         >
                             <div>
                                 <p className="text-sm font-semibold text-white">{group.name}</p>
@@ -383,7 +383,7 @@ const PickBuilderClientPage = () => {
                                     {`${group?.member_count ?? 0} member${(group?.member_count ?? 0) === 1 ? "" : "s"}`}
                                 </p>
                             </div>
-                            <span className="text-xs font-semibold text-emerald-100">Go to slips</span>
+                            <span className="text-xs font-semibold text-sky-100">Go to slips</span>
                         </button>
                     ))}
                 </div>
@@ -593,7 +593,7 @@ const PickBuilderClientPage = () => {
                                                         setSelectedSlipId(undefined);
                                                     }}
                                                     className={`rounded-full border px-3 py-1.5 text-sm font-semibold uppercase tracking-wide transition ${active
-                                                        ? "border-emerald-300/70 bg-emerald-500/15 text-white"
+                                                        ? "border-sky-300/70 bg-sky-500/15 text-white"
                                                         : "border-white/12 bg-white/[0.04] text-gray-200 hover:border-white/25"
                                                         }`}
                                                 >
@@ -620,7 +620,7 @@ const PickBuilderClientPage = () => {
                                                         onClick={() => setSelectedSlipId(slip.id)}
                                                         disabled={!eligible}
                                                         className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${active
-                                                            ? "border-emerald-300/70 bg-emerald-500/15 text-white"
+                                                            ? "border-sky-300/70 bg-sky-500/15 text-white"
                                                             : "border-white/12 bg-white/[0.04] text-white hover:border-white/25"
                                                             } ${eligible ? "" : "opacity-60"}`}
                                                     >
@@ -647,7 +647,7 @@ const PickBuilderClientPage = () => {
                                         type="button"
                                         onClick={handlePostToSlip}
                                         disabled={!selectedSlipId}
-                                        className="rounded-2xl bg-emerald-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="ui-accent-button rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                         Post pick
                                     </button>

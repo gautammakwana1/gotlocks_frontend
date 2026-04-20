@@ -128,72 +128,71 @@ const LandingPage = () => {
   return (
     <div className="flex min-h-[calc(100vh-64px)] flex-col items-center justify-center gap-10 pb-20 text-white">
       <div className="flex w-full max-w-md flex-col items-center gap-4 text-center">
-        <div className="relative flex items-center justify-center">
-          {/* Logo */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{
-              opacity: 1,
-              scale: [1, 1.08, 1],
-            }}
-            transition={{
-              opacity: { duration: 0.6 },
-              scale: {
-                duration: 2.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-            }}
-            className="relative flex items-center justify-center"
-          >
+        <div className="flex items-center gap-3 sm:gap-4 select-none">
+          <h1>
             <Image
-              src="/logocolorblackborder.svg"
-              alt=""
-              aria-hidden="true"
-              width={52}
-              height={50}
-              className="h-30 w-30 object-contain sm:h-[108px] sm:w-[108px] select-none"
+              src="/gotlockstext.svg"
+              alt={APP_NAME}
+              width={360}
+              height={56}
+              className="h-10 w-auto object-contain sm:h-12"
               priority
-              draggable={false}
+              draggable={"false"}
             />
-
-            {/* Shine */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                maskImage: "url(/logocolorblackborder.svg)",
-                WebkitMaskImage: "url(/logocolorblackborder.svg)",
-                maskSize: "contain",
-                WebkitMaskSize: "contain",
-                maskRepeat: "no-repeat",
-                WebkitMaskRepeat: "no-repeat",
-                maskPosition: "center",
-                WebkitMaskPosition: "center",
+          </h1>
+          <div className="relative flex items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{
+                opacity: 1,
+                scale: [1, 1.08, 1],
               }}
+              transition={{
+                opacity: { duration: 0.6 },
+                scale: {
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                },
+              }}
+              className="relative flex items-center justify-center"
             >
+              <Image
+                src="/mainblueblack.svg"
+                alt=""
+                aria-hidden="true"
+                width={52}
+                height={50}
+                className="h-12 w-12 object-contain sm:h-[52px] sm:w-[52px] select-none"
+                priority
+                draggable={false}
+              />
+
               <div
-                className="absolute w-[40%] h-full 
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  maskImage: "url(/logocolorblackborder.svg)",
+                  WebkitMaskImage: "url(/logocolorblackborder.svg)",
+                  maskSize: "contain",
+                  WebkitMaskSize: "contain",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskPosition: "center",
+                  WebkitMaskPosition: "center",
+                }}
+              >
+                <div
+                  className="absolute w-[20%] h-full 
                   bg-gradient-to-r 
                   from-transparent 
                   via-white/50 
                   to-transparent
                   skew-x-[-25deg]
                   animate-shine"
-              />
-            </div>
-          </motion.div>
-        </div>
-        <div className="flex items-center gap-3 sm:gap-4">
-          <h1
-            className="allow-caps text-5xl font-extrabold text-transparent bg-clip-text"
-            style={{
-              ...displayNameGradientStyle,
-              backgroundImage: `linear-gradient(130deg, ${COLORS.ACCENT} 0%, ${COLORS.ACCENT} 100%)`,
-              color: COLORS.ACCENT,
-            }}
-          >
-            {APP_NAME.toLowerCase()}
-          </h1>
+                />
+              </div>
+            </motion.div>
+          </div>
         </div>
       </div>
 
@@ -201,7 +200,7 @@ const LandingPage = () => {
         <button
           type="button"
           onClick={() => router.push("/account-creation")}
-          className={`w-full rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-500/35 via-emerald-400/15 to-black/40 py-3 text-base font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/70 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300`}
+          className={`ui-accent-button w-full rounded-2xl py-3 text-base font-semibold uppercase tracking-wide transition`}
         >
           create an account
         </button>
@@ -244,7 +243,7 @@ const LandingPage = () => {
                   setEmail(event.target.value)
                   setError(null)
                 }}
-                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
+                className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                 placeholder="shane@gotlocks.com"
                 autoComplete="email"
               />
@@ -263,7 +262,7 @@ const LandingPage = () => {
                     setPassword(event.target.value)
                     setError(null)
                   }}
-                  className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white caret-emerald-300 outline-none transition focus:border-[rgba(0,255,153,0.6)]"
+                  className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                   placeholder="locks123"
                   autoComplete="current-password"
                 />

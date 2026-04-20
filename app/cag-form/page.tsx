@@ -10,7 +10,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { GroupSelector } from "@/lib/interfaces/interfaces";
 import BackButton from "@/components/ui/BackButton";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { greenGradientBox } from "@/lib/styles/containers";
+import { accentGradientBox, greenGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { CopyIcon } from "@/components/ui/SvgIcons";
@@ -177,7 +177,7 @@ const CagFormPage = () => {
         </div>
 
         {!showSuccess && (
-          <div className={`${greenGradientBox} p-6`}>
+          <div className={`${accentGradientBox} p-6`}>
             <h1 className="text-2xl font-semibold text-white">Create a group</h1>
             <p className="mt-2 text-sm text-gray-400">
               Groups can host multiple slips at once. Create the group, share the code, and
@@ -192,7 +192,7 @@ const CagFormPage = () => {
                 <input
                   value={form.name}
                   onChange={handleInputChange("name")}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
+                  className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
                   placeholder="Sunday Locks"
                 />
                 {errors.name && (
@@ -209,7 +209,7 @@ const CagFormPage = () => {
                 <textarea
                   value={form.description}
                   onChange={handleInputChange("description")}
-                  className="min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition focus:border-emerald-400/70"
+                  className="ui-input-accent min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
                   placeholder="Multi-sport slips, leaderboard or just for vibes."
                 />
                 {errors.description && (
@@ -223,7 +223,7 @@ const CagFormPage = () => {
                 type="button"
                 onClick={handleCreate}
                 disabled={!form.name.trim() || loading}
-                className="self-start rounded-2xl bg-emerald-500/25 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/35 disabled:cursor-not-allowed disabled:opacity-40"
+                className="ui-accent-button self-start rounded-2xl px-6 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
               >
                 create group
               </button>
@@ -232,16 +232,16 @@ const CagFormPage = () => {
         )}
 
         {showSuccess && createdId && inviteCode && (
-          <div className={`${greenGradientBox} space-y-4 p-6 text-sm text-gray-300`}>
+          <div className={`${accentGradientBox} space-y-4 p-6 text-sm text-gray-300`}>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">Group ready</h2>
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-emerald-100">
-                <span className="text-emerald-100/70">code</span>
+              <div className="ui-accent-text flex items-center gap-2 text-xs uppercase tracking-wide">
+                <span className="text-blue-200/70">code</span>
                 <span className="text-sm font-semibold text-white">{inviteCode}</span>
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-2 text-emerald-100 transition hover:border-emerald-300/70 hover:text-white"
+                  className="ui-accent-button rounded-lg p-2 transition"
                   aria-label="Copy invite code"
                 >
                   <CopyIcon />
@@ -258,7 +258,7 @@ const CagFormPage = () => {
               <button
                 type="button"
                 onClick={() => router.push(`/group/${createdId}`)}
-                className="rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-emerald-500/35 via-emerald-400/15 to-black/40 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/70 hover:text-white"
+                className="ui-accent-button rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition"
               >
                 go to group
               </button>

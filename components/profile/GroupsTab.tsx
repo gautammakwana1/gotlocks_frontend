@@ -104,9 +104,9 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
     };
 
     const actionButtonClassName =
-        "group flex h-full w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/15 via-black/60 to-black/30 text-left shadow-sm transition hover:border-emerald-300/60 hover:bg-emerald-500/15";
+        "ui-accent-card group flex h-full w-full items-center justify-between gap-3 rounded-3xl border border-white/10 text-left shadow-sm transition";
     const actionIconClassName =
-        "flex h-9 w-9 items-center justify-center text-emerald-100 transition group-hover:text-emerald-50 sm:h-10 sm:w-10";
+        "ui-accent-card-icon flex h-9 w-9 items-center justify-center sm:h-10 sm:w-10";
 
     const handleJoin = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -184,7 +184,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 key={group.id}
                                 type="button"
                                 onClick={() => router.push(`/group/${group.id}`)}
-                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6"
+                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
                                     <span>{isCommissioner ? "commissioner" : "member"}</span>
@@ -219,7 +219,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 key={group.id}
                                 type="button"
                                 onClick={() => router.push(`/group/${group.id}`)}
-                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25 sm:p-6"
+                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
                                     <span>{isCommissioner ? "commissioner" : "member"}</span>
@@ -281,7 +281,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             inputMode="numeric"
                             placeholder="invite code"
                             autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base text-white outline-none transition focus:border-emerald-400/70"
+                            className="ui-input-accent w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base text-white outline-none transition"
                         />
                         {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
                         <div className="flex justify-center gap-3">
@@ -294,7 +294,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={!joinCode || joinCode.length !== 5}
                             >
                                 Join

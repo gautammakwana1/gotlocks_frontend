@@ -1,6 +1,7 @@
 "use client";
 
 import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/interfaces";
+import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
 import { formatDateTime } from "@/lib/utils/date";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
@@ -18,7 +19,7 @@ type PostCardProps = {
 const resultTone = (result: PickResult) => {
     switch (result) {
         case "win":
-            return "border-amber-300/70 bg-amber-400/15 text-amber-100";
+            return "border-emerald-300/70 bg-emerald-400/15 text-emerald-100";
         case "loss":
             return "border-red-400/60 bg-red-500/15 text-red-100";
         case "void":
@@ -92,9 +93,6 @@ const resolveLegCategoryLabel = (market?: string) => {
     return market.replace(/Player\s+/i, "Player ").toLowerCase();
 };
 
-const WINNING_POST_CARD_TONE =
-    "border border-[#c4ab78]/62 border-b-[3px] border-b-[#9e7840] bg-[radial-gradient(circle_at_top_right,rgba(255,231,165,0.06),transparent_24%),linear-gradient(180deg,rgba(255,248,220,0.035),rgba(255,255,255,0.02)_16%,rgba(255,255,255,0.025)_82%,rgba(217,119,6,0.03))] shadow-[inset_0_1px_0_rgba(255,248,220,0.18),inset_0_-2px_0_rgba(120,85,25,0.28),inset_0_0_0_1px_rgba(181,140,61,0.22),0_2px_10px_rgba(0,0,0,0.18)]";
-
 const WinningHeaderArt = () => (
     <div
         aria-hidden
@@ -152,7 +150,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
     const confidenceLabel = pick.confidence ? pick.confidence.toLowerCase() : null;
     const confidenceTone =
         confidenceLabel === "high"
-            ? "text-emerald-100"
+            ? "text-sky-100"
             : confidenceLabel === "medium"
                 ? "text-amber-100"
                 : confidenceLabel === "low"
@@ -204,6 +202,18 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
     const upActive = userReaction === "up";
     const downActive = userReaction === "down";
     const isWinningPost = resultLabel === "win";
+    const isLosingPost = resultLabel === "loss";
+    const isPendingPost = resultLabel === "pending";
+    const pickAccentDotTone = isWinningPost
+        ? "bg-emerald-300/80"
+        : isLosingPost
+            ? "bg-rose-300/80"
+            : "bg-sky-300/80";
+    const pickAccentTextTone = isWinningPost
+        ? "text-emerald-200"
+        : isLosingPost
+            ? "text-rose-200"
+            : "text-sky-200";
     const pickResult = pick?.result ?? "pending"
     const accent = PICK_RESULT_ACCENTS[pickResult] ?? PICK_RESULT_ACCENTS.pending;
 
@@ -211,7 +221,14 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
 
     return (
         <div className="py-4">
-            <div className="flex flex-wrap items-center justify-end gap-3 px-5 pb-3 sm:px-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
+                <div className="felx items-center">
+                    {collapsed && (
+                        <span className={`text-[12px] font-semibold ${pickAccentTextTone}`}>
+                            {postHeaderLabel}
+                        </span>
+                    )}
+                </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                     <div className="flex items-center gap-2">
                         {collapsed && (
@@ -224,9 +241,8 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                             onClick={() => onReaction("up", pick.id)}
                             aria-pressed={upActive}
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${upActive
-                                ? "border-emerald-300/70 bg-emerald-500/20 text-emerald-100"
-                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"
-                                }`}
+                                ? "border-sky-300/70 bg-sky-500/20 text-sky-100"
+                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"}`}
                         >
                             <span aria-hidden="true">{UP_TRIANGLE}</span>
                             <span className="tabular-nums text-[11px]">{up}</span>
@@ -237,8 +253,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                             aria-pressed={downActive}
                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${downActive
                                 ? "border-rose-300/70 bg-rose-500/20 text-rose-100"
-                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"
-                                }`}
+                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"}`}
                         >
                             <span aria-hidden="true">{DOWN_TRIANGLE}</span>
                             <span className="tabular-nums text-[11px]">{down}</span>
@@ -333,7 +348,11 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                         <div
                             className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
                                 ? WINNING_POST_CARD_TONE
-                                : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
+                                : isLosingPost
+                                    ? LOSING_POST_CARD_TONE
+                                    : isPendingPost
+                                        ? PENDING_POST_CARD_TONE
+                                        : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
                                 }`}
                         >
                             {isWinningPost && <WinningHeaderArt />}
@@ -348,7 +367,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                             <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
                                                 <div className="min-w-0 flex flex-1 items-center gap-2">
                                                     <span
-                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
                                                     />
                                                     <div className="min-w-0 flex-1">
                                                         {detailCategoryLabel && (
@@ -357,7 +376,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                             </span>
                                                         )}
                                                         <p
-                                                            className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}
+                                                            className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}
                                                             title={displayPick}
                                                         >
                                                             {pickLine}
@@ -407,7 +426,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                 >
                                                     <div className="min-w-0 flex items-center gap-2">
                                                         <span
-                                                            className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                            className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
                                                         />
                                                         <div className="min-w-0">
                                                             {legCategory && (
@@ -415,7 +434,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                                     {legCategory}
                                                                 </span>
                                                             )}
-                                                            <p className={`min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}>
+                                                            <p className={`min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}>
                                                                 {legPickLine}
                                                             </p>
                                                             {legMeta && (

@@ -12,14 +12,14 @@ export const AuthLegalNotice = () => {
             By continuing you agree to {APP_NAME.toLowerCase()}&apos;s{" "}
             <Link
                 href={TERMS_HREF}
-                className="font-medium text-white underline decoration-white/30 underline-offset-4 transition hover:text-emerald-200 hover:decoration-emerald-200"
+                className="ui-accent-link font-medium text-white underline decoration-white/30 underline-offset-4"
             >
                 Terms and Conditions
             </Link>{" "}
             and{" "}
             <Link
                 href={PRIVACY_HREF}
-                className="font-medium text-white underline decoration-white/30 underline-offset-4 transition hover:text-emerald-200 hover:decoration-emerald-200"
+                className="ui-accent-link font-medium text-white underline decoration-white/30 underline-offset-4"
             >
                 Privacy Policy
             </Link>

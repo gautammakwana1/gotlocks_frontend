@@ -885,7 +885,7 @@ const scrollerStickyColumnRowClasses = (
     `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-20 py-3 ${banded
         ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
         : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
-    } ${selected ? "after:bg-emerald-300/60" : "after:bg-white/5"}`;
+    } ${selected ? "after:bg-sky-300/60" : "after:bg-white/5"}`;
 
 const PropRowScroller = ({
     scrollerKey,
@@ -2047,6 +2047,7 @@ export const NhlPickBuilder = ({
                         description: summaryLabel,
                         odds_bracket: groupOddsLabel,
                         difficulty_label: difficultyLabel,
+                        difficultyTier: reviewGroupTierMeta?.tier,
                         buildMode: "ODDS",
                         points: payloadGroupTierMeta?.points,
                         isCombo: true,
@@ -2561,9 +2562,9 @@ export const NhlPickBuilder = ({
             return `${base} border-white/10 text-gray-500`;
         }
         if (selected) {
-            return `${base} border-emerald-300/70 bg-emerald-500/20 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]`;
+            return `${base} border-sky-300/70 bg-sky-500/20 text-sky-100 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]`;
         }
-        return `${base} border-emerald-400/50 text-emerald-200 hover:border-emerald-300/70`;
+        return `${base} border-sky-400/50 text-sky-200 hover:border-sky-300/70`;
     };
 
     const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
@@ -2594,7 +2595,7 @@ export const NhlPickBuilder = ({
                     {lineLabel}
                 </span>
                 <span
-                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-emerald-100"
+                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-sky-100"
                         }`}
                 >
                     {oddsLabel}
@@ -2617,7 +2618,7 @@ export const NhlPickBuilder = ({
                 type="button"
                 onClick={() => odd && handleSelectOdd(odd, activeGame as GameOption)}
                 disabled={!odd || locked}
-                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
+                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-sky-50" : "text-gray-200"
                     } ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
             >
                 {hasLine
@@ -2776,7 +2777,7 @@ export const NhlPickBuilder = ({
                                 onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
                                 disabled={!row.odd || locked}
                                 className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelected
-                                    ? "border-emerald-300/60 bg-emerald-500/10"
+                                    ? "border-sky-300/60 bg-sky-500/10"
                                     : "hover:bg-white/[0.02]"
                                     } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                 style={{
@@ -2893,7 +2894,7 @@ export const NhlPickBuilder = ({
                                                 {label}
                                             </span>
                                             <span
-                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-sky-100" : "text-gray-500"
                                                     }`}
                                             >
                                                 {odd ? formatOdds(odd.price) : "-"}
@@ -3006,7 +3007,7 @@ export const NhlPickBuilder = ({
                                                                     {lineLabel}
                                                                 </span>
                                                                 <span
-                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-emerald-100" : "text-gray-500"
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-sky-100" : "text-gray-500"
                                                                         }`}
                                                                 >
                                                                     {oddsLabel}
@@ -3471,7 +3472,7 @@ export const NhlPickBuilder = ({
                                             type="button"
                                             onClick={() => onDateChange?.(option.key, "user")}
                                             className={`shrink-0 border-b-2 pb-1 text-xs font-semibold transition ${active
-                                                ? "border-emerald-300 text-white"
+                                                ? "border-sky-300 text-white"
                                                 : "border-transparent text-gray-400 hover:border-white/30 hover:text-white"
                                                 }`}
                                         >
@@ -3624,7 +3625,7 @@ export const NhlPickBuilder = ({
                                             >
                                                 <div className="px-3">
                                                     <div className="relative flex items-center h-px w-full overflow-hidden">
-                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-emerald-700/90 to-transparent shimmer-divider"></div>
+                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/100 to-transparent shimmer-divider"></div>
                                                     </div>
                                                 </div>
                                                 <div></div>
@@ -3744,7 +3745,7 @@ export const NhlPickBuilder = ({
                                         type="button"
                                         onClick={() => handleTabChange(tab)}
                                         className={`whitespace-nowrap border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition ${active
-                                            ? "border-emerald-300 text-emerald-100 active"
+                                            ? "border-sky-300 text-sky-100 active"
                                             : "border-transparent text-gray-400 hover:text-white"
                                             }`}
                                     >
@@ -3962,7 +3963,7 @@ export const NhlPickBuilder = ({
                                                                         }))
                                                                     }
                                                                     className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                                        ? "border-emerald-300/70 bg-emerald-500/20 text-white"
+                                                                        ? "border-sky-300/70 bg-sky-500/20 text-white"
                                                                         : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
                                                                         }`}
                                                                 >
@@ -4014,7 +4015,7 @@ export const NhlPickBuilder = ({
                                                                             onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
                                                                             disabled={!row.odd || locked}
                                                                             className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
-                                                                                ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                                ? "border-sky-300/60 bg-sky-500/10"
                                                                                 : "hover:bg-white/[0.02]"
                                                                                 } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                                                             style={{

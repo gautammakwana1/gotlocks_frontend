@@ -205,7 +205,7 @@ const NotificationsFeed = ({
                                         <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">
                                             <span>{formatDateTime(notification.created_at)}</span>
                                             {!notification.is_read && (
-                                                <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-2 py-0.5 text-[9px] text-emerald-100">
+                                                <span className="ui-accent-badge rounded-full px-2 py-0.5 text-[9px]">
                                                     new
                                                 </span>
                                             )}
@@ -234,7 +234,7 @@ const NotificationsFeed = ({
                                         <button
                                             type="button"
                                             onClick={() => handleAccept(notification.follow_request_id as string, notification.id as string)}
-                                            className="rounded-lg border border-emerald-300/50 bg-emerald-500/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-emerald-100 transition hover:border-emerald-200/70"
+                                            className="ui-accent-button rounded-lg px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] transition"
                                         >
                                             accept
                                         </button>

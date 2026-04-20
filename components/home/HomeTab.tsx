@@ -79,7 +79,7 @@ const ActionCard = ({ action }: { action: ActionDefinition }) => (
     <button
         type="button"
         onClick={action.onClick}
-        className="group relative overflow-hidden rounded-[18px] border border-white/10 bg-gradient-to-br from-amber-400/20 via-black/60 to-black/30 px-3 py-3 text-left shadow-sm transition hover:border-amber-300/60 hover:bg-amber-400/12 sm:px-4 sm:py-4 lg:px-5 lg:py-5"
+        className="ui-accent-card group relative overflow-hidden rounded-[18px] border border-white/10 px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5"
     >
         <div
             aria-hidden
@@ -89,7 +89,7 @@ const ActionCard = ({ action }: { action: ActionDefinition }) => (
             <p className="text-[11px] font-semibold text-white sm:text-sm">
                 {action.label}
             </p>
-            <div className="text-amber-100 transition group-hover:text-amber-50">
+            <div className="ui-accent-card-icon">
                 {action.icon}
             </div>
         </div>
@@ -102,7 +102,7 @@ const StatCard = ({ stat }: { stat: StatDefinition }) => (
             {stat.label}
         </p>
         <p
-            className={`text-lg font-semibold sm:text-2xl ${stat.highlight ? "text-emerald-200" : "text-white"
+            className={`text-lg font-semibold sm:text-2xl ${stat.highlight ? "text-blue-200" : "text-white"
                 }`}
         >
             {stat.value}
@@ -612,14 +612,22 @@ const HomeTab = () => {
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">
-            <section className="relative overflow-hidden rounded-[18px] border border-white/10 bg-black/80 bg-gradient-to-br from-black/80 via-black/50 to-emerald-900/20 p-4 shadow-2xl shadow-black/40 sm:p-6 lg:p-8 animate-[homeFadeUp_0.7s_ease-out_both]">
+            <section className="-mx-2 -mt-3 relative overflow-hidden rounded-[18px] border border-white/10 p-4 shadow-2xl shadow-black/40 animate-[homeFadeUp_0.7s_ease-out_both] sm:mx-0 sm:mt-0 sm:p-6 lg:p-8">
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute -top-24 right-[-10%] h-56 w-56 rounded-full bg-emerald-400/25 blur-3xl animate-[homeFloat_12s_ease-in-out_infinite]"
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/90 via-black/84 to-blue-950/16"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute bottom-[-30%] left-[-15%] h-64 w-64 rounded-full bg-sky-400/20 blur-3xl animate-[homeFloat_16s_ease-in-out_infinite]"
+                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-gradient-to-b from-white/7 via-black/32 via-62% to-black/86"
+                />
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_52%)]"
+                />
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025)_16%,transparent_34%)]"
                 />
                 <div className="relative z-10 flex flex-col gap-5 sm:gap-6 lg:gap-8">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:items-center sm:gap-4">
@@ -643,7 +651,7 @@ const HomeTab = () => {
                             </div>
                             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10 sm:mt-3 sm:h-2">
                                 <div
-                                    className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-emerald-500"
+                                    className="h-full rounded-full bg-gradient-to-r from-sky-300 to-blue-500"
                                     style={{ width: `${Math.round(xpLevelRatio * 100)}%` }}
                                 />
                             </div>
@@ -685,7 +693,7 @@ const HomeTab = () => {
                                                 key={`${group.id}-${index}`}
                                                 type="button"
                                                 onClick={() => router.push(`/group/${group.id}`)}
-                                                className="min-w-full snap-center flex flex-col gap-2 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
+                                                className="min-w-full snap-center flex flex-col gap-2 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                             >
                                                 <div className="flex items-center justify-between text-[18px] uppercase tracking-[0.12em] text-gray-400">
                                                     <span>League</span>
@@ -744,7 +752,7 @@ const HomeTab = () => {
                                             key={group.id}
                                             type="button"
                                             onClick={() => router.push(`/group/${group.id}`)}
-                                            className="flex flex-col gap-3 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-emerald-400/60 hover:shadow-emerald-500/25"
+                                            className="flex flex-col gap-3 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                         >
                                             <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-gray-400">
                                                 <span>League</span>
@@ -775,7 +783,7 @@ const HomeTab = () => {
             </section>
 
             <section
-                className="grid grid-cols-3 gap-2 sm:gap-4 animate-[homeFadeUp_0.7s_ease-out_both]"
+                className="-mx-2 grid grid-cols-3 gap-2 animate-[homeFadeUp_0.7s_ease-out_both] sm:mx-0 sm:gap-4"
                 style={{ animationDelay: "0.1s" }}
             >
                 {quickActions.map((action) => (
@@ -813,7 +821,7 @@ const HomeTab = () => {
                                     >
                                         <span>notifications</span>
                                         {unreadNotifications > 0 ? (
-                                            <span className="rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-emerald-100">
+                                            <span className="rounded-full border border-blue-300/40 bg-blue-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-blue-100">
                                                 {unreadNotifications}
                                             </span>
                                         ) : null}
@@ -878,7 +886,7 @@ const HomeTab = () => {
                             inputMode="numeric"
                             placeholder="invite code"
                             autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                            className="ui-input-accent w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition"
                         />
                         {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
                         <div className="flex justify-center gap-3">
@@ -891,7 +899,7 @@ const HomeTab = () => {
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white disabled:cursor-not-allowed"
+                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed"
                                 disabled={!joinCode || joinCode.length !== 5}
                             >
                                 Join

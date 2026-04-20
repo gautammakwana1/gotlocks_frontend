@@ -341,11 +341,11 @@ const SlipCellCard = ({
                     </p>
                     <Link
                         href={`/group/${groupId}/slips/${slip.id}`}
-                        className="mt-auto flex w-full items-center justify-between rounded-md border border-dashed border-emerald-400/40 bg-white/[0.04] px-4 py-3 text-left text-[11px] font-semibold text-emerald-100 shadow-sm transition hover:border-emerald-300/70 md:text-xs"
+                        className="mt-auto flex w-full items-center justify-between rounded-md border border-dashed border-sky-400/40 bg-white/[0.04] px-4 py-3 text-left text-[11px] font-semibold text-sky-100 shadow-sm transition hover:border-emerald-300/70 md:text-xs"
                     >
                         <span>Add your pick</span>
                         <span
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/50 bg-emerald-500/10 text-lg text-emerald-100"
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/40 bg-sky-500/10 text-lg text-sky-100"
                             aria-hidden
                         >
                             +

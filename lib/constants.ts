@@ -1,6 +1,6 @@
 import { League } from "./interfaces/interfaces";
 
-export const APP_NAME = "gotLocks?"
+export const APP_NAME = "gotlocks?"
 export const TAGLINE = "trust your gut. 🔒 it in. climb the rankings."
 
 export const ALLOWED_API_KEYS = [
@@ -49,8 +49,8 @@ export const SPORT_OPTIONS = [
 
 export const COLORS = {
   BACKGROUND: "#000000",
-  ACCENT: "#00FF99",
-  SECONDARY: "#12420e",
+  ACCENT: "#60A5FA",
+  SECONDARY: "#0F172A",
   TEXT_PRIMARY: "#FFFFFF",
   TEXT_MUTED: "#A3A3A3",
   ERROR: "#FF4D4D",

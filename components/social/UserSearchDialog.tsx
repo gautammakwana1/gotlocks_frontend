@@ -334,7 +334,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                                             {isMobile && (
                                                 <div className="flex shrink-0 items-center gap-2">
                                                     {following ? (
-                                                        <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
+                                                        <span className="ui-accent-badge rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.14em]">
                                                             Following
                                                         </span>
                                                     ) : null}
@@ -349,7 +349,7 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                                     {!isMobile && (
                                         <div className="flex shrink-0 items-center gap-2">
                                             {following ? (
-                                                <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
+                                                <span className="ui-accent-badge rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]">
                                                     Following
                                                 </span>
                                             ) : null}

@@ -77,7 +77,7 @@ const MemberActions = ({
                 type="button"
                 disabled={disablePromote}
                 onClick={onPromote}
-                className="w-full rounded-lg border border-emerald-400/20 bg-gradient-to-br from-emerald-500/25 via-emerald-500/10 to-black/30 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-emerald-100 transition hover:border-emerald-300/60 hover:from-emerald-400/30 hover:via-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
+                className="ui-accent-button w-full rounded-lg px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
             >
                 {state?.promoting ? "transferring..." : "make commissioner"}
             </button>
@@ -130,7 +130,7 @@ const MemberCard = ({
     const showActions = showPromote || showLeave || Boolean(state?.error);
 
     return (
-        <div className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-[#00ff99]/12 via-[#00ff99]/6 to-slate-950/15 bg-clip-padding p-4 shadow-sm transition hover:border-[#00ff99]/35">
+        <div className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-blue-500/14 via-blue-500/8 to-slate-950/15 bg-clip-padding p-4 shadow-sm transition hover:border-sky-300/35">
             {showRemove && (
                 <button
                     type="button"
@@ -149,7 +149,7 @@ const MemberCard = ({
                             ? getProfilePath(member.user_id, currentUserId)
                             : "#"
                     }
-                    className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-gray-200 transition hover:border-emerald-300/60 hover:text-white hover:shadow-[0_0_16px_rgba(16,185,129,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                    className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-gray-200 transition hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_16px_rgba(96,165,250,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                     aria-label={`View ${displayName || "member"} profile`}
                 >
                     {memberProfileImage ? (

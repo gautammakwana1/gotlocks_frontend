@@ -4,3 +4,8 @@ export const displayNameGradientStyle = {
     textShadow: "0 1px 3px rgba(0,0,0,0.55), 0 0 12px rgba(0,0,0,0.28)",
     letterSpacing: "0.06em",
 } as const;
+
+export const brandWordmarkStyle = {
+    color: "#60A5FA",
+    letterSpacing: "0.06em",
+} as const;

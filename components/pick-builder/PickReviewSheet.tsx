@@ -395,7 +395,7 @@ export function PickReviewSheet({
                                   className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
                                   style={sheetTierCard.style}
                                 >
-                                  <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                  <p className="text-[10px] font-semibold lowercase tracking-wide text-sky-100/70">
                                     tier
                                   </p>
                                   <p className="mt-1 text-[10px] font-semibold text-white">
@@ -429,7 +429,7 @@ export function PickReviewSheet({
                                 type="button"
                                 onClick={() => onSubmitCombo("slip")}
                                 disabled={locked}
-                                className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="ui-accent-button rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
                               >
                                 post combo to slip
                               </button>
@@ -545,7 +545,7 @@ export function PickReviewSheet({
                                           className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${group.tierCard.toneClass}`}
                                           style={group.tierCard.style}
                                         >
-                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-sky-100/70">
                                             tier
                                           </p>
                                           <p className="mt-1 text-[10px] font-semibold text-white">
@@ -652,7 +652,7 @@ export function PickReviewSheet({
                                           className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${item.tierCard.toneClass}`}
                                           style={item.tierCard.style}
                                         >
-                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                                          <p className="text-[10px] font-semibold lowercase tracking-wide text-sky-100/70">
                                             tier
                                           </p>
                                           <p className="mt-1 text-[10px] font-semibold text-white">
@@ -741,7 +741,7 @@ export function PickReviewSheet({
                               className={`rounded-xl border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15, 23, 42, 0.24)] ${sheetTierCard.toneClass}`}
                               style={sheetTierCard.style}
                             >
-                              <p className="text-[10px] font-semibold lowercase tracking-wide text-emerald-100/70">
+                              <p className="text-[10px] font-semibold lowercase tracking-wide text-sky-100/70">
                                 tier
                               </p>
                               <p className="mt-1 text-[10px] font-semibold text-white">
@@ -775,7 +775,7 @@ export function PickReviewSheet({
                             type="button"
                             onClick={() => onSubmitSingle("slip")}
                             disabled={locked}
-                            className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-400/70 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="ui-accent-button rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             post to slip
                           </button>
@@ -804,7 +804,7 @@ export function PickReviewSheet({
                   })
                 }
                 disabled={locked || !hasSelectedPosts}
-                className="w-full rounded-xl bg-emerald-500/25 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/35 disabled:cursor-not-allowed disabled:opacity-40"
+                className="ui-accent-button w-full rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bottomPostLabel}
               </button>

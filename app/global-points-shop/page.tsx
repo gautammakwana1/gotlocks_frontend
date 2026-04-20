@@ -174,7 +174,7 @@ const GlobalPointsShopPage = () => {
                                                     setPendingRedemption(selectedReward);
                                                 }}
                                                 className={`w-[92px] rounded-2xl px-2.5 py-2 text-xs font-semibold uppercase tracking-[0.04em] transition ${canRedeem
-                                                    ? "bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                                                    ? "bg-sky-500/25 text-sky-100 hover:bg-sky-500/35"
                                                     : "border border-white/10 bg-white/5 text-[var(--text-muted)] disabled:cursor-not-allowed"
                                                     }`}
                                             >
@@ -225,7 +225,7 @@ const GlobalPointsShopPage = () => {
                                                     aria-pressed={isSelected}
                                                     aria-label={`Select ${pointFormatter.format(bucket.points)} point reward option ${slotIndex + 1}`}
                                                     className={`h-20 rounded-2xl border transition ${isSelected
-                                                        ? "border-emerald-300/70 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]"
+                                                        ? "border-sky-300/70 bg-sky-500/10 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]"
                                                         : "border-white/10 bg-white/5 hover:border-white/20"
                                                         } ${!canAfford ? "cursor-not-allowed opacity-50" : ""}`}
                                                 >
@@ -263,7 +263,7 @@ const GlobalPointsShopPage = () => {
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white"
+                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition"
                             >
                                 Confirm redeem
                             </button>

@@ -2481,6 +2481,7 @@ export const NflPickBuilder = ({
                         description: summaryLabel,
                         odds_bracket: groupOddsLabel,
                         difficulty_label: difficultyLabel,
+                        difficultyTier: reviewGroupTierMeta?.tier,
                         buildMode: "ODDS",
                         points: payloadGroupTierMeta?.points,
                         isCombo: true,
@@ -2984,7 +2985,7 @@ export const NflPickBuilder = ({
                                     type="button"
                                     onClick={() => onDateChange?.(option.key, "user")}
                                     className={`shrink-0 border-b-2 pb-1 text-xs font-semibold transition ${active
-                                        ? "border-emerald-300 text-white"
+                                        ? "border-sky-300 text-white"
                                         : "border-transparent text-gray-400 hover:border-white/30 hover:text-white"
                                         }`}
                                 >
@@ -3539,7 +3540,7 @@ export const NflPickBuilder = ({
                                                         }))
                                                     }
                                                     className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                        ? "border-emerald-300/70 bg-emerald-500/20 text-white"
+                                                        ? "border-sky-300/70 bg-sky-500/20 text-white"
                                                         : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
                                                         }`}
                                                 >
@@ -3653,7 +3654,7 @@ export const NflPickBuilder = ({
                                                             onClick={() => row.odd && handleOddsSelection(row.odd)}
                                                             disabled={!row.odd || locked}
                                                             className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
-                                                                ? "border-emerald-300/60 bg-emerald-500/10"
+                                                                ? "border-sky-300/60 bg-sky-500/10"
                                                                 : "hover:bg-white/[0.02]"
                                                                 } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                                             style={{
@@ -3779,7 +3780,7 @@ export const NflPickBuilder = ({
                                     type="button"
                                     onClick={() => handleTabChange(tab.key)}
                                     className={`whitespace-nowrap border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition ${isActive
-                                        ? "border-emerald-300 text-emerald-100 active"
+                                        ? "border-sky-300 text-sky-100 active"
                                         : "border-transparent text-gray-400 hover:text-white"
                                         } ${isDisabled ? "cursor-not-allowed opacity-40" : ""}`}
                                     disabled={locked || isDisabled}
@@ -3873,7 +3874,7 @@ export const NflPickBuilder = ({
         const isTwoWayOverUnder = hasOver && hasUnder && columns.length === 2;
 
         return (
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/70 shadow-lg shadow-emerald-500/5 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/70 shadow-lg shadow-blue-500/10 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                 <div
                     className={
                         isTwoWayOverUnder
@@ -4010,9 +4011,9 @@ export const NflPickBuilder = ({
             return `${base} border-white/10 text-gray-500`;
         }
         if (selected) {
-            return `${base} border-emerald-300/70 bg-emerald-500/20 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]`;
+            return `${base} border-sky-300/70 bg-sky-500/20 text-sky-100 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]`;
         }
-        return `${base} border-emerald-400/50 text-emerald-200 hover:border-emerald-300/70`;
+        return `${base} border-sky-400/50 text-sky-200 hover:border-sky-300/70`;
     };
 
     const oddsBoxClasses = (selected?: boolean, muted?: boolean) =>
@@ -4053,7 +4054,7 @@ export const NflPickBuilder = ({
                     {lineLabel}
                 </span>
                 <span
-                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-emerald-100"}`}
+                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-sky-100"}`}
                 >
                     {oddsLabel}
                 </span>
@@ -4077,7 +4078,7 @@ export const NflPickBuilder = ({
                 onClick={() => odd && handleOddsSelection(odd)}
                 disabled={!odd || locked}
                 className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 
-                    ${isSelected ? "text-emerald-50" : "text-gray-200"} 
+                    ${isSelected ? "text-sky-50" : "text-gray-200"} 
                     ${!odd ? "cursor-not-allowed text-gray-600" : ""}`}
             >
                 {hasLine
@@ -4734,8 +4735,8 @@ export const NflPickBuilder = ({
                                     }))
                                 }
                                 className={`flex-1 rounded-2xl border px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide transition ${selection.side === option
-                                    ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-100"
-                                    : "border-white/10 bg-white/5 text-gray-200 hover:border-emerald-400/60"
+                                    ? "border-sky-400/60 bg-sky-500/20 text-sky-100"
+                                    : "border-white/10 bg-white/5 text-gray-200 hover:border-sky-400/60"
                                     }`}
                                 disabled={locked}
                             >
@@ -4752,8 +4753,8 @@ export const NflPickBuilder = ({
                                 type="button"
                                 onClick={() => setThresholdAndValidate(value, effectiveSide)}
                                 className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${selection.threshold === value
-                                    ? "border-emerald-400/70 bg-emerald-500/20 text-emerald-100"
-                                    : "border-white/15 text-gray-200 hover:border-emerald-400/60"
+                                    ? "border-sky-400/70 bg-sky-500/20 text-sky-100"
+                                    : "border-white/15 text-gray-200 hover:border-sky-400/60"
                                     }`}
                                 disabled={locked}
                             >
@@ -4777,7 +4778,7 @@ export const NflPickBuilder = ({
                                         setThresholdAndValidate(parsed, effectiveSide);
                                     }
                                 }}
-                                className="text-xs uppercase tracking-wide text-emerald-200"
+                                className="text-xs uppercase tracking-wide text-sky-200"
                             >
                                 set
                             </button>
@@ -4801,7 +4802,7 @@ export const NflPickBuilder = ({
 
         if (validationStatus === "VALID") {
             return (
-                <div className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                <div className="rounded-2xl border border-sky-400/40 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
                     This looks like a real market. Odds loaded below.
                 </div>
             );
@@ -5145,7 +5146,7 @@ export const NflPickBuilder = ({
 //                                         <p className="text-xs font-semibold text-white">{row.name}</p>
 //                                         <p className="text-xs text-gray-300">Odds: {row.label}</p>
 //                                     </div>
-//                                     <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+//                                     <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-100">
 //                                         {row.points} pts
 //                                     </span>
 //                                 </div>

@@ -931,7 +931,7 @@ const SlipDetailsPage = () => {
                                     <button
                                         type="button"
                                         onClick={startRenameSlip}
-                                        className="inline-flex flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50"
+                                        className="ui-accent-outline-hover inline-flex flex-shrink-0 items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition"
                                         aria-label="Edit slip name"
                                     >
                                         <EditPencilIcon />
@@ -1292,7 +1292,7 @@ const SlipDetailsPage = () => {
                                                                         setPickDeadlineDraft(fromLocalInputValue(event.target.value))
                                                                     }
                                                                     disabled={!canEditDeadlines}
-                                                                    className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                    className="ui-input-accent rounded-2xl border border-white/10 bg-black px-3 py-2 text-base text-white outline-none transition disabled:cursor-not-allowed disabled:opacity-60"
                                                                 />
                                                             </label>
                                                             <label className="flex flex-col gap-1 text-xs text-gray-400">
@@ -1305,7 +1305,7 @@ const SlipDetailsPage = () => {
                                                                         }
                                                                         ref={slateWindowButtonRef}
                                                                         disabled={!canEditDeadlines}
-                                                                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black px-3 py-2 text-left text-sm text-white outline-none transition focus:border-emerald-400/70 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                        className="ui-input-accent flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black px-3 py-2 text-left text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:opacity-60"
                                                                         aria-haspopup="listbox"
                                                                         aria-expanded={isSlateWindowDropdownOpen}
                                                                         aria-controls="slate-window-options"
@@ -1335,7 +1335,7 @@ const SlipDetailsPage = () => {
                                                                                             <button
                                                                                                 type="button"
                                                                                                 className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition hover:bg-white/5 ${isSelected
-                                                                                                    ? "text-emerald-100"
+                                                                                                    ? "text-sky-100"
                                                                                                     : "text-gray-200"
                                                                                                     }`}
                                                                                                 onClick={() => {
@@ -1349,7 +1349,7 @@ const SlipDetailsPage = () => {
                                                                                                     {option} day{option === 1 ? "" : "s"}
                                                                                                 </span>
                                                                                                 {isSelected && (
-                                                                                                    <span className="text-emerald-200">•</span>
+                                                                                                    <span className="text-sky-200">•</span>
                                                                                                 )}
                                                                                             </button>
                                                                                         </li>
@@ -1364,7 +1364,7 @@ const SlipDetailsPage = () => {
                                                                     value={windowDaysDraft}
                                                                     onChange={(event) => setWindowDaysDraft(Number(event.target.value))}
                                                                     disabled={!canEditDeadlines}
-                                                                    className="hidden rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70 disabled:cursor-not-allowed disabled:opacity-60 sm:block"
+                                                                    className="ui-input-accent hidden rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:opacity-60 sm:block"
                                                                 >
                                                                     {WINDOW_DAY_OPTIONS.map((option) => (
                                                                         <option key={option} value={option}>
@@ -1389,7 +1389,7 @@ const SlipDetailsPage = () => {
                                                             <button
                                                                 type="submit"
                                                                 disabled={!canEditDeadlines}
-                                                                className="rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/25 via-emerald-500/10 to-black/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/60 hover:from-emerald-400/30 hover:via-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                                                className="ui-accent-button rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                                                             >
                                                                 update deadlines
                                                             </button>
@@ -1450,7 +1450,7 @@ const SlipDetailsPage = () => {
                                                                 onClick={() => handleWarningModeChange(option.id)}
                                                                 aria-pressed={isActive}
                                                                 className={`flex flex-1 flex-col items-start rounded-[14px] px-3 py-2 text-left transition ${isActive
-                                                                    ? "bg-emerald-500/15 text-white shadow-[inset_0_0_0_1px_rgba(110,231,183,0.4)]"
+                                                                    ? "bg-sky-500/15 text-white shadow-[inset_0_0_0_1px_rgba(147,197,253,0.35)]"
                                                                     : "text-gray-300 hover:bg-white/[0.06] hover:text-white"
                                                                     }`}
                                                             >
@@ -1485,7 +1485,7 @@ const SlipDetailsPage = () => {
                                                     <button
                                                         type="button"
                                                         onClick={openSecondaryAssign}
-                                                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
+                                                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-sky-300/60 hover:text-white"
                                                     >
                                                         Assign to secondary leaderboard
                                                     </button>
@@ -1567,7 +1567,7 @@ const SlipDetailsPage = () => {
                                                     label="Auto grade"
                                                     onClick={handleAutoGrade}
                                                     disabled={!canAutoGrade || pickLoader}
-                                                    className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-emerald-400/40 bg-gradient-to-br from-emerald-500/30 via-emerald-400/10 to-black/40 px-3 py-2 text-[11px] text-emerald-100 hover:border-emerald-300/70 hover:text-white"
+                                                    className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
                                                 />
                                                 <ActionButton
                                                     label="Reopen"
@@ -1593,7 +1593,7 @@ const SlipDetailsPage = () => {
 
                                     {showReviewSection ? (
                                         <section className="space-y-4">
-                                            <div className="flex justify-end text-xs font-semibold text-emerald-100">
+                                            <div className="flex justify-end text-xs font-semibold text-sky-100">
                                                 Changes save automatically, finalize when finished.
                                             </div>
 
@@ -1907,7 +1907,7 @@ const SlipDetailsPage = () => {
                                 onChange={(event) =>
                                     setReopenDeadlineDraft(fromLocalInputValue(event.target.value))
                                 }
-                                className="rounded-2xl border border-white/10 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                className="ui-input-accent rounded-2xl border border-white/10 bg-black px-3 py-2 text-base text-white outline-none transition"
                             />
                         </label>
                         <div className="flex justify-center gap-3">
@@ -1920,7 +1920,7 @@ const SlipDetailsPage = () => {
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white"
+                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition"
                             >
                                 Reopen slip
                             </button>
@@ -2012,7 +2012,7 @@ const SlipDetailsPage = () => {
                                         <button
                                             type="button"
                                             onClick={() => setIsSecondaryAssignDropdownOpen((prev) => !prev)}
-                                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                            className="ui-input-accent flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition"
                                             aria-haspopup="listbox"
                                             aria-expanded={isSecondaryAssignDropdownOpen}
                                             aria-controls="secondary-assign-options"
@@ -2035,7 +2035,7 @@ const SlipDetailsPage = () => {
                                                         <button
                                                             type="button"
                                                             className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition hover:bg-white/5 ${secondaryAssignDraft === ""
-                                                                ? "text-emerald-100"
+                                                                ? "text-sky-100"
                                                                 : "text-gray-200"
                                                                 }`}
                                                             onClick={() => {
@@ -2049,7 +2049,7 @@ const SlipDetailsPage = () => {
                                                                 No secondary leaderboard
                                                             </span>
                                                             {secondaryAssignDraft === "" && (
-                                                                <span className="text-emerald-200">•</span>
+                                                                <span className="text-sky-200">•</span>
                                                             )}
                                                         </button>
                                                     </li>
@@ -2059,8 +2059,7 @@ const SlipDetailsPage = () => {
                                                             <li key={board.id}>
                                                                 <button
                                                                     type="button"
-                                                                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition hover:bg-white/5 ${isSelected ? "text-emerald-100" : "text-gray-200"
-                                                                        }`}
+                                                                    className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm transition hover:bg-white/5 ${isSelected ? "text-sky-100" : "text-gray-200"}`}
                                                                     onClick={() => {
                                                                         setSecondaryAssignDraft(board.id);
                                                                         setIsSecondaryAssignDropdownOpen(false);
@@ -2071,7 +2070,7 @@ const SlipDetailsPage = () => {
                                                                     <span className="min-w-0 flex-1 truncate">
                                                                         {board.name}
                                                                     </span>
-                                                                    {isSelected && <span className="text-emerald-200">•</span>}
+                                                                    {isSelected && <span className="text-sky-200">•</span>}
                                                                 </button>
                                                             </li>
                                                         );
@@ -2083,7 +2082,7 @@ const SlipDetailsPage = () => {
                                     <select
                                         value={secondaryAssignDraft}
                                         onChange={(event) => setSecondaryAssignDraft(event.target.value)}
-                                        className="hidden rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition focus:border-emerald-400/70 sm:block"
+                                        className="ui-input-accent hidden rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none transition sm:block"
                                     >
                                         <option value="">No secondary leaderboard</option>
                                         {activeSecondaryLeaderboards.map((board) => (
@@ -2103,7 +2102,7 @@ const SlipDetailsPage = () => {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="rounded-xl border border-emerald-400/60 bg-emerald-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/80 hover:text-white"
+                                        className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition"
                                     >
                                         Save assignment
                                     </button>
@@ -2149,7 +2148,7 @@ const SlipDetailsPage = () => {
                             <button
                                 type="button"
                                 onClick={cancelRenameSlip}
-                                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                                 aria-label="Close rename slip"
                             >
                                 X
@@ -2161,7 +2160,7 @@ const SlipDetailsPage = () => {
                                 <input
                                     value={editingName}
                                     onChange={(event) => setEditingName(event.target.value)}
-                                    className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                    className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition"
                                     placeholder="Slip name"
                                 />
                                 {errors.name && (
@@ -2181,7 +2180,7 @@ const SlipDetailsPage = () => {
                                 <button
                                     type="submit"
                                     disabled={!editingName.trim()}
-                                    className="rounded-2xl bg-emerald-500/80 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="ui-accent-button-solid rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     save changes
                                 </button>
@@ -2341,7 +2340,7 @@ const ActionButton = ({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className={`rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+        className={`rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-sky-400/60 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
         {label}
     </button>

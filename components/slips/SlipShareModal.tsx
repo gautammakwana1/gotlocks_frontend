@@ -208,9 +208,14 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                             <div className="pt-8">
                                 <div className="flex items-center gap-3">
                                     <div className="h-px flex-1 bg-white/10" />
-                                    <span className="px-2 text-[10px] font-semibold tracking-[0.45em] text-slate-500/80">
-                                        gotlocks?
-                                    </span>
+                                    <Image
+                                        src="/gotlockstext.svg"
+                                        alt=""
+                                        aria-hidden="true"
+                                        width={120}
+                                        height={18}
+                                        className="h-3 w-auto object-contain opacity-75 md:h-4"
+                                    />
                                     <div className="h-px flex-1 bg-white/10" />
                                 </div>
                             </div>
@@ -221,7 +226,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                 <div className="mt-5 flex justify-end gap-3">
                     <button
                         type="button"
-                        className={`rounded-2xl border border-emerald-400/40 bg-gradient-to-br from-emerald-500/30 via-emerald-400/10 to-black/40 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:border-emerald-300/70 hover:text-white ${imageSaving ? "cursor-not-allowed opacity-60 pointer-events-none" : "cursor-pointer"}`}
+                        className={`ui-accent-button rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition ${imageSaving ? "cursor-not-allowed opacity-60 pointer-events-none" : "cursor-pointer"}`}
                         onClick={handleSaveImage}
                         disabled={imageSaving}
                     >

@@ -39,7 +39,7 @@ import {
 } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, LeagueObject, OddsEvent, OddsObject, Pick, PickLeg, PickSelectionMeta, RootState, Slip, SoccerSchedules, SoccerSchedulesWithOdds, TeamsObject, TierIndex } from "@/lib/interfaces/interfaces";
-import { useIsMobile } from "@/lib/utils/helpers";
+import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleRequest, soccerEnglandPremierLeaguePickValidateRequest, soccerGermanyBundesligaPickValidateRequest } from "@/lib/redux/slices/soccerSlice";
@@ -1725,6 +1725,7 @@ export const SoccerPickBuilder = ({
                         description: summaryLabel,
                         odds_bracket: groupOddsLabel,
                         difficulty_label: difficultyLabel,
+                        difficultyTier: reviewGroupTierMeta?.tier,
                         buildMode: "ODDS",
                         points: payloadGroupTierMeta?.points,
                         isCombo: true,
@@ -2110,14 +2111,14 @@ export const SoccerPickBuilder = ({
             return `${base} border-white/10 text-gray-500`;
         }
         if (selectedState) {
-            return `${base} border-emerald-300/70 bg-emerald-500/20 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]`;
+            return `${base} border-sky-300/70 bg-sky-500/20 text-sky-100 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]`;
         }
-        return `${base} border-emerald-400/50 text-emerald-200 hover:border-emerald-300/70`;
+        return `${base} border-sky-400/50 text-sky-200 hover:border-sky-300/70`;
     };
 
     const tableOddsBoxClasses = (selectedState?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "h-[40px] min-w-[60px] shrink-0 whitespace-nowrap overflow-hidden rounded-md border bg-black/70 px-3 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:min-w-[72px] sm:text-sm flex items-center justify-center",
+            "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap overflow-hidden rounded-md border bg-black/70 px-3 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
             selectedState,
             muted
         );
@@ -2206,7 +2207,7 @@ export const SoccerPickBuilder = ({
                                 onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
                                 disabled={!row.odd || locked}
                                 className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelectedRow
-                                    ? "border-emerald-300/60 bg-emerald-500/10"
+                                    ? "border-sky-300/60 bg-sky-500/10"
                                     : "hover:bg-white/[0.02]"
                                     } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
                                 style={{
@@ -2556,7 +2557,7 @@ export const SoccerPickBuilder = ({
                                             type="button"
                                             onClick={() => onDateChange?.(option.key, "user")}
                                             className={`shrink-0 border-b-2 pb-1 text-xs font-semibold transition ${active
-                                                ? "border-emerald-300 text-white"
+                                                ? "border-sky-300 text-white"
                                                 : "border-transparent text-gray-400 hover:border-white/30 hover:text-white"
                                                 }`}
                                         >
@@ -2583,7 +2584,7 @@ export const SoccerPickBuilder = ({
                                         className="border-t border-white/10 first:border-t-0"
                                     >
                                         <div className="px-5 pb-2 pt-4 sm:px-6">
-                                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-200/80">
+                                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200/80">
                                                 {displayLeagueName(section.leagueName)}
                                             </p>
                                         </div>
@@ -2658,8 +2659,8 @@ export const SoccerPickBuilder = ({
                                                     >
                                                         <div className="min-w-0 self-start pt-8">
                                                             <p className="text-xs font-semibold leading-snug text-white">
-                                                                <span className="block">{game.awayTeam} @</span>
-                                                                <span className="block">{game.homeTeam}</span>
+                                                                <span className="block">{isMobile ? getMobileTeamName(game.awayAbbr, game.awayTeam) : game.awayTeam} @</span>
+                                                                <span className="block">{isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}</span>
                                                             </p>
                                                             <p className="mt-3 text-[11px] text-gray-400">
                                                                 {formatDateTime(game.date)}
@@ -2732,7 +2733,7 @@ export const SoccerPickBuilder = ({
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                             <div>
-                                <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200/80">
+                                <p className="text-[11px] uppercase tracking-[0.22em] text-sky-200/80">
                                     {displayLeagueName(activeGame.leagueName)}
                                 </p>
                                 <p className="mt-2 text-sm font-semibold text-white">
@@ -2752,7 +2753,7 @@ export const SoccerPickBuilder = ({
                                         type="button"
                                         onClick={() => setActiveTab(tab)}
                                         className={`whitespace-nowrap border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition ${active
-                                            ? "border-emerald-300 text-emerald-100"
+                                            ? "border-sky-300 text-sky-100"
                                             : "border-transparent text-gray-400 hover:text-white"
                                             }`}
                                     >

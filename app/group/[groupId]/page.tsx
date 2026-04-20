@@ -257,9 +257,9 @@ const GroupPage = () => {
   );
 
   const primaryActionButtonClass =
-    "group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/15 via-black/60 to-black/30 px-5 py-4 text-left shadow-sm transition hover:border-emerald-300/60 hover:bg-emerald-500/15";
+    "ui-accent-card group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 px-5 py-4 text-left shadow-sm transition";
   const primaryActionIconClass =
-    "flex h-10 w-10 items-center justify-center text-emerald-100 transition group-hover:text-emerald-50";
+    "ui-accent-card-icon flex h-10 w-10 items-center justify-center";
   const secondaryLeaderboardCardClass =
     "rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20";
   const createSlipButtonClass =
@@ -995,7 +995,7 @@ const GroupPage = () => {
           <button
             type="button"
             onClick={handleOpenEditGroup}
-            className="inline-flex items-center justify-center rounded-full border border-white/15 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-emerald-400/60 hover:text-emerald-50 sm:ml-auto"
+            className="ui-accent-outline-hover inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition sm:ml-auto"
             aria-label="Edit group"
           >
             <EditPencilIcon />
@@ -1048,7 +1048,7 @@ const GroupPage = () => {
           <button
             type="button"
             onClick={() => setShowScoringModal(true)}
-            className="mb-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-gray-300 transition hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 sm:h-7 sm:w-7 sm:text-[11px]"
+            className="mb-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-gray-300 transition hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:h-7 sm:w-7 sm:text-[11px]"
             aria-label="Group scoring"
             aria-haspopup="dialog"
           >
@@ -1073,7 +1073,7 @@ const GroupPage = () => {
                       {selectedLeaderboard?.name ?? "Leaderboard"}
                     </span>
                     <ChevronUpDownIcon className={`h-3 w-3 transition ${showLeaderboardMenu
-                      ? "rotate-180 text-emerald-300"
+                      ? "rotate-180 text-sky-300"
                       : "text-gray-500"
                       }`} />
                   </button>
@@ -1097,7 +1097,7 @@ const GroupPage = () => {
                                 role="menuitem"
                                 onClick={() => handleLeaderboardSelect(board.id)}
                                 className={`flex w-full flex-col gap-1 rounded-xl px-3 py-2 text-left transition ${isSelected
-                                  ? "bg-emerald-500/15 text-emerald-100"
+                                  ? "bg-sky-500/15 text-sky-100"
                                   : "text-gray-200 hover:bg-white/5"
                                   }`}
                                 aria-current={isSelected ? "true" : undefined}
@@ -1108,7 +1108,7 @@ const GroupPage = () => {
                                   </span>
                                   <span
                                     className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${board.isDefault
-                                      ? "border-emerald-300/40 text-emerald-100"
+                                      ? "border-sky-300/40 text-sky-100"
                                       : "border-white/10 text-gray-400"
                                       }`}
                                   >
@@ -1394,7 +1394,7 @@ const GroupPage = () => {
                                     activeMainLeaderboard.name
                                   )
                               }
-                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
+                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
                               aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
                             >
                               <EditIcon />
@@ -1430,7 +1430,7 @@ const GroupPage = () => {
                                 value={leaderboardNameDraft}
                                 onChange={(event) => setLeaderboardNameDraft(event.target.value)}
                                 maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
                               />
                             </label>
                             <div className="flex gap-2">
@@ -1441,7 +1441,7 @@ const GroupPage = () => {
                                   !leaderboardNameDraft.trim() ||
                                   leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
                                 }
-                                className="rounded-2xl bg-emerald-500/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 Save
                               </button>
@@ -1494,7 +1494,7 @@ const GroupPage = () => {
                     aria-haspopup="dialog"
                     aria-controls="secondary-leaderboards-info-modal"
                     aria-label="Secondary leaderboards info"
-                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px] font-semibold text-gray-300 transition hover:border-emerald-300/60 hover:text-white"
+                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px] font-semibold text-gray-300 transition hover:border-sky-300/60 hover:text-white"
                   >
                     i
                   </button>
@@ -1505,7 +1505,7 @@ const GroupPage = () => {
                       type="checkbox"
                       checked={secondaryLeaderboardsEnabled}
                       onChange={handleSecondaryLeaderboardsToggle}
-                      className="h-4 w-4 rounded border border-white/20 bg-black text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                      className="h-4 w-4 rounded border border-white/20 bg-black text-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                     />
                     Enable
                   </label>
@@ -1576,7 +1576,7 @@ const GroupPage = () => {
                                         ? cancelLeaderboardNameEdit()
                                         : startLeaderboardNameEdit(board.id, board.name)
                                     }
-                                    className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-emerald-300/60 hover:text-white"
+                                    className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
                                     aria-label={`Edit ${board.name} leaderboard name`}
                                   >
                                     <EditIcon />
@@ -1617,7 +1617,7 @@ const GroupPage = () => {
                                         setLeaderboardNameDraft(event.target.value)
                                       }
                                       maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                      className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                                      className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
                                     />
                                   </label>
                                   <div className="flex gap-2">
@@ -1628,7 +1628,7 @@ const GroupPage = () => {
                                         !leaderboardNameDraft.trim() ||
                                         leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
                                       }
-                                      className="rounded-2xl bg-emerald-500/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                                     >
                                       Save
                                     </button>
@@ -1833,7 +1833,7 @@ const GroupPage = () => {
               <button
                 type="button"
                 onClick={() => setShowEditGroupModal(false)}
-                className="rounded-full border border-white/15 px-1 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                 aria-label="Close edit group"
               >
                 <X size={15} />
@@ -1846,7 +1846,7 @@ const GroupPage = () => {
                 <input
                   value={editGroupName}
                   onChange={(event) => setEditGroupName(event.target.value)}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
                   placeholder="Group name"
                 />
                 {errors.name && (
@@ -1863,7 +1863,7 @@ const GroupPage = () => {
                 <textarea
                   value={editGroupDescription}
                   onChange={(event) => setEditGroupDescription(event.target.value)}
-                  className="min-h-[96px] resize-none rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="ui-input-accent min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
                   placeholder="What's this group about?"
                 />
                 {errors.description && (
@@ -1885,7 +1885,7 @@ const GroupPage = () => {
                   type="button"
                   onClick={handleSaveGroupDetails}
                   disabled={!editGroupName.trim()}
-                  className="rounded-2xl bg-emerald-500/80 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="ui-accent-button-solid rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   save changes
                 </button>
@@ -1915,7 +1915,7 @@ const GroupPage = () => {
               <button
                 type="button"
                 onClick={closeSideContestModal}
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                 aria-label="Close secondary leaderboard modal"
               >
                 X
@@ -1931,7 +1931,7 @@ const GroupPage = () => {
                   value={sideContestName}
                   onChange={(event) => setSideContestName(event.target.value)}
                   maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                  className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
                   placeholder="NBA playoff slips"
                 />
               </label>
@@ -1985,7 +1985,7 @@ const GroupPage = () => {
               <button
                 type="button"
                 onClick={() => setArchivedLeaderboardId(null)}
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
                 aria-label="Close archived leaderboard"
               >
                 X
@@ -2069,7 +2069,7 @@ const SecondaryLeaderboardsInfoModal = ({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300"
+            className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
             aria-label="Close secondary leaderboards info"
           >
             x

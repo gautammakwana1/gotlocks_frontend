@@ -76,7 +76,7 @@ export default function CustomDatePicker({
                     placeholder={placeholder}
                     onChange={handleInputChange}
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className="w-full cursor-pointer rounded-2xl border border-white/10 bg-black px-4 py-3 pr-10 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                    className="ui-input-accent w-full cursor-pointer rounded-2xl border border-white/10 bg-black px-4 py-3 pr-10 text-base sm:text-sm text-white outline-none transition"
                 />
 
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
@@ -100,7 +100,7 @@ export default function CustomDatePicker({
                         backdrop-blur-xl
                         p-3 sm:p-4
                         shadow-[0_0_30px_rgba(16,185,129,0.15)]
-                        border border-emerald-400/70
+                        border border-sky-400/70
                         text-white
                         transition-all duration-300 ease-out
                         ${isOpen ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 -translate-y-2 pointer-events-none"}
@@ -141,20 +141,20 @@ export default function CustomDatePicker({
                             dropdown: `
                                         bg-black
                                         text-white
-                                        border border-emerald-400/70
+                                        border border-sky-400/70
                                         rounded-lg
                                         px-3
                                         py-2
                                         text-sm
                                         outline-none
-                                        hover:border-emerald-400
+                                        hover:border-sky-400
                                         transition
                                         cursor-pointer
                                     `,
                             dropdown_month: "min-w-[120px]",
                             dropdown_year: "min-w-[90px]",
                             caption_label: "hidden",
-                            today: "text-emerald-400",
+                            today: "text-sky-400",
                             footer: "text-[11px] text-gray-400 mt-2 italic",
                         }}
                     />

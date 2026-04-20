@@ -412,9 +412,9 @@ const ProfileHeader = ({
         <header className="relative overflow-visible -mx-5 bg-black sm:-mx-6">
             <div className="relative px-5 pt-2 pb-5 sm:px-6 sm:pt-3 sm:pb-6">
                 <div className="relative">
-                    <div className="pointer-events-none absolute -inset-y-2 inset-x-0 rounded-3xl bg-gradient-to-br from-slate-950/80 via-slate-900/65 to-blue-900/35 ring-1 ring-white/10 sm:-inset-y-3">
-                        <div className="absolute inset-[1px] rounded-3xl bg-gradient-to-b from-white/10 via-white/5 to-black/70" />
-                        <div className="absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_55%)]" />
+                    <div className="pointer-events-none absolute -inset-y-2 inset-x-0 rounded-[18px] bg-gradient-to-br from-slate-950/80 via-slate-900/65 to-blue-900/35 ring-1 ring-white/10 sm:-inset-y-3">
+                        <div className="absolute inset-[1px] rounded-[17px] bg-gradient-to-b from-white/10 via-white/5 to-black/70" />
+                        <div className="absolute inset-0 rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_55%)]" />
                     </div>
                     <div className="relative origin-top-left scale-[0.95] pl-1 sm:scale-100 sm:pl-2">
                         <div className="relative grid gap-5 sm:gap-6 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,250px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">

@@ -203,6 +203,11 @@ axiosInstance.interceptors.response.use(
                 removeLocalStorage("refresh_token");
                 removeLocalStorage("userId");
                 removeLocalStorage("provider");
+                if (
+                    (refreshError as AxiosError)?.response?.status === 404
+                ) {
+                    window.location.href = "/landing-page";
+                }
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;

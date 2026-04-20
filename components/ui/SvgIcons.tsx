@@ -153,7 +153,7 @@ export const CheckIcon = (props: IconProps) => (
         fill="none"
         stroke="currentColor"
         strokeWidth="2"
-        className="h-3 w-3 text-emerald-200"
+        className="h-3 w-3 text-sky-200"
         {...props}
     >
         <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />

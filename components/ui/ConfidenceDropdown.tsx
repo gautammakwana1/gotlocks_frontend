@@ -174,7 +174,7 @@ const ConfidenceDropdown = ({ value, onChange, disabled = false }: Props) => {
                                         </span>
                                     </span>
                                     {active ? (
-                                        <span className="text-emerald-200" aria-hidden>
+                                        <span className={option.textClassName} aria-hidden>
                                             <CheckIcon className="h-3.5 w-3.5" />
                                         </span>
                                     ) : (

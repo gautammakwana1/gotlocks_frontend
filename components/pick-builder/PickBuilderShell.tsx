@@ -21,7 +21,6 @@ import MlbPickBuilder from "./MlbPickBuilder";
 import FootballAnimation from "../animations/FootballAnimation";
 import { FALLBACK_LEAGUE } from "@/lib/constants";
 import SoccerPickBuilder from "./SoccerPickBuilder";
-import { toLocalDateKeyFromUTC } from "@/lib/utils/date";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -161,7 +160,7 @@ const StubLeagueBuilder = ({
                 <textarea
                     value={description}
                     onChange={(event) => setDescription(event.target.value)}
-                    className="min-h-[120px] rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                    className="ui-input-accent min-h-[120px] rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition0"
                     placeholder={`Example: ${league} custom pick`}
                 />
             </label>
@@ -172,7 +171,7 @@ const StubLeagueBuilder = ({
                     <input
                         value={odds}
                         onChange={(event) => setOdds(event.target.value)}
-                        className="rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition focus:border-emerald-400/70"
+                        className="ui-input-accent rounded-2xl border border-white/12 bg-black px-3 py-2 text-base sm:text-sm text-white outline-none transition"
                         placeholder="+150"
                     />
                 </label>
@@ -202,7 +201,7 @@ const StubLeagueBuilder = ({
                     type="button"
                     onClick={handleSave}
                     disabled={disabled}
-                    className="rounded-2xl bg-emerald-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="ui-accent-button rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     Save custom pick
                 </button>
@@ -891,7 +890,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                                 type="button"
                                 onClick={() => handleLeagueSelect(league)}
                                 className={`shrink-0 border-b-2 pb-1 text-xs font-semibold transition sm:text-sm ${active
-                                    ? "border-emerald-300 text-white"
+                                    ? "border-sky-300 text-white"
                                     : "border-transparent text-gray-400 hover:border-white/30 hover:text-white"
                                     }`}
                             >

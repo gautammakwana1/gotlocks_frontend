@@ -17,6 +17,7 @@ import UserSearchDialog from "@/components/social/UserSearchDialog";
 import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { SearchIcon } from "@/components/ui/SvgIcons";
+import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -90,8 +91,6 @@ const FEED_CARD_EST_HEIGHT = 220;
 const feedScrollStyle = {
     "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
 } as CSSProperties;
-const WINNING_POST_CARD_TONE =
-    "border border-[#c4ab78]/62 border-b-[3px] border-b-[#9e7840] bg-[radial-gradient(circle_at_top_right,rgba(255,231,165,0.06),transparent_24%),linear-gradient(180deg,rgba(255,248,220,0.035),rgba(255,255,255,0.02)_16%,rgba(255,255,255,0.025)_82%,rgba(217,119,6,0.03))] shadow-[inset_0_1px_0_rgba(255,248,220,0.18),inset_0_-2px_0_rgba(120,85,25,0.28),inset_0_0_0_1px_rgba(181,140,61,0.22),0_2px_10px_rgba(0,0,0,0.18)]";
 
 const WinningHeaderArt = () => (
     <div
@@ -279,7 +278,7 @@ const SocialPage = () => {
                 const confidenceLabel = item.confidence ? item.confidence.toLowerCase() : null;
                 const confidenceTone =
                     confidenceLabel === "high"
-                        ? "text-emerald-100"
+                        ? "text-sky-100"
                         : confidenceLabel === "medium"
                             ? "text-amber-100"
                             : confidenceLabel === "low"
@@ -323,6 +322,18 @@ const SocialPage = () => {
                 const upActive = userReaction === "up";
                 const downActive = userReaction === "down";
                 const isWinningPost = item.result === "win";
+                const isLosingPost = item.result === "loss";
+                const isPendingPost = (item.result ?? "pending") === "pending";
+                const pickAccentDotTone = isWinningPost
+                    ? "bg-emerald-300/80"
+                    : isLosingPost
+                        ? "bg-rose-300/80"
+                        : "bg-sky-300/80";
+                const pickAccentTextTone = isWinningPost
+                    ? "text-emerald-200"
+                    : isLosingPost
+                        ? "text-rose-200"
+                        : "text-sky-200";
 
                 return (
                     <div
@@ -338,7 +349,7 @@ const SocialPage = () => {
                                 }}
                                 className="group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5"
                             >
-                                <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-emerald-100">
+                                <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-sky-100">
                                     {profileImg ? (
                                         <Image
                                             src={profileImg}
@@ -375,7 +386,7 @@ const SocialPage = () => {
                                             onClick={() => handleReaction(item.id, "up")}
                                             aria-pressed={upActive}
                                             className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${upActive
-                                                ? "border-emerald-300/70 bg-emerald-500/20 text-emerald-100"
+                                                ? "border-sky-300/70 bg-sky-500/20 text-sky-100"
                                                 : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"
                                                 }`}
                                         >
@@ -458,7 +469,11 @@ const SocialPage = () => {
                                     <div
                                         className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
                                             ? WINNING_POST_CARD_TONE
-                                            : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
+                                            : isLosingPost
+                                                ? LOSING_POST_CARD_TONE
+                                                : isPendingPost
+                                                    ? PENDING_POST_CARD_TONE
+                                                    : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
                                             }`}
                                     >
                                         {isWinningPost && <WinningHeaderArt />}
@@ -470,10 +485,10 @@ const SocialPage = () => {
                                                 {!showComboLegs && (
                                                     <>
                                                         <div className="mt-3 h-px w-full bg-white/10" />
-                                                        <div className="mt-3 flex min-w-0 items-start justify-between gap-3">
-                                                            <div className="min-w-0 flex flex-1 items-start gap-2">
+                                                        <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
+                                                            <div className="min-w-0 flex flex-1 items-center gap-2">
                                                                 <span
-                                                                    className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                                    className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
                                                                 />
                                                                 <div className="min-w-0 flex-1">
                                                                     {detailCategoryLabel && (
@@ -482,7 +497,7 @@ const SocialPage = () => {
                                                                         </span>
                                                                     )}
                                                                     <p
-                                                                        className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}
+                                                                        className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}
                                                                         title={displayPick}
                                                                     >
                                                                         {pickLine}
@@ -530,7 +545,7 @@ const SocialPage = () => {
                                                             >
                                                                 <div className="min-w-0 flex items-start gap-2">
                                                                     <span
-                                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${isWinningPost ? "bg-emerald-300/80" : "bg-cyan-300/80"}`}
+                                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
                                                                     />
                                                                     <div className="min-w-0">
                                                                         {legCategory && (
@@ -539,7 +554,7 @@ const SocialPage = () => {
                                                                             </span>
                                                                         )}
                                                                         <p
-                                                                            className={`min-w-0 text-[12px] font-semibold leading-snug ${isWinningPost ? "text-emerald-200" : "text-cyan-200"}`}
+                                                                            className={`min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}
                                                                         >
                                                                             {legPickLine}
                                                                         </p>

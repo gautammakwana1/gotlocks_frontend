@@ -159,7 +159,7 @@ const BlockedAccountsPage = () => {
                                     <button
                                         type="button"
                                         onClick={() => handleUnblock(user.blocked_id)}
-                                        className="rounded-full border border-emerald-500/30 px-3 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/10"
+                                        className="ui-accent-button rounded-full px-3 py-2 text-sm font-medium transition"
                                     >
                                         Unblock
                                     </button>

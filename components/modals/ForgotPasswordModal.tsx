@@ -171,7 +171,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
+                            className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                             placeholder="you@example.com"
                         />
 
@@ -180,7 +180,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                         <button
                             onClick={handleSendCode}
                             disabled={userLoading || !email}
-                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/50 disabled:opacity-50"
+                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 disabled:opacity-50"
                         >
                             {userLoading ? "Sending..." : "Send Code"}
                         </button>
@@ -194,7 +194,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                             type="text"
                             value={code}
                             onChange={(e) => setCode(e.target.value)}
-                            className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
+                            className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                             placeholder="Enter code"
                         />
 
@@ -203,7 +203,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                         <button
                             onClick={handleVerifyCode}
                             disabled={userLoading || !code}
-                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/50 disabled:opacity-50"
+                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 disabled:opacity-50"
                         >
                             {userLoading ? "Verifying..." : "Submit"}
                         </button>
@@ -224,7 +224,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                                 type={showPassword ? "text" : "password"}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
+                                className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                                 placeholder="New password"
                                 autoComplete="new-password"
                             />
@@ -243,7 +243,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                                 type={showConfirmPassword ? "text" : "password"}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none focus:border-emerald-400"
+                                className="ui-input-accent w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-base text-white outline-none transition"
                                 placeholder="Confirm new password"
                                 autoComplete="confirm-password"
                             />
@@ -261,7 +261,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, onInitialOTP, onVerifyOTP, onRes
                         <button
                             type="submit"
                             disabled={userLoading || !password || !confirmPassword}
-                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white"
+                            className="w-full rounded-2xl bg-white/10 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 disabled:opacity-50"
                         >
                             {userLoading ? "Updating..." : "Update Password"}
                         </button>

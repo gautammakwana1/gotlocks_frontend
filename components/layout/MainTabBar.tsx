@@ -120,13 +120,13 @@ const TabButton = ({
     <Link href={tab.href} className="group block">
         <div
             className={`relative flex h-11 w-11 min-[380px]:h-14 min-[380px]:w-14 sm:h-[70px] sm:w-[70px] flex-col items-center justify-center rounded-2xl border text-[10px] font-semibold tracking-[0.08em] transition ${active
-                ? "border-emerald-300/70 bg-emerald-400/10 shadow-[0_12px_40px_-18px_rgba(52,211,153,0.9)]"
+                ? "border-sky-300/70 bg-sky-400/10 shadow-[0_12px_40px_-18px_rgba(96,165,250,0.7)]"
                 : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.08]"
                 }`}
         >
             <div
                 className={`mb-0 sm:mb-1 flex h-8 w-8 min-[380px]:h-10 min-[380px]:w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white transition ${active
-                    ? "from-emerald-300 via-emerald-500 to-emerald-300 shadow-lg shadow-emerald-500/40"
+                    ? "from-sky-300 via-blue-500 to-sky-300 shadow-lg shadow-blue-500/35"
                     : "from-white/20 via-white/10 to-white/0 text-gray-200 group-hover:from-white/30 group-hover:via-white/20 group-hover:to-white/10"
                     }`}
             >
@@ -202,7 +202,7 @@ export const MainTabBar = () => {
         <nav className="pointer-events-none fixed bottom-3 left-0 right-0 z-40">
             <div className="pointer-events-auto mx-auto flex justify-center px-5 sm:px-6">
                 <div
-                    className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 overflow-hidden border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-1 shadow-lg shadow-emerald-500/10 backdrop-blur sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
+                    className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 overflow-hidden border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-1 shadow-lg shadow-blue-500/10 backdrop-blur sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
                         ? "w-full max-w-[360px] rounded-b-3xl rounded-t-none border-t-0 sm:max-w-[390px]"
                         : "rounded-3xl"
                         }`}

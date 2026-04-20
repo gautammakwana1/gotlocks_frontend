@@ -65,7 +65,7 @@ const FeedbackPage = () => {
                         onChange={(event) => setDescription(event.target.value)}
                         placeholder="Feature requests, bugs, or product ideas..."
                         rows={6}
-                        className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--app-text)] outline-none transition focus:border-white/20"
+                        className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-[var(--app-text)] outline-none transition focus:border-white/20"
                     />
                 </label>
 

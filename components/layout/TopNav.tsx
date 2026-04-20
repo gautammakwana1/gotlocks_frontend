@@ -10,7 +10,7 @@ import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { CircleDollarSignIcon, Lock, LockKeyhole, LogOutIcon, MessageSquareMoreIcon, Settings, Unlock } from "lucide-react";
+import { CircleDollarSignIcon, Lock, LockKeyhole, LogOutIcon, MessageSquareMoreIcon, Settings, TvMinimalIcon, TvMinimalPlayIcon, Unlock } from "lucide-react";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
 
@@ -126,23 +126,34 @@ export const TopNav = () => {
               </span>
             </button>
           </div>
-          <div className="ml-auto flex justify-center items-center gap-3 sm:ml-0">
+          <div className="ml-auto flex justify-center items-end gap-2 sm:ml-0">
             <button
               type="button"
               onClick={() => router.push("/home")}
-              className="text-[21px] font-extrabold uppercase tracking-[0.18em] text-white transition hover:text-emerald-200"
-              style={accentStyle}
+              aria-label="Go to home"
+              className="translate-y-[2px] transition hover:opacity-90"
             >
-              gotlocks?
+              <span className="sr-only">gotlocks?</span>
+              <Image
+                src="/gotlockstext.svg"
+                alt=""
+                aria-hidden="true"
+                width={210}
+                height={32}
+                className="h-7 w-auto object-contain sm:h-8"
+                priority
+                draggable={"false"}
+              />
             </button>
             <Image
-              src="/logocolorblackborder.svg"
+              src="/nocircleblack.svg"
               alt=""
               aria-hidden="true"
-              width={36}
-              height={35}
-              className="h-9 w-9 object-contain"
+              width={40}
+              height={39}
+              className="translate-y-[2px] h-8 w-8 object-contain sm:h-9 sm:w-9"
               priority
+              draggable={"false"}
             />
           </div>
         </div>
@@ -158,7 +169,7 @@ export const TopNav = () => {
               }`}
           />
           <div
-            className={`absolute left-0 top-0 h-full w-[80vw] min-w-[260px] bg-gradient-to-b from-white/8 via-white/5 to-black/80 p-6 shadow-2xl shadow-emerald-500/20 ring-1 ring-white/10
+            className={`ui-accent-menu-surface absolute left-0 top-0 h-full w-[80vw] min-w-[260px] p-6 ring-1 ring-white/10
               sm:w-[40vw] lg:w-[25vw] transform transition-transform duration-300 ease-out ${isAnimating ? "translate-x-0" : "-translate-x-full"}
             `}
           >
@@ -195,7 +206,14 @@ export const TopNav = () => {
                 className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
               >
                 <span>account settings</span>
-                <Settings size={18} className="text-emerald-400 transition-transform duration-300 group-hover:rotate-90" />
+                <Image
+                  src="/icons/settings.png"
+                  alt="settings"
+                  width={24}
+                  height={24}
+                  className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)]"
+                  draggable={false}
+                />
               </button>
               <Link
                 href="/global-points-shop"
@@ -203,7 +221,14 @@ export const TopNav = () => {
                 onClick={() => setMenuOpen(false)}
               >
                 <span>global points shop</span>
-                <CircleDollarSignIcon size={18} className="text-orange-400 transition-transform duration-300 group-hover:[transform:rotate(180deg)_scale(1.2)]" />
+                <Image
+                  src="/icons/money.png"
+                  alt="coin"
+                  width={24}
+                  height={24}
+                  className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)]"
+                  draggable={false}
+                />
               </Link>
               <button
                 type="button"
@@ -211,24 +236,17 @@ export const TopNav = () => {
                   setMenuOpen(false);
                   setOnboardingOpen(true);
                 }}
-                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
+                className="group ui-accent-outline-hover flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition"
               >
                 <span>tutorial</span>
-                <div className="relative w-[18px] h-[18px]">
-
-                  {/* Locked Icon (default) */}
-                  <Lock
-                    size={18}
-                    className="absolute text-violet-400 transition-all duration-300 group-hover:opacity-0 group-hover:rotate-[-90deg]"
-                  />
-
-                  {/* Unlock Icon (hover) */}
-                  <Unlock
-                    size={18}
-                    className="absolute text-violet-400 opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:rotate-0"
-                  />
-
-                </div>
+                <Image
+                  src="/icons/tutorial.png"
+                  alt="tutorial"
+                  width={24}
+                  height={24}
+                  className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)]"
+                  draggable={false}
+                />
               </button>
               <Link
                 href="/feedback"
@@ -236,7 +254,14 @@ export const TopNav = () => {
                 onClick={() => setMenuOpen(false)}
               >
                 <span>feedback</span>
-                <MessageSquareMoreIcon size={18} className="text-white-400 transition-transform duration-300 group-hover:[transform:rotateY(180deg)]" />
+                <Image
+                  src="/icons/feedback.png"
+                  alt="tutorial"
+                  width={24}
+                  height={24}
+                  className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)]"
+                  draggable={false}
+                />
               </Link>
               {currentUser && (
                 <button
@@ -248,7 +273,14 @@ export const TopNav = () => {
                   className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-red-400/60 hover:bg-red-500/10"
                 >
                   <span>logout</span>
-                  <LogOutIcon size={18} className="text-red-500 transition-transform duration-300 group-hover:[transform:rotateX(180deg)]" />
+                  <Image
+                    src="/icons/logout.png"
+                    alt="tutorial"
+                    width={28}
+                    height={28}
+                    className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)] object-none"
+                    draggable={false}
+                  />
                 </button>
               )}
             </div>
