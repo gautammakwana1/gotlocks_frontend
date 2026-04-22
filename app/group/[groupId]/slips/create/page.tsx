@@ -230,8 +230,8 @@ const SlipCreationPage = () => {
             nextErrors.name = "Slip name is required.";
         }
 
-        if (form.name.length > 15) {
-            nextErrors.name = "Slip name must be 15 characters or less.";
+        if (form.name.length > 25) {
+            nextErrors.name = "Slip name must be 25 characters or less.";
         }
 
         const containsNameRestricted = checkAnyRestrictedWords(form.name);

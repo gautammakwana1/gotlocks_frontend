@@ -27,6 +27,7 @@ import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { LeftChevronIcon } from "../ui/SvgIcons";
+import ProfileSkeleton from "./ProfileSkeleton";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -590,13 +591,7 @@ const ProfileView = ({
     const showStats = mode === "self" || profileVisible;
 
     if (authLoader || isProfileLoading) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
-        )
+        return <ProfileSkeleton />;
     }
 
     if (!targetUser) {

@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts, FetchBlockedUsersPayload } from "@/lib/interfaces/interfaces";
-import { removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
+import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts, FetchBlockedUsersPayload, CurrentUser } from "@/lib/interfaces/interfaces";
+import { getLocalStorage, removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 
 type AuthState = {
 	user: User | null;
@@ -166,6 +166,10 @@ const authSlice = createSlice({
 		},
 		updateProfileSuccess: (state, action) => {
 			state.loading = false;
+			if (action.payload.data.profile) {
+				const storedUser = getLocalStorage<CurrentUser>("currentUser");
+				setLocalStorage("currentUser", { ...storedUser, username: action.payload.data.profile?.username, full_name: action.payload.data.profile?.full_name });
+			}
 			state.user = action.payload;
 			state.profileUpdateMessage = action.payload?.message;
 		},

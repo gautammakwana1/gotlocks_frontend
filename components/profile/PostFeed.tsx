@@ -2,6 +2,7 @@
 
 import { Pick, PickReaction, Picks } from "@/lib/interfaces/interfaces";
 import PostCard from "./PostCard";
+import { PostCardSkeleton } from "./ProfileSkeleton";
 
 type PostFeedProps = {
     picks: Picks;
@@ -89,8 +90,10 @@ const PostFeed = ({
                     </div>
                 )}
                 {loading && (
-                    <div className="flex justify-center py-8">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+                    <div className="divide-y divide-white/10">
+                        {[1, 2].map((i) => (
+                            <PostCardSkeleton key={i} />
+                        ))}
                     </div>
                 )}
             </div>

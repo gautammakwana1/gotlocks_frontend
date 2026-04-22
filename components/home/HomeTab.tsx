@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { getLevelProgress } from "@/lib/utils/progression";
-import { AppNotification, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
+import { AppNotification, CurrentUser, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -20,6 +20,7 @@ import ScrollUpButton from "../ui/ScrollUpButton";
 import { MembersIcon, RightArrowIcon, SlipIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
 import OnboardingModal from "../modals/OnboardingModal";
 import { completeIntroRequest } from "@/lib/redux/slices/authSlice";
+import { getLocalStorage } from "@/lib/utils/jwtUtils";
 
 type GroupSliceState = {
     group: {
@@ -114,6 +115,7 @@ const HomeTab = () => {
     const router = useRouter();
     const dispatch = useAppDispatch();
     const currentUser = useCurrentUser();
+    const storedUser = getLocalStorage<CurrentUser>("currentUser");
     const { setToast } = useToast();
     const currentUserId = currentUser?.userId ?? undefined;
     const [joinCode, setJoinCode] = useState("");
@@ -231,7 +233,6 @@ const HomeTab = () => {
         dispatch(fetchMyGroupsRequest({ page: nextGroupPage, limit: 10 }));
     }, [groupLoading, myGroupsHasMore, groupPage, dispatch]);
 
-    const displayHandle = currentUser?.username ?? "Member";
     const { level, xpIntoLevel, xpToNext } = getLevelProgress(
         progress?.lifetime_xp ?? 0
     );
@@ -638,7 +639,7 @@ const HomeTab = () => {
                                     className="allow-caps block text-transparent bg-clip-text"
                                     style={displayNameGradientStyle}
                                 >
-                                    {displayHandle}
+                                    {storedUser?.username ?? "Member"}
                                 </span>
                             </h1>
                         </div>

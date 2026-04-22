@@ -3,7 +3,8 @@
 import { useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { Session } from '@supabase/supabase-js';
-import { setLocalStorage } from './jwtUtils';
+import { getLocalStorage, setLocalStorage } from './jwtUtils';
+import { CurrentUser } from '../interfaces/interfaces';
 
 export function AuthSync() {
     useEffect(() => {
@@ -14,7 +15,7 @@ export function AuthSync() {
 
         // Listen to all changes
         const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+            if (event === "SIGNED_IN") {
                 if (session) {
                     saveCleanUser(session);
                 }
@@ -38,12 +39,14 @@ export function AuthSync() {
 export async function saveCleanUser(session: Session) {
     const { user } = session;
     if (!user) return;
+    const existingUser = getLocalStorage<CurrentUser>("currentUser");
+
     const cleanUser = {
         access_token: session.access_token,
         refresh_token: session.refresh_token,
         expires_at: session.expires_at,
         email: user?.email,
-        username: user?.user_metadata?.username || user?.user_metadata?.preferred_username,
+        username: user?.user_metadata?.username || existingUser?.username || user?.user_metadata?.preferred_username,
         full_name: user?.user_metadata?.full_name || user?.user_metadata?.name,
         avatar_url: user?.user_metadata?.avatar_url || user?.user_metadata?.picture,
         provider: user?.app_metadata?.provider,

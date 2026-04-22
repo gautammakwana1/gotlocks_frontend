@@ -217,17 +217,17 @@ const LandingPage = () => {
           sign in with email
         </button>
 
-        {!showManualSignIn && (
-          <AuthLegalNotice />
-        )}
-
-        {/* <button
+        <button
           type="button"
           onClick={handleGoogleAuth}
           className="w-full rounded-2xl border border-white/15 px-4 py-3 text-base font-semibold uppercase tracking-wide text-white transition hover:border-white/35 hover:bg-white/5"
         >
           sign in with Google
-        </button> */}
+        </button>
+
+        {!showManualSignIn && (
+          <AuthLegalNotice />
+        )}
 
         {showManualSignIn && (
           <form className="mt-2 flex flex-col gap-3" onSubmit={handleManualSubmit}>

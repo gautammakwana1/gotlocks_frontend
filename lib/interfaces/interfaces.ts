@@ -83,6 +83,7 @@ export type CurrentUser = {
     phone_verified: boolean;
     sub: string;
     userId: string;
+    full_name: string;
 }
 
 // NOTE: `name` is a legacy alias for the username/handle chosen during onboarding.

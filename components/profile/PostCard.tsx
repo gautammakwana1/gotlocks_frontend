@@ -214,7 +214,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
         : isLosingPost
             ? "text-rose-200"
             : "text-sky-200";
-    const pickResult = pick?.result ?? "pending"
+    const pickResult = pick?.result ?? "pending";
     const accent = PICK_RESULT_ACCENTS[pickResult] ?? PICK_RESULT_ACCENTS.pending;
 
     if (pick.pick_type !== PickType.POST) return null;
@@ -376,7 +376,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                             </span>
                                                         )}
                                                         <p
-                                                            className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}
+                                                            className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${accent.text}`}
                                                             title={displayPick}
                                                         >
                                                             {pickLine}
@@ -419,6 +419,11 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                             const legCategory = resolveLegCategoryLabel(leg.selection?.market);
                                             const legResult = leg.result ?? "pending";
                                             const legAccent = PICK_RESULT_ACCENTS[legResult] ?? PICK_RESULT_ACCENTS.pending;
+                                            const legAccentDotTone = legResult === "win"
+                                                ? "bg-emerald-300/80"
+                                                : legResult === "loss"
+                                                    ? "bg-rose-300/80"
+                                                    : "bg-sky-300/80";
                                             return (
                                                 <li
                                                     key={`${leg.description}-${index}`}
@@ -426,7 +431,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                 >
                                                     <div className="min-w-0 flex items-center gap-2">
                                                         <span
-                                                            className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
+                                                            className={`mt-2 h-1.5 w-1.5 rounded-full ${legAccentDotTone}`}
                                                         />
                                                         <div className="min-w-0">
                                                             {legCategory && (
@@ -434,7 +439,7 @@ const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCa
                                                                     {legCategory}
                                                                 </span>
                                                             )}
-                                                            <p className={`min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}>
+                                                            <p className={`min-w-0 text-[12px] font-semibold leading-snug ${legAccent.text}`}>
                                                                 {legPickLine}
                                                             </p>
                                                             {legMeta && (

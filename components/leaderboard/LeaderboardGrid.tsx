@@ -223,9 +223,10 @@ const RankCell = ({
     return (
         < div className="flex w-full items-start pt-[14px]" >
             <div className="relative inline-flex">
-                <div
-                    className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer`}
+                <button
+                    className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default`}
                     onClick={() => handleViewProfile(user_id)}
+                    disabled={currentUserId === user_id}
                 >
                     {profileImg && hasValidImage ? (
                         <Image
@@ -244,7 +245,7 @@ const RankCell = ({
                             <span>{userInitial}</span>
                         </div>
                     )}
-                </div>
+                </button>
                 <div
                     className={`absolute -bottom-1 -right-1 flex items-center justify-center rounded-full border border-white/20 bg-black font-semibold text-slate-100 shadow-sm ${badgeSize}`}
                 >
@@ -382,7 +383,7 @@ const SlipCellCard = ({
         .join(" · ");
     const result = resultMeta(pick?.pick_result);
     const resultPoints =
-        pick?.pick_result === "pending" || pick?.pick_result === null
+        pick?.pick_result === "pending" || pick?.pick_result === null || !isFinal
             ? null
             : computeResultPoints(pick?.pick_difficulty_label, pick?.pick_result, pick?.slip_points, pick?.odds_bracket);
     const resolvedResult = (pick?.pick_result ?? "pending") as keyof typeof PICK_RESULT_ACCENTS;
@@ -393,7 +394,7 @@ const SlipCellCard = ({
             : tierMeta?.points;
     const potentialPoints =
         typeof basePotential === "number" ? Math.min(basePotential, 60) : null;
-    const isPending = pick?.pick_result === "pending" || pick?.pick_result === null;
+    const isPending = pick?.pick_result === "pending" || pick?.pick_result === null || !isFinal;
     const pointsValue = resultPoints !== null ? resultPoints : potentialPoints;
     const pointsDisplay = formatPointsValue(pointsValue);
     const pointsLabel = resultPoints !== null ? "Points" : isPending ? "Potential" : "Points";
@@ -485,7 +486,7 @@ const SlipCellCard = ({
                             )}
                         </div>
                         <span className="block truncate text-[9px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[10px]">
-                            {result.label}
+                            {!isFinal ? "Pending" : result.label}
                         </span>
                     </div>
                 </div>
@@ -782,7 +783,7 @@ export const LeaderboardGrid = ({
                         {loadingMore ? (
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                         ) : (
-                            "Show more ranking"
+                            "show all members"
                         )}
                     </button>
                 </div>
