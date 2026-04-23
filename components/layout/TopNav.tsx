@@ -13,6 +13,7 @@ import { displayNameGradientStyle } from "@/lib/styles/text";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
 import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+import * as Sentry from "@sentry/nextjs";
 
 type AuthUserPayload = {
   data?: {
@@ -75,6 +76,8 @@ export const TopNav = () => {
 
       // 3. Dispatch global logout to reset Redux state
       dispatch(logout());
+
+      Sentry.setUser(null);
 
       setToast({
         id: Date.now(),
