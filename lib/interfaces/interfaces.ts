@@ -17,6 +17,8 @@ export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
 export type SlipConflictWarningMode = "competition" | "group_combo";
 
+export type TutorialKeys = "home" | "social" | "groups" | "profile" | "global" | null;
+
 export type TierIndex =
     | 1
     | 2
@@ -816,6 +818,10 @@ export type FetchSearchedUsersPayload = {
 
 export type RedeemGlobalPointsPayload = {
     points: number;
+}
+
+export type UpdateTutorialProgressPayload = {
+    tutorial_key: TutorialKeys;
 }
 
 export type ActivityState = {
@@ -1732,6 +1738,15 @@ export type ProgressState = {
     picksCount: PicksCount | null,
     slipsCount: SlipsCount | null,
     hasSeenIntro: boolean;
+    hasSeenWelcomeIntro: boolean;
+    hasSeenGroupIntro: boolean;
+    hasSeenSocialIntro: boolean;
+}
+
+export type TutorialProgress = {
+    hasSeenWelcomeIntro: boolean;
+    hasSeenGroupIntro: boolean;
+    hasSeenSocialIntro: boolean;
 }
 
 export type SearchUsers = {

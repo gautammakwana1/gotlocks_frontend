@@ -11,7 +11,7 @@ import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearJoinedGroupByInviteCodeMessage, fetchMyGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
-import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
+import { fetchMyTutorialProgressRequest, fetchProgressByUserIdRequest, updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { clearAllNotificationRequest, fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
 import NotificationsFeed from "./NotificationFeed";
@@ -21,6 +21,8 @@ import { MembersIcon, RightArrowIcon, SlipIcon, SparkIcon, TrashIcon } from "../
 import OnboardingModal from "../modals/OnboardingModal";
 import { completeIntroRequest } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
+import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+import Image from "next/image";
 
 type GroupSliceState = {
     group: {
@@ -76,11 +78,21 @@ const TwoLineActionLabel = ({
 
 type TabIconProps = { className?: string };
 
-const ActionCard = ({ action }: { action: ActionDefinition }) => (
+const ActionCard = ({
+    action,
+    locked,
+    onLockedTap,
+}: {
+    action: ActionDefinition;
+    locked?: boolean;
+    onLockedTap?: () => void;
+}) => (
     <button
         type="button"
-        onClick={action.onClick}
-        className="ui-accent-card group relative overflow-hidden rounded-[18px] border border-white/10 px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5"
+        onClick={locked ? onLockedTap : action.onClick}
+        aria-label={locked ? "Locked — finish the group tour first" : undefined}
+        className={`ui-accent-card group relative overflow-hidden rounded-[18px] border border-white/10 px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5 ${locked ? "opacity-45" : ""
+            }`}
     >
         <div
             aria-hidden
@@ -94,6 +106,21 @@ const ActionCard = ({ action }: { action: ActionDefinition }) => (
                 {action.icon}
             </div>
         </div>
+        {locked && (
+            <span
+                aria-hidden
+                className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/80 text-[9px] leading-none text-sky-200 ring-1 ring-sky-300/50"
+            >
+                <Image
+                    src="/icons/lock.png"
+                    alt="tutorial"
+                    width={24}
+                    height={24}
+                    className="transition-transform p-[1px] duration-300 group-hover:scale-110"
+                    draggable={false}
+                />
+            </span>
+        )}
     </button>
 );
 
@@ -138,8 +165,19 @@ const HomeTab = () => {
 
     const { joinLoading, message, error, hasMore: myGroupsHasMore, myGroups, loading: groupLoading } = useSelector((state: GroupRootState) => state.group);
     const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
-    const { progress, picksCount, slipsCount, hasSeenIntro, loading: progerssLoading } = useSelector((state: RootState) => state.progress);
+    const { progress, picksCount, slipsCount, hasSeenIntro } = useSelector((state: RootState) => state.progress);
     const { notification } = useSelector((state: RootState) => state.notifications);
+    const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
+
+    const actionsLocked = !hasSeenGroupIntro;
+    const handleLockedActionTap = useCallback(() => {
+        setToast({
+            id: Date.now(),
+            type: "info",
+            message: "Tap the groups tab to continue the tour 🔒",
+            duration: 3000
+        });
+    }, []);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -152,6 +190,7 @@ const HomeTab = () => {
         fetchData(1);
         if (currentUserId) {
             dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
+            dispatch(fetchMyTutorialProgressRequest());
         }
     }, [dispatch, currentUserId, fetchData]);
 
@@ -550,11 +589,12 @@ const HomeTab = () => {
         dispatch(clearAllNotificationRequest({}));
     }, [dispatch]);
 
-    const handleCompleteIntro = () => {
-        setShowOnboarding(false);
-        if (!hasSeenIntro) {
-            dispatch(completeIntroRequest({}));
-        }
+    const handleCompleteWelcomeIntro = () => {
+        // setShowOnboarding(false);
+        // if (!hasSeenIntro) {
+        //     dispatch(completeIntroRequest({}));
+        // }
+        dispatch(updateTutorialProgressRequest({ tutorial_key: "home" }));
     };
 
     const stats: StatDefinition[] = [
@@ -788,7 +828,12 @@ const HomeTab = () => {
                 style={{ animationDelay: "0.1s" }}
             >
                 {quickActions.map((action) => (
-                    <ActionCard key={action.id} action={action} />
+                    <ActionCard
+                        key={action.id}
+                        action={action}
+                        locked={actionsLocked}
+                        onLockedTap={handleLockedActionTap}
+                    />
                 ))}
             </section>
 
@@ -862,9 +907,14 @@ const HomeTab = () => {
                     )}
                 </div>
             </section>
-            {showOnboarding && (
+            {/* {showOnboarding && (
                 <OnboardingModal open={showOnboarding} onClose={handleCompleteIntro} />
-            )}
+            )} */}
+            <OnboardingModal
+                open={!hasSeenWelcomeIntro}
+                steps={WELCOME_TUTORIAL}
+                onClose={handleCompleteWelcomeIntro}
+            />
             {joinOpen && (
                 <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">
                     <form onSubmit={handleJoin} className="space-y-4 text-center">

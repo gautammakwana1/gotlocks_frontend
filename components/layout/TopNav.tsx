@@ -5,14 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { logout } from "@/lib/redux/slices/authSlice";
-import { getLocalStorage, removeLocalStorage } from "@/lib/utils/jwtUtils";
+import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
-import type { CurrentUser } from "@/lib/interfaces/interfaces";
+import type { CurrentUser, TutorialKeys } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { CircleDollarSignIcon, Lock, LockKeyhole, LogOutIcon, MessageSquareMoreIcon, Settings, TvMinimalIcon, TvMinimalPlayIcon, Unlock } from "lucide-react";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
+import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 
 type AuthUserPayload = {
   data?: {
@@ -40,6 +40,20 @@ export const TopNav = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [tutorialStage, setTutorialStage] = useState<TutorialKeys>(null);
+  const tutorialSteps =
+    tutorialStage === "home"
+      ? WELCOME_TUTORIAL
+      : tutorialStage === "groups"
+        ? GROUP_TUTORIAL
+        : tutorialStage === "global"
+          ? GLOBAL_TUTORIAL
+          : WELCOME_TUTORIAL;
+  const advanceTutorial = () => {
+    setTutorialStage((prev) =>
+      prev === "home" ? "groups" : prev === "groups" ? "global" : null
+    );
+  };
 
   const { setToast } = useToast();
 
@@ -234,7 +248,7 @@ export const TopNav = () => {
                 type="button"
                 onClick={() => {
                   setMenuOpen(false);
-                  setOnboardingOpen(true);
+                  setTutorialStage("home");
                 }}
                 className="group ui-accent-outline-hover flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition"
               >
@@ -289,8 +303,9 @@ export const TopNav = () => {
       )}
 
       <OnboardingModal
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
+        open={tutorialStage !== null}
+        steps={tutorialSteps}
+        onClose={advanceTutorial}
       />
     </>
   );

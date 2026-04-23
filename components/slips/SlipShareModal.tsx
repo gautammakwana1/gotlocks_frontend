@@ -150,13 +150,19 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                             (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
                                         ).toLowerCase();
                                         const profileImg = generateProfileImageUrl(member?.profiles?.profile_image);
+                                        const isWin = pick.result ?? "pending";
 
                                         return (
                                             <li key={pick.id} className="relative pl-5" >
-                                                <span className="absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-slate-500" />
+                                                <span className={`absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${isWin === "win" ? "bg-emerald-400" : isWin === "loss" ? "bg-red-400" : isWin === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
                                                 <div className="flex items-center gap-4 md:gap-5">
                                                     <div className="flex flex-col items-center gap-1.5">
-                                                        <div className="mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-100">
+                                                        <div
+                                                            className={`
+                                                                mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border bg-slate-800 text-xs font-semibold uppercase text-slate-100
+                                                                ${isWin === "win" ? "border-emerald-500" : isWin === "loss" ? "border-red-500" : isWin === "not_found" ? "border-amber-500" : "border-slate-500"}
+                                                            `}
+                                                        >
                                                             {profileImg ? (
                                                                 <Image
                                                                     src={profileImg}
@@ -184,14 +190,14 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                                                         {sourceTabLabel}
                                                                     </span>
                                                                     <p
-                                                                        className="mt-1 min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug text-cyan-200 md:text-base"
+                                                                        className={`min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug md:text-base ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"}`}
                                                                         title={displayPick}
                                                                     >
                                                                         {displayPick}
                                                                     </p>
                                                                 </div>
                                                                 <div className="flex shrink-0 flex-col items-end text-right">
-                                                                    <span className="mt-1 text-[11px] font-bold text-slate-100 md:mt-1.5 md:text-sm">
+                                                                    <span className={`flex mt-1 text-[11px] font-bold ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"} md:mt-1.5 md:text-sm`}>
                                                                         {oddsCopy}
                                                                     </span>
                                                                 </div>

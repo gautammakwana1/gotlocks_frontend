@@ -225,10 +225,6 @@ const LandingPage = () => {
           sign in with Google
         </button>
 
-        {!showManualSignIn && (
-          <AuthLegalNotice />
-        )}
-
         {showManualSignIn && (
           <form className="mt-2 flex flex-col gap-3" onSubmit={handleManualSubmit}>
             <div className="flex flex-col gap-1">
@@ -285,8 +281,6 @@ const LandingPage = () => {
               <span className="text-xs font-medium text-red-400">{errors}</span>
             )}
 
-            <AuthLegalNotice />
-
             <button
               type="submit"
               disabled={loading}
@@ -304,6 +298,8 @@ const LandingPage = () => {
             </Link>
           </form>
         )}
+
+        <AuthLegalNotice />
       </div>
 
       <ForgotPasswordModal

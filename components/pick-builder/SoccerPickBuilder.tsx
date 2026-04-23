@@ -2690,17 +2690,17 @@ export const SoccerPickBuilder = ({
                                                                 </div>
                                                             </div>
 
-                                                            <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3 row-start-3">
+                                                            <div className="flex items-center justify-between min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3 row-start-3">
                                                                 <div className="min-w-0">
                                                                     <span className="truncate text-xs font-semibold leading-snug text-white">
                                                                         {/* <p className="truncate text-[10px] text-slate-100/50">home</p> */}
                                                                         {/* {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam} */}
                                                                         <p className="flex items-center justify-center gap-1">
-                                                                            <House size={14} color="white" />
                                                                             {game.homeTeam}
                                                                         </p>
                                                                     </span>
                                                                 </div>
+                                                                <House size={14} color="white" />
                                                             </div>
 
                                                             <div className="row-span-3 flex items-center justify-center">

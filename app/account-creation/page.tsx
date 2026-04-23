@@ -360,8 +360,6 @@ const AccountCreationPage = () => {
           )}
         </label>
 
-        <AuthLegalNotice />
-
         <button
           type="submit"
           disabled={loading}
@@ -369,6 +367,8 @@ const AccountCreationPage = () => {
         >
           {loading ? "registering..." : "register"}
         </button>
+
+        <AuthLegalNotice />
       </form>
     </div>
   );

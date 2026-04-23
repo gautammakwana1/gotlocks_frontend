@@ -1,4 +1,4 @@
-import { FetchProgressByUserIdPayload, ProgressState, RedeemGlobalPointsPayload } from "@/lib/interfaces/interfaces";
+import { FetchProgressByUserIdPayload, ProgressState, RedeemGlobalPointsPayload, UpdateTutorialProgressPayload } from "@/lib/interfaces/interfaces";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 const initialState: ProgressState = {
@@ -9,6 +9,9 @@ const initialState: ProgressState = {
     progress: null,
     picksCount: null,
     slipsCount: null,
+    hasSeenGroupIntro: true,
+    hasSeenSocialIntro: true,
+    hasSeenWelcomeIntro: true,
 };
 
 const progressSlice = createSlice({
@@ -74,6 +77,45 @@ const progressSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        fetchMyTutorialProgressRequest: (state) => {
+            state.loading = true;
+            state.error = null;
+        },
+        fetchMyTutorialProgressSuccess: (state, action) => {
+            state.loading = false;
+            state.hasSeenGroupIntro = action.payload.hasSeenGroupIntro;
+            state.hasSeenWelcomeIntro = action.payload.hasSeenWelcomeIntro;
+            state.hasSeenSocialIntro = action.payload.hasSeenSocialIntro;
+        },
+        fetchMyTutorialProgressFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchMyTutorialProgressMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
+
+        updateTutorialProgressRequest: (state, action: PayloadAction<UpdateTutorialProgressPayload>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        updateTutorialProgressSuccess: (state, action) => {
+            state.loading = false;
+            state.hasSeenGroupIntro = action.payload.hasSeenGroupIntro;
+            state.hasSeenWelcomeIntro = action.payload.hasSeenWelcomeIntro;
+            state.hasSeenSocialIntro = action.payload.hasSeenSocialIntro;
+        },
+        updateTutorialProgressFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearUpdateTutorialProgressMessage: (state) => {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -90,6 +132,14 @@ export const {
     redeemGlobalPointsSuccess,
     redeemGlobalPointsFailure,
     clearRedeemGlobalPointsMessage,
+    fetchMyTutorialProgressRequest,
+    fetchMyTutorialProgressSuccess,
+    fetchMyTutorialProgressFailure,
+    clearFetchMyTutorialProgressMessage,
+    updateTutorialProgressRequest,
+    updateTutorialProgressSuccess,
+    updateTutorialProgressFailure,
+    clearUpdateTutorialProgressMessage,
 } = progressSlice.actions;
 
 export default progressSlice.reducer;

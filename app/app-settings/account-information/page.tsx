@@ -124,7 +124,7 @@ const AccountInformationPage = () => {
                 setIsPublicDraft(user?.profile?.is_public);
             };
         }
-    }, [dispatch, currentUser?.userId, loading, profileUpdateMessage, error, setToast]);
+    }, [dispatch, currentUser?.userId, user?.profile, loading, profileUpdateMessage, error, setToast]);
 
     const validate = useCallback((): boolean => {
         const nextErrors: FormErrors = {};

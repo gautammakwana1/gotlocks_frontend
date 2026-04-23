@@ -3,9 +3,9 @@ import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { SagaIterator } from "redux-saga";
-import { fetchMyProgressFailure, fetchMyProgressRequest, fetchMyProgressSuccess, fetchProgressByUserIdFailure, fetchProgressByUserIdRequest, fetchProgressByUserIdSuccess, redeemGlobalPointsFailure, redeemGlobalPointsRequest, redeemGlobalPointsSuccess } from "../slices/progressSlice";
+import { fetchMyProgressFailure, fetchMyProgressRequest, fetchMyProgressSuccess, fetchMyTutorialProgressFailure, fetchMyTutorialProgressRequest, fetchMyTutorialProgressSuccess, fetchProgressByUserIdFailure, fetchProgressByUserIdRequest, fetchProgressByUserIdSuccess, redeemGlobalPointsFailure, redeemGlobalPointsRequest, redeemGlobalPointsSuccess, updateTutorialProgressFailure, updateTutorialProgressRequest, updateTutorialProgressSuccess } from "../slices/progressSlice";
 import { PayloadAction } from "@reduxjs/toolkit";
-import { FetchProgressByUserIdPayload, RedeemGlobalPointsPayload } from "@/lib/interfaces/interfaces";
+import { FetchProgressByUserIdPayload, RedeemGlobalPointsPayload, TutorialProgress, UpdateTutorialProgressPayload } from "@/lib/interfaces/interfaces";
 type ApiErrorResponse = {
     message?: string;
 };
@@ -65,8 +65,43 @@ function* handleRedeemGlobalPoints(action: PayloadAction<RedeemGlobalPointsPaylo
     }
 };
 
+function* handleFetchMyTutorialProgress(): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/progress/tutorial-progress`,
+        );
+        const payload = response.data as { data?: { progress: TutorialProgress } };
+        const welcomIntro = payload.data?.progress.hasSeenWelcomeIntro;
+        const groupIntro = payload.data?.progress.hasSeenGroupIntro;
+        const socialIntro = payload.data?.progress.hasSeenSocialIntro;
+        yield put(fetchMyTutorialProgressSuccess({ hasSeenGroupIntro: groupIntro, hasSeenWelcomeIntro: welcomIntro, hasSeenSocialIntro: socialIntro }));
+    } catch (error: unknown) {
+        yield put(fetchMyTutorialProgressFailure(getErrorMessage(error, "Tutorial Progress Fetch Failed")));
+    }
+};
+
+function* handleUpdateTutorialProgress(action: PayloadAction<UpdateTutorialProgressPayload>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.patch,
+            `${API_BASE_URL}/progress/tutorial-update`,
+            action.payload
+        );
+        const payload = response.data as { data?: { progress: TutorialProgress } };
+        const welcomIntro = payload.data?.progress.hasSeenWelcomeIntro;
+        const groupIntro = payload.data?.progress.hasSeenGroupIntro;
+        const socialIntro = payload.data?.progress.hasSeenSocialIntro;
+        yield put(updateTutorialProgressSuccess({ hasSeenGroupIntro: groupIntro, hasSeenWelcomeIntro: welcomIntro, hasSeenSocialIntro: socialIntro }));
+    } catch (error: unknown) {
+        yield put(updateTutorialProgressFailure(getErrorMessage(error, "Update Tutorial Progress Failed")));
+    }
+};
+
 export default function* progressSaga() {
     yield takeLatest(fetchMyProgressRequest.type, handleFetchMyProgress);
     yield takeLatest(fetchProgressByUserIdRequest.type, handleFetchProgressByUserId);
     yield takeLatest(redeemGlobalPointsRequest.type, handleRedeemGlobalPoints);
+    yield takeLatest(fetchMyTutorialProgressRequest.type, handleFetchMyTutorialProgress);
+    yield takeLatest(updateTutorialProgressRequest.type, handleUpdateTutorialProgress);
 };
