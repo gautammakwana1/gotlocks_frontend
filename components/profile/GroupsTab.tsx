@@ -50,8 +50,9 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
     const { joinLoading, message, error, loading: groupLoading, myGroups, hasMore } = useSelector((state: RootState) => state.group);
 
     useEffect(() => {
+        if (!currentUser) return;
         dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
-    }, [dispatch]);
+    }, [dispatch, currentUser]);
 
     useEffect(() => {
         if (!joinLoading && message) {

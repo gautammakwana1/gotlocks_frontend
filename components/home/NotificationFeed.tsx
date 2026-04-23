@@ -47,9 +47,10 @@ const NotificationsFeed = ({
     }, [dispatch, limit]);
 
     useEffect(() => {
+        if (!currentUser) return;
         setPage(1);
         fetchData(1);
-    }, [fetchData]);
+    }, [fetchData, currentUser]);
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (loading) return;

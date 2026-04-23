@@ -357,3 +357,8 @@ body {
 .animate-shine {
   animation: shine 3s linear infinite;
 }
+
+.slip-share-user-select-none {
+    -webkit-user-select: none;
+    user-select: none;
+}

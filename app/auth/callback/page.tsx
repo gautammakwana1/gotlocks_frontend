@@ -24,8 +24,14 @@ export default function AuthCallbackPage() {
 
                 if (session?.user) {
                     const metadata = session.user.user_metadata || {};
-                    // If username is missing, redirect to set it.
-                    if (!metadata.username) {
+
+                    // Identify if this is a fresh signup (created just now)
+                    const createdAt = new Date(session.user.created_at).getTime();
+                    const lastSignInAt = new Date(session.user.last_sign_in_at || "").getTime();
+                    const isNewUser = Math.abs(lastSignInAt - createdAt) < 10000; // Within 10 seconds
+
+                    // If username or DOB is missing, or it's a fresh signup, redirect to onboarding.
+                    if (!metadata.username || isNewUser) {
                         router.replace("/auth/set-username");
                         return;
                     }
@@ -59,7 +65,7 @@ export default function AuthCallbackPage() {
                 // We only handle "null" session if there's no hash at all or we've waited long enough.
                 const hash = window.location.hash;
                 const hasAuthParts = hash.includes("access_token") || hash.includes("error") || hash.includes("code");
-                
+
                 if (!hasAuthParts) {
                     handleSession(null);
                 } else {

@@ -99,10 +99,11 @@ const PickBuilderClientPage = () => {
     const { slips: slipList } = useSelector((state: RootState) => state.slip);
 
     useEffect(() => {
+        if (!currentUser) return;
         dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
         const todayDateKey = toLocalDateKeyFromUTC(new Date().toISOString());
         dispatch(fetchLeaguesCountsRequest({ date: todayDateKey }));
-    }, [dispatch]);
+    }, [dispatch, currentUser]);
 
     const slips: Slip[] = useMemo(() => {
         if (!Array.isArray(slipList) || !slipList?.length) return [];

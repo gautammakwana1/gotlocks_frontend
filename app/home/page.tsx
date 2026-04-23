@@ -1,12 +1,20 @@
 "use client";
 
 import HomeTab from "@/components/home/HomeTab";
-import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { CurrentUser } from "@/lib/interfaces/interfaces";
+import { getLocalStorage } from "@/lib/utils/jwtUtils";
 
 const HomePage = () => {
-  const currentUser = useCurrentUser();
+  const storedUser = getLocalStorage<CurrentUser>("currentUser");
 
-  if (!currentUser) return null;
+  if (!storedUser) return null;
+
+  const hasUsername = storedUser?.username;
+
+  if (!hasUsername) {
+    window.location.href = "/auth/set-username";
+    return null;
+  }
 
   return <HomeTab />;
 };

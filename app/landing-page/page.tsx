@@ -146,7 +146,7 @@ const LandingPage = () => {
             className="relative flex items-center justify-center"
           >
             <Image
-              src="/mainblueblack.svg"
+              src="/gotlocks_blue_logo.svg"
               alt=""
               aria-hidden="true"
               width={52}

@@ -1,10 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 export type OnboardingStep = {
-    media: string;           // path to image or video
+    media?: string;          // path to image or video (skip when mediaNode is set)
+    mediaNode?: ReactNode;   // inline React animation node (takes precedence over media)
     mediaAlt: string;
     label: string;
     title: string;
@@ -26,12 +27,16 @@ type Props = {
 const isVideo = (src: string) =>
     src.endsWith(".mp4") || src.endsWith(".mov") || src.endsWith(".webm");
 
+const MEDIA_BOX_CLASS =
+    "relative mx-5 mt-5 h-[62vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] sm:mx-auto sm:mt-8 sm:h-[58vh] sm:w-full sm:max-w-4xl";
+
 function ImageMedia({ step }: { step: Step }) {
-    if (!step) return null;
+    const src = step.media;
+    if (!src) return null;
     return (
-        <div className="relative mx-5 mt-5 h-[62vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] sm:mx-auto sm:mt-8 sm:h-[58vh] sm:w-full sm:max-w-4xl">
+        <div className={MEDIA_BOX_CLASS}>
             <Image
-                src={step.media}
+                src={src}
                 alt={step.mediaAlt}
                 fill
                 className={
@@ -47,6 +52,7 @@ function ImageMedia({ step }: { step: Step }) {
 
 function VideoMedia({ step }: { step: Step }) {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const src = step.media;
 
     useEffect(() => {
         const el = videoRef.current;
@@ -58,12 +64,14 @@ function VideoMedia({ step }: { step: Step }) {
         return () => el.removeEventListener("loadedmetadata", apply);
     }, [step.media, step.playbackRate]);
 
+    if (!src) return null;
+
     return (
-        <div className="mx-5 mt-5 flex h-[62vh] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] sm:mx-auto sm:mt-8 sm:h-[58vh] sm:w-full sm:max-w-4xl">
+        <div className={`${MEDIA_BOX_CLASS} flex items-center justify-center`}>
             {!step ? null : (
                 <video
                     ref={videoRef}
-                    src={`${step.media}?t=${BUILD_TS}`}
+                    src={`${src}?t=${BUILD_TS}`}
                     autoPlay
                     loop
                     muted
@@ -73,6 +81,10 @@ function VideoMedia({ step }: { step: Step }) {
             )}
         </div>
     );
+}
+
+function NodeMedia({ node }: { node: ReactNode }) {
+    return <div className={MEDIA_BOX_CLASS}>{node}</div>;
 }
 
 const BUILD_TS = Date.now();
@@ -165,7 +177,9 @@ export const OnboardingModal = ({ open, steps, onClose, finalCtaLabel = "let's g
 
             {/* Content area with tap-zone navigation */}
             <div className="relative flex min-h-0 flex-1 flex-col">
-                {isVideo(current?.media || "") ? (
+                {current.mediaNode ? (
+                    <NodeMedia node={current.mediaNode} />
+                ) : current.media && isVideo(current?.media || "") ? (
                     <VideoMedia step={current} />
                 ) : (
                     <ImageMedia step={current} />

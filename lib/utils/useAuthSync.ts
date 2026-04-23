@@ -52,6 +52,7 @@ export async function saveCleanUser(session: Session) {
         provider: user?.app_metadata?.provider,
         id: user?.id,
         userId: user?.id,
+        dob: user?.user_metadata?.dob || existingUser?.dob,
         // Add any custom fields from your users table here
     };
 

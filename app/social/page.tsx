@@ -148,10 +148,11 @@ const SocialPage = () => {
     };
 
     useEffect(() => {
+        if (!currentUser) return;
         setPage(1);
         setHasMore(true);
         fetchDataByTab(1);
-    }, [activeTab, forYouScope, topHitsScope, dispatch]);
+    }, [activeTab, forYouScope, topHitsScope, dispatch, currentUser]);
 
     useEffect(() => {
         if (pickLoader || !pickMessage) return;

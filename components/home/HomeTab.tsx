@@ -185,13 +185,12 @@ const HomeTab = () => {
     }, [dispatch, limit]);
 
     useEffect(() => {
+        if (!currentUserId) return;
         dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
         dispatch(fetchNotificationListRequest({}));
         fetchData(1);
-        if (currentUserId) {
-            dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
-            dispatch(fetchMyTutorialProgressRequest());
-        }
+        dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
+        dispatch(fetchMyTutorialProgressRequest());
     }, [dispatch, currentUserId, fetchData]);
 
     useEffect(() => {

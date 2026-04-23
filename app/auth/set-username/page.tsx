@@ -7,8 +7,8 @@ import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearUpdateProfileMessage, updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
-import { RootState } from "@/lib/interfaces/interfaces";
-import { getLocalStorage } from "@/lib/utils/jwtUtils";
+import { CurrentUser, RootState } from "@/lib/interfaces/interfaces";
+import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import CustomDatePicker from "@/components/ui/CustomDatePicker";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
@@ -28,10 +28,16 @@ const SetUsernamePage = () => {
     );
 
     useEffect(() => {
+        // Only redirect to home if BOTH username and DOB are present
         if (currentUser?.username) {
             router.replace("/home");
         }
-    }, [router, currentUser]);
+
+        // Pre-fill username from current user if it exists (e.g. from Google)
+        if (currentUser?.username && !username) {
+            setUsername(currentUser.username);
+        }
+    }, [router, currentUser, username]);
 
     useEffect(() => {
         // Check if we have a valid session to even be here
@@ -43,7 +49,6 @@ const SetUsernamePage = () => {
 
     useEffect(() => {
         if (loading) return;
-
         if (profileUpdateMessage) {
             setToast({
                 id: Date.now(),
@@ -52,6 +57,8 @@ const SetUsernamePage = () => {
                 duration: 4000,
             });
             dispatch(clearUpdateProfileMessage());
+            const storedUser = getLocalStorage<CurrentUser>("currentUser");
+            setLocalStorage("currentUser", { ...storedUser, username: username.trim() });
             router.push("/home");
         } else if (authError) {
             setToast({
@@ -96,7 +103,7 @@ const SetUsernamePage = () => {
         }
 
         if (age < 13) {
-            setError("You must be at least 13 years old to refgister.");
+            setError("You must be at least 13 years old to register.");
             return false;
         }
 

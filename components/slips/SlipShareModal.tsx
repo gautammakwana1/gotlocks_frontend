@@ -27,6 +27,39 @@ const deepJaggedStyle = {
     "--jagged-tip": "0px",
 } as CSSProperties;
 
+const PICK_RESULT_ACCENTS = {
+    win: {
+        dot: "bg-emerald-300/80",
+        ring: "shadow-[0_0_0_4px_rgba(16,185,129,0.12)]",
+        text: "text-emerald-200",
+        avatar: "ring-1 ring-emerald-300/40 ring-offset-1 ring-offset-black/60",
+    },
+    loss: {
+        dot: "bg-red-300/80",
+        ring: "shadow-[0_0_0_4px_rgba(248,113,113,0.12)]",
+        text: "text-red-200",
+        avatar: "ring-1 ring-red-300/40 ring-offset-1 ring-offset-black/60",
+    },
+    void: {
+        dot: "bg-amber-300/80",
+        ring: "shadow-[0_0_0_4px_rgba(251,191,36,0.12)]",
+        text: "text-amber-200",
+        avatar: "ring-1 ring-amber-300/40 ring-offset-1 ring-offset-black/60",
+    },
+    not_found: {
+        dot: "bg-amber-300/80",
+        ring: "shadow-[0_0_0_4px_rgba(251,191,36,0.12)]",
+        text: "text-amber-200",
+        avatar: "ring-1 ring-amber-300/40 ring-offset-1 ring-offset-black/60",
+    },
+    pending: {
+        dot: "bg-gray-300/80",
+        ring: "shadow-[0_0_0_4px_rgba(148,163,184,0.12)]",
+        text: "text-gray-200",
+        avatar: "ring-1 ring-slate-400/35 ring-offset-1 ring-offset-black/60",
+    },
+} as const;
+
 const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalProps) => {
     const { setToast } = useToast();
     const [imageSaving, setImageSaving] = useState(false);
@@ -150,18 +183,20 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                             (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
                                         ).toLowerCase();
                                         const profileImg = generateProfileImageUrl(member?.profiles?.profile_image);
-                                        const isWin = pick.result ?? "pending";
+                                        const gameTimeCopy = formatDateTime(pick.match_date);
+                                        const showGameTime = gameTimeCopy !== PLACEHOLDER;
+                                        const resolvedResult = pick.result ?? "pending";
+                                        const resultLabel =
+                                            resolvedResult === "not_found" ? "n/a" : resolvedResult;
+                                        const accent = PICK_RESULT_ACCENTS[resolvedResult];
 
                                         return (
                                             <li key={pick.id} className="relative pl-5" >
-                                                <span className={`absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${isWin === "win" ? "bg-emerald-400" : isWin === "loss" ? "bg-red-400" : isWin === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
+                                                <span className={`absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${resolvedResult === "win" ? "bg-emerald-400" : resolvedResult === "loss" ? "bg-red-400" : resolvedResult === "not_found" ? "bg-amber-400" : "bg-cyan-300/80"}`} />
                                                 <div className="flex items-center gap-4 md:gap-5">
                                                     <div className="flex flex-col items-center gap-1.5">
                                                         <div
-                                                            className={`
-                                                                mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border bg-slate-800 text-xs font-semibold uppercase text-slate-100
-                                                                ${isWin === "win" ? "border-emerald-500" : isWin === "loss" ? "border-red-500" : isWin === "not_found" ? "border-amber-500" : "border-slate-500"}
-                                                            `}
+                                                            className={`mt-1 flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-slate-800 text-xs font-semibold uppercase text-slate-100 ${accent.avatar}`}
                                                         >
                                                             {profileImg ? (
                                                                 <Image
@@ -178,6 +213,11 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                                                 <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
                                                             )}
                                                         </div>
+                                                        <span
+                                                            className={`text-[8px] font-semibold uppercase tracking-wide md:text-[10px] ${accent.text}`}
+                                                        >
+                                                            {resultLabel}
+                                                        </span>
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex min-h-0 w-full flex-1 flex-col justify-between gap-1 md:gap-2">
@@ -190,14 +230,23 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                                                         {sourceTabLabel}
                                                                     </span>
                                                                     <p
-                                                                        className={`min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug md:text-base ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"}`}
+                                                                        className={`min-w-0 whitespace-normal break-words text-[11px] font-semibold leading-snug md:text-base ${accent.text}`}
                                                                         title={displayPick}
                                                                     >
                                                                         {displayPick}
                                                                     </p>
                                                                 </div>
                                                                 <div className="flex shrink-0 flex-col items-end text-right">
-                                                                    <span className={`flex mt-1 text-[11px] font-bold ${isWin === "win" ? "text-emerald-400" : isWin === "loss" ? "text-red-400" : isWin === "not_found" ? "text-amber-400" : "text-cyan-200"} md:mt-1.5 md:text-sm`}>
+                                                                    {showGameTime ? (
+                                                                        <span className="block text-[8px] text-slate-300 md:text-[10px]">
+                                                                            {gameTimeCopy}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="block text-[8px] text-transparent md:text-[10px]">
+                                                                            {PLACEHOLDER}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className={`flex mt-1 text-[11px] font-bold md:mt-1.5 md:text-sm ${accent.text}`}>
                                                                         {oddsCopy}
                                                                     </span>
                                                                 </div>

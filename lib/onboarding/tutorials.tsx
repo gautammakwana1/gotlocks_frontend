@@ -1,32 +1,29 @@
 import { OnboardingStep } from "@/components/modals/OnboardingModal";
+import { WelcomeStep1Animation, WelcomeStep2Animation, WelcomeStep3Animation } from "@/components/ui/onboarding/animation/WelcomeAnimation";
 
 const PLACEHOLDER = "/onboarding/placeholder.jpg";
 
 export const WELCOME_TUTORIAL: OnboardingStep[] = [
     {
-        media: PLACEHOLDER,
+        mediaNode: <WelcomeStep1Animation />,
         mediaAlt: "gotlocks welcome",
         label: "welcome",
         title: "Welcome to gotlocks",
         body: "You're in. gotlocks is where you and your crew compete on picks, build a record, and settle the debate on who actually knows sports.",
-        imgFit: "contain",
-        imgHeight: 420,
     },
     {
-        media: PLACEHOLDER,
+        mediaNode: <WelcomeStep2Animation />,
         mediaAlt: "Private groups",
         label: "private",
         title: "Your crew, your group",
         body: "Groups are private spaces for your people. Each one has its own slips, leaderboard, and chat. Join an existing group with an invite code, or start your own.",
-        imgHeight: 460,
     },
     {
-        media: PLACEHOLDER,
+        mediaNode: <WelcomeStep3Animation />,
         mediaAlt: "The global side",
         label: "public",
         title: "Or go global",
         body: "Outside your group there's the global feed — a public space where anyone can post picks, react, and follow those who always seem to win. Two sides of gotlocks, and you can play both.",
-        imgHeight: 460,
     },
 ];
 

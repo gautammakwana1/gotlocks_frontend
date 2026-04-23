@@ -86,6 +86,7 @@ export type CurrentUser = {
     sub: string;
     userId: string;
     full_name: string;
+    dob?: string;
 }
 
 // NOTE: `name` is a legacy alias for the username/handle chosen during onboarding.

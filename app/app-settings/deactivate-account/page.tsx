@@ -51,8 +51,9 @@ const DeleteAccountPage = () => {
     const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
 
     useEffect(() => {
+        if (!currentUser) return;
         dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
-    }, [dispatch]);
+    }, [dispatch, currentUser]);
 
     useEffect(() => {
         if (!authLoader && authMessage) {
