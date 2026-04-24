@@ -367,7 +367,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 </li>
                 <li>
                   <strong>Vibe Slips.</strong> Casual group play for profile
-                  progression. They award XP only and never affect leaderboard totals.
+                  progression. They award XP only, skip review, and never affect
+                  leaderboard totals.
                 </li>
               </ul>
             ),
@@ -390,12 +391,14 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   <strong>Open.</strong> Members submit picks before the deadline.
                 </li>
                 <li>
-                  <strong>In Review.</strong> Once the deadline passes, the slip locks
-                  and waits for review.
+                  <strong>Leaderboard Slips.</strong> Open, then In Review, then
+                  Finalized. Once the deadline passes, the slip locks for commissioner
+                  review before it closes.
                 </li>
                 <li>
-                  <strong>Finalized.</strong> The commissioner grades it, can adjust
-                  points, and then finalizes it.
+                  <strong>Vibe Slips.</strong> Open, then Locked Picks, then
+                  Finalized. Once the deadline passes, the picks lock and the slip
+                  finalizes automatically after auto-grade resolves every pick.
                 </li>
                 <li>
                   <strong>Multiple slips can run at once.</strong> A group can run
@@ -418,12 +421,16 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   Any group member can create a Vibe Slip.
                 </li>
                 <li>
-                  After a slip locks, the commissioner reviews it with auto-grading
-                  and optional point adjustments.
+                  After a Leaderboard Slip locks, the commissioner reviews it with
+                  auto-grading and optional point adjustments.
                 </li>
                 <li>
-                  Before finalization, a slip can be reopened. Reopening clears the
-                  picks and resets the slip.
+                  After a Vibe Slip locks, the creator or commissioner can auto-grade
+                  it. Once every pick resolves, it finalizes automatically.
+                </li>
+                <li>
+                  Before finalization, a locked slip can be reopened. Reopening clears
+                  the picks and resets the slip.
                 </li>
               </ul>
             ),

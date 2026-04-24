@@ -733,27 +733,26 @@ const HomeTab = () => {
                                                 key={`${group.id}-${index}`}
                                                 type="button"
                                                 onClick={() => router.push(`/group/${group.id}`)}
-                                                className="min-w-full snap-center flex flex-col gap-2 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
+                                                className="relative min-h-[7.5rem] min-w-full snap-center rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                             >
-                                                <div className="flex items-center justify-between text-[18px] uppercase tracking-[0.12em] text-gray-400">
-                                                    <span>League</span>
-                                                    <span className="text-[9px] text-gray-300">
-                                                        code {group.invite_code}
+                                                <span className="absolute right-3 top-3 text-[9px] uppercase tracking-[0.12em] text-gray-300">
+                                                    code {group.invite_code}
+                                                </span>
+                                                <div className="flex h-full flex-col">
+                                                    <h3
+                                                        className="allow-caps pr-16 text-base font-extrabold text-transparent bg-clip-text"
+                                                        style={displayNameGradientStyle}
+                                                    >
+                                                        {group.name}
+                                                    </h3>
+                                                    <p className="mt-1 text-[10px] text-gray-300 break-words line-clamp-2">
+                                                        {group.description ??
+                                                            "Run slips, share picks, and climb the table together."}
+                                                    </p>
+                                                    <span className="mt-auto pt-3 text-[9px] uppercase tracking-[0.16em] text-gray-400">
+                                                        {group.member_count} members
                                                     </span>
                                                 </div>
-                                                <h3
-                                                    className="allow-caps text-base font-extrabold text-transparent bg-clip-text"
-                                                    style={displayNameGradientStyle}
-                                                >
-                                                    {group.name}
-                                                </h3>
-                                                <p className="text-[10px] text-gray-300 break-words line-clamp-2">
-                                                    {group.description ??
-                                                        "Run slips, share picks, and climb the table together."}
-                                                </p>
-                                                <span className="text-[9px] uppercase tracking-[0.16em] text-gray-400">
-                                                    {group.member_count} members
-                                                </span>
                                             </button>
                                         ))}
                                     </div>
@@ -792,27 +791,26 @@ const HomeTab = () => {
                                             key={group.id}
                                             type="button"
                                             onClick={() => router.push(`/group/${group.id}`)}
-                                            className="flex flex-col gap-3 rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
+                                            className="relative min-h-[9rem] rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                         >
-                                            <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.14em] text-gray-400">
-                                                <span>League</span>
-                                                <span className="text-[10px] text-gray-300">
-                                                    code {group.invite_code}
+                                            <span className="absolute right-4 top-4 text-[10px] uppercase tracking-[0.14em] text-gray-300">
+                                                code {group.invite_code}
+                                            </span>
+                                            <div className="flex h-full flex-col">
+                                                <h3
+                                                    className="allow-caps pr-20 text-lg font-extrabold text-transparent bg-clip-text"
+                                                    style={displayNameGradientStyle}
+                                                >
+                                                    {group.name}
+                                                </h3>
+                                                <p className="mt-1 text-xs text-gray-300 line-clamp-2">
+                                                    {group.description ??
+                                                        "Run slips, share picks, and climb the table together."}
+                                                </p>
+                                                <span className="mt-auto pt-4 text-[11px] uppercase tracking-[0.18em] text-gray-400">
+                                                    {group.member_count} members
                                                 </span>
                                             </div>
-                                            <h3
-                                                className="allow-caps text-lg font-extrabold text-transparent bg-clip-text"
-                                                style={displayNameGradientStyle}
-                                            >
-                                                {group.name}
-                                            </h3>
-                                            <p className="text-xs text-gray-300 line-clamp-2">
-                                                {group.description ??
-                                                    "Run slips, share picks, and climb the table together."}
-                                            </p>
-                                            <span className="text-[11px] uppercase tracking-[0.18em] text-gray-400">
-                                                {group.member_count} members
-                                            </span>
                                         </button>
                                     ))}
                                 </div>

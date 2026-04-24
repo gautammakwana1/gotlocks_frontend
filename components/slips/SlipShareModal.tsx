@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { JAGGED_CLIP_PATH } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils/date";
 import Image from "next/image";
-import { toPng } from "html-to-image";
+import { toJpeg } from "html-to-image";
 import { Member, Pick, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
@@ -103,14 +103,14 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
         if (!sectionRef.current) return;
         setImageSaving(true);
         try {
-            const dataUrl = await toPng(sectionRef.current, {
+            const dataUrl = await toJpeg(sectionRef.current, {
                 cacheBust: true,
                 pixelRatio: 2,
                 backgroundColor: "transparent",
             });
 
             const link = document.createElement("a");
-            link.download = `${slip.name || "slip"}-picks.png`;
+            link.download = `${slip.name || "slip"}-picks.jpeg`;
             link.href = dataUrl;
             link.click();
         } catch (err) {

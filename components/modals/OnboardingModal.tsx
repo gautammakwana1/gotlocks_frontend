@@ -7,7 +7,6 @@ export type OnboardingStep = {
     media?: string;          // path to image or video (skip when mediaNode is set)
     mediaNode?: ReactNode;   // inline React animation node (takes precedence over media)
     mediaAlt: string;
-    label: string;
     title: string;
     body: string;
     imgFit?: "cover" | "contain";
@@ -187,13 +186,10 @@ export const OnboardingModal = ({ open, steps, onClose, finalCtaLabel = "let's g
 
                 {/* Step content */}
                 <div className="mx-auto w-full max-w-xl px-6 pb-2 pt-4 sm:max-w-3xl sm:px-10 sm:pb-4 sm:pt-8">
-                    <p className="mb-1 text-[10px] uppercase tracking-[0.2em] text-sky-300 sm:mb-2 sm:text-xs">
-                        {current?.label}
-                    </p>
                     <h2 className="mb-2 text-xl font-bold text-white sm:mb-3 sm:text-3xl">
                         {current?.title}
                     </h2>
-                    <p className="text-sm leading-relaxed text-gray-300 sm:text-base sm:leading-relaxed">
+                    <p className="text-base leading-relaxed text-gray-300 sm:text-lg sm:leading-relaxed">
                         {current?.body}
                     </p>
                 </div>

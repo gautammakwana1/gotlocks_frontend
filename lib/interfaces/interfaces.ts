@@ -2094,6 +2094,8 @@ export type LeaderboardList = {
     created_at: string;
     archived_at?: string;
     hasAnyOpenSlips: boolean;
+    totalSlipCount: number;
+    openSlipCount: number;
 };
 
 export type ReactionKey =

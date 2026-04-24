@@ -185,7 +185,6 @@ const RankCell = ({
     user_id,
     currentUserId,
 }: {
-    cumulative: number;
     rank: number;
     isMobile: boolean;
     profile_image: string | undefined;
@@ -195,16 +194,22 @@ const RankCell = ({
 }) => {
     const router = useRouter();
     const [imgError, setImgError] = useState(false);
+    const isCurrentUser = user_id === currentUserId;
     const displayName = username ?? "Member";
+    const usernameCopy =
+        displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
     const profileImg = generateProfileImageUrl(profile_image);
     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
 
     const avatarSize = isMobile
-        ? "h-8 w-8 text-[9px] ring-1 ring-white/20 ring-offset-1"
-        : "h-14 w-14 text-[13px] ring-[2.5px] ring-white/20 ring-offset-[3px]";
+        ? `h-8 w-8 text-[9px] ${isCurrentUser ? "ring-[1.5px]" : "ring-1"} ring-offset-1`
+        : `h-14 w-14 text-[13px] ${isCurrentUser ? "ring-[3.5px]" : "ring-[2.5px]"} ring-offset-[3px]`;
     const badgeSize = isMobile
         ? "h-[18px] w-[18px] text-[9px]"
         : "h-[28px] w-[28px] text-[12px]";
+    const avatarTone = isCurrentUser
+        ? "bg-sky-500/[0.14] text-sky-50 ring-sky-200/80 shadow-[0_0_20px_rgba(125,211,252,0.22)]"
+        : "bg-white/[0.08] text-slate-100 ring-white/20";
 
     const hasValidImage =
         profile_image && !imgError;
@@ -221,10 +226,10 @@ const RankCell = ({
     );
 
     return (
-        < div className="flex w-full items-start pt-[14px]" >
+        < div className="flex w-full min-w-0 flex-col items-start gap-1 pt-[8px] md:gap-1.5 md:pt-[10px]" >
             <div className="relative inline-flex">
                 <button
-                    className={`relative flex items-center justify-center rounded-full bg-white/[0.08] font-semibold uppercase text-slate-100 ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default`}
+                    className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
                     onClick={() => handleViewProfile(user_id)}
                     disabled={currentUserId === user_id}
                 >
@@ -251,6 +256,14 @@ const RankCell = ({
                 >
                     {rank}
                 </div>
+            </div>
+            <div className="flex max-w-full items-center gap-1">
+                <span
+                    className="max-w-full truncate text-left text-[9px] font-medium text-slate-400 md:text-[11px]"
+                    title={username}
+                >
+                    {usernameCopy}
+                </span>
             </div>
         </div >
     );
@@ -650,9 +663,7 @@ export const LeaderboardGrid = ({
                                 <div
                                     className="flex items-center border-b border-white/10 px-1.5 text-[10px] uppercase tracking-wide text-gray-400 box-border md:px-4 md:text-xs"
                                     style={{ height: HEADER_H }}
-                                >
-                                    Rank
-                                </div>
+                                />
                                 {leaderboard.map(({ cumulative_points, profile_image, username, user_id, win, loss }, rowIndex) => {
                                     const rowBand = "bg-transparent";
                                     const isLastRow = rowIndex === leaderboard.length - 1;
@@ -665,7 +676,6 @@ export const LeaderboardGrid = ({
                                         >
                                             <div className="flex h-full w-full min-w-0 flex-col justify-center gap-[20px] pl-2 md:gap-2 md:pl-3">
                                                 <RankCell
-                                                    cumulative={cumulative_points}
                                                     rank={rowIndex + 1}
                                                     isMobile={isMobile}
                                                     profile_image={profile_image}

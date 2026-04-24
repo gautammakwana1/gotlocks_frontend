@@ -19,6 +19,7 @@ type DeadlinesOverviewModalProps = {
     open: boolean;
     onClose: () => void;
     windowDays: number;
+    isGraded: boolean;
 };
 
 interface FormErrors {
@@ -61,13 +62,14 @@ const MODE_INFO = {
     },
     vibe: {
         title: "Vibe slip",
-        summary: "Vibe slips are casual and award XP only.",
+        summary: "Vibe slips are casual, award XP only, and skip review.",
         bullets: [
             <>any member can create one for quick, low-stakes bragging rights.</>,
             <>
                 <span className="font-semibold text-amber-200">multi-pick only</span> so
                 friends can fire off as many picks as they want.
             </>,
+            <>after the deadline, picks lock and the slip finalizes automatically once grading resolves every pick.</>,
             <>great for lottery plays, gut calls, and testing instincts.</>,
         ] as ReactNode[],
     },
@@ -748,6 +750,7 @@ const SlipCreationPage = () => {
                 open={showDeadlinesOverview}
                 onClose={() => setShowDeadlinesOverview(false)}
                 windowDays={form.windowDays}
+                isGraded={slipIsFantasy}
             />
 
             <ModeInfoModal
@@ -760,7 +763,12 @@ const SlipCreationPage = () => {
 
 export default SlipCreationPage;
 
-const DeadlinesOverviewModal = ({ open, onClose, windowDays }: DeadlinesOverviewModalProps) => {
+const DeadlinesOverviewModal = ({
+    open,
+    onClose,
+    windowDays,
+    isGraded,
+}: DeadlinesOverviewModalProps) => {
     useEffect(() => {
         if (!open) return;
         const handler = (event: KeyboardEvent) => {
@@ -789,17 +797,21 @@ const DeadlinesOverviewModal = ({ open, onClose, windowDays }: DeadlinesOverview
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
                     <div className="space-y-1">
                         <h2 id="deadlines-overview-title" className="text-lg font-semibold text-white">
-                            deadlines &amp; review overview
+                            {isGraded
+                                ? "deadlines & review overview"
+                                : "deadlines & locked picks overview"}
                         </h2>
                         <p className="text-xs text-gray-400">
-                            quick refresher on how deadlines, auto-grade, and slips stay in sync.
+                            {isGraded
+                                ? "quick refresher on how deadlines, auto-grade, and slips stay in sync."
+                                : "quick refresher on how deadlines, locked picks, and automatic finalizing stay in sync."}
                         </p>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
                         className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                        aria-label="close deadlines and review overview"
+                        aria-label="close deadlines overview"
                     >
                         x
                     </button>
@@ -830,12 +842,12 @@ const DeadlinesOverviewModal = ({ open, onClose, windowDays }: DeadlinesOverview
 
                     <section className="space-y-3">
                         <h3 className="text-sm font-semibold tracking-wide text-sky-200">
-                            review and finalizing
+                            {isGraded ? "review and finalizing" : "locked picks and finalizing"}
                         </h3>
                         <p>
-                            commissioners can auto-grade once games finish. Results are read-only after
-                            auto-grade, and awarded points are the only review adjustment. Finalize when you&apos;re
-                            ready to post to the leaderboard.
+                            {isGraded
+                                ? "commissioners can auto-grade once games finish. Results are read-only after auto-grade, and awarded points are the only review adjustment. Finalize when you&apos;re ready to post to the leaderboard."
+                                : "vibe slips lock at the deadline, stay read-only while results resolve, and finalize automatically once auto-grade has every pick."}
                         </p>
                     </section>
                 </div>

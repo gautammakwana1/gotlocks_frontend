@@ -504,11 +504,11 @@ const SlipDetailsPage = () => {
 
     const preflightIsCommissioner = group?.created_by === currentUser?.userId;
     const preflightIsCreator = slip?.created_by === currentUser?.userId;
-    const preflightHasVibeControl = Boolean(slip && !slip.isGraded && preflightIsCreator);
+    const isVibeSlip = Boolean(slip && !slip.isGraded && slip.slip_type === "vibe");
     const availableSports = Array.isArray(slip?.sports) && slip.sports.length > 0
         ? slip.sports
         : [DEFAULT_SPORT];
-    const showReviewTab = Boolean(slip && (preflightIsCommissioner || preflightHasVibeControl) && isSlipTimeLocked(slip));
+    const showReviewTab = Boolean(slip && slip.isGraded && preflightIsCommissioner && isSlipTimeLocked(slip));
     const showActionsTab = Boolean(
         slip && (preflightIsCommissioner || (!slip.isGraded && preflightIsCreator))
     );
@@ -653,6 +653,9 @@ const SlipDetailsPage = () => {
         canManagePicks
             ? "No pick yet."
             : "pick not submitted before slip deadline";
+    const lockedResetHint = slip.isGraded
+        ? "Deadline is locked. Use Reopen slip in Review to reset picks and set a new deadline."
+        : "Deadline is locked for this vibe slip.";
 
     const handleAutoGrade = () => {
         if (!canAutoGrade) return;
@@ -1379,10 +1382,7 @@ const SlipDetailsPage = () => {
                                                                 {formatDateTime(eligibilityWindowEnd ?? "")} latest start).
                                                             </p>
                                                             {!canEditDeadlines && (
-                                                                <p className="text-[11px] text-amber-200">
-                                                                    Deadline is locked. Use Reopen slip in Review to reset picks and set a
-                                                                    new deadline.
-                                                                </p>
+                                                                <p className="text-[11px] text-amber-200">{lockedResetHint}</p>
                                                             )}
                                                         </div>
                                                         <div className="flex justify-end">
@@ -2251,16 +2251,22 @@ const DeadlinesOverviewModal = ({
             >
                 <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
                     <div className="space-y-1">
-                        <h2 className="text-lg font-semibold text-white">Deadlines &amp; review overview</h2>
+                        <h2 className="text-lg font-semibold text-white">
+                            {isGraded
+                                ? "Deadlines & review overview"
+                                : "Deadlines & locked picks overview"}
+                        </h2>
                         <p className="text-xs text-gray-400">
-                            How pick locks, auto-grade, and scoring flow together on each slip.
+                            {isGraded
+                                ? "How pick locks, auto-grade, and scoring flow together on each slip."
+                                : "How pick locks, auto-grade, and automatic finalization work on vibe slips."}
                         </p>
                     </div>
                     <button
                         type="button"
                         onClick={onClose}
                         className="rounded-full border border-white/15 px-2 py-2 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                        aria-label="Close deadlines and review overview"
+                        aria-label="Close deadlines overview"
                     >
                         <X size={14} />
                     </button>
@@ -2281,11 +2287,12 @@ const DeadlinesOverviewModal = ({
 
                     <section className="space-y-2">
                         <h3 className="text-sm font-semibold tracking-wide text-sky-200">
-                            Review flow
+                            {isGraded ? "Review flow" : "Locked picks flow"}
                         </h3>
                         <p>
-                            Once the pick deadline passes, the slip locks and review opens. Commissioners can
-                            run auto-grade, adjust awarded points, and finalize when ready.
+                            {isGraded
+                                ? "Once the pick deadline passes, the slip locks and review opens. Commissioners can run auto-grade, adjust awarded points, and finalize when ready."
+                                : "Once the pick deadline passes, the slip locks into locked picks. Auto-grade resolves finished results, and the vibe slip finalizes automatically once every pick has a result."}
                         </p>
                         <ul className="list-disc space-y-2 pl-5 text-xs text-gray-300">
                             {isGraded ? (
@@ -2301,9 +2308,12 @@ const DeadlinesOverviewModal = ({
                             ) : (
                                 <>
                                     <li>Auto-grade sets results to win/loss/not found when possible.</li>
-                                    <li>Awarded points override the default tier scoring.</li>
-                                    <li>Not found/void default to 0; pending stays at 0.</li>
-                                    <li>Finalize to close out the slip.</li>
+                                    <li>
+                                        Pending picks stay locked until their games finish and grading can resolve
+                                        them.
+                                    </li>
+                                    <li>Not found and void settle at 0 XP impact by default.</li>
+                                    <li>As soon as every pick is graded, the slip finalizes automatically.</li>
                                 </>
                             )}
                         </ul>

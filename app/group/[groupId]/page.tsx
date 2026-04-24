@@ -1289,7 +1289,7 @@ const GroupPage = () => {
                         hasMore={hasMoreOpens}
                       />
                       <SlipCategorySection
-                        title="slips in review"
+                        title="locked picks"
                         slips={vibeLockedSlips || []}
                         onSelect={handleSlipSelect}
                         onLoadMore={handleLoadMoreReview}
@@ -1562,7 +1562,9 @@ const GroupPage = () => {
                       {activeSecondaryLeaderboards.map((board) => {
                         const blockedReason = board.hasAnyOpenSlips
                           ? "You have open slips still running in this leaderboard."
-                          : null;
+                          : board.totalSlipCount === 0
+                            ? "This leaderboard can't be archived because it has no slips yet."
+                            : null;
                         return (
                           <div key={board.id} className={secondaryLeaderboardCardClass}>
                             <div className="flex flex-wrap items-start justify-between gap-3">

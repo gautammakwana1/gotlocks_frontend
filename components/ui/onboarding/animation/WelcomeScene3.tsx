@@ -4,14 +4,24 @@ import { clamp, Easing, useTime } from "./engine";
 import { AMBER, AMBER_GLOW, AMBER_SOFT, APP_BG, Avatar, FONT_MONO, FONT_SANS, TEXT, TEXT_MUTED } from "./primitives";
 
 // Scene 3 V2 — Follow Graph.
-// Central "YOU" avatar, 6 surrounding nodes. Dashed lines sprout outward
-// with traveling dots. Each surrounding node gets a "follow" or "following"
-// label pill in amber (only those two labels — no tailed/fire/etc).
-export function WelcomeScene3({ showText = false }: { showText?: boolean }) {
+// Central "YOU" avatar; 16 nodes evenly distributed on a ring (radius 320),
+// appearing in a shuffled order with mixed follow/following labels in amber.
+export function WelcomeScene3(_props: { showText?: boolean } = {}) {
     const time = useTime();
 
     const cx = 400;
     const cy = 500;
+
+    const count = 16;
+    const radius = 320;
+    const followPattern = [
+        true, false, true, false, false, true, false, true,
+        true, false, true, false, false, true, false, true,
+    ];
+    const hues = [280, 160, 40, 340, 200, 320, 100, 240, 20, 180, 300, 60, 140, 260, 360, 80];
+    const initialsList = ["ST", "KT", "DV", "ML", "AB", "RC", "JN", "EW", "PZ", "LH", "OZ", "TN", "BR", "KV", "HY", "MG"];
+    // Shuffled delay order — avatars appear non-sequentially around the ring
+    const delayOrder = [7, 2, 13, 0, 11, 5, 15, 3, 9, 1, 14, 6, 10, 4, 12, 8];
 
     type Node = {
         initials: string;
@@ -22,14 +32,19 @@ export function WelcomeScene3({ showText = false }: { showText?: boolean }) {
         label: "follow" | "following";
     };
 
-    const nodes: Node[] = [
-        { initials: "ST", hue: 280, x: cx - 240, y: cy - 180, delay: 0.8, label: "follow" },
-        { initials: "KT", hue: 160, x: cx + 240, y: cy - 180, delay: 1.1, label: "following" },
-        { initials: "DV", hue: 40, x: cx - 280, y: cy + 20, delay: 1.4, label: "follow" },
-        { initials: "ML", hue: 340, x: cx + 280, y: cy + 20, delay: 1.7, label: "following" },
-        { initials: "AB", hue: 200, x: cx - 200, y: cy + 200, delay: 2.0, label: "follow" },
-        { initials: "RC", hue: 320, x: cx + 200, y: cy + 200, delay: 2.3, label: "following" },
-    ];
+    const nodes: Node[] = Array.from({ length: count }).map((_, i) => {
+        // offset start angle slightly so no avatar sits exactly above/below center
+        const angle = (i / count) * Math.PI * 2 - Math.PI / 2 + Math.PI / count;
+        const orderIndex = delayOrder.indexOf(i);
+        return {
+            initials: initialsList[i],
+            hue: hues[i],
+            x: cx + Math.cos(angle) * radius,
+            y: cy + Math.sin(angle) * radius,
+            delay: 0.4 + orderIndex * 0.15,
+            label: followPattern[i] ? "follow" : "following",
+        };
+    });
 
     return (
         <div style={{ position: "absolute", inset: 0, background: APP_BG, overflow: "hidden" }}>
@@ -146,20 +161,20 @@ export function WelcomeScene3({ showText = false }: { showText?: boolean }) {
                             opacity: enter,
                         }}
                     >
-                        <Avatar initials={n.initials} size={70} hue={n.hue} />
+                        <Avatar initials={n.initials} size={54} hue={n.hue} />
                         {time > n.delay + 0.5 && (
                             <div
                                 style={{
                                     position: "absolute",
                                     left: "50%",
-                                    top: 78,
+                                    top: 60,
                                     transform: "translateX(-50%)",
-                                    padding: "3px 9px",
-                                    borderRadius: 10,
+                                    padding: "2px 7px",
+                                    borderRadius: 8,
                                     background: AMBER_SOFT,
                                     border: `1px solid ${AMBER}`,
                                     fontFamily: FONT_MONO,
-                                    fontSize: 10,
+                                    fontSize: 9,
                                     fontWeight: 700,
                                     color: AMBER,
                                     whiteSpace: "nowrap",
@@ -172,68 +187,6 @@ export function WelcomeScene3({ showText = false }: { showText?: boolean }) {
                     </div>
                 );
             })}
-
-            {/* Header */}
-            <div
-                style={{
-                    position: "absolute",
-                    left: 0,
-                    right: 0,
-                    top: 80,
-                    textAlign: "center",
-                    opacity: clamp(time / 0.4, 0, 1),
-                }}
-            >
-                <div
-                    style={{
-                        fontSize: 11,
-                        fontFamily: FONT_MONO,
-                        color: AMBER,
-                        letterSpacing: "0.2em",
-                        textTransform: "uppercase",
-                    }}
-                >
-                    global feed
-                </div>
-                <div
-                    style={{
-                        fontFamily: FONT_SANS,
-                        fontSize: 30,
-                        fontWeight: 700,
-                        color: TEXT,
-                        marginTop: 6,
-                        letterSpacing: "-0.025em",
-                    }}
-                >
-                    follow who&apos;s <span style={{ color: AMBER }}>actually hitting</span>
-                </div>
-            </div>
-
-            {/* Tagline (off by default) */}
-            {showText && time > 4 && (
-                <div
-                    style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        bottom: 70,
-                        textAlign: "center",
-                        opacity: clamp((time - 4) / 0.4, 0, 1),
-                    }}
-                >
-                    <div
-                        style={{
-                            fontFamily: FONT_MONO,
-                            fontSize: 11,
-                            color: TEXT_MUTED,
-                            letterSpacing: "0.18em",
-                            textTransform: "uppercase",
-                        }}
-                    >
-                        react · tail · follow
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

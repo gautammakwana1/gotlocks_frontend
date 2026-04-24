@@ -19,20 +19,25 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
     };
 
     const people: Person[] = [
-        { name: "stacks", hue: 280, basePts: 180, growth: 8 },
-        { name: "you", hue: 220, basePts: 120, growth: 55, you: true },
-        { name: "kt.bets", hue: 160, basePts: 155, growth: 12 },
-        { name: "dv.kim", hue: 40, basePts: 140, growth: 10 },
-        { name: "ml.park", hue: 340, basePts: 130, growth: 6 },
-        { name: "ab.rush", hue: 200, basePts: 105, growth: 4 },
+        { name: "ColdBloodKing", hue: 280, basePts: 180, growth: 8 },
+        { name: "SharpShark22", hue: 220, basePts: 120, growth: 55, you: true },
+        { name: "LockdNLoaded", hue: 160, basePts: 155, growth: 12 },
+        { name: "GrindsetGuru", hue: 40, basePts: 140, growth: 10 },
+        { name: "IcyLines", hue: 340, basePts: 130, growth: 6 },
+        { name: "NightOwlPicks", hue: 200, basePts: 105, growth: 4 },
+        { name: "HailMaryKing", hue: 80, basePts: 95, growth: 3 },
+        { name: "ChalkEater", hue: 300, basePts: 85, growth: 2 },
     ];
 
     const points = people.map((p) => ({
         ...p,
-        pts: Math.floor(
-            p.basePts +
-            p.growth * Easing.easeOutCubic(clamp((time - 0.8) / 3, 0, 1)) * 3
-        ),
+        // round to nearest 5 so displayed values always end in 0 or 5
+        pts:
+            Math.round(
+                (p.basePts +
+                    p.growth * Easing.easeOutCubic(clamp((time - 0.8) / 3, 0, 1)) * 3) /
+                5
+            ) * 5,
     }));
 
     const sorted = [...points].sort((a, b) => b.pts - a.pts);
@@ -60,7 +65,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
             >
                 <div
                     style={{
-                        fontSize: 11,
+                        fontSize: 14,
                         fontFamily: FONT_MONO,
                         color: BRAND_HIGHLIGHT,
                         letterSpacing: "0.14em",
@@ -72,14 +77,14 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                 <div
                     style={{
                         fontFamily: FONT_SANS,
-                        fontSize: 34,
+                        fontSize: 48,
                         fontWeight: 700,
                         color: TEXT,
-                        marginTop: 6,
+                        marginTop: 8,
                         letterSpacing: "-0.03em",
                     }}
                 >
-                    week 14 · live
+                    week 7 · live
                     <span
                         style={{
                             marginLeft: 12,
@@ -97,10 +102,10 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
             </div>
 
             {/* Leaderboard rows — absolute positioning, reorder via CSS transition */}
-            <div style={{ position: "absolute", top: 200, left: 100, right: 100 }}>
+            <div style={{ position: "absolute", top: 210, left: 80, right: 80 }}>
                 {points.map((p, i) => {
                     const rank = sorted.findIndex((x) => x.name === p.name) + 1;
-                    const y = (rank - 1) * 72;
+                    const y = (rank - 1) * 80;
                     const enterDelay = 0.3 + i * 0.1;
                     const enterT = clamp((time - enterDelay) / 0.4, 0, 1);
 
@@ -125,8 +130,8 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                 style={{
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: 14,
-                                    padding: "14px 18px",
+                                    gap: 16,
+                                    padding: "14px 20px",
                                     background: p.you
                                         ? "rgba(59,130,246,0.14)"
                                         : "rgba(255,255,255,0.03)",
@@ -140,10 +145,10 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                             >
                                 <div
                                     style={{
-                                        width: 32,
+                                        width: 40,
                                         textAlign: "center",
                                         fontFamily: FONT_MONO,
-                                        fontSize: 18,
+                                        fontSize: 26,
                                         fontWeight: 700,
                                         color:
                                             rank === 1
@@ -157,41 +162,32 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                 </div>
                                 <Avatar
                                     initials={p.name.slice(0, 2).toUpperCase()}
-                                    size={38}
+                                    size={50}
                                     hue={p.hue}
                                     ring={p.you}
                                 />
                                 <div
                                     style={{
                                         flex: 1,
-                                        fontSize: 17,
+                                        fontSize: 24,
                                         fontWeight: p.you ? 700 : 500,
                                         color: TEXT,
                                         fontFamily: FONT_SANS,
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
                                     }}
                                 >
                                     {p.name}
-                                    {p.you && (
-                                        <span
-                                            style={{
-                                                marginLeft: 6,
-                                                fontSize: 11,
-                                                color: BRAND_HIGHLIGHT,
-                                                fontFamily: FONT_MONO,
-                                            }}
-                                        >
-                                            (you)
-                                        </span>
-                                    )}
                                 </div>
                                 <div
                                     style={{
                                         fontFamily: FONT_MONO,
-                                        fontSize: 20,
+                                        fontSize: 36,
                                         fontWeight: 700,
                                         color: TEXT,
                                         fontVariantNumeric: "tabular-nums",
-                                        minWidth: 60,
+                                        minWidth: 86,
                                         textAlign: "right",
                                     }}
                                 >
@@ -205,7 +201,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                             top: "50%",
                                             transform: "translateY(-50%)",
                                             fontFamily: FONT_MONO,
-                                            fontSize: 14,
+                                            fontSize: 17,
                                             fontWeight: 700,
                                             color: "#86efac",
                                             textShadow: "0 0 10px #86efac",
@@ -228,7 +224,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                     const localT = clamp((time - t0) / 0.9, 0, 1);
                     if (localT <= 0 || localT >= 1) return null;
                     const youRank = sorted.findIndex((x) => x.you) + 1;
-                    const y = 200 + (youRank - 1) * 72 + 20 - localT * 100;
+                    const y = 210 + (youRank - 1) * 80 + 24 - localT * 100;
                     return (
                         <PointsBurst
                             key={i}
@@ -249,7 +245,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                         position: "absolute",
                         left: 0,
                         right: 0,
-                        bottom: 90,
+                        bottom: 50,
                         textAlign: "center",
                         opacity: clamp((time - 4.5) / 0.4, 0, 1),
                     }}
