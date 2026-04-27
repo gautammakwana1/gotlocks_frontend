@@ -104,19 +104,6 @@ export const TopNav = () => {
     }, 300);
   };
 
-  // const handleFeedback = () => {
-  //   const email = "feedback@gotlocks.com";
-  //   const subject = encodeURIComponent("Feedback from Gotlocks User");
-  //   const body = encodeURIComponent(
-  //     `Hi there,\n\nI'd like to share my feedback:\n\n[Please write your feedback here]\n\nBest regards,`
-  //   );
-
-  //   window.open(
-  //     `https://mail.google.com/mail/u/0/?view=cm&fs=1&to=${email}&su=${subject}&body=${body}`,
-  //     "_blank"
-  //   );
-  // };
-
   if (hideNav) return null;
 
   return (
