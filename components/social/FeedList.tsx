@@ -14,7 +14,7 @@ import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE }
 
 type FeedListProps = {
     items: Picks | null;
-    emptyCopy: string;
+    emptyCopy?: string;
     currentUserId?: string;
     showReactions?: boolean;
     showTopBorder?: boolean;
@@ -511,7 +511,7 @@ const FeedList = ({
                 );
             })}
 
-            {loading && (
+            {loading && emptyCopy && (
                 <div className="flex justify-center py-8">
                     <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
                 </div>

@@ -59,27 +59,21 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       : "Group Scoring Rules";
   const modalSubtitle =
     variant === "global"
-      ? "How post scoring, XP, and global points connect to profiles and the shop."
+      ? "How post scoring, XP, and lock chips connect to profiles and the shop."
       : "How slips, scoring, and commissioner controls work inside your group.";
-  const modalWidthClassName = isGroupOnly ? "max-w-3xl" : "max-w-[640px]";
-  const modalHeaderClassName = isGroupOnly ? "px-6 py-5 sm:px-7" : "px-7 py-5";
-  const modalTitleClassName = isGroupOnly ? "text-xl sm:text-2xl" : "text-2xl";
-  const modalSubtitleClassName = isGroupOnly ? "text-xs sm:text-sm" : "text-sm";
-  const modalBodyClassName = isGroupOnly
-    ? "min-h-0 shrink space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7"
-    : "min-h-0 shrink space-y-8 overflow-y-auto overscroll-contain px-7 py-7 text-base text-gray-300";
-  const singleModeSectionClassName = isGroupOnly
+  const modalWidthClassName = "max-w-3xl";
+  const modalHeaderClassName = "px-6 py-5 sm:px-7";
+  const modalTitleClassName = "text-xl sm:text-2xl";
+  const modalSubtitleClassName = "text-xs sm:text-sm";
+  const modalBodyClassName = "min-h-0 shrink space-y-6 overflow-y-auto overscroll-contain px-6 py-6 text-sm text-gray-300 sm:px-7 sm:py-7";
+  const singleModeSectionClassName = isSingleMode
     ? "mx-auto w-full max-w-[760px]"
-    : isSingleMode
-      ? "mx-auto w-full max-w-[560px]"
-      : "";
+    : "";
   const singleModeHeaderTextClassName = isSingleMode ? "max-w-[560px]" : "";
-  const groupGridClassName = isGroupOnly
-    ? "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[max-content_max-content] md:justify-center"
-    : "grid gap-3 sm:grid-cols-2";
-  const globalGridClassName = isGlobalOnly
-    ? "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[max-content_max-content] md:justify-center"
-    : "grid gap-2 sm:grid-cols-2 sm:justify-center sm:justify-items-center";
+  const tierGridClassName = "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[max-content_max-content] md:justify-center";
+  const groupGridClassName = tierGridClassName;
+  const globalGridClassName = tierGridClassName;
+
   const sectionTitleClassName = isSingleMode ? "text-base" : "text-sm";
   const legalTextClassName = isSingleMode
     ? "text-sm text-gray-300"
@@ -367,8 +361,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 </li>
                 <li>
                   <strong>Vibe Slips.</strong> Casual group play for profile
-                  progression. They award XP only, skip review, and never affect
-                  leaderboard totals.
+                  progression. They never affect leaderboard totals.
                 </li>
               </ul>
             ),
@@ -578,11 +571,11 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGlobalSection("scoring", "global-points"),
             panelId: "global-rule-scoring-global-points",
             eyebrow: "Currency",
-            title: "What are Global Points?",
+            title: "What are Lock Chips?",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  Global Points are earned through your posts and used to unlock
+                  Lock chips are earned through your posts and used to unlock
                   exclusive rewards.
                 </li>
                 <li>
@@ -590,7 +583,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   subtract points.
                 </li>
                 <li>
-                  The more success you have posting, the more Global Points you
+                  The more success you have posting, the more lock chips you
                   earn.
                 </li>
               </ul>
@@ -638,7 +631,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   Your posts are scored by tier based on their odds.
                 </li>
                 <li>
-                  Higher-risk picks can earn more Global Points on wins, while
+                  Higher-risk picks can earn more lock chips on wins, while
                   losses are always <strong>-15 points</strong>.
                 </li>
               </ul>
@@ -661,16 +654,16 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           onToggle: () => toggleGlobalSection("shop", "connection"),
           panelId: "global-rule-shop-connection",
           eyebrow: "Shop",
-          title: "Global Points Shop",
+          title: "The Shop",
           children: (
             <div className="space-y-4">
-              <p>Redeem your Global Points for exclusive rewards.</p>
+              <p>Redeem your lock chips for exclusive rewards.</p>
               <Link
                 href="/global-points-shop"
                 onClick={onClose}
                 className="inline-flex items-center text-sm font-semibold text-sky-200 underline decoration-white/25 underline-offset-4 transition hover:text-white"
               >
-                Go to Shop
+                Go to The Shop
               </Link>
             </div>
           ),

@@ -9,6 +9,7 @@ import { Member, Pick, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
+import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 type SlipShareModalProps = {
     open: boolean;
@@ -93,6 +94,10 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
         return list;
     }, [members, picks]);
 
+    const groupComboOddsSummary = useMemo(
+        () => getGroupComboOddsSummary(slip, picks),
+        [slip, picks]
+    );
     if (!open) return null;
 
     const deadlineInline = slip?.pick_deadline_at ? formatDateTime(slip.pick_deadline_at) : "TBD";
@@ -258,6 +263,19 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                         );
                                     })}
                                 </ul>
+                            )}
+
+                            {groupComboOddsSummary && (
+                                <div className="flex justify-end pt-1">
+                                    <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400 md:text-[11px]">
+                                        <span>
+                                            Group Combo+ odds:
+                                        </span>
+                                        <span className="ml-2 text-sm font-bold text-cyan-100 md:text-base">
+                                            {groupComboOddsSummary.label}
+                                        </span>
+                                    </p>
+                                </div>
                             )}
 
                             <div className="pt-8">

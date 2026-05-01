@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
 import { canUserEditSlipPicks, isSlipFinal, slipShowsConflictWarnings } from "@/lib/slips/state";
@@ -40,6 +40,7 @@ const SlipAddPickPage = () => {
     const { setToast } = useToast();
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
+    const [isReturningToSlip, setIsReturningToSlip] = useState(false);
 
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -73,6 +74,19 @@ const SlipAddPickPage = () => {
     }, [pickList, slip?.id]);
 
     const returnPath = group && slip ? `/group/${group.id}/slips/${slip.id}` : "/home";
+
+    const returnToSlip = useCallback(() => {
+        setIsReturningToSlip(true);
+        router.replace(returnPath);
+
+        if (typeof window !== "undefined") {
+            window.setTimeout(() => {
+                if (window.location.pathname.endsWith("/add-pick")) {
+                    window.location.assign(returnPath);
+                }
+            }, 350);
+        }
+    }, [returnPath, router]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -109,8 +123,23 @@ const SlipAddPickPage = () => {
             message: canManagePicks ? "Pick limit reached." : "Picks are locked for this slip.",
             duration: 3000
         });
-        router.replace(returnPath);
-    }, [canAddPick, canManagePicks, currentUser, group, returnPath, router, setToast, slip]);
+        returnToSlip();
+    }, [canAddPick, canManagePicks, currentUser, group, returnToSlip, setToast, slip]);
+
+    if (isReturningToSlip) {
+        return (
+            <div className="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-center">
+                <p className="text-sm font-semibold text-white">Returning to slip...</p>
+                <button
+                    type="button"
+                    onClick={() => window.location.assign(returnPath)}
+                    className="text-xs font-semibold uppercase tracking-wide text-sky-200 transition hover:text-white"
+                >
+                    Open slip
+                </button>
+            </div>
+        );
+    }
 
     if (!group || !currentUser || !slip || !canAddPick) {
         return null;
@@ -164,7 +193,7 @@ const SlipAddPickPage = () => {
         //             : "Pick added to slip.",
         //     duration: 3000
         // });
-        router.replace(returnPath);
+        returnToSlip();
     };
 
     return (
@@ -173,7 +202,7 @@ const SlipAddPickPage = () => {
                 <div className="flex items-center justify-between gap-3">
                     <button
                         type="button"
-                        onClick={() => router.replace(returnPath)}
+                        onClick={returnToSlip}
                         className="text-xs lowercase tracking-wide text-gray-400 transition hover:text-white"
                     >
                         ← back to slip
@@ -204,7 +233,7 @@ const SlipAddPickPage = () => {
                     }}
                     initialLeague={(availableSports[0] as League | undefined) ?? DEFAULT_SPORT}
                     leagues={availableSports as League[]}
-                    onDismiss={() => router.replace(returnPath)}
+                    onDismiss={returnToSlip}
                     showDismissButton={false}
                 />
             </div>

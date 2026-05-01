@@ -18,7 +18,7 @@ export const isSlipFinal = (slip?: SlipLike | null): boolean =>
     Boolean(slip && slip.status === "final");
 
 export const getSlipConflictWarningMode = (
-    slip?: Slip | null
+    slip?: Slip | ArchiveLeaderboardSlip | null
 ): SlipConflictWarningMode => slip?.conflict_warning_mode ?? "group_combo";
 
 export const slipShowsConflictWarnings = (slip?: Slip | null): boolean =>

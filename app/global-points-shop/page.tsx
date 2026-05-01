@@ -121,8 +121,7 @@ const GlobalPointsShopPage = () => {
                 <header className="flex items-start justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
                     <div className="min-w-0">
                         <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">
-                            <span className="block sm:inline">Global</span>
-                            <span className="block sm:inline sm:ml-2">Points Shop</span>
+                            <span className="block sm:inline">Shop</span>
                         </h1>
                     </div>
                     <div className="shrink-0 pt-1 text-right">
@@ -133,7 +132,7 @@ const GlobalPointsShopPage = () => {
                             {pointFormatter.format(currentBalance)}
                         </p>
                         <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                            global points
+                            lock chips
                         </p>
                     </div>
                 </header>
@@ -249,7 +248,7 @@ const GlobalPointsShopPage = () => {
                         <div className="space-y-1 text-center">
                             <h3 className="text-base font-semibold text-white">Redeem points</h3>
                             <p className="text-xs text-gray-400">
-                                Redeem {pointFormatter.format(pendingRedemption.bucketPoints)} global points
+                                Redeem {pointFormatter.format(pendingRedemption.bucketPoints)} lock chips
                                 for this reward?
                             </p>
                         </div>

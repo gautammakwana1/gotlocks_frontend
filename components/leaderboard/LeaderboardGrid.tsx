@@ -8,7 +8,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, Slips, TierIndex } from "@/lib/interfaces/interfaces";
+import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, SlipConflictWarningMode, Slips, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { getGroupTierColor, getGroupTierName, getTierMetaForPick, GROUP_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
 import Link from "next/link";
@@ -20,6 +20,7 @@ import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickD
 import { generateProfileImageUrl, getMemberInitials, useIsMobile } from "@/lib/utils/helpers";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useRouter } from "next/navigation";
+import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 type Props = {
     group: Group | null;
@@ -176,6 +177,27 @@ const buildMatchupByGameId = (picks: Pick[]) => {
 
     return map;
 };
+
+function mapSlipToPick(user: Leaderboard, slip: leaderboardSlip): Pick {
+    return {
+        id: slip.slip_id,
+        slip_id: slip.slip_id,
+        user_id: user.user_id,
+        description: slip.pick_description ?? "",
+        odds_bracket: slip.odds_bracket ?? "",
+        result: slip.pick_result ?? "pending",
+        points: slip.slip_points ?? 0,
+        bonus: slip.bonus_points ?? 0,
+        sport: slip.selection?.sport ?? "",
+        difficulty_label: slip.pick_difficulty_label ?? null,
+        selection: slip.selection,
+        profiles: {
+            user_id: user.user_id,
+            username: user.username,
+            profile_image: user.profile_image,
+        },
+    };
+}
 
 const RankCell = ({
     rank,
@@ -590,9 +612,35 @@ export const LeaderboardGrid = ({
         [isArchived, archivedLeaderboardSlips, leaderboardSlips]
     );
 
+    const leaderboardAllPicks = useMemo<Pick[]>(() => {
+        return leaderboard?.flatMap((user) =>
+            user.slips?.map((slip) =>
+                mapSlipToPick(user, slip)
+            ) || []
+        ) ?? [];
+    }, [leaderboard]);
+
     const groupMembers = useMemo(() => {
         return group?.members;
     }, [group?.members]);
+
+    const groupComboOddsBySlipId = useMemo(() => {
+        const memberIds = new Set(groupMembers?.map(member => member.user_id));
+
+        return new Map(
+            leaderboardAllSlips.map((slip) => [
+                slip.id,
+                getGroupComboOddsSummary(
+                    slip,
+                    leaderboardAllPicks.filter(
+                        (pick) =>
+                            pick.slip_id === slip.id &&
+                            memberIds.has(pick.user_id)
+                    )
+                ),
+            ])
+        );
+    }, [groupMembers, leaderboardAllSlips, leaderboardAllPicks]);
 
     const SLIP_WIDTH = useMemo(() => {
         const slipArea = Math.max(effectiveWidth - STICKY_WIDTH, 0);
@@ -708,6 +756,7 @@ export const LeaderboardGrid = ({
                                         const slipBg = "bg-transparent";
                                         const slipTone = isFinal ? "text-gray-300" : "text-gray-400";
                                         const isLastSlip = slipIndex === leaderboardAllSlips.length - 1;
+                                        const groupComboOddsSummary = groupComboOddsBySlipId.get(slip.id);
 
                                         return (
                                             <div
@@ -735,9 +784,21 @@ export const LeaderboardGrid = ({
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <span className={`text-[10px] font-semibold uppercase tracking-wide md:text-xs ${statusMeta.tone}`}>
-                                                        {statusMeta.label}
-                                                    </span>
+                                                    <div className="flex shrink-0 flex-col items-end leading-tight">
+                                                        <span className={`text-[10px] font-semibold uppercase tracking-wide md:text-xs ${statusMeta.tone}`}>
+                                                            {statusMeta.label}
+                                                        </span>
+                                                        {groupComboOddsSummary && (
+                                                            <span className="mt-1 inline-flex items-center justify-end whitespace-nowrap text-[8px] font-semibold uppercase tracking-wide text-cyan-200 md:text-[10px]">
+                                                                <span>
+                                                                    Group Combo+ odds:
+                                                                    <span className="ml-1 text-cyan-100">
+                                                                        {groupComboOddsSummary.label}
+                                                                    </span>
+                                                                </span>
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {leaderboard.map(({ user_id, slips }, rowIndex) => {

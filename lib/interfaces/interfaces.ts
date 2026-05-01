@@ -899,6 +899,7 @@ export type ArchiveLeaderboardSlip = {
     index: number;
     created_at: string;
     pick_deadline_at: string;
+    conflict_warning_mode?: SlipConflictWarningMode;
 }
 
 export type ArchivedLeaderboard = {

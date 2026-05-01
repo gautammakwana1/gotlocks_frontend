@@ -606,7 +606,7 @@ const HomeTab = () => {
             value: String(slipsCount?.open_slip ?? 0),
         },
         {
-            label: "Global points",
+            label: "Lock chips",
             value: String(progress?.lifetime_xp ?? 0),
             highlight: true,
         },
@@ -887,7 +887,6 @@ const HomeTab = () => {
                     {activityTab === "posts" ? (
                         <FeedList
                             items={postPicks}
-                            emptyCopy="No pending public posts yet. Share a pick from the builder to light this up."
                             currentUserId={currentUserId}
                             onReaction={handleReaction}
                             onViewProfile={handleViewProfile}

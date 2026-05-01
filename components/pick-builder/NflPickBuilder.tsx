@@ -5123,7 +5123,7 @@ export const NflPickBuilder = ({
 //                 <div className="max-h-[70vh] overflow-y-auto px-6 py-6 text-sm text-gray-300">
 //                     <div className="space-y-4">
 //                         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-gray-300">
-//                             <p>Profiles/global points use the full Tier 1-14 table.</p>
+//                             <p>Profiles/lock chips use the full Tier 1-14 table.</p>
 //                             <p>
 //                                 Group leaderboards cap at Tier {GROUP_CAP_TIER} ({GROUP_CAP_POINTS} pts
 //                                 max).

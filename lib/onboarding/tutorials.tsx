@@ -26,7 +26,7 @@ export const WELCOME_TUTORIAL: OnboardingStep[] = [
 
 export const GROUP_TUTORIAL: OnboardingStep[] = [
     {
-        media: PLACEHOLDER,
+        media: "/onboarding/role.mp4",
         mediaAlt: "Commissioner and members",
         title: "Know your role",
         body: "Leagues are where your crew gets organized. Every league has a commissioner and members — start your own and you're the commissioner by default. Move as a unit, compete against each other, or both.",
@@ -41,7 +41,7 @@ export const GROUP_TUTORIAL: OnboardingStep[] = [
         media: PLACEHOLDER,
         mediaAlt: "Vibe slips",
         title: "Just for fun? Vibe slips",
-        body: "Anyone can create one. Bundle multiple picks into a single submission and share the results with the league. No leaderboard impact, just gut feels and wild combos.",
+        body: "Anyone can create one. Bundle multiple picks into a single submission and let other members add their picks as well. No limit on picks and no leaderboard impact, just gut feels and wild combos.",
     },
     {
         media: PLACEHOLDER,
@@ -68,13 +68,13 @@ export const GLOBAL_TUTORIAL: OnboardingStep[] = [
         media: PLACEHOLDER,
         mediaAlt: "Rewards",
         title: "How you get rewarded",
-        body: "Wins earn both XP and Lock Chips based on your tier. Higher odds mean bigger rewards and faster level gains. Losses deduct 15 chips from your balance by default.",
+        body: "Wins earn both XP and lock chips based on your tier. Higher odds mean bigger rewards and faster level gains. Losses deduct 15 chips from your balance by default.",
     },
     {
         media: PLACEHOLDER,
-        mediaAlt: "Lock Chips",
-        title: "But what are Lock Chips?",
-        body: "Lock Chips and XP are both earned by being right. XP levels up your profile and unlocks new ways to customize your experience. Lock Chips are your currency, stack them up and spend them in The Shop on exclusive access and limited rewards.",
+        mediaAlt: "Lock chips",
+        title: "But what are lock chips?",
+        body: "Lock chips and XP are both earned by being right. XP levels up your profile and unlocks new ways to customize your experience. Lock chips are your currency, stack them up and spend them in the shop on exclusive access and limited rewards.",
     },
     {
         media: PLACEHOLDER,

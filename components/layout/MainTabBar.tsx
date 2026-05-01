@@ -8,6 +8,7 @@ import { SlipIcon } from "../ui/SvgIcons";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
+import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 
 type TabIconProps = { className?: string };
 
@@ -27,7 +28,8 @@ const HIDDEN_ROUTES = [
     "/auth/set-username",
     "/auth/callback",
     "/terms-and-conditions",
-    "/privacy-policy"
+    "/privacy-policy",
+    "/not-found"
 ];
 
 const isRouteHidden = (pathname: string | null) => {
@@ -177,7 +179,7 @@ const TabInner = ({
         >
             {tab.label}
         </span>
-        {locked && <LockBadge />}
+        {locked && !active && <LockBadge />}
     </div>
 );
 
@@ -210,24 +212,25 @@ const TabButton = ({
 
 export const MainTabBar = () => {
     const pathname = usePathname();
+    const currentUser = useCurrentUser();
     const [hasSelection, setHasSelection] = useState(false);
     const [lockHintOpen, setLockHintOpen] = useState(false);
     const lockHintTimeoutRef = useRef<number | null>(null);
 
     const { hasSeenSocialIntro, hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
-    const guidedTarget: "leaderboard" | "profile" | null = !hasSeenWelcomeIntro
+    const guidedTarget: "leaderboard" | "social" | null = !hasSeenWelcomeIntro
         ? null
         : !hasSeenGroupIntro
             ? "leaderboard"
             : !hasSeenSocialIntro
-                ? "profile"
+                ? "social"
                 : null;
     const lockHintLabel =
         guidedTarget === "leaderboard"
             ? "Tap the groups tab to continue 🔒"
-            : guidedTarget === "profile"
-                ? "Tap your profile to continue 🔒"
+            : guidedTarget === "social"
+                ? "Tap the global tab to continue 🔒"
                 : null;
 
     useEffect(() => {
@@ -290,7 +293,7 @@ export const MainTabBar = () => {
         []
     );
 
-    if (isRouteHidden(pathname)) return null;
+    if (isRouteHidden(pathname) || !currentUser) return null;
 
     return (
         <>
@@ -338,8 +341,7 @@ export const MainTabBar = () => {
                                 tab.matchers.find((matcher) => pathname?.startsWith(matcher)) !==
                                 undefined;
                             const isGuided = guidedTarget !== null && tab.id === guidedTarget;
-                            const locked =
-                                guidedTarget !== null && tab.id !== guidedTarget && !active;
+                            const locked = guidedTarget !== null && tab.id !== guidedTarget;
                             return (
                                 <TabButton
                                     key={tab.id}

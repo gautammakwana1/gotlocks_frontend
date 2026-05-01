@@ -553,7 +553,7 @@ const ProfileHeader = ({
                                 {showRightSummary && (
                                     <div className="space-y-3 pt-2">
                                         <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.2em]">
-                                            {stats.globalPoints} global points
+                                            {stats.globalPoints} lock chips
                                         </p>
                                         <div className="flex flex-nowrap items-center gap-3 text-xs uppercase tracking-[0.16em] text-white/80 sm:gap-4 sm:text-sm sm:tracking-[0.18em]">
                                             {recordItems.map((item) => (

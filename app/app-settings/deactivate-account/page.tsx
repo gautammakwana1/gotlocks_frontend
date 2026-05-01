@@ -358,7 +358,7 @@ const DeleteAccountPage = () => {
                             />
                             <span>
                                 I understand this permanently deletes my account and removes its stats,
-                                XP, global points, picks, and access.
+                                XP, lock chips, picks, and access.
                             </span>
                         </label>
 

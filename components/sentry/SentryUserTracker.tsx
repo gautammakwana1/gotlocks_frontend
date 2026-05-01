@@ -15,11 +15,11 @@ export default function SentryUserTracker() {
                 email: user.data?.user?.userData?.email,
             });
 
-            console.log("✅ Sentry user set:", user.data?.user?.userData?.email);
+            // console.log("✅ Sentry user set:", user.data?.user?.userData?.email);
         } else {
             Sentry.setUser(null);
 
-            console.log("🚪 Sentry user cleared");
+            // console.log("🚪 Sentry user cleared");
         }
     }, [user]);
 

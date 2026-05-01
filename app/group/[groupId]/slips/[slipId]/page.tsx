@@ -38,6 +38,7 @@ import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
 import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
+import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 interface FormErrors {
     name?: string;
@@ -165,7 +166,7 @@ const SlipDetailsPage = () => {
     }, [params.groupId, currentUser, dispatch, params.slipId]);
 
     const slip = useMemo(() => {
-        if (!Array.isArray(slips) || !params?.slipId) return null;
+        if (!Array.isArray(slips) || !params?.slipId) return undefined;
         return slips.find((candidate) => candidate.id === params.slipId)
     }, [params.slipId, slips]);
 
@@ -233,6 +234,10 @@ const SlipDetailsPage = () => {
     const slipConflictAnalysis = useMemo(
         () => analyzeSlipPicks(slipPicks),
         [slipPicks]
+    );
+    const groupComboOddsSummary = useMemo(
+        () => getGroupComboOddsSummary(slip, slipPicks),
+        [slip, slipPicks]
     );
     const warningModeEnabled = slipShowsConflictWarnings(slip);
     const slipConflictIssues = useMemo(
@@ -1035,6 +1040,18 @@ const SlipDetailsPage = () => {
                                             </div>
                                             <p className="mt-2 text-[11px] uppercase tracking-wide text-gray-500">
                                                 {perMemberLimitLabel} · {totalMembers} member{totalMembers === 1 ? "" : "s"}
+                                            </p>
+                                        </section>
+                                    )}
+                                    {groupComboOddsSummary && (
+                                        <section className="flex justify-end">
+                                            <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                                                <span>
+                                                    Group Combo+ odds:
+                                                </span>
+                                                <span className="ml-2 text-sm font-bold text-cyan-100">
+                                                    {groupComboOddsSummary.label}
+                                                </span>
                                             </p>
                                         </section>
                                     )}

@@ -1,6 +1,6 @@
 # gotLocks Codex Setup Guide
 
-This repository provides full context for Codex to generate the **frontend skeleton** of gotLocks — a mobile-first web app for tracking sports picks, leaderboards, and group competitions.
+This repository provides full context for Codex to generate the **frontend skeleton** of gotLocks — a mobile-first web app for tracking sports picks, leaderboards, and league competitions.
 
 ---
 
@@ -21,11 +21,11 @@ Codex should:
 **Phase 1**
 
 * Relied on `lib/mockData.ts` plus in-memory `AppState` as a fake backend so we could iterate on UI + game logic without latency or schema concerns.
-* Every action (auth, groups, slips, picks, leaderboard updates) lived entirely in React state, making it easy to prototype flows.
+* Every action (auth, leagues, slips, picks, leaderboard updates) lived entirely in React state, making it easy to prototype flows.
 
 **Phase 2 (current)**
 
-* Supabase (Postgres + Auth) becomes the **source of truth** for users, groups, slips, picks, leaderboards, and activity feed.
+* Supabase (Postgres + Auth) becomes the **source of truth** for users, leagues, slips, picks, leaderboards, and activity feed.
 * `lib/state/appState.tsx` will evolve into a UI cache/state manager that hydrates from Supabase instead of `mockData`.
 * `lib/mockData.ts` stays available for demos/tests and story-style fixtures, but **is no longer the long-term production source of truth**.
 
@@ -41,7 +41,7 @@ This repo now contains Supabase client helpers so future tasks can begin swappin
 | `/docs/app-overview.md`     | Overall app flow and navigation structure.                          |
 | `/docs/logic/game-logic.md` | Rules for pick behavior, deadlines, scoring, and leaderboard logic. |
 | `/docs/screens`             | Screen-by-screen UI breakdown and interactive logic instructions.   |
-| `/docs/STRUCTURE.md`        | Current folder layout, component grouping, and key entry points.    |
+| `/docs/STRUCTURE.md`        | Current folder layout, component organization, and key entry points. |
 | `/lib/mockData.ts`          | Dummy data for Codex to simulate backend reads/writes.              |
 
 ---
@@ -66,23 +66,23 @@ const fetchPicks = async () => mockPicks
 
 * Users are always identified by their **in-app username** (`User.name`), not their legal name.
 * Username selection happens during onboarding. Email/password signups choose it within the form; Google sign-in users pick one immediately after their first successful OAuth flow.
-* Real names returned by Google Auth are only used to suggest a username — they are not stored as the display identity for gameplay, chat, groups, or leaderboards.
+* Real names returned by Google Auth are only used to suggest a username — they are not stored as the display identity for gameplay, chat, leagues, or leaderboards.
 
 ---
 
 ## 🧭 Navigation Flow
 
 **Global flow:**
-landing page → account creation → intro text → home → individual group
+landing page → account creation → intro text → home → individual league
 
-**Within a group:**
+**Within a league:**
 picks → leaderboard → slip → chat → feed → back to home
 
 **Home functions:**
 
-* “Create Group” → opens group creation form
-* “Join Group” → enter group code
-* Displays all groups the user belongs to (each card links into that group’s flow)
+* “Create League” → opens league creation form
+* “Join League” → enter league code
+* Displays all leagues the user belongs to (each card links into that league’s flow)
 
 ---
 

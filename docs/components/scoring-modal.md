@@ -1,7 +1,7 @@
 # Scoring Modal — gotLocks
 
 ## Purpose
-Reusable component that displays the scoring breakdown for either **profiles (global points + XP)** or **groups (leaderboard scoring)**.  
+Reusable component that displays the scoring breakdown for either **profiles (lock chips + XP)** or **groups (leaderboard scoring)**.  
 Lightweight and scrollable — opens as a centered overlay.
 
 ---
@@ -18,9 +18,9 @@ Lightweight and scrollable — opens as a centered overlay.
 
 ### 🧭 Scoring Modes
 
-**Profile scoring (XP + global points)**
+**Profile scoring (XP + lock chips)**
 - Uses the full Tier 1-14 table (see `ODDS_BRACKETS` in `lib/constants.ts`).  
-- Wins add tier points to global points. Losses are -15. Void/not found/pending stay at 0.  
+- Wins add tier points to lock chips. Losses are -15. Void/not found/pending stay at 0.  
 - XP is awarded on wins only and capped at **300 XP per day**.  
 
 **Group leaderboard scoring (Epic cap)**

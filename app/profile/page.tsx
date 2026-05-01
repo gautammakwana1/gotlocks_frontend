@@ -29,14 +29,14 @@ const ProfilePage = () => {
     if (!currentUser) return null;
 
     return (
-        <>
-            <ProfileView targetUserId={currentUser.userId} mode="self" currentUser={currentUser} />
-            <OnboardingModal
-                open={hasSeenWelcomeIntro && !hasSeenSocialIntro}
-                steps={GLOBAL_TUTORIAL}
-                onClose={handleCompleteSocialIntro}
-            />
-        </>
+        <ProfileView targetUserId={currentUser.userId} mode="self" currentUser={currentUser} />
+        // <>
+        //     <OnboardingModal
+        //         open={hasSeenWelcomeIntro && !hasSeenSocialIntro}
+        //         steps={GLOBAL_TUTORIAL}
+        //         onClose={handleCompleteSocialIntro}
+        //     />
+        // </>
     );
 };
 

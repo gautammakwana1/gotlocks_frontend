@@ -104,7 +104,7 @@ export const TopNav = () => {
     }, 300);
   };
 
-  if (hideNav) return null;
+  if (hideNav || !currentUser) return null;
 
   return (
     <>
@@ -224,7 +224,7 @@ export const TopNav = () => {
                 className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-amber-300/50 hover:bg-amber-400/10"
                 onClick={() => setMenuOpen(false)}
               >
-                <span>global points shop</span>
+                <span>the shop</span>
                 <Image
                   src="/icons/money.png"
                   alt="coin"

@@ -767,7 +767,10 @@ const SocialPage = () => {
             <OnboardingModal
                 open={hasSeenWelcomeIntro && !hasSeenSocialIntro}
                 steps={GLOBAL_TUTORIAL}
-                onClose={handleCompleteSocialIntro}
+                onClose={() => {
+                    handleCompleteSocialIntro();
+                    router.push("/home");
+                }}
             />
         </div>
     );
