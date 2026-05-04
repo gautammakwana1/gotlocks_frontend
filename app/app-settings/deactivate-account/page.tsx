@@ -82,12 +82,12 @@ const DeleteAccountPage = () => {
             });
             dispatch(clearDeleteAccountMessage());
         }
-    }, [dispatch, authLoader, authMessage]);
+    }, [dispatch, authLoader, authMessage, setToast, authError, router]);
 
-    const { commissionerGroups, memberGroups } = useMemo(() => {
+    const { commissionerLeagues, memberLeagues } = useMemo(() => {
         if (!Array.isArray(myGroups) || !myGroups.length || !currentUser?.userId) return {
-            commissionerGroups: [],
-            memberGroups: [],
+            commissionerLeagues: [],
+            memberLeagues: [],
         };
 
         const commissioner: GroupObject[] = [];
@@ -101,15 +101,15 @@ const DeleteAccountPage = () => {
         });
 
         return {
-            commissionerGroups: commissioner,
-            memberGroups: member,
+            commissionerLeagues: commissioner,
+            memberLeagues: member,
         };
     }, [myGroups, currentUser?.userId]);
 
     if (!currentUser) return null;
 
     const confirmationPhrase = `DELETE @${currentUser.username}`;
-    const canDelete = commissionerGroups.length === 0 && memberGroups.length === 0;
+    const canDelete = commissionerLeagues.length === 0 && memberLeagues.length === 0;
     const deleteReady =
         canDelete &&
         acknowledged &&
@@ -128,21 +128,21 @@ const DeleteAccountPage = () => {
     };
 
     const handleDeleteAccount = () => {
-        if (commissionerGroups.length > 0) {
+        if (commissionerLeagues.length > 0) {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: "Transfer commissioner access and leave those groups first.",
+                message: "Transfer commissioner access and leave those leagues first.",
                 duration: 3000
             });
             return;
         }
 
-        if (memberGroups.length > 0) {
+        if (memberLeagues.length > 0) {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: "Leave every group you're part of before deleting your account.",
+                message: "Leave every league you're part of before deleting your account.",
                 duration: 3000
             });
             return;
@@ -220,43 +220,43 @@ const DeleteAccountPage = () => {
                             Before you can delete this account
                         </h2>
                         <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                            {commissionerGroups.length > 0 && memberGroups.length > 0
-                                ? "Transfer commissioner access where needed and leave all remaining groups first."
-                                : commissionerGroups.length > 0
-                                    ? "You still commission one or more groups. Transfer ownership and leave those groups first."
-                                    : "You still belong to one or more groups. Leave them before deleting your account."}
+                            {commissionerLeagues.length > 0 && memberLeagues.length > 0
+                                ? "Transfer commissioner access where needed and leave all remaining leagues first."
+                                : commissionerLeagues.length > 0
+                                    ? "You still commission one or more leagues. Transfer ownership and leave those leagues first."
+                                    : "You still belong to one or more leagues. Leave them before deleting your account."}
                         </p>
                     </div>
 
-                    {commissionerGroups.length > 0 && (
+                    {commissionerLeagues.length > 0 && (
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                Commissioner groups
+                                Commissioner leagues
                             </p>
                             <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
-                                {commissionerGroups.map((group) => (
+                                {commissionerLeagues.map((league) => (
                                     <div
-                                        key={group.id}
+                                        key={league.id}
                                         className="flex flex-wrap items-center justify-between gap-3 py-4"
                                     >
                                         <div className="min-w-0 flex-1">
                                             <p className="text-base font-medium tracking-tight text-[var(--app-text)]">
-                                                {group.name}
+                                                {league.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {group?.member_count ?? 0} members · invite code {group.invite_code}
+                                                {league?.member_count ?? 0} members · invite code {league.invite_code}
                                             </p>
                                         </div>
                                         <Link
-                                            href={`/group/${group.id}?tab=members`}
+                                            href={`/league/${league.id}?tab=members`}
                                             className="shrink-0 text-right text-sm leading-5 text-[var(--app-text)] transition hover:text-white"
                                         >
                                             <span className="sm:hidden">
-                                                Open group
+                                                Open league
                                                 <br />
                                                 settings
                                             </span>
-                                            <span className="hidden sm:inline">Open group settings</span>
+                                            <span className="hidden sm:inline">Open league settings</span>
                                         </Link>
                                     </div>
                                 ))}
@@ -264,30 +264,30 @@ const DeleteAccountPage = () => {
                         </div>
                     )}
 
-                    {memberGroups.length > 0 && (
+                    {memberLeagues.length > 0 && (
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                Joined groups
+                                Joined leagues
                             </p>
                             <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
-                                {memberGroups.map((group) => (
+                                {memberLeagues.map((league) => (
                                     <div
-                                        key={group.id}
+                                        key={league.id}
                                         className="flex flex-wrap items-center justify-between gap-3 py-4"
                                     >
                                         <div className="min-w-0 flex-1">
                                             <p className="text-base font-medium tracking-tight text-[var(--app-text)]">
-                                                {group.name}
+                                                {league.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {group?.member_count ?? 0} members · invite code {group.invite_code}
+                                                {league?.member_count ?? 0} members · invite code {league.invite_code}
                                             </p>
                                         </div>
                                         <Link
-                                            href={`/group/${group.id}?tab=members`}
+                                            href={`/league/${league.id}?tab=members`}
                                             className="text-sm text-[var(--app-text)] transition hover:text-white"
                                         >
-                                            Leave group
+                                            Leave league
                                         </Link>
                                     </div>
                                 ))}

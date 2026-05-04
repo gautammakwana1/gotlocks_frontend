@@ -35,7 +35,7 @@ const FeedbackPage = () => {
             });
             dispatch(clearCreateFeedbackMessage());
         }
-    }, [dispatch, loading, message, error])
+    }, [dispatch, loading, message, error, setToast])
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();

@@ -1,4 +1,5 @@
-import { LeaderboardStatus } from "@/app/group/[groupId]/leaderboard/page";
+
+import { LeaderboardStatus } from "@/app/league/[leagueId]/leaderboard/page";
 import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
 
 export type Role = "member" | "commissioner";
@@ -17,7 +18,7 @@ export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
 export type SlipConflictWarningMode = "competition" | "group_combo";
 
-export type TutorialKeys = "home" | "social" | "groups" | "profile" | "global" | null;
+export type TutorialKeys = "home" | "social" | "league" | "profile" | "global" | null;
 
 export type TierIndex =
     | 1

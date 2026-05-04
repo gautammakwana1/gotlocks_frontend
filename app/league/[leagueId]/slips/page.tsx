@@ -28,24 +28,24 @@ const extractGroup = (data: GroupDataShape): Group | null => {
 
 const SlipsPage = () => {
     const dispatch = useDispatch();
-    const params = useParams<{ groupId: string }>();
+    const params = useParams<{ leagueId: string }>();
     const router = useRouter();
     const currentUser = useCurrentUser();
 
-    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+    const rawLeague = useSelector((state: GroupSelector) => state.group.group);
+    const league = useMemo(() => extractGroup(rawLeague as GroupDataShape), [rawLeague]);
 
     useEffect(() => {
-        if (!params.groupId || !currentUser) return;
-        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-    }, [params.groupId, currentUser, dispatch]);
+        if (!params.leagueId || !currentUser) return;
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
+    }, [params.leagueId, currentUser, dispatch]);
 
     useEffect(() => {
-        if (!group || !currentUser) return;
-        router.replace(`/group/${group.id}?tab=slips`);
-    }, [currentUser, group, router]);
+        if (!league || !currentUser) return;
+        router.replace(`/league/${league.id}?tab=slips`);
+    }, [currentUser, league, router]);
 
-    if (!group || !currentUser) {
+    if (!league || !currentUser) {
         router.replace("/home");
         return null;
     }

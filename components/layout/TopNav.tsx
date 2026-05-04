@@ -6,13 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { logout } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
-import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser, TutorialKeys } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
-import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+import { GLOBAL_TUTORIAL, LEAGUE_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import * as Sentry from "@sentry/nextjs";
 
 type AuthUserPayload = {
@@ -32,27 +31,24 @@ const HIDDEN_ROUTES = new Set([
   "/privacy-policy"
 ]);
 
-const accentStyle = { color: COLORS.ACCENT } as const;
-
 export const TopNav = () => {
   const pathname = usePathname();
   const router = useRouter();
   const dispatch = useAppDispatch();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [tutorialStage, setTutorialStage] = useState<TutorialKeys>(null);
   const tutorialSteps =
     tutorialStage === "home"
       ? WELCOME_TUTORIAL
-      : tutorialStage === "groups"
-        ? GROUP_TUTORIAL
+      : tutorialStage === "league"
+        ? LEAGUE_TUTORIAL
         : tutorialStage === "global"
           ? GLOBAL_TUTORIAL
           : WELCOME_TUTORIAL;
   const advanceTutorial = () => {
     setTutorialStage((prev) =>
-      prev === "home" ? "groups" : prev === "groups" ? "global" : null
+      prev === "home" ? "league" : prev === "league" ? "global" : null
     );
   };
 

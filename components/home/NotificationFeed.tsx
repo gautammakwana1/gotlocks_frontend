@@ -15,18 +15,6 @@ type NotificationsFeedProps = {
     onOpenGroup: (groupId: string) => void;
 };
 
-const buildInitials = (label: string) => {
-    const cleaned = label.trim();
-    if (!cleaned) return "GL";
-    const segments = cleaned.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-    const source = segments.length ? segments : [cleaned];
-    return source
-        .map((segment) => segment.charAt(0))
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-};
-
 const NotificationsFeed = ({
     onOpenProfile,
     onOpenGroup,
@@ -91,7 +79,7 @@ const NotificationsFeed = ({
             dispatch(clearDeclineFollowMessage());
         };
 
-    }, [authLoader, authMessage, authError, dispatch]);
+    }, [authLoader, authMessage, authError, dispatch, setToast]);
 
     const handleAccept = (requestId: string, notificationId: string) => {
         if (!currentUser) return;
@@ -110,7 +98,7 @@ const NotificationsFeed = ({
     if (!notifications?.length) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-[var(--text-secondary)]">
-                No notifications yet. Activity around your posts, follows, and groups will land here.
+                No notifications yet. Activity around your posts, follows, and leagues will land here.
             </div>
         );
     }
@@ -121,7 +109,6 @@ const NotificationsFeed = ({
                 const isLast = index === notifications.length - 1;
                 const actor = notification.sender ?? null;
                 const actorLabel = actor?.username ?? actor?.full_name ?? "gotlocks";
-                const initials = buildInitials(actorLabel);
                 const request = notification.follow_request_id ?? undefined;
                 const requestPending =
                     notification.type === "follow_request" &&
@@ -142,7 +129,7 @@ const NotificationsFeed = ({
                 const primaryAction =
                     notification.group_id && notification.type !== "follow_request"
                         ? {
-                            label: "open group",
+                            label: "open league",
                             onClick: () => onOpenGroup(notification.group_id as string),
                         }
                         : null;

@@ -35,7 +35,7 @@ import {
 } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, MLBSchedulesWithOdds, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex, User } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, MLBSchedulesWithOdds, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleByTimezoneRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
@@ -1509,14 +1509,14 @@ export const MlbPickBuilder = ({
     const setParlayLegs = onParlayLegsChange ?? setLocalParlayLegs;
     const isPostMode = builderMode === "post";
     const isParlayMode = !slip.isGraded;
-    const useGroupScoring = false;
+    const useLeagueScoring = false;
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
     const reviewTierScoringMode =
         confirmationVariant === "slip" && slip.isGraded
-            ? "groupLeaderboard"
+            ? "leagueLeaderboard"
             : "global";
     const reviewTierDisplayMode =
-        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+        reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
 
@@ -1556,14 +1556,14 @@ export const MlbPickBuilder = ({
 
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
-            useGroupScoring
+            useLeagueScoring
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
-        [useGroupScoring]
+        [useLeagueScoring]
     );
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
-            reviewTierScoringMode === "groupLeaderboard"
+            reviewTierScoringMode === "leagueLeaderboard"
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [reviewTierScoringMode]
@@ -1590,7 +1590,7 @@ export const MlbPickBuilder = ({
         return eligibleGames;
     }, [eligibleGames]);
     const shouldFilterByDate = true;
-    const showDateFilters = shouldFilterByDate && !hideDateControls;
+    // const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
     const selectedDateKey = activeDateKey?.trim() || "";
     const dateOptions = useMemo(() => {
@@ -2062,7 +2062,7 @@ export const MlbPickBuilder = ({
                         const tierPrimary = tierMeta
                             ? formatTierPrimary(tierMeta.tier)
                             : draft?.displayDifficulty ?? "Tier —";
-                        const tierPoints = reviewTierScoringMode === "groupLeaderboard"
+                        const tierPoints = reviewTierScoringMode === "leagueLeaderboard"
                             ? tierMeta?.points
                             : payload.points ?? draft?.points ?? tierMeta?.points;
                         const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
@@ -2164,7 +2164,7 @@ export const MlbPickBuilder = ({
                     const legTierLine = formatReviewSheetTierLine({
                         tierMeta: legTierMeta,
                         points: legPoints,
-                        includeName: reviewTierDisplayMode === "group",
+                        includeName: reviewTierDisplayMode === "league",
                         mode: reviewTierDisplayMode,
                     });
                     return {
@@ -2248,7 +2248,7 @@ export const MlbPickBuilder = ({
                 const groupTierLine = formatReviewSheetTierLine({
                     tierMeta: reviewGroupTierMeta,
                     points: reviewGroupTierMeta?.points,
-                    includeName: reviewTierDisplayMode === "group",
+                    includeName: reviewTierDisplayMode === "league",
                     mode: reviewTierDisplayMode,
                 });
                 const description = group
@@ -3803,7 +3803,7 @@ export const MlbPickBuilder = ({
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetPoints = reviewTierScoringMode === "groupLeaderboard"
+    const sheetPoints = reviewTierScoringMode === "leagueLeaderboard"
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
     const sheetTierCard = resolveReviewSheetTierCardAppearance(
@@ -3814,7 +3814,7 @@ export const MlbPickBuilder = ({
         tierMeta: sheetTierMeta,
         fallbackPrimary: sheetTierPrimary,
         points: sheetPoints,
-        includeName: reviewTierDisplayMode === "group",
+        includeName: reviewTierDisplayMode === "league",
         mode: reviewTierDisplayMode,
     });
     const comboOddsLabel = hasMultiSelection

@@ -8,19 +8,18 @@ import {
     useRef,
     useState,
 } from "react";
-import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, SlipConflictWarningMode, Slips, TierIndex } from "@/lib/interfaces/interfaces";
+import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
-import { getGroupTierColor, getGroupTierName, getTierMetaForPick, GROUP_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
+import { getGroupTierColor, getGroupTierName, getTierMetaForPick, LEAGUE_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/utils/date";
 import { isSlipFinal, isSlipTimeLocked, SlipLike } from "@/lib/slips/state";
 import { LOSS_PICK_POINTS } from "@/lib/constants";
-import { UserIcon } from "../layout/MainTabBar";
-import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
+import { EM_DASH, parsePickDescription } from "@/lib/utils/pickDescription";
 import { generateProfileImageUrl, getMemberInitials, useIsMobile } from "@/lib/utils/helpers";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useRouter } from "next/navigation";
-import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 type Props = {
     group: Group | null;
@@ -84,7 +83,7 @@ const getGroupTierRangeLabel = (tierMeta: TierMeta) => {
         const maxLabel = formatOddsValue(tierMeta.maxOdds);
         return maxLabel ? `${maxLabel} or less` : tierMeta.label;
     }
-    if (tierMeta.tier === GROUP_CAP_TIER) {
+    if (tierMeta.tier === LEAGUE_CAP_TIER) {
         const minLabel = formatOddsValue(tierMeta.minOdds);
         return minLabel ? `${minLabel} or greater` : tierMeta.label;
     }
@@ -123,7 +122,7 @@ const pickTierMeta = (pick?: { odds_bracket: string, slip_points: number, pick_d
         odds: pick.odds_bracket,
         label: pick.pick_difficulty_label,
         points: pick.slip_points,
-        mode: "groupLeaderboard",
+        mode: "leagueLeaderboard",
     });
     if (!tierMeta) return null;
     return {
@@ -156,27 +155,27 @@ const computeResultPoints = (pick_difficulty_label?: DifficultyLabel | null, res
     return 0;
 };
 
-const buildMatchupByGameId = (picks: Pick[]) => {
-    const map = new Map<string, string>();
+// const buildMatchupByGameId = (picks: Pick[]) => {
+//     const map = new Map<string, string>();
 
-    picks.forEach((pick) => {
-        const gameId = pick.selection?.gameId;
-        const matchup = extractMatchup(pick.description, pick.selection?.matchup);
-        if (gameId && matchup && !map.has(gameId)) {
-            map.set(gameId, matchup);
-        }
+//     picks.forEach((pick) => {
+//         const gameId = pick.selection?.gameId;
+//         const matchup = extractMatchup(pick.description, pick.selection?.matchup);
+//         if (gameId && matchup && !map.has(gameId)) {
+//             map.set(gameId, matchup);
+//         }
 
-        pick.legs?.forEach((leg) => {
-            const legGameId = leg.selection?.gameId;
-            const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
-            if (legGameId && legMatchup && !map.has(legGameId)) {
-                map.set(legGameId, legMatchup);
-            }
-        });
-    });
+//         pick.legs?.forEach((leg) => {
+//             const legGameId = leg.selection?.gameId;
+//             const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+//             if (legGameId && legMatchup && !map.has(legGameId)) {
+//                 map.set(legGameId, legMatchup);
+//             }
+//         });
+//     });
 
-    return map;
-};
+//     return map;
+// };
 
 function mapSlipToPick(user: Leaderboard, slip: leaderboardSlip): Pick {
     return {
@@ -376,7 +375,7 @@ const SlipCellCard = ({
                         {emptyCopy}
                     </p>
                     <Link
-                        href={`/group/${groupId}/slips/${slip.id}`}
+                        href={`/league/${groupId}/slips/${slip.id}`}
                         className="mt-auto flex w-full items-center justify-between rounded-md border border-dashed border-sky-400/40 bg-white/[0.04] px-4 py-3 text-left text-[11px] font-semibold text-sky-100 shadow-sm transition hover:border-emerald-300/70 md:text-xs"
                     >
                         <span>Add your pick</span>
@@ -630,7 +629,7 @@ export const LeaderboardGrid = ({
         return new Map(
             leaderboardAllSlips.map((slip) => [
                 slip.id,
-                getGroupComboOddsSummary(
+                getLeagueComboOddsSummary(
                     slip,
                     leaderboardAllPicks.filter(
                         (pick) =>
@@ -791,7 +790,7 @@ export const LeaderboardGrid = ({
                                                         {groupComboOddsSummary && (
                                                             <span className="mt-1 inline-flex items-center justify-end whitespace-nowrap text-[8px] font-semibold uppercase tracking-wide text-cyan-200 md:text-[10px]">
                                                                 <span>
-                                                                    Group Combo+ odds:
+                                                                    League Combo+ odds:
                                                                     <span className="ml-1 text-cyan-100">
                                                                         {groupComboOddsSummary.label}
                                                                     </span>

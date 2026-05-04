@@ -72,7 +72,7 @@ const BASE_TABS = [
   },
   {
     id: "settings",
-    label: "Group Settings",
+    label: "League Settings",
   },
 ] as const;
 
@@ -112,7 +112,7 @@ const GroupPage = () => {
   const currentUser = useCurrentUser();
   const params = useParams();
   const searchParams = useSearchParams();
-  const groupId = params.groupId as string;
+  const leagueId = params.leagueId as string;
   const fetchedGroupId = useRef<string | null>(null);
   const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
   const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slip[]>([]);
@@ -162,10 +162,10 @@ const GroupPage = () => {
   const [showScoringModal, setShowScoringModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
-  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
-  const [editGroupName, setEditGroupName] = useState("");
-  const [editGroupDescription, setEditGroupDescription] = useState("");
-  const [leavingGroup, setLeavingGroup] = useState(false);
+  const [showEditLeagueModal, setShowEditLeagueModal] = useState(false);
+  const [editLeagueName, setEditLeagueName] = useState("");
+  const [editLeagueDescription, setEditLeagueDescription] = useState("");
+  const [leavingLeague, setLeavingLeague] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [showCreateSideModal, setShowCreateSideModal] = useState(false);
@@ -224,12 +224,12 @@ const GroupPage = () => {
   const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
 
   useEffect(() => {
-    if (!groupId || !currentUser) return;
-    if (fetchedGroupId.current === groupId) return;
+    if (!leagueId || !currentUser) return;
+    if (fetchedGroupId.current === leagueId) return;
 
-    dispatch(fetchGroupByIdRequest({ groupId }));
-    fetchedGroupId.current = groupId;
-  }, [groupId, currentUser, dispatch]);
+    dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
+    fetchedGroupId.current = leagueId;
+  }, [leagueId, currentUser, dispatch]);
 
   useEffect(() => {
     if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.leaderboard)) {
@@ -245,7 +245,7 @@ const GroupPage = () => {
   const secondaryLeaderboardsEnabled =
     group?.is_enable_secondary_leaderboard ?? false;
 
-  const activeSlip = group?.active_slip ?? null;
+  // const activeSlip = group?.active_slip ?? null;
   const members = useMemo(() => group?.members ?? [], [group?.members]);
 
   const tabs = useMemo(
@@ -286,12 +286,12 @@ const GroupPage = () => {
   );
 
   useEffect(() => {
-    if (!groupId) return;
+    if (!leagueId) return;
     if (activeTab === "leaderboard" || activeTab === "settings") {
-      dispatch(fetchAllLeaderboardsRequest({ group_id: groupId }));
-      dispatch(fetchArchivedLeaderboardListRequest({ groupId: groupId }));
+      dispatch(fetchAllLeaderboardsRequest({ group_id: leagueId }));
+      dispatch(fetchArchivedLeaderboardListRequest({ groupId: leagueId }));
     }
-  }, [dispatch, groupId, activeTab]);
+  }, [dispatch, leagueId, activeTab]);
 
   const leaderboardActiveSlips = openSlips;
   const leaderboardLockedSlips = reviewSlips;
@@ -308,8 +308,8 @@ const GroupPage = () => {
 
   useEffect(() => {
     if (!group) return;
-    setEditGroupName(group.name);
-    setEditGroupDescription(group.description ?? "");
+    setEditLeagueName(group.name);
+    setEditLeagueDescription(group.description ?? "");
   }, [group]);
 
   useEffect(() => {
@@ -436,7 +436,7 @@ const GroupPage = () => {
     if (!group) return;
     setActiveTab(tabId);
     const query = tabId === "leaderboard" ? "" : `?tab=${tabId}`;
-    router.replace(`/group/${group.id}${query}`);
+    router.replace(`/league/${group.id}${query}`);
   };
 
   const toggleLeaderboardMenu = () => {
@@ -464,7 +464,7 @@ const GroupPage = () => {
     );
 
     if (!slipOpen && !slipInReview && !finalSlip) return;
-    const basePath = `/group/${group.id}/slips/${slipId}`;
+    const basePath = `/league/${group.id}/slips/${slipId}`;
 
     if (finalSlip?.status === "final") {
       router.push(`${basePath}/results`);
@@ -480,7 +480,7 @@ const GroupPage = () => {
     }
     const modeQuery = slipTab === "vibe" ? "?mode=vibe" : "";
     navigationTimeoutRef.current = setTimeout(
-      () => router.push(`/group/${group.id}/slips/create${modeQuery}`),
+      () => router.push(`/league/${group.id}/slips/create${modeQuery}`),
       800
     );
   };
@@ -491,14 +491,14 @@ const GroupPage = () => {
       setToast({
         id: Date.now(),
         type: "error",
-        message: "Only the commissioner can edit the group.",
+        message: "Only the commissioner can edit the League.",
         duration: 3000,
       });
       return;
     }
-    setEditGroupName(group.name);
-    setEditGroupDescription(group.description ?? "");
-    setShowEditGroupModal(true);
+    setEditLeagueName(group.name);
+    setEditLeagueDescription(group.description ?? "");
+    setShowEditLeagueModal(true);
   };
 
   const handleLoadMoreOpen = () => {
@@ -649,6 +649,9 @@ const GroupPage = () => {
 
   useEffect(() => {
     if (!loading && !groupData && currentUser) {
+      console.log(`loading -------->`, loading);
+      console.log(`groupData -------->`, groupData);
+      console.log(`currentUser -------->`, currentUser);
       const timer = setTimeout(() => {
         router.replace("/home");
       }, 1000);
@@ -704,31 +707,31 @@ const GroupPage = () => {
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
 
-    if (!editGroupName?.trim()) {
-      nextErrors.name = "Group name is required.";
+    if (!editLeagueName?.trim()) {
+      nextErrors.name = "League name is required.";
     }
 
-    if (editGroupName.length > 25) {
-      nextErrors.name = "Group name must be 25 characters or less.";
+    if (editLeagueName.length > 25) {
+      nextErrors.name = "League name must be 25 characters or less.";
     }
 
-    if (editGroupDescription.length > 50) {
-      nextErrors.description = "Group description must be 50 characters or less.";
+    if (editLeagueDescription.length > 50) {
+      nextErrors.description = "League description must be 50 characters or less.";
     }
 
-    const containsNameRestricted = checkAnyRestrictedWords(editGroupName);
+    const containsNameRestricted = checkAnyRestrictedWords(editLeagueName);
     if (containsNameRestricted) {
-      nextErrors.name = "Group name contains inappropriate language.";
+      nextErrors.name = "League name contains inappropriate language.";
     }
 
-    const containsDescriptionRestricted = checkAnyRestrictedWords(editGroupDescription || "");
+    const containsDescriptionRestricted = checkAnyRestrictedWords(editLeagueDescription || "");
     if (containsDescriptionRestricted) {
-      nextErrors.description = "Group description contains inappropriate language.";
+      nextErrors.description = "League description contains inappropriate language.";
     }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
-  }, [editGroupName, editGroupDescription]);
+  }, [editLeagueName, editLeagueDescription]);
 
   if (!rawGroup && !loading) {
     return (
@@ -740,7 +743,7 @@ const GroupPage = () => {
 
   const handleDeleteGroup = async () => {
     if (!isCommissioner) {
-      setDeleteError("Only the commissioner can delete this group.");
+      setDeleteError("Only the commissioner can delete this league.");
       return;
     }
 
@@ -764,7 +767,7 @@ const GroupPage = () => {
       }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to delete group.";
+        error instanceof Error ? error.message : "Failed to delete league.";
       setDeleteError(message);
     }
   };
@@ -781,10 +784,10 @@ const GroupPage = () => {
       return;
     }
     if (group.id) {
-      setLeavingGroup(true);
+      setLeavingLeague(true);
       dispatch(leaveGroupRequest({ group_id: group.id }));
     }
-    setLeavingGroup(false);
+    setLeavingLeague(false);
   };
 
   const closeSideContestModal = () => {
@@ -821,11 +824,11 @@ const GroupPage = () => {
 
     if (!validate()) return;
 
-    const name = editGroupName.trim();
-    const description = editGroupDescription.trim();
+    const name = editLeagueName.trim();
+    const description = editLeagueDescription.trim();
 
     if (group.name === name && (group.description || "") === description) {
-      setShowEditGroupModal(false);
+      setShowEditLeagueModal(false);
       return;
     }
 
@@ -838,7 +841,7 @@ const GroupPage = () => {
         })
       );
     }
-    setShowEditGroupModal(false);
+    setShowEditLeagueModal(false);
   };
 
   const handleRemoveMember = async (
@@ -848,15 +851,15 @@ const GroupPage = () => {
       return { success: false, error: "Not authenticated." };
     }
 
-    if (!groupId) {
-      return { success: false, error: "Group not found." };
+    if (!leagueId) {
+      return { success: false, error: "Missing league context." };
     }
 
     try {
       dispatch(
         removeGroupMemberRequest({
           user_id: userId,
-          group_id: groupId,
+          group_id: leagueId,
         })
       );
 
@@ -881,8 +884,8 @@ const GroupPage = () => {
       return { success: false, error: "Not authenticated." };
     }
 
-    if (!groupId) {
-      return { success: false, error: "Group not found." };
+    if (!leagueId) {
+      return { success: false, error: "Missing league context." };
     }
 
     try {
@@ -890,7 +893,7 @@ const GroupPage = () => {
         updateGroupMemberRoleRequest({
           member_id: newCommissionerId,
           role: "commissioner",
-          group_id: groupId,
+          group_id: leagueId,
         })
       );
 
@@ -916,7 +919,7 @@ const GroupPage = () => {
 
   const handleConfirmDeleteGroup = async () => {
     if (!isCommissioner) {
-      setDeleteError("Only the commissioner can delete this group.");
+      setDeleteError("Only the commissioner can delete this league.");
       return;
     }
     try {
@@ -929,7 +932,7 @@ const GroupPage = () => {
       setAcknowledged(false);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to delete group.";
+        error instanceof Error ? error.message : "Failed to delete league.";
       setDeleteError(message);
     }
   };
@@ -987,7 +990,7 @@ const GroupPage = () => {
       <header className="flex flex-col gap-4">
         <div className="flex items-center justify-between ">
           <BackButton
-            label="back to all groups"
+            label="back to all leagues"
             fallback="/fantasy"
             preferFallback
             className="inline-flex items-center justify-center gap-2 text-[11px] font-semibold normal-case py-2 tracking-[0.12em] text-gray-300 transition hover:text-white"
@@ -996,7 +999,7 @@ const GroupPage = () => {
             type="button"
             onClick={handleOpenEditGroup}
             className="ui-accent-outline-hover inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition sm:ml-auto"
-            aria-label="Edit group"
+            aria-label="Edit league"
           >
             <EditPencilIcon />
           </button>
@@ -1049,7 +1052,7 @@ const GroupPage = () => {
             type="button"
             onClick={() => setShowScoringModal(true)}
             className="mb-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-gray-300 transition hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:h-7 sm:w-7 sm:text-[11px]"
-            aria-label="Group scoring"
+            aria-label="League scoring"
             aria-haspopup="dialog"
           >
             i
@@ -1324,8 +1327,8 @@ const GroupPage = () => {
                 onRemoveMember={handleRemoveMember}
                 onMakeCommissioner={handleTransferCommissioner}
                 onLeaveGroup={handleLeaveGroup}
-                leavingGroup={leavingGroup}
-                groupId={groupId}
+                leavingGroup={leavingLeague}
+                groupId={leagueId}
               />
             )}
           </div>
@@ -1712,14 +1715,14 @@ const GroupPage = () => {
                 className="flex w-full items-start justify-between gap-4 text-left"
               >
                 <div className="space-y-1">
-                  <p className="text-sm uppercase tracking-wide text-red-300">Delete group</p>
+                  <p className="text-sm uppercase tracking-wide text-red-300">Delete league</p>
                 </div>
                 <span className="text-red-200">{dangerZoneOpen ? "▴" : "▾"}</span>
               </button>
               {dangerZoneOpen && (
                 <div id="danger-zone-content" className="mt-4 space-y-3">
                   <p className="text-xs text-red-100">
-                    delete this group and all associated leaderboards and slips.
+                    delete this league and all associated leaderboards and slips.
                   </p>
                   <label className="flex flex-col gap-2 text-sm text-gray-200">
                     <span className="text-xs uppercase tracking-wide text-gray-400">
@@ -1751,7 +1754,7 @@ const GroupPage = () => {
                       disabled={deleteConfirmation !== confirmationCode || !acknowledged}
                       className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Delete group permanently
+                      Delete league permanently
                     </button>
                   </div>
                 </div>
@@ -1764,7 +1767,7 @@ const GroupPage = () => {
       <ScoringModal
         open={showScoringModal}
         onClose={() => setShowScoringModal(false)}
-        variant="group"
+        variant="league"
       />
 
       {pendingLeaderboardAction && (
@@ -1816,12 +1819,12 @@ const GroupPage = () => {
         </div>
       )}
 
-      {showEditGroupModal && (
+      {showEditLeagueModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
           role="dialog"
           aria-modal="true"
-          onClick={() => setShowEditGroupModal(false)}
+          onClick={() => setShowEditLeagueModal(false)}
         >
           <div
             className="w-full max-w-lg rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur"
@@ -1829,16 +1832,16 @@ const GroupPage = () => {
           >
             <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
               <div className="space-y-1">
-                <h2 className="text-lg font-semibold text-white">Edit group details</h2>
+                <h2 className="text-lg font-semibold text-white">Edit league details</h2>
                 <p className="text-xs text-gray-400">
                   Update the name or description for {group?.name}.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowEditGroupModal(false)}
+                onClick={() => setShowEditLeagueModal(false)}
                 className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                aria-label="Close edit group"
+                aria-label="Close edit league"
               >
                 <X size={15} />
               </button>
@@ -1846,12 +1849,12 @@ const GroupPage = () => {
 
             <div className="space-y-4 px-6 py-5">
               <label className="flex flex-col gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-400">group name</span>
+                <span className="text-xs uppercase tracking-wide text-gray-400">league name</span>
                 <input
-                  value={editGroupName}
-                  onChange={(event) => setEditGroupName(event.target.value)}
+                  value={editLeagueName}
+                  onChange={(event) => setEditLeagueName(event.target.value)}
                   className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
-                  placeholder="Group name"
+                  placeholder="League name"
                 />
                 {errors.name && (
                   <span className="text-xs font-medium text-red-400">
@@ -1865,10 +1868,10 @@ const GroupPage = () => {
                   description (optional)
                 </span>
                 <textarea
-                  value={editGroupDescription}
-                  onChange={(event) => setEditGroupDescription(event.target.value)}
+                  value={editLeagueDescription}
+                  onChange={(event) => setEditLeagueDescription(event.target.value)}
                   className="ui-input-accent min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
-                  placeholder="What's this group about?"
+                  placeholder="What's this league about?"
                 />
                 {errors.description && (
                   <span className="text-xs font-medium text-red-400">
@@ -1880,7 +1883,7 @@ const GroupPage = () => {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowEditGroupModal(false)}
+                  onClick={() => setShowEditLeagueModal(false)}
                   className="rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white"
                 >
                   cancel
@@ -1888,7 +1891,7 @@ const GroupPage = () => {
                 <button
                   type="button"
                   onClick={handleSaveGroupDetails}
-                  disabled={!editGroupName.trim()}
+                  disabled={!editLeagueName.trim()}
                   className="ui-accent-button-solid rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   save changes
@@ -2082,11 +2085,11 @@ const SecondaryLeaderboardsInfoModal = ({
         <div className="space-y-3 px-5 py-5 text-sm text-gray-200">
           <p>
             Every slip counts toward the Main Leaderboard by default, but Secondary Leaderboards
-            let your group keep separate rankings for specific types of slips. When enabled, the
+            let your league keep separate rankings for specific types of slips. When enabled, the
             commissioner can assign certain slips to a Secondary Leaderboard.
           </p>
           <p>
-            For example, your group might want separate rankings for NFL slips vs NBA slips, or a
+            For example, your league might want separate rankings for NFL slips vs NBA slips, or a
             dedicated board just for the Playoffs. This lets members easily see how they rank
             within just that league or category. You can assign a slip to a secondary leaderboard
             during slip creation (or update it later in slip actions if enabled).

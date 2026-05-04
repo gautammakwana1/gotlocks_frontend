@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { Feed, FeedSelector, Members } from "@/lib/interfaces/interfaces";
+import type { Feed, FeedSelector } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllActivitiesRequest } from "@/lib/redux/slices/activitySlice";
 import ActivitiesSkeleton from "./ActivitiesSkeleton";

@@ -1,7 +1,7 @@
 import { OnboardingStep } from "@/components/modals/OnboardingModal";
+import { LeagueStep1Animation, LeagueStep2Animation, LeagueStep3Animation } from "@/components/ui/onboarding/animation/LeagueAnimation";
+import { ProfileStep1Animation, ProfileStep2Animation, ProfileStep3Animation } from "@/components/ui/onboarding/animation/ProfileAnimation";
 import { WelcomeStep1Animation, WelcomeStep2Animation, WelcomeStep3Animation } from "@/components/ui/onboarding/animation/WelcomeAnimation";
-
-const PLACEHOLDER = "/onboarding/placeholder.jpg";
 
 export const WELCOME_TUTORIAL: OnboardingStep[] = [
     {
@@ -24,60 +24,42 @@ export const WELCOME_TUTORIAL: OnboardingStep[] = [
     },
 ];
 
-export const GROUP_TUTORIAL: OnboardingStep[] = [
+export const LEAGUE_TUTORIAL: OnboardingStep[] = [
     {
-        media: "/onboarding/role.mp4",
+        mediaNode: <LeagueStep1Animation />,
         mediaAlt: "Commissioner and members",
         title: "Know your role",
         body: "Leagues are where your crew gets organized. Every league has a commissioner and members — start your own and you're the commissioner by default. Move as a unit, compete against each other, or both.",
     },
     {
-        media: PLACEHOLDER,
+        mediaNode: <LeagueStep2Animation />,
         mediaAlt: "Leaderboard slip",
         title: "The leaderboard slip",
-        body: "Created by the commissioner. Open the slip, choose from the games available in the selected league and window, and lock in one pick. Every pick gets a confidence tier based on its odds. Once finalized, results push straight to the league standings.",
+        body: "Created by the commissioner. Choose from the available games and lock in one pick. Your odds determine your scoring tier, so the bolder the call the bigger the reward. Losses are -15 by default but the commissioner can adjust. Once finalized, results push straight to the league standings.",
     },
     {
-        media: PLACEHOLDER,
+        mediaNode: <LeagueStep3Animation />,
         mediaAlt: "Vibe slips",
         title: "Just for fun? Vibe slips",
-        body: "Anyone can create one. Bundle multiple picks into a single submission and let other members add their picks as well. No limit on picks and no leaderboard impact, just gut feels and wild combos.",
-    },
-    {
-        media: PLACEHOLDER,
-        mediaAlt: "How points work",
-        title: "How the points work",
-        body: "Wins earn points based on your tier. Higher odds mean more points and a quicker climb up the rankings. Losses are -15 by default, but the commissioner can adjust scores during review for custom house rules.",
+        body: "Anyone can create one. Bundle multiple picks into a single submission and let other members stack their own picks on top. No limit, no leaderboard impact, just gut feels, wild combos, and odds that stack up fast.",
     },
 ];
 
 export const GLOBAL_TUTORIAL: OnboardingStep[] = [
     {
-        media: PLACEHOLDER,
+        mediaNode: <ProfileStep1Animation />,
         mediaAlt: "Public profile",
         title: "Your public profile",
-        body: "Your public profile shows your level and your record. Keep it public so anyone can follow your picks, or flip it private so only approved followers can see.",
+        body: "Your public profile shows your level and your record. Drop single picks or bundle multiple into one post and let everyone see where you stand. Every post grades automatically when the games finish and your record updates in real time.",
     },
     {
-        media: PLACEHOLDER,
-        mediaAlt: "Posting a pick",
-        title: "Post your locks",
-        body: "Posts are your public callouts. Drop a single pick or bundle multiple into one post and let the world see where you stand. Every post grades automatically when the games finish and your record updates in real time.",
-    },
-    {
-        media: PLACEHOLDER,
+        mediaNode: <ProfileStep2Animation />,
         mediaAlt: "Rewards",
         title: "How you get rewarded",
-        body: "Wins earn both XP and lock chips based on your tier. Higher odds mean bigger rewards and faster level gains. Losses deduct 15 chips from your balance by default.",
+        body: "Wins earn both XP and Lock Chips based on your scoring tier. The bolder the call the bigger the reward. Losses deduct 15 chips by default. XP levels up your profile, Lock Chips are your currency to spend in The Shop.",
     },
     {
-        media: PLACEHOLDER,
-        mediaAlt: "Lock chips",
-        title: "But what are lock chips?",
-        body: "Lock chips and XP are both earned by being right. XP levels up your profile and unlocks new ways to customize your experience. Lock chips are your currency, stack them up and spend them in the shop on exclusive access and limited rewards.",
-    },
-    {
-        media: PLACEHOLDER,
+        mediaNode: <ProfileStep3Animation />,
         mediaAlt: "Global feed tabs",
         title: "Discover & connect",
         body: "For You, Following, Winners. Three tabs that make up your global feed. Scroll to find picks worth tailing, react to boost the ones that deserve more eyes, and follow anyone whose record speaks for itself.",

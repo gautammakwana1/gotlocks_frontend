@@ -6,7 +6,7 @@ import {
 } from "@/lib/utils/scoring";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 
-export type ReviewSheetTierDisplayMode = "default" | "group";
+export type ReviewSheetTierDisplayMode = "default" | "league";
 
 type FormatReviewSheetTierLineArgs = {
     tierMeta?: TierMeta | null;
@@ -33,7 +33,7 @@ export const getReviewSheetTierName = ({
 }) => {
     const normalizedFallback = normalizeTierLabel(fallbackName);
     if (!tierMeta) return normalizedFallback;
-    if (mode === "group") {
+    if (mode === "league") {
         return getGroupTierName(tierMeta.tier, normalizedFallback ?? tierMeta.name);
     }
     return normalizedFallback ?? tierMeta.name;
@@ -57,7 +57,7 @@ export const formatReviewSheetTierLine = ({
         ? getReviewSheetTierName({ tierMeta, fallbackName, mode })
         : null;
 
-    if (mode === "group") {
+    if (mode === "league") {
         const parts: string[] = [];
         if (resolvedName && resolvedName !== "—") {
             parts.push(resolvedName);
@@ -84,5 +84,5 @@ export const resolveReviewSheetTierCardAppearance = (
     mode: ReviewSheetTierDisplayMode = "default"
 ) =>
     resolveTierCardAppearance(
-        mode === "group" && tierMeta ? getGroupTierColor(tierMeta.tier) : tierMeta?.color
+        mode === "league" && tierMeta ? getGroupTierColor(tierMeta.tier) : tierMeta?.color
     );

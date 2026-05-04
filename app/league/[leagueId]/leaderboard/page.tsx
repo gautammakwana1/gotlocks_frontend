@@ -9,18 +9,18 @@ import { useDispatch, useSelector } from "react-redux";
 import { GroupDataShape } from "../page";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 
-const hasNestedGroup = (
+const hasNestedLeague = (
     value: GroupDataShape
 ): value is { group?: Group | null } => {
     return Boolean(value && typeof value === "object" && "group" in value);
 };
 
-const extractGroup = (data: GroupDataShape): Group | null => {
+const extractLeague = (data: GroupDataShape): Group | null => {
     if (!data) {
         return null;
     }
 
-    if (hasNestedGroup(data)) {
+    if (hasNestedLeague(data)) {
         return data.group ?? null;
     }
 
@@ -39,25 +39,25 @@ export type Leaderboard = {
     sportScope?: League | string | null;
 };
 
-const GroupLeaderboardPage = () => {
+const LeagueLeaderboardPage = () => {
     const dispatch = useDispatch();
-    const params = useParams<{ groupId: string }>();
+    const params = useParams<{ leagueId: string }>();
     const router = useRouter();
     const currentUser = useCurrentUser();
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+    const league = useMemo(() => extractLeague(rawGroup as GroupDataShape), [rawGroup]);
     // const slip = useSelector((state: SlipSelector) => state.slip);
 
     useEffect(() => {
-        if (!params.groupId || !currentUser) return;
-        // dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-    }, [params.groupId, currentUser, dispatch]);
+        if (!params.leagueId || !currentUser) return;
+        // dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
+    }, [params.leagueId, currentUser, dispatch]);
 
     useEffect(() => {
-        if (currentUser && !group) {
+        if (currentUser && !league) {
             router.replace("/home");
         }
-    }, [group, router, currentUser]);
+    }, [league, router, currentUser]);
 
     // const groupSlips = useMemo(
     //     () => slip.slip?.filter((slip: Slip) => slip.group_id === group?.id),
@@ -91,7 +91,7 @@ const GroupLeaderboardPage = () => {
     //     [groupLeaderboards]
     // );
 
-    if (!currentUser || !group) {
+    if (!currentUser || !league) {
         return null;
     }
 
@@ -103,7 +103,7 @@ const GroupLeaderboardPage = () => {
                     className="allow-caps text-sm font-extrabold text-transparent bg-clip-text"
                     style={displayNameGradientStyle}
                 >
-                    {group.name}
+                    {league.name}
                 </p>
                 <h1 className="text-3xl font-semibold text-white">Leaderboard</h1>
             </header>
@@ -136,4 +136,4 @@ const GroupLeaderboardPage = () => {
     );
 };
 
-export default GroupLeaderboardPage;
+export default LeagueLeaderboardPage;

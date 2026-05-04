@@ -12,9 +12,8 @@ import { clearCreatePostPickMessage, createPickRequest, createPostPickRequest } 
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
+import { canUserEditSlipPicks } from "@/lib/slips/state";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
-import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 
 type GroupSliceState = {
     group: {
@@ -37,7 +36,7 @@ type RootState = {
     slip: SlipState;
 };
 
-type FlowStage = "choose" | "groups" | "builder";
+type FlowStage = "choose" | "leagues" | "builder";
 type BuilderIntent = "post";
 
 const normalizeSport = (sport?: string) => (sport ? sport.toUpperCase() : "NFL");
@@ -309,15 +308,15 @@ const PickBuilderClientPage = () => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <button
                     type="button"
-                    onClick={() => setFlowStage("groups")}
+                    onClick={() => setFlowStage("leagues")}
                     className={pickCardClasses}
                 >
                     <div className="space-y-2">
                         <p className="text-xs uppercase tracking-wide text-sky-200">
-                            Make picks for groups
+                            Make picks for leagues
                         </p>
                         <p className="text-sm text-gray-200">
-                            Jump into your groups and drop picks straight into their slips.
+                            Jump into your leagues and drop picks straight into their slips.
                         </p>
                     </div>
                 </button>
@@ -364,18 +363,18 @@ const PickBuilderClientPage = () => {
                 >
                     &larr; back to other pick options
                 </button>
-                <p className="text-xs tracking-wide text-gray-400">group picks</p>
+                <p className="text-xs tracking-wide text-gray-400">league picks</p>
             </div>
 
             {sortedGroups.length === 0 ? (
-                <p className="text-xs text-gray-400">No groups yet. Create or join one to route picks.</p>
+                <p className="text-xs text-gray-400">No leagues yet. Create or join one to route picks.</p>
             ) : (
                 <div className="grid gap-3">
                     {sortedGroups.map((group) => (
                         <button
                             key={group.id}
                             type="button"
-                            onClick={() => router.push(`/group/${group.id}?tab=slips`)}
+                            onClick={() => router.push(`/league/${group.id}?tab=slips`)}
                             className="flex items-center justify-between rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-3 text-left transition hover:border-sky-300/50 hover:text-white"
                         >
                             <div>
@@ -543,7 +542,7 @@ const PickBuilderClientPage = () => {
         <div className="flex flex-col gap-6 text-white">
             {(() => {
                 switch (flowStage) {
-                    case "groups":
+                    case "leagues":
                         return renderGroupsFlow();
                     case "builder":
                         return renderBuilderStage();
@@ -560,7 +559,7 @@ const PickBuilderClientPage = () => {
                             <div>
                                 <p className="text-sm font-semibold text-white">Post to a slip</p>
                                 <p className="text-xs text-gray-400">
-                                    Choose group, then an open slip that includes every sport in this pick.
+                                    Choose league, then an open slip that includes every sport in this pick.
                                 </p>
                             </div>
                             <button
@@ -574,12 +573,12 @@ const PickBuilderClientPage = () => {
 
                         {destinations.length === 0 ? (
                             <p className="mt-3 text-xs text-gray-400">
-                                Join a group with an open slip that supports {completedPick?.sport ?? "this sport"} to post your pick.
+                                Join a league with an open slip that supports {completedPick?.sport ?? "this sport"} to post your pick.
                             </p>
                         ) : (
                             <div className="mt-4 space-y-4">
                                 <div className="space-y-2">
-                                    <p className="text-xs uppercase tracking-wide text-gray-400">Step 1 · Group</p>
+                                    <p className="text-xs uppercase tracking-wide text-gray-400">Step 1 · League</p>
                                     <div className="flex flex-wrap gap-2">
                                         {destinations.map(({ group }) => {
                                             const active = group.id === selectedGroupId;
@@ -608,7 +607,7 @@ const PickBuilderClientPage = () => {
                                 <div className="space-y-2">
                                     <p className="text-xs uppercase tracking-wide text-gray-400">Step 2 · Slip</p>
                                     {activeSlips.length === 0 ? (
-                                        <p className="text-xs text-gray-500">No open slips for this league in the selected group.</p>
+                                        <p className="text-xs text-gray-500">No open slips for this league in the selected league.</p>
                                     ) : (
                                         <div className="grid gap-3">
                                             {activeSlips.map((slip) => {

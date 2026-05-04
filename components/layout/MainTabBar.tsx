@@ -228,7 +228,7 @@ export const MainTabBar = () => {
                 : null;
     const lockHintLabel =
         guidedTarget === "leaderboard"
-            ? "Tap the groups tab to continue 🔒"
+            ? "Tap the leagues tab to continue 🔒"
             : guidedTarget === "social"
                 ? "Tap the global tab to continue 🔒"
                 : null;
@@ -263,10 +263,10 @@ export const MainTabBar = () => {
             },
             {
                 id: "leaderboard",
-                label: "groups",
+                label: "leagues",
                 href: "/fantasy",
                 icon: PeopleIcon,
-                matchers: ["/fantasy", "/group"],
+                matchers: ["/fantasy", "/league"],
             },
             {
                 id: "profile",

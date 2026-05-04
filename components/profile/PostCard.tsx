@@ -106,7 +106,7 @@ const WinningHeaderArt = () => (
     />
 );
 
-const PostCard = ({ pick, displayName, canDelete, onDelete, onReaction }: PostCardProps) => {
+const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);

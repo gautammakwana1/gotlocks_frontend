@@ -1356,10 +1356,10 @@ export const NbaPickBuilder = ({
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
     const reviewTierScoringMode =
         confirmationVariant === "slip" && slip.isGraded
-            ? "groupLeaderboard"
+            ? "leagueLeaderboard"
             : "global";
     const reviewTierDisplayMode =
-        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+        reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const resolveTierMetaForOdds = useCallback(
@@ -1371,7 +1371,7 @@ export const NbaPickBuilder = ({
     );
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
-            reviewTierScoringMode === "groupLeaderboard"
+            reviewTierScoringMode === "leagueLeaderboard"
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [reviewTierScoringMode]
@@ -2018,7 +2018,7 @@ export const NbaPickBuilder = ({
                         const tierPrimary = tierMeta
                             ? formatTierPrimary(tierMeta.tier)
                             : draft?.displayDifficulty ?? "Tier —";
-                        const tierPoints = reviewTierScoringMode === "groupLeaderboard"
+                        const tierPoints = reviewTierScoringMode === "leagueLeaderboard"
                             ? tierMeta?.points
                             : payload.points ?? draft?.points ?? tierMeta?.points;
                         const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
@@ -2131,7 +2131,7 @@ export const NbaPickBuilder = ({
             const legTierLine = formatReviewSheetTierLine({
                 tierMeta: legTierMeta,
                 points: legPoints,
-                includeName: reviewTierDisplayMode === "group",
+                includeName: reviewTierDisplayMode === "league",
                 mode: reviewTierDisplayMode,
             });
             return {
@@ -2216,7 +2216,7 @@ export const NbaPickBuilder = ({
                     tierMeta: reviewGroupTierMeta,
                     points: reviewGroupTierMeta?.points,
                     includeName:
-                        reviewTierDisplayMode === "group",
+                        reviewTierDisplayMode === "league",
                     mode: reviewTierDisplayMode,
                 });
                 const description = group
@@ -3513,7 +3513,7 @@ export const NbaPickBuilder = ({
     const sheetTierPrimary = sheetTierMeta
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
-    const sheetPoints = reviewTierScoringMode === "groupLeaderboard"
+    const sheetPoints = reviewTierScoringMode === "leagueLeaderboard"
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
     const sheetTierCard = resolveReviewSheetTierCardAppearance(
@@ -3524,7 +3524,7 @@ export const NbaPickBuilder = ({
         tierMeta: sheetTierMeta,
         fallbackPrimary: sheetTierPrimary,
         points: sheetPoints,
-        includeName: reviewTierDisplayMode === "group",
+        includeName: reviewTierDisplayMode === "league",
         mode: reviewTierDisplayMode,
     });
     const comboOddsLabel = hasMultiSelection

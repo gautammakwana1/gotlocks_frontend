@@ -9,7 +9,7 @@ import { Member, Pick, Slip } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
-import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 type SlipShareModalProps = {
     open: boolean;
@@ -95,7 +95,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
     }, [members, picks]);
 
     const groupComboOddsSummary = useMemo(
-        () => getGroupComboOddsSummary(slip, picks),
+        () => getLeagueComboOddsSummary(slip, picks),
         [slip, picks]
     );
     if (!open) return null;
@@ -269,7 +269,7 @@ const SlipShareModal = ({ open, onClose, slip, picks, members }: SlipShareModalP
                                 <div className="flex justify-end pt-1">
                                     <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400 md:text-[11px]">
                                         <span>
-                                            Group Combo+ odds:
+                                            League Combo+ odds:
                                         </span>
                                         <span className="ml-2 text-sm font-bold text-cyan-100 md:text-base">
                                             {groupComboOddsSummary.label}

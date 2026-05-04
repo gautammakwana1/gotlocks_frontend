@@ -25,7 +25,7 @@ import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessag
 import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import Image from "next/image";
-import { getPickPoints, GROUP_CAP_POINTS, GROUP_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
+import { getPickPoints, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
 import { X } from "lucide-react";
 import PickListCard from "@/components/slips/PickListCard";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -38,7 +38,7 @@ import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
 import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
-import { getGroupComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 interface FormErrors {
     name?: string;
@@ -50,7 +50,7 @@ type PointsDraft = Record<string, string>;
 
 const buildInitialPointsDraft = (
     picks: Pick[],
-    mode: "global" | "groupLeaderboard"
+    mode: "global" | "leagueLeaderboard"
 ): PointsDraft =>
     picks.reduce<PointsDraft>((acc, pick) => {
         const normalized = normalizePickResult(pick.result);
@@ -122,7 +122,7 @@ const PICK_RESULT_ACCENTS = {
 const SlipDetailsPage = () => {
     const dispatch = useDispatch();
     const isMobile = useIsMobile();
-    const params = useParams<{ groupId: string; slipId: string }>();
+    const params = useParams<{ leagueId: string; slipId: string }>();
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
@@ -157,13 +157,13 @@ const SlipDetailsPage = () => {
     }, [leaderboardData?.leaderboard, leaderboardListData]);
 
     useEffect(() => {
-        if (!params.groupId || !params.slipId || !currentUser) return
+        if (!params.leagueId || !params.slipId || !currentUser) return
 
-        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
         dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
-        dispatch(fetchAllLeaderboardsRequest({ group_id: params.groupId }));
+        dispatch(fetchAllLeaderboardsRequest({ group_id: params.leagueId }));
         dispatch(clearCreatePickMessage());
-    }, [params.groupId, currentUser, dispatch, params.slipId]);
+    }, [params.leagueId, currentUser, dispatch, params.slipId]);
 
     const slip = useMemo(() => {
         if (!Array.isArray(slips) || !params?.slipId) return undefined;
@@ -236,7 +236,7 @@ const SlipDetailsPage = () => {
         [slipPicks]
     );
     const groupComboOddsSummary = useMemo(
-        () => getGroupComboOddsSummary(slip, slipPicks),
+        () => getLeagueComboOddsSummary(slip, slipPicks),
         [slip, slipPicks]
     );
     const warningModeEnabled = slipShowsConflictWarnings(slip);
@@ -258,7 +258,7 @@ const SlipDetailsPage = () => {
         [members]
     );
 
-    const scoringMode = slip?.isGraded ? "groupLeaderboard" : "global";
+    const scoringMode = slip?.isGraded ? "leagueLeaderboard" : "global";
 
     const userPicks = useMemo(
         () => slipPicks.filter((pick: Pick) => pick.user_id === currentUser?.userId),
@@ -319,7 +319,7 @@ const SlipDetailsPage = () => {
                 duration: 3000,
             })
             dispatch(clearUpdateSlipsMessage())
-            dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
+            dispatch(fetchAllSlipsRequest({ group_id: params.leagueId }));
         }
         if (!slipLoader && slipError) {
             setToast({
@@ -330,7 +330,7 @@ const SlipDetailsPage = () => {
             })
             dispatch(clearUpdateSlipsMessage());
         }
-    }, [setToast, slipLoader, slipMessage, slipError, dispatch, params.groupId]);
+    }, [setToast, slipLoader, slipMessage, slipError, dispatch, params.leagueId]);
 
     useEffect(() => {
         if (!deleteLoading && deleteMessage) {
@@ -341,8 +341,8 @@ const SlipDetailsPage = () => {
                 duration: 3000,
             })
             dispatch(clearDeleteSlipMessage());
-            if (params.groupId) {
-                router.replace(`/group/${params.groupId}?tab=slips`);
+            if (params.leagueId) {
+                router.replace(`/league/${params.leagueId}?tab=slips`);
             } else {
                 router.replace('/fantasy');
             }
@@ -356,7 +356,7 @@ const SlipDetailsPage = () => {
             })
             dispatch(clearDeleteSlipMessage());
         }
-    }, [setToast, deleteLoading, deleteMessage, deleteError, dispatch, params.groupId]);
+    }, [setToast, deleteLoading, deleteMessage, deleteError, dispatch, params.leagueId, router]);
 
     useEffect(() => {
         if (!slip) return;
@@ -454,10 +454,10 @@ const SlipDetailsPage = () => {
     useEffect(() => {
         if (!group || !isSlipFinal(slip)) return;
         if (!slip) {
-            router.replace(`/group/${group.id}?tab=slips`);
+            router.replace(`/league/${group.id}?tab=slips`);
         }
         if (group.id && slip?.id) {
-            router.replace(`/group/${group.id}/slips/${slip.id}/results`);
+            router.replace(`/league/${group.id}/slips/${slip.id}/results`);
         }
     }, [group, slip, router]);
 
@@ -509,7 +509,7 @@ const SlipDetailsPage = () => {
 
     const preflightIsCommissioner = group?.created_by === currentUser?.userId;
     const preflightIsCreator = slip?.created_by === currentUser?.userId;
-    const isVibeSlip = Boolean(slip && !slip.isGraded && slip.slip_type === "vibe");
+    // const isVibeSlip = Boolean(slip && !slip.isGraded && slip.slip_type === "vibe");
     const availableSports = Array.isArray(slip?.sports) && slip.sports.length > 0
         ? slip.sports
         : [DEFAULT_SPORT];
@@ -519,7 +519,7 @@ const SlipDetailsPage = () => {
     );
     const tabs = useMemo<{ id: SlipTab; label: string }[]>(() => {
         const baseTabs: { id: SlipTab; label: string }[] = [
-            { id: "picks", label: "Group picks" },
+            { id: "picks", label: "League picks" },
         ];
         if (showReviewTab) {
             baseTabs.push({ id: "review", label: "Slip review" });
@@ -587,8 +587,7 @@ const SlipDetailsPage = () => {
     const canRenameSlip = isCommissioner || (!slip.isGraded && isCreator);
     const canEditDeadlines =
         (isCommissioner || (!slip.isGraded && isCreator)) && canManagePicks;
-    const canEditWarningMode =
-        (isCommissioner || (!slip.isGraded && isCreator)) && canManagePicks;
+    const canEditWarningMode = slip.isGraded && isCommissioner && canManagePicks
     const canAssignSecondaryLeaderboard =
         isCommissioner &&
         secondaryLeaderboardsEnabled &&
@@ -658,9 +657,11 @@ const SlipDetailsPage = () => {
         canManagePicks
             ? "No pick yet."
             : "pick not submitted before slip deadline";
-    const lockedResetHint = slip.isGraded
-        ? "Deadline is locked. Use Reopen slip in Review to reset picks and set a new deadline."
-        : "Deadline is locked for this vibe slip.";
+    const deadlineStatusHint = !canEditDeadlines
+        ? slip.isGraded
+            ? "Deadline is locked. Use Reopen slip in Review to reset picks and set a new deadline."
+            : "Deadline is locked for this vibe slip. Use Reopen to reset picks and set a new deadline."
+        : null;
 
     const handleAutoGrade = () => {
         if (!canAutoGrade) return;
@@ -836,7 +837,7 @@ const SlipDetailsPage = () => {
 
     const startAddFlow = () => {
         if (!canAddPick) return;
-        router.push(`/group/${group.id}/slips/${slip.id}/add-pick`);
+        router.push(`/league/${group.id}/slips/${slip.id}/add-pick`);
     };
 
     const handleDeletePick = (pick: Pick) => {
@@ -926,7 +927,7 @@ const SlipDetailsPage = () => {
                     />
                     <div className="relative z-10 flex flex-col gap-6 p-5 pb-32 sm:p-6 sm:pb-36">
                         <BackButton
-                            fallback={`/group/${group.id}?tab=slips${slip.isGraded ? "" : "&mode=vibe"}`}
+                            fallback={`/league/${group.id}?tab=slips${slip.isGraded ? "" : "&mode=vibe"}`}
                             preferFallback
                             className="self-start"
                         />
@@ -1047,7 +1048,7 @@ const SlipDetailsPage = () => {
                                         <section className="flex justify-end">
                                             <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                                                 <span>
-                                                    Group Combo+ odds:
+                                                    League Combo+ odds:
                                                 </span>
                                                 <span className="ml-2 text-sm font-bold text-cyan-100">
                                                     {groupComboOddsSummary.label}
@@ -1130,7 +1131,7 @@ const SlipDetailsPage = () => {
 
                                     <section className="space-y-3">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <p className="text-sm font-semibold text-white">Your group&apos;s picks</p>
+                                            <p className="text-sm font-semibold text-white">Your league&apos;s picks</p>
                                             <span className="text-[11px] uppercase tracking-wide text-gray-400">
                                                 {perMemberLimitLabel}
                                             </span>
@@ -1398,11 +1399,21 @@ const SlipDetailsPage = () => {
                                                                 {activeWindowDays} day{activeWindowDays === 1 ? "" : "s"} (
                                                                 {formatDateTime(eligibilityWindowEnd ?? "")} latest start).
                                                             </p>
-                                                            {!canEditDeadlines && (
-                                                                <p className="text-[11px] text-amber-200">{lockedResetHint}</p>
+                                                            {deadlineStatusHint && (
+                                                                <p className="text-[11px] text-amber-200">{deadlineStatusHint}</p>
                                                             )}
                                                         </div>
-                                                        <div className="flex justify-end">
+                                                        <div className="flex justify-end gap-2">
+                                                            {!slip.isGraded && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={openReopenModal}
+                                                                    disabled={!canReopen}
+                                                                    className="ui-accent-button rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
+                                                                >
+                                                                    reopen
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 type="submit"
                                                                 disabled={!canEditDeadlines}
@@ -1440,7 +1451,7 @@ const SlipDetailsPage = () => {
                                                     </div>
                                                     {isSlipModeInfoOpen && (
                                                         <p className="text-xs text-gray-500">
-                                                            Group Combo+ mode shows overlapping and contradictory same-slip pick
+                                                            League Combo+ mode shows overlapping and contradictory same-slip pick
                                                             warnings inside the builder and on the slip. Competition mode hides those
                                                             warnings.
                                                         </p>
@@ -1450,7 +1461,7 @@ const SlipDetailsPage = () => {
                                                     {[
                                                         {
                                                             id: "group_combo" as const,
-                                                            label: "Group Combo+",
+                                                            label: "League Combo+",
                                                             detail: "Warnings on",
                                                         },
                                                         {
@@ -1567,7 +1578,7 @@ const SlipDetailsPage = () => {
                                                             type="button"
                                                             onClick={() => setShowScoringModal(true)}
                                                             className="flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
-                                                            aria-label="Group scoring"
+                                                            aria-label="League scoring"
                                                         >
                                                             i
                                                         </button>
@@ -1748,13 +1759,13 @@ const SlipDetailsPage = () => {
                                                                             const normalizedResult = normalizePickResult(pick.result);
                                                                             const displayPick = pick.description ?? "No pick was submitted";
                                                                             const pickLine = extractPickLine(displayPick);
-                                                                            const matchupLabel = extractMatchup(
-                                                                                displayPick,
-                                                                                pick?.matchup ??
-                                                                                (pick.selection?.gameId
-                                                                                    ? matchupByGameId.get(pick.selection.gameId)
-                                                                                    : null)
-                                                                            );
+                                                                            // const matchupLabel = extractMatchup(
+                                                                            //     displayPick,
+                                                                            //     pick?.matchup ??
+                                                                            //     (pick.selection?.gameId
+                                                                            //         ? matchupByGameId.get(pick.selection.gameId)
+                                                                            //         : null)
+                                                                            // );
                                                                             const matchupTag = isMobile && pick?.selection?.away_abbr && pick?.selection?.home_abbr
                                                                                 ? `${pick?.selection?.away_abbr} @ ${pick?.selection?.home_abbr}` : `${pick?.selection?.matchup ?? ""}`
                                                                             const timeLabel = formatDateTime(pick.match_date);
@@ -2128,7 +2139,7 @@ const SlipDetailsPage = () => {
                         ) : (
                             <>
                                 <p className="text-xs text-gray-400 text-center">
-                                    Create a secondary leaderboard in Group Settings to organize slips into
+                                    Create a secondary leaderboard in League Settings to organize slips into
                                     separate rankings.
                                 </p>
                                 <div className="flex justify-center">
@@ -2217,7 +2228,7 @@ const SlipDetailsPage = () => {
             <ScoringModal
                 open={showScoringModal}
                 onClose={() => setShowScoringModal(false)}
-                variant="group"
+                variant="league"
             />
 
             <SlipShareModal
@@ -2341,9 +2352,9 @@ const DeadlinesOverviewModal = ({
                             Scoring reference
                         </h3>
                         <p className="text-xs text-gray-400">
-                            Group leaderboards use the tier table, with a cap at Tier {GROUP_CAP_TIER} (
-                            {GROUP_CAP_POINTS} pts max). The scoring modal inside the pick builder shows the
-                            group tier rules if you need a refresher.
+                            League leaderboards use the tier table, with a cap at Tier {LEAGUE_CAP_TIER} (
+                            {LEAGUE_CAP_POINTS} pts max). The scoring modal inside the pick builder shows the
+                            league tier rules if you need a refresher.
                         </p>
                     </section>
                 </div>

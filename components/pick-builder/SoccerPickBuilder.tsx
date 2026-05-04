@@ -38,8 +38,8 @@ import {
     withMatchupDescription,
 } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, LeagueObject, OddsEvent, OddsObject, Pick, PickLeg, PickSelectionMeta, RootState, Slip, SoccerSchedules, SoccerSchedulesWithOdds, TeamsObject, TierIndex } from "@/lib/interfaces/interfaces";
-import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, LeagueObject, OddsData, OddsEvent, OddsObject, Pick, PickLeg, PickSelectionMeta, RootState, Slip, SoccerOdds, SoccerSchedules, SoccerSchedulesWithOdds, TeamsObject, TierIndex } from "@/lib/interfaces/interfaces";
+import { useIsMobile } from "@/lib/utils/helpers";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleRequest, soccerEnglandPremierLeaguePickValidateRequest, soccerGermanyBundesligaPickValidateRequest } from "@/lib/redux/slices/soccerSlice";
@@ -325,7 +325,10 @@ const latestUpdatedAt = (snapshots: OddsBlazeSnapshot[]) =>
         return latest;
     }, "");
 
-const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapshot => {
+const mergeOddsSnapshots = (
+    ...inputSnapshots: (SoccerOdds | null | undefined)[]
+): SoccerOdds => {
+    const snapshots = inputSnapshots.filter((s): s is SoccerOdds => !!s);
     const baseSnapshot = snapshots[0];
 
     if (!baseSnapshot) {
@@ -337,7 +340,7 @@ const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapsho
         };
     }
 
-    const mergedEvents = new Map<string, OddsBlazeEvent>();
+    const mergedEvents = new Map<string, OddsData>();
 
     snapshots.forEach((snapshot) => {
         snapshot.events.forEach((event) => {
@@ -364,7 +367,7 @@ const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapsho
     return {
         updated: latestUpdatedAt(snapshots),
         league: baseSnapshot.league,
-        sportsbook: { id: "multi", name: "Multiple" },
+        sportsbook: baseSnapshot.sportsbook,
         events: [...mergedEvents.values()],
     };
 };
@@ -372,12 +375,12 @@ const mergeOddsSnapshots = (...snapshots: OddsBlazeSnapshot[]): OddsBlazeSnapsho
 const mergeSoccerSchedules = (
     scheduledWithOdds: SoccerSnapshotWithOdds | null | undefined,
     allSchedules: SoccerSnapshot | null | undefined
-): OddsBlazeSnapshot => {
-    const defaultSnapshot: OddsBlazeSnapshot = {
+): SoccerOdds => {
+    const defaultSnapshot: SoccerOdds = {
         updated: "",
         league: { id: "soccer", name: "Soccer", sport: "Soccer" },
         sportsbook: { id: "multi", name: "Multiple" },
-        events: []
+        events: [],
     };
 
     if (!scheduledWithOdds && !allSchedules) return defaultSnapshot;
@@ -387,13 +390,13 @@ const mergeSoccerSchedules = (
             updated: allSchedules.updated,
             league: allSchedules.league,
             sportsbook: { id: "multi", name: "Multiple" },
-            events: allSchedules.events.map(event => ({
+            events: allSchedules.events.map((event) => ({
                 id: event.id,
                 teams: event.teams,
                 date: event.date,
                 live: event.live,
-                odds: []
-            }))
+                odds: [],
+            })),
         };
     }
 
@@ -402,18 +405,18 @@ const mergeSoccerSchedules = (
             updated: scheduledWithOdds.updated,
             league: scheduledWithOdds.league,
             sportsbook: { id: "multi", name: "Multiple" },
-            events: scheduledWithOdds.events.map(event => ({
+            events: scheduledWithOdds.events.map((event) => ({
                 id: event.id,
                 teams: event.teams,
                 date: event.date,
                 live: event.live,
-                odds: event.odds
-            }))
+                odds: event.odds,
+            })),
         };
     }
 
     // Both exist
-    const mergedMap = new Map<string, OddsBlazeEvent>();
+    const mergedMap = new Map<string, OddsData>();
 
     // Rule 1: Use Matches with Odds First
     scheduledWithOdds!.events.forEach((match) => {
@@ -422,7 +425,7 @@ const mergeSoccerSchedules = (
             teams: match.teams,
             date: match.date,
             live: match.live,
-            odds: match.odds
+            odds: match.odds,
         });
     });
 
@@ -443,7 +446,7 @@ const mergeSoccerSchedules = (
         updated: scheduledWithOdds!.updated,
         league: scheduledWithOdds!.league,
         sportsbook: { id: "multi", name: "Multiple" },
-        events: Array.from(mergedMap.values())
+        events: Array.from(mergedMap.values()),
     };
 };
 
@@ -463,16 +466,28 @@ const normalizeAbbr = (team: OddsBlazeTeam) =>
         .join("")
         .slice(0, 3);
 
-const buildGameOptions = (snapshot: OddsBlazeSnapshot): GameOption[] =>
+const buildGameOptions = (
+    snapshot: SoccerOdds,
+    detailedOddsSnapshot?: SoccerOdds | null,
+    activeGameId?: string | null
+): GameOption[] =>
     snapshot.events.map((event) => {
+        const isCurrentlyActive = activeGameId && event.id === activeGameId;
+        let currentOdds = event.odds;
+
+        if (isCurrentlyActive && detailedOddsSnapshot) {
+            const activeEvent = detailedOddsSnapshot.events.find((e) => e.id === event.id);
+            if (activeEvent) {
+                currentOdds = dedupeOdds([...currentOdds, ...activeEvent.odds]);
+            }
+        }
+
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
-        event.odds.forEach((odd) => {
+        currentOdds.forEach((odd) => {
             marketSet.add(odd.market);
             if (odd.player?.id) playerSet.add(odd.player.id);
         });
-
-        // console.log(`event -------->`, event);
 
         return {
             id: event.id,
@@ -484,12 +499,12 @@ const buildGameOptions = (snapshot: OddsBlazeSnapshot): GameOption[] =>
             awayTeamId: event.teams.away.id,
             date: event.date,
             live: event.live,
-            odds: event.odds,
+            odds: currentOdds,
             homeAbbr: normalizeAbbr(event.teams.home),
             awayAbbr: normalizeAbbr(event.teams.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
-            hasOdds: event.odds.length > 0
+            hasOdds: currentOdds.length > 0,
         };
     });
 
@@ -990,16 +1005,24 @@ export const SoccerPickBuilder = ({
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
     const reviewTierScoringMode =
         confirmationVariant === "slip" && slip.isGraded
-            ? "groupLeaderboard"
+            ? "leagueLeaderboard"
             : "global";
     const reviewTierDisplayMode =
-        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+        reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const [soccerMatchSchedules, setSoccerMatchSchedules] = useState<SoccerSchedulesWithOdds[]>([]);
-    const [oddsData, setOddsData] = useState<OddsObject[]>([]);
 
-    const { englandPremierLeagueSchedulesWithOdds, englandPremierLeagueSchedules, germanyBundesligaSchedulesWithOdds, germanyBundesligaSchedules, fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.soccer);
+    const {
+        englandPremierLeagueSchedulesWithOdds,
+        englandPremierLeagueSchedules,
+        germanyBundesligaSchedulesWithOdds,
+        germanyBundesligaSchedules,
+        fanduelEnglandPremierLeagueOdds,
+        draftkingEnglandPremierLeagueOdds,
+        fanduelGermanyBundesligaOdds,
+        draftkingGermanyBundesligaOdds,
+    } = useSelector((state: RootState) => state.soccer);
 
     useEffect(() => {
         dispatch(fetchSoccerEnglandPremierLeagueScheduleRequest({ is_pick_of_day: true, is_range: false }));
@@ -1015,15 +1038,15 @@ export const SoccerPickBuilder = ({
 
 
 
-    useEffect(() => {
-        if (fanduelEnglandPremierLeagueOdds?.events?.length && draftkingEnglandPremierLeagueOdds?.events?.length) {
-            const mergedOdds = mergeOddsSnapshots(fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds);
-            const activeEvent = activeGameId
-                ? mergedOdds.events.find(e => e.id === activeGameId)
-                : mergedOdds.events[0];
-            setOddsData(activeEvent?.odds ?? []);
-        }
-    }, [activeGameId, fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds]);
+    const mergedEPLOdds = useMemo(
+        () => mergeOddsSnapshots(fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds),
+        [fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds]
+    );
+
+    const mergedBundesligaOdds = useMemo(
+        () => mergeOddsSnapshots(fanduelGermanyBundesligaOdds, draftkingGermanyBundesligaOdds),
+        [fanduelGermanyBundesligaOdds, draftkingGermanyBundesligaOdds]
+    );
 
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
@@ -1034,34 +1057,48 @@ export const SoccerPickBuilder = ({
     );
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
-            reviewTierScoringMode === "groupLeaderboard"
+            reviewTierScoringMode === "leagueLeaderboard"
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [reviewTierScoringMode]
     );
 
-    const SOCCER_SNAPSHOTS = [
-        mergeOddsSnapshots(
-            mergeSoccerSchedules(englandPremierLeagueSchedulesWithOdds, englandPremierLeagueSchedules) as OddsBlazeSnapshot
-        ),
-        mergeOddsSnapshots(
-            mergeSoccerSchedules(germanyBundesligaSchedulesWithOdds, germanyBundesligaSchedules) as OddsBlazeSnapshot
-        ),
-    ];
 
-    const games = useMemo(
-        () =>
-            SOCCER_SNAPSHOTS.flatMap((snapshot) => buildGameOptions(snapshot)).sort((a, b) => {
-                const timeDiff = a.date.localeCompare(b.date);
-                if (timeDiff !== 0) return timeDiff;
-                const leagueDiff =
-                    SOCCER_LEAGUE_ORDER.indexOf(a.leagueName as (typeof SOCCER_LEAGUE_ORDER)[number]) -
-                    SOCCER_LEAGUE_ORDER.indexOf(b.leagueName as (typeof SOCCER_LEAGUE_ORDER)[number]);
-                if (leagueDiff !== 0) return leagueDiff;
-                return (matchupLabel(a) ?? "").localeCompare(matchupLabel(b) ?? "");
-            }),
-        [englandPremierLeagueSchedulesWithOdds, englandPremierLeagueSchedules, germanyBundesligaSchedulesWithOdds, germanyBundesligaSchedules]
-    );
+    const games = useMemo(() => {
+        const eplSnapshot = mergeSoccerSchedules(
+            englandPremierLeagueSchedulesWithOdds,
+            englandPremierLeagueSchedules
+        );
+        const bundesligaSnapshot = mergeSoccerSchedules(
+            germanyBundesligaSchedulesWithOdds,
+            germanyBundesligaSchedules
+        );
+
+        const eplOptions = buildGameOptions(eplSnapshot, mergedEPLOdds, activeGameId);
+        const bundesligaOptions = buildGameOptions(
+            bundesligaSnapshot,
+            mergedBundesligaOdds,
+            activeGameId
+        );
+
+        return [...eplOptions, ...bundesligaOptions].sort((a, b) => {
+            const timeDiff = a.date.localeCompare(b.date);
+            if (timeDiff !== 0) return timeDiff;
+            const leagueDiff =
+                SOCCER_LEAGUE_ORDER.indexOf(a.leagueName as (typeof SOCCER_LEAGUE_ORDER)[number]) -
+                SOCCER_LEAGUE_ORDER.indexOf(b.leagueName as (typeof SOCCER_LEAGUE_ORDER)[number]);
+            if (leagueDiff !== 0) return leagueDiff;
+            return (matchupLabel(a) ?? "").localeCompare(matchupLabel(b) ?? "");
+        });
+    }, [
+        englandPremierLeagueSchedulesWithOdds,
+        englandPremierLeagueSchedules,
+        germanyBundesligaSchedulesWithOdds,
+        germanyBundesligaSchedules,
+        mergedEPLOdds,
+        mergedBundesligaOdds,
+        activeGameId,
+    ]);
 
     const upcomingGames = useMemo(() => {
         const base = games.filter((game) => !game.live && !isPast(game.date));
@@ -1511,7 +1548,7 @@ export const SoccerPickBuilder = ({
                         const tierPrimary = tierMeta
                             ? formatTierPrimary(tierMeta.tier)
                             : draft?.displayDifficulty ?? "Tier —";
-                        const tierPoints = reviewTierScoringMode === "groupLeaderboard"
+                        const tierPoints = reviewTierScoringMode === "leagueLeaderboard"
                             ? tierMeta?.points
                             : payload.points ?? draft?.points ?? tierMeta?.points;
                         const tierName = tierMeta?.name ?? payload.difficulty_label ?? "—";
@@ -1613,7 +1650,7 @@ export const SoccerPickBuilder = ({
                     const legTierLine = formatReviewSheetTierLine({
                         tierMeta: legTierMeta,
                         points: legPoints,
-                        includeName: reviewTierDisplayMode === "group",
+                        includeName: reviewTierDisplayMode === "league",
                         mode: reviewTierDisplayMode,
                     });
                     return {
@@ -1697,7 +1734,7 @@ export const SoccerPickBuilder = ({
                 const groupTierLine = formatReviewSheetTierLine({
                     tierMeta: reviewGroupTierMeta,
                     points: reviewGroupTierMeta?.points,
-                    includeName: reviewTierDisplayMode === "group",
+                    includeName: reviewTierDisplayMode === "league",
                     mode: reviewTierDisplayMode,
                 });
                 const description = group
@@ -2502,7 +2539,7 @@ export const SoccerPickBuilder = ({
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
     const sheetPoints =
-        reviewTierScoringMode === "groupLeaderboard"
+        reviewTierScoringMode === "leagueLeaderboard"
             ? sheetTierMeta?.points
             : activeDraft?.points ?? sheetTierMeta?.points;
     const sheetTierCard = resolveReviewSheetTierCardAppearance(
@@ -2513,7 +2550,7 @@ export const SoccerPickBuilder = ({
         tierMeta: sheetTierMeta,
         fallbackPrimary: sheetTierPrimary,
         points: sheetPoints,
-        includeName: reviewTierDisplayMode === "group",
+        includeName: reviewTierDisplayMode === "league",
         mode: reviewTierDisplayMode,
     });
     const comboOddsLabel = hasMultiSelection
@@ -2545,7 +2582,7 @@ export const SoccerPickBuilder = ({
                         <div className="flex items-center justify-between">
                             <h4 className="text-sm font-semibold text-white">choose a matchup</h4>
                             <span className="text-xs uppercase tracking-wide text-gray-400">
-                                grouped by league
+                                organized by league
                             </span>
                         </div>
                         {showDateFilters && dateOptions.length > 0 && (

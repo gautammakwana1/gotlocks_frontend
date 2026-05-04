@@ -10,7 +10,7 @@ const EXPLAINED_STEPS = [
     eyebrow: "step 1",
     title: "Create your league",
     body:
-      "Name your group and add a quick description. You’ll be the commissioner, with a few extra controls to manage the league.",
+      "Name your league and add a quick description. You’ll be the commissioner, with a few extra controls to manage the league.",
   },
   {
     eyebrow: "step 2",
@@ -57,7 +57,7 @@ const CagExplainedPage = () => {
         <div onClick={(event) => event.stopPropagation()}>
           <BackButton />
         </div>
-        <span>Group Creation</span>
+        <span>League Creation</span>
       </div>
 
       <section className="grid max-w-xl gap-4 md:max-w-none md:grid-cols-3">

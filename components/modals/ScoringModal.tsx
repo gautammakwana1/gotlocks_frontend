@@ -2,14 +2,14 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
-import { formatTierPrimary, getGroupTierColor, getGroupTierName, GROUP_CAP_POINTS, GROUP_CAP_TIER } from "@/lib/utils/scoring";
+import { formatTierPrimary, getGroupTierColor, getGroupTierName, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER } from "@/lib/utils/scoring";
 import { XP_DAILY_CAP } from "@/lib/utils/progression";
 import Link from "next/link";
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  variant: "global" | "group";
+  variant: "global" | "league";
 };
 
 const GROUP_MODAL_TABS = [
@@ -45,22 +45,22 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
     Record<GlobalModalTab, string | null>
   >(DEFAULT_GLOBAL_OPEN_SECTIONS);
   const globalTiers = ODDS_BRACKETS;
-  const groupTiers = ODDS_BRACKETS.filter((tier) => tier.tier <= GROUP_CAP_TIER);
-  const groupCapPoints = groupTiers[groupTiers.length - 1]?.points ?? GROUP_CAP_POINTS;
-  const groupCapName = getGroupTierName(GROUP_CAP_TIER, `Tier ${GROUP_CAP_TIER}`);
+  const groupTiers = ODDS_BRACKETS.filter((tier) => tier.tier <= LEAGUE_CAP_TIER);
+  const groupCapPoints = groupTiers[groupTiers.length - 1]?.points ?? LEAGUE_CAP_POINTS;
+  const groupCapName = getGroupTierName(LEAGUE_CAP_TIER, `Tier ${LEAGUE_CAP_TIER}`);
   const showGlobal = variant === "global";
-  const showGroup = variant === "group";
-  const isGroupOnly = variant === "group";
+  const showGroup = variant === "league";
+  const isGroupOnly = variant === "league";
   const isGlobalOnly = variant === "global";
   const isSingleMode = isGroupOnly || isGlobalOnly;
   const modalTitle =
     variant === "global"
       ? "Profile Scoring Rules"
-      : "Group Scoring Rules";
+      : "League Scoring Rules";
   const modalSubtitle =
     variant === "global"
       ? "How post scoring, XP, and lock chips connect to profiles and the shop."
-      : "How slips, scoring, and commissioner controls work inside your group.";
+      : "How slips, scoring, and commissioner controls work inside your league.";
   const modalWidthClassName = "max-w-3xl";
   const modalHeaderClassName = "px-6 py-5 sm:px-7";
   const modalTitleClassName = "text-xl sm:text-2xl";
@@ -113,7 +113,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   }, [open]);
 
   useEffect(() => {
-    if (open && variant === "group") {
+    if (open && variant === "league") {
       setActiveGroupTab("slips");
       setOpenGroupSections(DEFAULT_GROUP_OPEN_SECTIONS);
       return;
@@ -144,7 +144,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
         return `${maxLabel} or less`;
       }
     }
-    if (capped && tier.tier === GROUP_CAP_TIER) {
+    if (capped && tier.tier === LEAGUE_CAP_TIER) {
       const minLabel = formatOddsValue(tier.minOdds);
       if (minLabel) {
         return `${minLabel} or greater`;
@@ -202,7 +202,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       showDescriptor?: boolean;
       nameOverride?: string;
       colorOverride?: string;
-      cardVariant?: "default" | "group" | "global";
+      cardVariant?: "default" | "league" | "global";
     } = {}
   ) => {
     const tierPrimary = formatTierPrimary(tier.tier);
@@ -212,7 +212,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
     const oddsCopy = showTierLabel ? `Odds · ${tierLabel}` : tierLabel;
     const cardTone = colorOverride ? "bg-transparent" : `bg-gradient-to-br ${tier.color}`;
     const cardStyle = getCardStyle(colorOverride);
-    const isGroupCard = cardVariant === "group";
+    const isGroupCard = cardVariant === "league";
     const isGlobalCard = cardVariant === "global";
     const isTierCard = isGroupCard || isGlobalCard;
     const isTierLarge =
@@ -349,18 +349,18 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.slips === "types",
             onToggle: () => toggleGroupSection("slips", "types"),
-            panelId: "group-rule-slips-types",
+            panelId: "league-rule-slips-types",
             eyebrow: "Basics",
             title: "Two slip types",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
                   <strong>Leaderboard Slips.</strong> The official competition inside
-                  the group. They count toward group standings and are the slips that
+                  the league. They count toward league standings and are the slips that
                   get reviewed, scored, and finalized.
                 </li>
                 <li>
-                  <strong>Vibe Slips.</strong> Casual group play for profile
+                  <strong>Vibe Slips.</strong> Casual league play for profile
                   progression. They never affect leaderboard totals.
                 </li>
               </ul>
@@ -370,7 +370,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.slips === "flow",
             onToggle: () => toggleGroupSection("slips", "flow"),
-            panelId: "group-rule-slips-flow",
+            panelId: "league-rule-slips-flow",
             eyebrow: "Flow",
             title: "How a slip works",
             children: (
@@ -394,7 +394,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   finalizes automatically after auto-grade resolves every pick.
                 </li>
                 <li>
-                  <strong>Multiple slips can run at once.</strong> A group can run
+                  <strong>Multiple slips can run at once.</strong> A league can run
                   Leaderboard and Vibe Slips at the same time.
                 </li>
               </ul>
@@ -404,14 +404,14 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.slips === "controls",
             onToggle: () => toggleGroupSection("slips", "controls"),
-            panelId: "group-rule-slips-controls",
+            panelId: "league-rule-slips-controls",
             eyebrow: "Controls",
             title: "Who controls what",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
                   Only the <strong>commissioner</strong> can create Leaderboard Slips.
-                  Any group member can create a Vibe Slip.
+                  Any league member can create a Vibe Slip.
                 </li>
                 <li>
                   After a Leaderboard Slip locks, the commissioner reviews it with
@@ -438,9 +438,9 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.scoring === "tiers",
             onToggle: () => toggleGroupSection("scoring", "tiers"),
-            panelId: "group-rule-scoring-tiers",
+            panelId: "league-rule-scoring-tiers",
             eyebrow: "Tiers",
-            title: "How group scoring works",
+            title: "How league scoring works",
             children: (
               <div className="space-y-4">
                 <ul className={groupBulletListClassName}>
@@ -449,7 +449,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                     tier value, and losses are <strong>-15 points</strong>.
                   </li>
                   <li>
-                    Group leaderboard scoring caps at {groupCapName}. Any odds above it
+                    League leaderboard scoring caps at {groupCapName}. Any odds above it
                     still score {groupCapPoints} points max.
                   </li>
                 </ul>
@@ -460,7 +460,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                       showTierLabel: false,
                       nameOverride: getGroupTierName(tier.tier, tier.name),
                       colorOverride: getGroupTierColor(tier.tier),
-                      cardVariant: "group",
+                      cardVariant: "league",
                     })
                   ))}
                 </div>
@@ -471,7 +471,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.scoring === "adjustments",
             onToggle: () => toggleGroupSection("scoring", "adjustments"),
-            panelId: "group-rule-scoring-adjustments",
+            panelId: "league-rule-scoring-adjustments",
             eyebrow: "Commissioner",
             title: "Optional score adjustments",
             children: (
@@ -491,7 +491,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.scoring === "leaderboard",
             onToggle: () => toggleGroupSection("scoring", "leaderboard"),
-            panelId: "group-rule-scoring-leaderboard",
+            panelId: "league-rule-scoring-leaderboard",
             eyebrow: "Standings",
             title: "What counts toward the leaderboard",
             children: (
@@ -506,7 +506,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 </li>
                 <li>
                   <strong>Vibe Slips.</strong> They can award XP, but they never change
-                  group standings.
+                  league standings.
                 </li>
               </ul>
             ),
@@ -514,7 +514,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           {renderRuleCard({
             isOpen: openGroupSections.scoring === "extra-controls",
             onToggle: () => toggleGroupSection("scoring", "extra-controls"),
-            panelId: "group-rule-scoring-extra-controls",
+            panelId: "league-rule-scoring-extra-controls",
             eyebrow: "Extra",
             title: "Extra commissioner controls",
             children: (
@@ -526,7 +526,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 </li>
                 <li>
                   Commissioners can open side boards, archive boards, and restart boards
-                  whenever the group needs a reset or a new format.
+                  whenever the league needs a reset or a new format.
                 </li>
               </ul>
             ),
@@ -748,7 +748,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             <section className={`space-y-4 ${singleModeSectionClassName}`}>
               <div
                 role="tablist"
-                aria-label="Group scoring sections"
+                aria-label="League scoring sections"
                 className="scrollbar-hide -mx-1 flex gap-5 overflow-x-auto border-b border-white/10 px-1"
               >
                 {GROUP_MODAL_TABS.map((tab) => {
@@ -758,9 +758,9 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                       key={tab.id}
                       type="button"
                       role="tab"
-                      id={`group-scoring-tab-${tab.id}`}
+                      id={`league-scoring-tab-${tab.id}`}
                       aria-selected={isActive}
-                      aria-controls={`group-scoring-panel-${tab.id}`}
+                      aria-controls={`league-scoring-panel-${tab.id}`}
                       onClick={() => setActiveGroupTab(tab.id)}
                       className={`relative whitespace-nowrap border-b-2 px-0 pb-3 text-xs font-semibold uppercase tracking-wide transition sm:text-[11px] ${isActive
                         ? "border-white text-white"
@@ -775,8 +775,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
 
               <div
                 role="tabpanel"
-                id={`group-scoring-panel-${activeGroupTab}`}
-                aria-labelledby={`group-scoring-tab-${activeGroupTab}`}
+                id={`league-scoring-panel-${activeGroupTab}`}
+                aria-labelledby={`league-scoring-tab-${activeGroupTab}`}
                 className="space-y-4"
               >
                 {renderGroupTabContent()}

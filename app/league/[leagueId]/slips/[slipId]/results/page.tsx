@@ -20,6 +20,7 @@ import { UserIcon } from "@/components/layout/MainTabBar";
 import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickDescription";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { ShareIcon } from "@/components/ui/SvgIcons";
+import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -57,7 +58,7 @@ const PICK_RESULT_ACCENTS = {
 const normalizeResult = (result: string | null | undefined) =>
     (result ?? "pending") as keyof typeof PICK_RESULT_ACCENTS;
 
-type SlipResultsTab = "group" | "actions";
+type SlipResultsTab = "league" | "actions";
 
 const deepJaggedStyle: CSSProperties = {
     clipPath: JAGGED_CLIP_PATH,
@@ -66,7 +67,7 @@ const deepJaggedStyle: CSSProperties = {
 } as CSSProperties;
 
 const RESULTS_TABS: Array<{ id: SlipResultsTab; label: string }> = [
-    { id: "group", label: "finalized group slips" },
+    { id: "league", label: "finalized league slips" },
     { id: "actions", label: "slip actions" },
 ];
 
@@ -103,14 +104,14 @@ const extractGroup = (data: GroupDataShape): Group | null => {
 };
 
 const SlipResultsPage = () => {
-    const params = useParams<{ groupId: string; slipId: string }>();
+    const params = useParams<{ leagueId: string; slipId: string }>();
     const router = useRouter();
     const { setToast } = useToast();
     const dispatch = useDispatch();
     const searchParams = useSearchParams();
     const currentUser = useCurrentUser();
 
-    const [activeTab, setActiveTab] = useState<SlipResultsTab>("group");
+    const [activeTab, setActiveTab] = useState<SlipResultsTab>("league");
     const [isDeleteSlipOpen, setIsDeleteSlipOpen] = useState(false);
     const [isDeleteSlipModalOpen, setIsDeleteSlipModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -125,11 +126,11 @@ const SlipResultsPage = () => {
     }, [slips, params?.slipId]);
 
     useEffect(() => {
-        if (!params.slipId && !params.groupId) return;
+        if (!params.slipId && !params.leagueId) return;
         dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
-        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }))
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }))
         dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
-    }, [dispatch, params.slipId, params.groupId]);
+    }, [dispatch, params.slipId, params.leagueId]);
 
     useEffect(() => {
         if (!slipLoader && slipMessage) {
@@ -141,14 +142,14 @@ const SlipResultsPage = () => {
             })
             dispatch(clearUpdateSlipsMessage())
         }
-    }, [setToast, slipLoader, slipMessage, dispatch, params.groupId]);
+    }, [setToast, slipLoader, slipMessage, dispatch, params.leagueId]);
 
     // useEffect(() => {
     //     if (currentUser && (!group || !activeSlip)) {
     //         router.replace("/home");
     //     }
     //     if (!activeSlip && group?.id) {
-    //         router.replace(`/group/${group?.id}?tab=slips`);
+    //         router.replace(`/league/${group?.id}?tab=slips`);
     //     }
     // }, [group, router, activeSlip, currentUser]);
 
@@ -169,6 +170,11 @@ const SlipResultsPage = () => {
         if (!Array.isArray(pickList) || !activeSlip?.id) return [];
         return pickList.filter(pick => pick.slip_id === activeSlip?.id);
     }, [pickList, activeSlip?.id]);
+
+    const leagueComboOddsSummary = useMemo(
+        () => getLeagueComboOddsSummary(activeSlip, slipPicks),
+        [activeSlip, slipPicks]
+    );
 
     const memberLookup = useMemo(() => {
         const map = new Map<string, (typeof members)[number]>();
@@ -276,8 +282,8 @@ const SlipResultsPage = () => {
     }
 
     const isFinalized = isSlipFinal(activeSlip);
-    const slipsTabPath = `/group/${group.id}?tab=slips`;
-    const fallbackPath = fallbackFromQuery ?? `/group/${group.id}?tab=slips${activeSlip.slip_type === "vibe" ? "&mode=vibe" : ""}`;
+    const slipsTabPath = `/league/${group.id}?tab=slips`;
+    const fallbackPath = fallbackFromQuery ?? `/league/${group.id}?tab=slips${activeSlip.slip_type === "vibe" ? "&mode=vibe" : ""}`;
     const isCommissioner = group.created_by === currentUser.userId;
     const isCreator = activeSlip.created_by === currentUser.userId;
     const canDeleteSlip = isCommissioner || isCreator;
@@ -384,11 +390,11 @@ const SlipResultsPage = () => {
                                 </div>
                             </div>
 
-                            {activeTab === "group" && (
+                            {activeTab === "league" && (
                                 <div className="space-y-4">
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div>
-                                            <p className="text-xs uppercase tracking-wide text-gray-400">finalized group slips</p>
+                                            <p className="text-xs uppercase tracking-wide text-gray-400">finalized league slips</p>
                                         </div>
                                     </div>
 
@@ -593,11 +599,22 @@ const SlipResultsPage = () => {
                                 </div>
                             )}
                         </div>
-                        {activeTab === "group" && (
+                        {activeTab === "league" && (
                             <div className="absolute inset-x-0 bottom-8 z-10 px-5 pt-7 pb-9 sm:px-6 sm:pb-10">
                                 <div className="flex items-center justify-end">
                                     <span className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-200/40 bg-gradient-to-r from-cyan-500/25 via-sky-500/15 to-indigo-500/25 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-100 md:px-5 md:py-2 md:text-xs">
-                                        {pickProgressLabel}
+                                        <span>{pickProgressLabel}</span>
+                                        {leagueComboOddsSummary && (
+                                            <>
+                                                <span className="text-cyan-100/45">•</span>
+                                                <span>
+                                                    League Combo+ odds:
+                                                    <span className="ml-1 text-white">
+                                                        {leagueComboOddsSummary.label}
+                                                    </span>
+                                                </span>
+                                            </>
+                                        )}
                                     </span>
                                 </div>
                             </div>

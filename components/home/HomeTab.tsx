@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
@@ -17,9 +17,8 @@ import { clearAllNotificationRequest, fetchNotificationListRequest, markNotifica
 import NotificationsFeed from "./NotificationFeed";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
-import { MembersIcon, RightArrowIcon, SlipIcon, SparkIcon, TrashIcon } from "../ui/SvgIcons";
+import { MembersIcon, RightArrowIcon, SlipIcon, TrashIcon } from "../ui/SvgIcons";
 import OnboardingModal from "../modals/OnboardingModal";
-import { completeIntroRequest } from "@/lib/redux/slices/authSlice";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import Image from "next/image";
@@ -76,7 +75,7 @@ const TwoLineActionLabel = ({
     </span>
 );
 
-type TabIconProps = { className?: string };
+// type TabIconProps = { className?: string };
 
 const ActionCard = ({
     action,
@@ -90,7 +89,7 @@ const ActionCard = ({
     <button
         type="button"
         onClick={locked ? onLockedTap : action.onClick}
-        aria-label={locked ? "Locked — finish the group tour first" : undefined}
+        aria-label={locked ? "Locked — finish the league tour first" : undefined}
         className={`ui-accent-card group relative overflow-hidden rounded-[18px] border border-white/10 px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5 ${locked ? "opacity-45" : ""
             }`}
     >
@@ -174,10 +173,10 @@ const HomeTab = () => {
         setToast({
             id: Date.now(),
             type: "info",
-            message: "Tap the groups tab to continue the tour 🔒",
+            message: "Tap the leagues tab to continue the tour 🔒",
             duration: 3000
         });
-    }, []);
+    }, [setToast]);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -569,7 +568,7 @@ const HomeTab = () => {
 
     const handleOpenGroup = useCallback(
         (groupId: string) => {
-            router.push(`/group/${groupId}`);
+            router.push(`/league/${groupId}`);
         },
         [router]
     );
@@ -582,7 +581,7 @@ const HomeTab = () => {
     useEffect(() => {
         if (activityTab !== "notifications" || !currentUserId || unreadNotifications === 0) return;
         dispatch(markNotificationReadRequest({}));
-    }, [activityTab, currentUserId]);
+    }, [activityTab, currentUserId, unreadNotifications, dispatch]);
 
     const handleClearAll = useCallback(() => {
         dispatch(clearAllNotificationRequest({}));
@@ -732,7 +731,7 @@ const HomeTab = () => {
                                             <button
                                                 key={`${group.id}-${index}`}
                                                 type="button"
-                                                onClick={() => router.push(`/group/${group.id}`)}
+                                                onClick={() => router.push(`/league/${group.id}`)}
                                                 className="relative min-h-[7.5rem] min-w-full snap-center rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                             >
                                                 <span className="absolute right-3 top-3 text-[9px] uppercase tracking-[0.12em] text-gray-300">
@@ -790,7 +789,7 @@ const HomeTab = () => {
                                         <button
                                             key={group.id}
                                             type="button"
-                                            onClick={() => router.push(`/group/${group.id}`)}
+                                            onClick={() => router.push(`/league/${group.id}`)}
                                             className="relative min-h-[9rem] rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                         >
                                             <span className="absolute right-4 top-4 text-[10px] uppercase tracking-[0.14em] text-gray-300">

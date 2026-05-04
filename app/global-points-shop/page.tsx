@@ -1,6 +1,5 @@
 "use client";
 
-import { greenGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { FormEvent, ReactNode, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -50,7 +49,7 @@ const GlobalPointsShopPage = () => {
         if (currentUserId) {
             dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
         }
-    }, [currentUserId]);
+    }, [currentUserId, dispatch]);
 
     useEffect(() => {
         if (!loading && message) {
@@ -71,7 +70,7 @@ const GlobalPointsShopPage = () => {
             })
             dispatch(clearRedeemGlobalPointsMessage());
         }
-    }, [loading, message, error]);
+    }, [dispatch, setToast, loading, message, error]);
 
     const currentBalance = progress?.lifetime_xp ?? 0;
 

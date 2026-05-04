@@ -16,7 +16,7 @@ export const LeaderboardSlipSummary = ({ slip, picks, onClick }: Props) => {
         (pick) => normalizePickResult(pick.result) !== "pending"
     );
     const totalPoints = scoredPicks.reduce(
-        (sum, pick) => sum + getPickPoints(pick, "groupLeaderboard"),
+        (sum, pick) => sum + getPickPoints(pick, "leagueLeaderboard"),
         0
     );
     const isFinal = isSlipFinal(slip);

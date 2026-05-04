@@ -4,13 +4,13 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 const GroupSettingsRedirectPage = () => {
-    const params = useParams<{ groupId: string }>();
+    const params = useParams<{ leagueId: string }>();
     const router = useRouter();
 
     useEffect(() => {
-        if (!params.groupId) return;
-        router.replace(`/group/${params.groupId}?tab=members`);
-    }, [params.groupId, router]);
+        if (!params.leagueId) return;
+        router.replace(`/league/${params.leagueId}?tab=settings`);
+    }, [params.leagueId, router]);
 
     return null;
 };

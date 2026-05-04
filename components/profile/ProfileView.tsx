@@ -16,7 +16,6 @@ import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowe
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import FootballAnimation from "../animations/FootballAnimation";
 import { getPickPoints } from "@/lib/utils/scoring";
 import ScoringModal from "../modals/ScoringModal";
 import Link from "next/link";
@@ -267,14 +266,14 @@ const ProfileView = ({
         [followings]
     );
 
-    const canViewProfile = useCallback(
-        (viewerId: string, targetUser: Profile | undefined) => {
-            if (!targetUser) return false;
-            if (viewerId === targetUser.id) return true;
-            if (targetUser.is_public) return true;
-            // return isFollowing(viewerId, targetUser.id);
-        }, []
-    );
+    // const canViewProfile = useCallback(
+    //     (viewerId: string, targetUser: Profile | undefined) => {
+    //         if (!targetUser) return false;
+    //         if (viewerId === targetUser.id) return true;
+    //         if (targetUser.is_public) return true;
+    //         // return isFollowing(viewerId, targetUser.id);
+    //     }, []
+    // );
 
     const hasPendingFollowRequest = useCallback(
         (requesterId: string, targetUserId: string) =>
@@ -304,7 +303,7 @@ const ProfileView = ({
         typeof profileVisibleOverride === "boolean"
             ? profileVisibleOverride
             : computedProfileVisible;
-    const postsVisible = profileVisible && !viewerBlockedTarget && !targetBlockedViewer;
+    // const postsVisible = profileVisible && !viewerBlockedTarget && !targetBlockedViewer;
     const showLockedPrivateHeaderSummary =
         mode === "public" &&
         Boolean(targetUser) &&
@@ -362,7 +361,7 @@ const ProfileView = ({
         [profileVisible, sortedPicks]
     );
 
-    const headerSummaryPicks = showLockedPrivateHeaderSummary ? postPicks : statsPicks;
+    // const headerSummaryPicks = showLockedPrivateHeaderSummary ? postPicks : statsPicks;
 
     const postWins = useMemo(
         () => postPicksList.filter((pick) => normalizeResult(pick.result) === "win").length,
@@ -379,7 +378,7 @@ const ProfileView = ({
             dispatch(followUnfollowUserRequest({ user_id: userId }));
             return true;
         },
-        [currentUser]
+        [currentUser, dispatch]
     );
 
     const requestUnfollowUser = useCallback(
@@ -391,7 +390,7 @@ const ProfileView = ({
             }
             performUnfollowUser(userId);
         },
-        [currentUser, isFollowing, performUnfollowUser]
+        [currentUser, isFollowing, performUnfollowUser, user?.profile?.is_public]
     );
 
     const handleFollowToggle = () => {
@@ -553,13 +552,11 @@ const ProfileView = ({
     const xpToday = progress?.xp_today ?? 0;
     const levelProgressPercent = xpToNext > 0 ? Math.min(100, (xpIntoLevel / xpToNext) * 100) : 0;
     const displayName = targetUser?.username ?? targetUser?.full_name ?? "Member";
-    const resolvedShowFollowControls =
-        showFollowControls && !viewerBlockedTarget && !targetBlockedViewer;
-    const pendingUnfollowUser = pendingUnfollowUserId
-        ? pendingFollowRequests.find((candidate) => candidate.receiver_id === pendingUnfollowUserId) ?? null
-        : null;
-    const pendingUnfollowLabel =
-        pendingUnfollowUser?.receiver.username ?? pendingUnfollowUser?.receiver.full_name ?? "this member";
+    // const resolvedShowFollowControls =
+    //     showFollowControls && !viewerBlockedTarget && !targetBlockedViewer;
+    // const pendingUnfollowUser = pendingUnfollowUserId ? pendingFollowRequests.find((candidate) => candidate.receiver_id === pendingUnfollowUserId) ?? null : null;
+    // const pendingUnfollowLabel =
+    //     pendingUnfollowUser?.receiver.username ?? pendingUnfollowUser?.receiver.full_name ?? "this member";
     const isFollowersTab = followPanelTab === "followers";
     const isSelfMode = mode === "self";
 

@@ -1,41 +1,45 @@
 # Scoring Modal — gotLocks
 
 ## Purpose
-Reusable component that displays the complete scoring breakdown wherever needed (e.g. **Picks**, **Settings**, or **Leaderboard**).  
+Reusable component that displays the scoring breakdown for either **profiles (lock chips + XP)** or **leagues (leaderboard scoring)**.  
 Lightweight and scrollable — opens as a centered overlay.
 
 ---
 
 ## Trigger Points
 
-- Picks screen → “View full scoring” link  
-- Settings screen → “View Rules & Scoring” button  
-- Optional reuse in Leaderboard hover tooltips  
+- Profile screen → “Profile scoring rules” button (global)  
+- League screens → “League scoring” trigger (league)  
+- Pick builder → “Scoring” reference link (league)  
 
 ---
 
 ## Content
 
-### 🏅 Scoring System
+### 🧭 Scoring Modes
 
-Each pick earns or loses points based on its odds range:
+**Profile scoring (XP + lock chips)**
+- Uses the full Tier 1-14 table (see `ODDS_BRACKETS` in `lib/constants.ts`).  
+- Wins add tier points to lock chips. Losses are -15. Void/not found/pending stay at 0.  
+- XP is awarded on wins only and capped at **300 XP per day**.  
 
-| Odds Range | Points for Win | Points for Loss |
-|-------------|----------------|----------------|
-| –250 or shorter | +5 pts | –10 pts |
-| –249 to 0 | +10 pts | –10 pts |
-| +1 to +250 | +15 pts | –10 pts |
-| +251 to +500 | +20 pts | –10 pts |
-| +501 and up | +25 pts | –10 pts |
+**League leaderboard scoring (Epic cap)**
+- Uses the same tier table, but caps at **Epic** (higher odds score as Epic).  
+- Awarded points can override tier points during review.  
+- Vibe slips award XP only and do not impact league standings.  
 
 ---
 
-### 💬 How Scoring Works
+### 🏅 League Table (Cap Preview)
 
-- You’ll earn points when your pick wins, based on its odds range.  
-- Any incorrect pick always costs –10 points.  
-- You can resubmit your pick until the **group deadline** — only your final submission counts.  
-- Commissioners can award **manual bonuses** for streaks, perfect slips, or other creative reasons before results lock.  
+| Name | Odds Range | Win Points |
+|------|------------|------------|
+| Safe | -300 or less | +5 pts |
+| Lock | -299 to -150 | +15 pts |
+| Edge | -149 to +150 | +25 pts |
+| Risky | +151 to +450 | +35 pts |
+| Spicy | +451 to +850 | +45 pts |
+| Epic | +851 or greater | +60 pts |
 
 ---
 
@@ -58,15 +62,15 @@ All scoring is purely for entertainment, leaderboard ranking, and personal bragg
 
 ## UI / UX Notes
 
-- `rounded-2xl` container with `bg-surface` background  
-- Header: “Scoring System” (white, bold)  
-- Text color: `text-gray-200`  
-- Table accent lines: green  
+- `rounded-xl` container with `border-slate-800/80` + `bg-black/85`  
+- Header: title + subtitle, `text-white` / `text-gray-400`  
+- Section headers: `text-sky-200`  
+- Row cards: `rounded-2xl` cards with subtle borders  
 - Appears centered with dimmed backdrop  
-- Close button at bottom or top-right  
+- Close button: small circular `x` button in header  
 
 Triggered from: /docs/screens/picks-page.md and /docs/screens/settings.md
 
 ---
 
-**Last Updated:** October 2025
+**Last Updated:** February 2026

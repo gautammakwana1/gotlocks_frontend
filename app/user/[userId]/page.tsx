@@ -29,7 +29,7 @@ const UserProfilePage = () => {
             dispatch(fetchFollowingListByIdRequest({ user_id: params.userId }));
             dispatch(fetchBlockedUsersRequest({}));
         }
-    }, [params.userId]);
+    }, [params.userId, dispatch]);
 
     if (!currentUser || params.userId === currentUser?.userId) return null;
 

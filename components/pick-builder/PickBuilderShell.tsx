@@ -113,7 +113,7 @@ const StubLeagueBuilder = ({
                 odds,
                 label: initialPick?.difficulty_label ?? null,
                 points: initialPick?.points ?? null,
-                mode: isGroupScoring ? "groupLeaderboard" : "global",
+                mode: isGroupScoring ? "leagueLeaderboard" : "global",
             }),
         [initialPick?.difficulty_label, initialPick?.points, isGroupScoring, odds]
     );
@@ -391,7 +391,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     const standaloneGroup =
         context.mode === "standalone" && context.currentUser
             ? ({
-                id: "solo-group",
+                id: "solo-league",
                 name: "Personal Picks",
                 invite_code: "00000",
                 created_by: context.currentUser.userId,

@@ -10,7 +10,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { GroupSelector } from "@/lib/interfaces/interfaces";
 import BackButton from "@/components/ui/BackButton";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { accentGradientBox, greenGradientBox } from "@/lib/styles/containers";
+import { accentGradientBox } from "@/lib/styles/containers";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { CopyIcon } from "@/components/ui/SvgIcons";
@@ -167,27 +167,27 @@ const CagFormPage = () => {
       <div className="flex flex-col gap-8 text-white">
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
           {showSuccess ? (
-            <span className="ml-auto" >Group created</span>
+            <span className="ml-auto" >League created</span>
           ) : (
             <>
               <BackButton fallback="/home" />
-              <span>Group Creation</span>
+              <span>League Creation</span>
             </>
           )}
         </div>
 
         {!showSuccess && (
           <div className={`${accentGradientBox} p-6`}>
-            <h1 className="text-2xl font-semibold text-white">Create a group</h1>
+            <h1 className="text-2xl font-semibold text-white">Create a league</h1>
             <p className="mt-2 text-sm text-gray-400">
-              Groups can host multiple slips at once. Create the group, share the code, and
+              Leagues can host multiple slips at once. Create the league, share the code, and
               start opening slips whenever you’re ready.
             </p>
 
             <div className="mt-6 flex flex-col gap-4">
               <label className="flex flex-col gap-2">
                 <span className="text-xs uppercase tracking-wide text-gray-400">
-                  group name
+                  league name
                 </span>
                 <input
                   value={form.name}
@@ -225,7 +225,7 @@ const CagFormPage = () => {
                 disabled={!form.name.trim() || loading}
                 className="ui-accent-button self-start rounded-2xl px-6 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
               >
-                create group
+                create league
               </button>
             </div>
           </div>
@@ -234,7 +234,7 @@ const CagFormPage = () => {
         {showSuccess && createdId && inviteCode && (
           <div className={`${accentGradientBox} space-y-4 p-6 text-sm text-gray-300`}>
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">Group ready</h2>
+              <h2 className="text-xl font-semibold text-white">League ready</h2>
               <div className="ui-accent-text flex items-center gap-2 text-xs uppercase tracking-wide">
                 <span className="text-blue-200/70">code</span>
                 <span className="text-sm font-semibold text-white">{inviteCode}</span>
@@ -250,17 +250,17 @@ const CagFormPage = () => {
             </div>
             <p>
               Share the invite code above to bring your crew in. Once they join, head to
-              the Group Dashboard to create slips and open them for picks. When games
+              the League Dashboard to create slips and open them for picks. When games
               finish, review the slip, adjust grading if needed, and publish results to
               the leaderboard.
             </p>
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => router.push(`/group/${createdId}`)}
+                onClick={() => router.push(`/league/${createdId}`)}
                 className="ui-accent-button rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition"
               >
-                go to group
+                go to league
               </button>
             </div>
           </div>

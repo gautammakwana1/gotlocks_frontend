@@ -3,12 +3,12 @@ import { Pick } from "../interfaces/interfaces";
 
 export type TierMeta = (typeof ODDS_BRACKETS)[number];
 export type TierIndex = TierMeta["tier"];
-export type TierMode = "global" | "groupLeaderboard";
+export type TierMode = "global" | "leagueLeaderboard";
 
-export const GROUP_CAP_TIER: TierIndex = 6;
-export const GROUP_CAP_POINTS = 60;
+export const LEAGUE_CAP_TIER: TierIndex = 6;
+export const LEAGUE_CAP_POINTS = 60;
 
-const GROUP_TIER_NAME_OVERRIDES: Partial<Record<TierIndex, string>> = {
+const LEAGUE_TIER_NAME_OVERRIDES: Partial<Record<TierIndex, string>> = {
     1: "Safe",
     2: "Lock",
     3: "Edge",
@@ -18,9 +18,9 @@ const GROUP_TIER_NAME_OVERRIDES: Partial<Record<TierIndex, string>> = {
 };
 
 export const getGroupTierName = (tier: TierIndex, fallback?: string) =>
-    GROUP_TIER_NAME_OVERRIDES[tier] ?? fallback ?? `Tier ${tier}`;
+    LEAGUE_TIER_NAME_OVERRIDES[tier] ?? fallback ?? `Tier ${tier}`;
 
-const GROUP_TIER_COLOR_OVERRIDES: Partial<Record<TierIndex, string>> = {
+const LEAGUE_TIER_COLOR_OVERRIDES: Partial<Record<TierIndex, string>> = {
     1: "#8A5BFF",
     2: "#4C7BFF",
     3: "#00B6FF",
@@ -30,7 +30,7 @@ const GROUP_TIER_COLOR_OVERRIDES: Partial<Record<TierIndex, string>> = {
 };
 
 export const getGroupTierColor = (tier: TierIndex, fallback?: string) =>
-    GROUP_TIER_COLOR_OVERRIDES[tier] ?? fallback ?? "#FFFFFF";
+    LEAGUE_TIER_COLOR_OVERRIDES[tier] ?? fallback ?? "#FFFFFF";
 
 const TIER_NAME_LOOKUP: Record<string, TierIndex> = {
     LOCK: 1,
@@ -58,7 +58,7 @@ const LEGACY_LABEL_LOOKUP: Record<string, TierIndex> = {
 };
 
 const clampToGroupTier = (tier: TierMeta) =>
-    tier.tier > GROUP_CAP_TIER ? getTierByIndex(GROUP_CAP_TIER) : tier;
+    tier.tier > LEAGUE_CAP_TIER ? getTierByIndex(LEAGUE_CAP_TIER) : tier;
 
 const getTierByIndex = (tier: TierIndex) =>
     ODDS_BRACKETS.find((entry) => entry.tier === tier) ?? ODDS_BRACKETS[0];
@@ -94,7 +94,7 @@ export const getTierForAmericanOdds = (
         return minOk && maxOk;
     });
     const base = resolved ?? ODDS_BRACKETS[ODDS_BRACKETS.length - 1];
-    return mode === "groupLeaderboard" ? clampToGroupTier(base) : base;
+    return mode === "leagueLeaderboard" ? clampToGroupTier(base) : base;
 };
 
 export const getTierForOdds = (
@@ -136,14 +136,14 @@ export const getTierMetaForPick = ({
     const base =
         getTierForOdds(odds) ?? getTierForLabel(label) ?? getTierForPoints(points);
     if (!base) return null;
-    return mode === "groupLeaderboard" ? clampToGroupTier(base) : base;
+    return mode === "leagueLeaderboard" ? clampToGroupTier(base) : base;
 };
 
 export const getGlobalPointsForOdds = (americanOdds: number): number =>
     getTierForAmericanOdds(americanOdds).points;
 
 export const getLeaderboardStandingPoints = (americanOdds: number): number =>
-    Math.min(getGlobalPointsForOdds(americanOdds), GROUP_CAP_POINTS);
+    Math.min(getGlobalPointsForOdds(americanOdds), LEAGUE_CAP_POINTS);
 
 export const getGroupLeaderboardPointsForOdds = (americanOdds: number): number =>
     getLeaderboardStandingPoints(americanOdds);
@@ -173,7 +173,7 @@ export const getPickPoints = (
 ): number => {
     if (!pick) return 0;
     if (
-        mode === "groupLeaderboard" &&
+        mode === "leagueLeaderboard" &&
         typeof pick.points === "number" &&
         Number.isFinite(pick.points)
     ) {
@@ -182,7 +182,7 @@ export const getPickPoints = (
     const result = (pick.result ?? "pending") as NonNullable<Pick["result"]>;
     if (result === "win") {
         const base = getBasePointsForPick(pick, mode);
-        return mode === "groupLeaderboard" ? Math.min(base, GROUP_CAP_POINTS) : base;
+        return mode === "leagueLeaderboard" ? Math.min(base, LEAGUE_CAP_POINTS) : base;
     }
     if (result === "loss") return -15;
     if (result === "void" || result === "not_found") return 0;

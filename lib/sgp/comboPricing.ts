@@ -30,11 +30,11 @@ type NbaComponent =
 
 type PairWeightClassifier = (legA: SlipLeg, legB: SlipLeg) => number;
 
-type WeightedGroupEstimatorConfig = {
+type WeightedLeagueEstimatorConfig = {
     negativeFloor: number;
     positiveCap: number;
-    minGroupWeight: number;
-    maxGroupWeight: number;
+    minLeagueWeight: number;
+    maxLeagueWeight: number;
 };
 
 const NEGATIVE_WEIGHT_FLOOR = 0.65;
@@ -534,10 +534,10 @@ const isNflRushingCategory = (category: NflPlayerCategory | null) =>
     category === "rushing_receiving_yards" ||
     category === "touchdowns";
 
-const estimateWeightedGroupOdds = (
+const estimateWeightedLeagueOdds = (
     legs: PriceableSlipLeg[],
     classifyPairWeight: PairWeightClassifier,
-    config: WeightedGroupEstimatorConfig
+    config: WeightedLeagueEstimatorConfig
 ) => {
     const probabilities = legs.map((leg) => {
         const american = parseAmericanOdds(leg.price);
@@ -563,10 +563,10 @@ const estimateWeightedGroupOdds = (
 
     const averageWeight =
         pairWeights.reduce((accumulator, weight) => accumulator + weight, 0) / pairWeights.length;
-    const groupWeight = clamp(
+    const leagueWeight = clamp(
         averageWeight * (legs.length - 1),
-        config.minGroupWeight,
-        config.maxGroupWeight
+        config.minLeagueWeight,
+        config.maxLeagueWeight
     );
     const minLegProbability = Math.min(...resolvedProbabilities);
     const lowerBound = Math.max(0.0001, independentProbability * config.negativeFloor);
@@ -575,7 +575,7 @@ const estimateWeightedGroupOdds = (
         Math.min(config.positiveCap, minLegProbability * config.positiveCap)
     );
     const adjustedProbability = clamp(
-        independentProbability * Math.exp(groupWeight),
+        independentProbability * Math.exp(leagueWeight),
         lowerBound,
         upperBound
     );
@@ -1303,56 +1303,56 @@ const classifySoccerPairWeight = (legA: SlipLeg, legB: SlipLeg) => {
     );
 };
 
-const estimateNbaGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(legs, classifyNbaPairWeight, {
+const estimateNbaLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(legs, classifyNbaPairWeight, {
         negativeFloor: NEGATIVE_WEIGHT_FLOOR,
         positiveCap: POSITIVE_WEIGHT_CAP,
-        minGroupWeight: -0.35,
-        maxGroupWeight: 0.45,
+        minLeagueWeight: -0.35,
+        maxLeagueWeight: 0.45,
     });
 
-const estimateNcaabGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(
+const estimateNcaabLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(
         legs,
         (legA, legB) => classifyNbaPairWeight(legA, legB) * 0.9,
         {
             negativeFloor: 0.67,
             positiveCap: 0.982,
-            minGroupWeight: -0.33,
-            maxGroupWeight: 0.42,
+            minLeagueWeight: -0.33,
+            maxLeagueWeight: 0.42,
         }
     );
 
-const estimateMlbGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(legs, classifyMlbPairWeight, {
+const estimateMlbLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(legs, classifyMlbPairWeight, {
         negativeFloor: 0.7,
         positiveCap: 0.98,
-        minGroupWeight: -0.3,
-        maxGroupWeight: 0.38,
+        minLeagueWeight: -0.3,
+        maxLeagueWeight: 0.38,
     });
 
-const estimateNhlGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(legs, classifyNhlPairWeight, {
+const estimateNhlLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(legs, classifyNhlPairWeight, {
         negativeFloor: 0.72,
         positiveCap: 0.979,
-        minGroupWeight: -0.28,
-        maxGroupWeight: 0.34,
+        minLeagueWeight: -0.28,
+        maxLeagueWeight: 0.34,
     });
 
-const estimateNflGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(legs, classifyNflPairWeight, {
+const estimateNflLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(legs, classifyNflPairWeight, {
         negativeFloor: 0.68,
         positiveCap: 0.983,
-        minGroupWeight: -0.32,
-        maxGroupWeight: 0.4,
+        minLeagueWeight: -0.32,
+        maxLeagueWeight: 0.4,
     });
 
-const estimateSoccerGroupOdds = (legs: PriceableSlipLeg[]) =>
-    estimateWeightedGroupOdds(legs, classifySoccerPairWeight, {
+const estimateSoccerLeagueOdds = (legs: PriceableSlipLeg[]) =>
+    estimateWeightedLeagueOdds(legs, classifySoccerPairWeight, {
         negativeFloor: 0.74,
         positiveCap: 0.98,
-        minGroupWeight: -0.26,
-        maxGroupWeight: 0.34,
+        minLeagueWeight: -0.26,
+        maxLeagueWeight: 0.34,
     });
 
 const quoteCustomPricingGroup = (legs: PriceableSlipLeg[]) => {
@@ -1361,27 +1361,27 @@ const quoteCustomPricingGroup = (legs: PriceableSlipLeg[]) => {
     if (legs.some((leg) => sportToken(leg) !== normalizedSport)) return null;
 
     if (normalizedSport === "nba") {
-        return estimateNbaGroupOdds(legs);
+        return estimateNbaLeagueOdds(legs);
     }
 
     if (normalizedSport === "ncaab") {
-        return estimateNcaabGroupOdds(legs);
+        return estimateNcaabLeagueOdds(legs);
     }
 
     if (normalizedSport === "mlb") {
-        return estimateMlbGroupOdds(legs);
+        return estimateMlbLeagueOdds(legs);
     }
 
     if (normalizedSport === "nhl") {
-        return estimateNhlGroupOdds(legs);
+        return estimateNhlLeagueOdds(legs);
     }
 
     if (normalizedSport === "nfl") {
-        return estimateNflGroupOdds(legs);
+        return estimateNflLeagueOdds(legs);
     }
 
     if (normalizedSport === "soccer") {
-        return estimateSoccerGroupOdds(legs);
+        return estimateSoccerLeagueOdds(legs);
     }
 
     return combineParlayOdds(legs);

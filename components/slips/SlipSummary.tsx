@@ -12,7 +12,7 @@ type Props = {
 
 export default function SlipSummary({ slip, picks = [], className }: Props) {
     const totalPoints = picks.reduce(
-        (sum, pick) => sum + getPickPoints(pick, "groupLeaderboard"),
+        (sum, pick) => sum + getPickPoints(pick, "leagueLeaderboard"),
         0
     );
 

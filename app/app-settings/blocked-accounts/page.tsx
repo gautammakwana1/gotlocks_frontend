@@ -11,7 +11,7 @@ import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
-import { ArrowLeft, ChevronUp, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import ScrollUpButton from "@/components/ui/ScrollUpButton";
 
 const BlockedAccountsPage = () => {

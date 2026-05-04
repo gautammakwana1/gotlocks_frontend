@@ -4,7 +4,7 @@ import { getSlipConflictWarningMode } from "@/lib/slips/state";
 import { parseAmericanOdds } from "@/lib/utils/scoring";
 import { ArchiveLeaderboardSlip, Pick, PickLeg, PickSelectionMeta, Slip } from "../interfaces/interfaces";
 
-export type GroupComboOddsSummary = {
+export type LeagueComboOddsSummary = {
     label: string;
     americanOdds: number;
     isEstimated: boolean;
@@ -190,10 +190,10 @@ export const formatAmericanOdds = (odds: string | number | null | undefined) => 
     return americanOdds > 0 ? `+${americanOdds}` : `${americanOdds}`;
 };
 
-export const getGroupComboOddsSummary = (
-    slip: Slip | ArchiveLeaderboardSlip | undefined,
+export const getLeagueComboOddsSummary = (
+    slip: Slip | ArchiveLeaderboardSlip | undefined | null,
     picks: Pick[]
-): GroupComboOddsSummary | null => {
+): LeagueComboOddsSummary | null => {
     if (!slip || getSlipConflictWarningMode(slip) !== "group_combo") return null;
     if (picks.length < 2) return null;
 

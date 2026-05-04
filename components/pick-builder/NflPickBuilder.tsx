@@ -653,6 +653,31 @@ const formatAltLineLabel = (line: number) => {
     return `${value}+`;
 };
 
+const STICKY_COLUMN_BASE_CLASSES =
+    "relative sticky left-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:inset-y-0 after:left-full after:w-8 after:bg-gradient-to-r after:to-transparent after:content-[''] sm:before:w-6 sm:after:w-10";
+
+const STICKY_COLUMN_HEADER_CLASSES = `${STICKY_COLUMN_BASE_CLASSES} z-30 pl-0 pr-3 py-2 bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.72)_100%)] after:from-black/45`;
+
+const stickyColumnRowClasses = (banded: boolean) =>
+    `${STICKY_COLUMN_BASE_CLASSES} z-20 pl-0 pr-3 py-3 ${banded
+        ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
+        : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
+    } after:from-black/40`;
+
+const SCROLLER_STICKY_COLUMN_BASE_CLASSES =
+    "relative sticky left-0 pl-0 pr-3 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:bottom-0 after:left-[-100vw] after:h-px after:w-[200vw] after:content-[''] sm:before:w-6";
+
+const SCROLLER_STICKY_COLUMN_HEADER_CLASSES = `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-30 py-2 bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.72)_100%)] after:bg-white/10`;
+
+const scrollerStickyColumnRowClasses = (
+    banded: boolean,
+    selected = false
+) =>
+    `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-20 py-3 ${banded
+        ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
+        : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
+    } ${selected ? "after:bg-sky-300/60" : "after:bg-white/5"}`;
+
 const CATEGORY_ROW_PREVIEW_LIMIT = 5;
 
 const compareNumbersDesc = (
@@ -1127,9 +1152,6 @@ export const NflPickBuilder = ({
     const [expandedCategoryRows, setExpandedCategoryRows] = useState<
         Record<string, boolean>
     >({});
-    const [altSideByMarket, setAltSideByMarket] = useState<
-        Record<string, "Over" | "Under">
-    >({});
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
     const [altTotalLine, setAltTotalLine] = useState<number | null>(null);
     const [localIsReviewOpen, setLocalIsReviewOpen] = useState(false);
@@ -1169,10 +1191,10 @@ export const NflPickBuilder = ({
     const confirmationVariant: "post" | "slip" = isPostMode ? "post" : "slip";
     const reviewTierScoringMode =
         confirmationVariant === "slip" && slip.isGraded
-            ? "groupLeaderboard"
+            ? "leagueLeaderboard"
             : "global";
     const reviewTierDisplayMode =
-        reviewTierScoringMode === "groupLeaderboard" ? "group" : "default";
+        reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
 
@@ -1191,7 +1213,7 @@ export const NflPickBuilder = ({
     );
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
-            reviewTierScoringMode === "groupLeaderboard"
+            reviewTierScoringMode === "leagueLeaderboard"
                 ? getGroupTierForAmericanOdds(americanOdds)
                 : getTierForAmericanOdds(americanOdds),
         [reviewTierScoringMode]
@@ -2043,7 +2065,7 @@ export const NflPickBuilder = ({
         ? formatTierPrimary(sheetTierMeta.tier)
         : activeDraft?.displayDifficulty ?? "Tier —";
     const sheetTierName = sheetTierMeta?.name ?? activeDraft?.difficulty_label ?? "—";
-    const sheetPoints = reviewTierScoringMode === "groupLeaderboard"
+    const sheetPoints = reviewTierScoringMode === "leagueLeaderboard"
         ? sheetTierMeta?.points
         : activeDraft?.points ?? sheetTierMeta?.points;
     const sheetHeaderLabel = hasMultipick
@@ -3491,7 +3513,7 @@ export const NflPickBuilder = ({
         const hasOver = sides.has("over");
         const hasUnder = sides.has("under");
         const defaultSide = hasOver ? "Over" : hasUnder ? "Under" : "Over";
-        const activeSide = altSideByMarket[sectionKey] ?? defaultSide;
+        const activeSide = defaultSide;
         const table = buildAltLinesTable(altOdds, game, activeSide);
         const showTable = table.lines.length > 1 && table.rows.length > 0;
         const simpleRows = buildSimpleAltRows(altOdds, game, activeSide);
@@ -3523,34 +3545,6 @@ export const NflPickBuilder = ({
                             </div>
                         ) : (
                             <>
-                                {(hasOver || hasUnder) && (
-                                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                                        {["Over", "Under"].map((side) => {
-                                            if (side === "Over" && !hasOver) return null;
-                                            if (side === "Under" && !hasUnder) return null;
-                                            const active = activeSide === side;
-                                            return (
-                                                <button
-                                                    key={`${sectionKey}-${side}`}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setAltSideByMarket((prev) => ({
-                                                            ...prev,
-                                                            [sectionKey]: side as "Over" | "Under",
-                                                        }))
-                                                    }
-                                                    className={`rounded-full border px-2 py-1 text-xs font-semibold uppercase tracking-wide transition sm:px-3 ${active
-                                                        ? "border-sky-300/70 bg-sky-500/20 text-white"
-                                                        : "border-white/10 bg-white/[0.04] text-gray-300 hover:border-white/30"
-                                                        }`}
-                                                >
-                                                    {side}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-
                                 {showTable ? (
                                     <>
                                         <div className="mt-4">
@@ -3707,6 +3701,11 @@ export const NflPickBuilder = ({
                 enabled: hasGameLines
             },
             {
+                key: "TD_SCORER",
+                label: NFL_TAB_LABELS.TD_SCORER,
+                enabled: tabMarketOptions.TD_SCORER.length > 0,
+            },
+            {
                 key: "PASSING",
                 label: NFL_TAB_LABELS.PASSING,
                 enabled: tabMarketOptions.PASSING.length > 0
@@ -3720,11 +3719,6 @@ export const NflPickBuilder = ({
                 key: "RUSHING",
                 label: NFL_TAB_LABELS.RUSHING,
                 enabled: tabMarketOptions.RUSHING.length > 0,
-            },
-            {
-                key: "TD_SCORER",
-                label: NFL_TAB_LABELS.TD_SCORER,
-                enabled: tabMarketOptions.TD_SCORER.length > 0,
             },
         ];
         const showStepBack =
@@ -3873,45 +3867,31 @@ export const NflPickBuilder = ({
         }
         const isTwoWayOverUnder = hasOver && hasUnder && columns.length === 2;
 
+        const gridTemplateColumns = columns.length
+            ? `minmax(0,1fr) repeat(${columns.length}, var(--table-chip-width))`
+            : "minmax(0,1fr)";
+
         return (
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/70 shadow-lg shadow-blue-500/10 [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                <div
-                    className={
-                        isTwoWayOverUnder
-                            ? "grid gap-2 border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                            : "grid gap-2 border-b border-white/10 bg-white/[0.04] text-xs uppercase tracking-wide text-gray-400"
-                    }
-                    style={{
-                        gridTemplateColumns: isTwoWayOverUnder
-                            ? "minmax(0,1fr) repeat(2, var(--table-chip-width))"
-                            : columns.length
-                                ? `minmax(200px,1fr) repeat(${columns.length}, var(--table-chip-width))`
-                                : "minmax(200px,1fr)",
-                    }}
-                >
+            <div className="-mx-5 sm:-mx-6">
+                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                     <div
-                        className={
-                            isTwoWayOverUnder
-                                ? "px-3 py-2"
-                                : "sticky left-0 z-20 bg-black/80 px-3 py-2"
-                        }
+                        className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                        style={{ gridTemplateColumns }}
                     >
-                        Player
+                        <div className="pl-0 pr-3 py-2">Player</div>
+                        {columns.map((column) => (
+                            <div
+                                key={`player-odds-${column.key}`}
+                                className="px-3 py-2 text-center"
+                            >
+                                {isTwoWayOverUnder
+                                    ? column.key === "over"
+                                        ? "Over line"
+                                        : "Under line"
+                                    : column.label}
+                            </div>
+                        ))}
                     </div>
-                    {columns.map((column) => (
-                        <div
-                            key={`player-odds-${column.key}`}
-                            className="px-3 py-2 text-center"
-                        >
-                            {isTwoWayOverUnder
-                                ? column.key === "over"
-                                    ? "Over line"
-                                    : "Under line"
-                                : column.label}
-                        </div>
-                    ))}
-                </div>
-                <div className="divide-y divide-white/5">
                     {rows.map((row, rowIndex) => {
                         const primaryLine = row.lines.find((line) => line.main) ?? row.lines[0];
                         if (!primaryLine) return null;
@@ -3921,37 +3901,19 @@ export const NflPickBuilder = ({
                         return (
                             <div
                                 key={row.player.id}
-                                className={
-                                    isTwoWayOverUnder
-                                        ? `grid items-center gap-2 border-b border-white/5 text-left ${rowBand}`
-                                        : `grid gap-2 border-b border-white/5 ${rowBand}`
-                                }
-                                style={{
-                                    gridTemplateColumns: isTwoWayOverUnder
-                                        ? "minmax(0,1fr) repeat(2, var(--table-chip-width))"
-                                        : columns.length
-                                            ? `minmax(200px,1fr) repeat(${columns.length}, var(--table-chip-width))`
-                                            : "minmax(200px,1fr)",
-                                }}
+                                className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
+                                style={{ gridTemplateColumns }}
                             >
-                                <div
-                                    className={
-                                        isTwoWayOverUnder
-                                            ? "min-w-0 px-3 py-2.5"
-                                            : "sticky left-0 z-10 bg-black/80 px-3 py-3"
-                                    }
-                                >
-                                    <div className="min-w-0">
-                                        <p className="truncate text-sm font-semibold text-white">
-                                            {row.player.name}
-                                        </p>
-                                        <p className="text-xs uppercase tracking-wide text-gray-400">
-                                            {playerMetaLabel(
-                                                row.player,
-                                                row.team.abbreviation ?? row.team.name
-                                            )}
-                                        </p>
-                                    </div>
+                                <div className="min-w-0 pl-0 pr-3 py-2.5">
+                                    <p className="truncate text-sm font-semibold text-white">
+                                        {row.player.name}
+                                    </p>
+                                    <p className="mt-1 truncate text-xs text-gray-400">
+                                        {playerMetaLabel(
+                                            row.player,
+                                            row.team.abbreviation ?? row.team.name
+                                        )}
+                                    </p>
                                 </div>
                                 {columns.map((column) => {
                                     const odd =
@@ -4016,23 +3978,12 @@ export const NflPickBuilder = ({
         return `${base} border-sky-400/50 text-sky-200 hover:border-sky-300/70`;
     };
 
-    const oddsBoxClasses = (selected?: boolean, muted?: boolean) =>
-        buildOddsBoxClasses(
-            "min-w-[88px] h-[44px] shrink-0 rounded-md border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 flex items-center justify-center",
-            selected,
-            muted
-        );
-
     const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
             "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap rounded-md border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
             selected,
             muted
         );
-
-    const renderOddsBox = (value: string, selected?: boolean, muted?: boolean) => (
-        <div className={oddsBoxClasses(selected, muted)}>{value}</div>
-    );
 
     const renderTableOddsBox = (
         value: string,
@@ -4088,26 +4039,66 @@ export const NflPickBuilder = ({
         );
     };
 
-    const renderAltLineCard = (
-        odd: OddsBlazeOdd | undefined,
-        label: string,
-        lineLabel: string
+    type SimpleMarketRow = {
+        id: string;
+        label: string;
+        sublabel?: string;
+        odd?: OddsBlazeOdd;
+        lineLabel?: string;
+    };
+
+    const renderSimpleMarketRows = (
+        rows: SimpleMarketRow[],
+        headerLabel: string
     ) => {
-        const isSelected = isOddSelected(odd);
+        if (!activeGame) return null;
         return (
-            <button
-                type="button"
-                onClick={() => odd && handleOddsSelection(odd)}
-                disabled={!odd || locked}
-                className={`flex min-h-[64px] items-center justify-between rounded-2xl px-4 py-3 text-left transition bg-black/70 ${!odd ? "cursor-not-allowed text-gray-600" : ""
-                    }`}
-            >
-                <div>
-                    <p className="text-sm font-semibold text-white">{label}</p>
-                    <p className="text-sm font-semibold text-white">{lineLabel}</p>
+            <div className="-mx-5 sm:-mx-6">
+                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                    <div
+                        className="grid border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                        style={{
+                            gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                        }}
+                    >
+                        <div className={STICKY_COLUMN_HEADER_CLASSES}>{headerLabel}</div>
+                        <div className="px-3 py-2 text-center">Odds</div>
+                    </div>
+                    {rows.map((row, rowIndex) => {
+                        const rowBand =
+                            rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                        const isSelected = row.odd ? isOddSelected(row.odd) : false;
+                        const oddsLabel = row.odd ? formatOdds(row.odd.price) : "-";
+                        return (
+                            <button
+                                key={row.id}
+                                type="button"
+                                onClick={() => row.odd && handleOddsSelection(row.odd)}
+                                disabled={!row.odd || locked}
+                                className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelected
+                                    ? "border-sky-300/60 bg-sky-500/10"
+                                    : "hover:bg-white/[0.02]"
+                                    } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                style={{
+                                    gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                                }}
+                            >
+                                <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
+                                    <p className="text-sm font-semibold text-white">{row.label}</p>
+                                    {row.sublabel ? (
+                                        <p className="mt-1 text-xs text-gray-400">{row.sublabel}</p>
+                                    ) : null}
+                                </div>
+                                <div className="flex justify-center px-3 py-3">
+                                    {row.lineLabel
+                                        ? renderLineOddsBox(row.lineLabel, oddsLabel, isSelected, !row.odd)
+                                        : renderTableOddsBox(oddsLabel, isSelected, !row.odd)}
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
-                {renderOddsBox(odd ? formatOdds(odd.price) : "-", isSelected, !odd)}
-            </button>
+            </div>
         );
     };
 
@@ -4130,20 +4121,32 @@ export const NflPickBuilder = ({
         const homeLine = activeLine ?? homeOdd?.selection?.line;
         const awayLine =
             activeLine !== null ? -activeLine : awayOdd?.selection?.line ?? undefined;
+        const homeLineLabel = formatLineValue(homeLine ?? homeOdd?.selection?.line);
+        const awayLineLabel = formatLineValue(awayLine ?? awayOdd?.selection?.line);
+        const rows: SimpleMarketRow[] = [
+            {
+                id: `${activeGame.id}-alt-spread-away`,
+                label:
+                    awayLineLabel !== "-"
+                        ? `${activeGame.away_team} ${awayLineLabel}`
+                        : activeGame.away_team,
+                sublabel: activeGame.away_abbr,
+                odd: awayOdd,
+            },
+            {
+                id: `${activeGame.id}-alt-spread-home`,
+                label:
+                    homeLineLabel !== "-"
+                        ? `${activeGame.home_team} ${homeLineLabel}`
+                        : activeGame.home_team,
+                sublabel: activeGame.home_abbr,
+                odd: homeOdd,
+            },
+        ];
+
         return (
             <div className="mt-4 space-y-3">
-                <div className="grid gap-2 md:grid-cols-2">
-                    {renderAltLineCard(
-                        awayOdd,
-                        activeGame.away_team,
-                        formatLineValue(awayLine ?? awayOdd?.selection?.line)
-                    )}
-                    {renderAltLineCard(
-                        homeOdd,
-                        activeGame.home_team,
-                        formatLineValue(homeLine ?? homeOdd?.selection?.line)
-                    )}
-                </div>
+                {renderSimpleMarketRows(rows, "Team")}
                 <LineScroller
                     lines={altSpreadLineData.lines}
                     activeLine={activeLine}
@@ -4170,24 +4173,32 @@ export const NflPickBuilder = ({
         const overOdd = entry?.over;
         const underOdd = entry?.under;
         const lineLabel = formatNumberLine(activeLine ?? undefined);
+        const rows: SimpleMarketRow[] = [
+            {
+                id: `${activeGame.id}-alt-total-over`,
+                label:
+                    overOdd?.selection?.line !== undefined
+                        ? `Over ${formatNumberLine(overOdd.selection.line)}`
+                        : lineLabel !== "-"
+                            ? `Over ${lineLabel}`
+                            : "Over",
+                odd: overOdd,
+            },
+            {
+                id: `${activeGame.id}-alt-total-under`,
+                label:
+                    underOdd?.selection?.line !== undefined
+                        ? `Under ${formatNumberLine(underOdd.selection.line)}`
+                        : lineLabel !== "-"
+                            ? `Under ${lineLabel}`
+                            : "Under",
+                odd: underOdd,
+            },
+        ];
+
         return (
             <div className="mt-4 space-y-3">
-                <div className="grid gap-2 md:grid-cols-2">
-                    {renderAltLineCard(
-                        overOdd,
-                        "Over",
-                        overOdd?.selection?.line !== undefined
-                            ? formatNumberLine(overOdd.selection.line)
-                            : lineLabel
-                    )}
-                    {renderAltLineCard(
-                        underOdd,
-                        "Under",
-                        underOdd?.selection?.line !== undefined
-                            ? formatNumberLine(underOdd.selection.line)
-                            : lineLabel
-                    )}
-                </div>
+                {renderSimpleMarketRows(rows, "Side")}
                 <LineScroller
                     lines={altTotalLineData.lines}
                     activeLine={activeLine}
@@ -4556,8 +4567,8 @@ export const NflPickBuilder = ({
         const sectionKey = "td-scorer-table";
         const collapsed = isSectionCollapsed(sectionKey, true);
         const tdGridTemplate = table.columns.length
-            ? `minmax(88px,1fr) repeat(${table.columns.length}, var(--table-chip-width))`
-            : "minmax(88px,1fr)";
+            ? `var(--td-player-column-width) repeat(${table.columns.length}, var(--table-chip-width))`
+            : "var(--td-player-column-width)";
 
         return (
             <div className="flex flex-col gap-3">
@@ -4584,15 +4595,15 @@ export const NflPickBuilder = ({
                                 No touchdown props available for this matchup yet.
                             </div>
                         ) : (
-                            <div className="mt-4 overflow-x-auto">
-                                <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                            <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                                <div className="w-max min-w-full text-xs text-white [--table-chip-width:60px] [--td-player-column-width:132px] sm:[--table-chip-width:96px] sm:[--td-player-column-width:220px]">
                                     <div
-                                        className="grid gap-1 border-b border-white/10 text-[10px] uppercase tracking-wide text-gray-400 sm:gap-2 sm:text-xs"
+                                        className="grid gap-2 border-b border-white/10 text-[10px] uppercase tracking-wide text-gray-400 sm:text-xs"
                                         style={{
                                             gridTemplateColumns: tdGridTemplate,
                                         }}
                                     >
-                                        <div className="sticky left-0 z-20 min-w-0 bg-black/80 px-2 py-2 sm:min-w-[220px] sm:px-3">
+                                        <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
                                             Player
                                         </div>
                                         {table.columns.map((column) => (
@@ -4607,12 +4618,19 @@ export const NflPickBuilder = ({
                                         return (
                                             <div
                                                 key={`td-${row.player.id}`}
-                                                className={`grid gap-1 border-b border-white/5 sm:gap-2 ${rowBand}`}
+                                                className={`grid gap-2 border-b border-white/5 ${rowBand}`}
                                                 style={{
                                                     gridTemplateColumns: tdGridTemplate,
                                                 }}
                                             >
-                                                <div className="sticky left-0 z-10 min-w-0 bg-black/80 px-2 py-3 sm:min-w-[220px] sm:px-3">
+                                                <div
+                                                    className={scrollerStickyColumnRowClasses(
+                                                        rowIndex % 2 === 1,
+                                                        table.columns.some((column) =>
+                                                            isOddSelected(row.odds.get(column.key))
+                                                        )
+                                                    )}
+                                                >
                                                     <div className="min-w-0">
                                                         <p className="truncate text-sm font-semibold text-white">
                                                             {row.player.name}
@@ -5073,8 +5091,8 @@ export const NflPickBuilder = ({
 //                             <span className="mt-1 text-rose-200">•</span>
 //                             <p>
 //                                 The tier system maps real odds into points from Tier 1 (LOCK) to Tier 14
-//                                 (LEGENDARY). Profiles use the full table; group leaderboards cap at Tier{" "}
-//                                 {GROUP_CAP_TIER} ({GROUP_CAP_POINTS} pts max).
+//                                 (LEGENDARY). Profiles use the full table; league leaderboards cap at Tier{" "}
+//                                 {LEAGUE_CAP_TIER} ({LEAGUE_CAP_POINTS} pts max).
 //                             </p>
 //                         </div>
 //                     </div>
@@ -5125,7 +5143,7 @@ export const NflPickBuilder = ({
 //                         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-gray-300">
 //                             <p>Profiles/lock chips use the full Tier 1-14 table.</p>
 //                             <p>
-//                                 Group leaderboards cap at Tier {GROUP_CAP_TIER} ({GROUP_CAP_POINTS} pts
+//                                 Group leaderboards cap at Tier {GROUP_CAP_TIER} ({LEAGUE_CAP_POINTS} pts
 //                                 max).
 //                             </p>
 //                         </div>

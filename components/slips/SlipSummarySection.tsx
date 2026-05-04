@@ -13,7 +13,7 @@ type Props = {
 
 export const SlipSummarySection = ({ slips, groupId, returnTo }: Props) => {
     const router = useRouter();
-    const fallbackPath = returnTo ?? `/group/${groupId}?tab=leaderboard`;
+    const fallbackPath = returnTo ?? `/league/${groupId}?tab=leaderboard`;
     const encodedReturn = encodeURIComponent(fallbackPath);
 
     if (slips.length === 0) {
@@ -34,7 +34,7 @@ export const SlipSummarySection = ({ slips, groupId, returnTo }: Props) => {
                         type="button"
                         onClick={() =>
                             router.push(
-                                `/group/${groupId}/slips/${slip.id}/results?returnTo=${encodedReturn}`
+                                `/league/${groupId}/slips/${slip.id}/results?returnTo=${encodedReturn}`
                             )
                         }
                         className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-white transition hover:bg-white/5"

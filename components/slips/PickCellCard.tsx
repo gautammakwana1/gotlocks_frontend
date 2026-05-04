@@ -42,7 +42,7 @@ const formatPointsValue = (value: number | null) => {
     return value > 0 ? `+${value}` : `${value}`;
 };
 
-const computeResultPoints = (pick?: Pick) => getPickPoints(pick, "groupLeaderboard");
+const computeResultPoints = (pick?: Pick) => getPickPoints(pick, "leagueLeaderboard");
 
 const pickTierMeta = (pick?: Pick) => {
     if (!pick) return null;
@@ -92,7 +92,7 @@ export const PickCellCard = ({
         slipStatus === "final"
             ? "border-slate-800 bg-slate-950/80"
             : "border-slate-900/80 bg-slate-950/70";
-    const basePotential = pick ? getBasePointsForPick(pick, "groupLeaderboard") : null;
+    const basePotential = pick ? getBasePointsForPick(pick, "leagueLeaderboard") : null;
     const potentialPoints =
         typeof basePotential === "number" ? Math.min(basePotential, 60) : null;
     const isPending = pick?.result === "pending" || pick?.result === null;

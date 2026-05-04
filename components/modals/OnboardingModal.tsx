@@ -61,7 +61,7 @@ function VideoMedia({ step }: { step: Step }) {
         apply();
         el.addEventListener("loadedmetadata", apply);
         return () => el.removeEventListener("loadedmetadata", apply);
-    }, [step.media, step.playbackRate]);
+    }, [step, step.playbackRate]);
 
     if (!src) return null;
 

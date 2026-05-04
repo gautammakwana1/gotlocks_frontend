@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { APP_NAME, COLORS } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 import { clearLoginWithEmailMessage, initialForgotPasswordOTPRequest, loginWithEmailRequest, resetPasswordRequest, verifyForgotPasswordOTPRequest } from "../../lib/redux/slices/authSlice";
 import { useSelector } from "react-redux";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { useToast } from "@/lib/state/ToastContext";
 import type { RootState } from "@/lib/interfaces/interfaces";
 import { supabase } from "@/lib/supabaseClient";
-import { displayNameGradientStyle } from "@/lib/styles/text";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import ForgotPasswordModal from "@/components/modals/ForgotPasswordModal";
 import { EyeClosed, EyeIcon } from "lucide-react";

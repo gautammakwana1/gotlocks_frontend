@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CurrentUser, GroupSelector, Member, RootState } from "@/lib/interfaces/interfaces";
+import { CurrentUser, GroupSelector, Member } from "@/lib/interfaces/interfaces";
 import Link from "next/link";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
@@ -90,7 +90,7 @@ const MemberActions = ({
                 disabled={leavingGroup}
                 className="w-full rounded-lg border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
             >
-                {leavingGroup ? "Leaving..." : "Leave group"}
+                {leavingGroup ? "Leaving..." : "Leave league"}
             </button>
         )}
     </div>
@@ -234,7 +234,7 @@ export const ModifyMembers = ({
             dispatch(clearLeaveGroupMessage());
             router.replace("/fantasy");
         }
-    }, [leaveLoading, dispatch, leaveMessage]);
+    }, [leaveLoading, dispatch, leaveMessage, router, setToast]);
 
     const handleLoadMore = () => {
         if (!groupId || !membersPagination || loadingMembers) return;
@@ -416,21 +416,21 @@ export const ModifyMembers = ({
                             </p>
                             <p className="text-sm text-gray-300">
                                 {pendingAction.kind === "remove"
-                                    ? `Remove ${formatDisplayName(pendingAction.member.profiles?.username)} from the group?`
+                                    ? `Remove ${formatDisplayName(pendingAction.member.profiles?.username)} from the league?`
                                     : pendingAction.kind === "leave"
-                                        ? "Leave this group?"
+                                        ? "Leave this league?"
                                         : `Make ${formatDisplayName(pendingAction.member.profiles?.username)} the commissioner?`}
                             </p>
                         </div>
                         {pendingAction.kind === "remove" && (
                             <p className="text-[11px] text-gray-400">
-                                This will remove this user from your group permanently. Their name will still
+                                This will remove this user from your league permanently. Their name will still
                                 be visible in any past slips and leaderboards.
                             </p>
                         )}
                         {pendingAction.kind === "promote" && (
                             <p className="text-[11px] text-gray-400">
-                                This action will give this user the power to control this group from now on.
+                                This action will give this user the power to control this league from now on.
                             </p>
                         )}
                         {pendingAction.kind === "leave" && (
@@ -474,7 +474,7 @@ export const ModifyMembers = ({
 
             {canManage && (
                 <p className="text-[11px] text-gray-500">
-                    Removing a member immediately hides this group from their &quot;your groups&quot;
+                    Removing a member immediately hides this league from their &quot;your leagues&quot;
                     list and
                     removes them from the leaderboard display.
                 </p>

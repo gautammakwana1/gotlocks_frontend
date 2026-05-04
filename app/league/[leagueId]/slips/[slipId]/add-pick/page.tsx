@@ -3,16 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
-import { canUserEditSlipPicks, isSlipFinal, slipShowsConflictWarnings } from "@/lib/slips/state";
+import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { BuiltPickPayload, Group, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
-import { createPickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
-import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
-import { fetchAllSlipsRequest } from "@/lib/redux/slices/slipSlice";
+import { createPickRequest } from "@/lib/redux/slices/pickSlice";
 import { GroupDataShape } from "../../../page";
-import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
+import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage } from "@/lib/slips/pickConflicts";
 
 const hasNestedGroup = (
     value: GroupDataShape
@@ -35,7 +33,7 @@ const extractGroup = (data: GroupDataShape): Group | null => {
 const DEFAULT_SPORT = "NFL";
 
 const SlipAddPickPage = () => {
-    const params = useParams<{ groupId: string; slipId: string }>();
+    const params = useParams<{ leagueId: string; slipId: string }>();
     const router = useRouter();
     const { setToast } = useToast();
     const dispatch = useDispatch();
@@ -50,11 +48,11 @@ const SlipAddPickPage = () => {
     // useEffect(() => {
     //     if (!params.slipId) return;
     //     dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
-    //     if (params.groupId) {
-    //         dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-    //         dispatch(fetchAllSlipsRequest({ group_id: params.groupId }));
+    //     if (params.leagueId) {
+    //         dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
+    //         dispatch(fetchAllSlipsRequest({ group_id: params.leagueId }));
     //     }
-    // }, [dispatch, params.slipId, params.groupId]);
+    // }, [dispatch, params.slipId, params.leagueId]);
 
     // const slips: Slips = useMemo(() => {
     //     if (!group?.id || !slipData?.slips?.length) return [];
@@ -73,7 +71,7 @@ const SlipAddPickPage = () => {
         return pickList.filter(pick => pick.slip_id === slip.id);
     }, [pickList, slip?.id]);
 
-    const returnPath = group && slip ? `/group/${group.id}/slips/${slip.id}` : "/home";
+    const returnPath = group && slip ? `/league/${group.id}/slips/${slip.id}` : "/home";
 
     const returnToSlip = useCallback(() => {
         setIsReturningToSlip(true);
@@ -95,11 +93,11 @@ const SlipAddPickPage = () => {
             return;
         }
         if (!slip) {
-            router.replace(`/group/${group.id}?tab=slips`);
+            router.replace(`/league/${group.id}?tab=slips`);
             return;
         }
         if (isSlipFinal(slip)) {
-            router.replace(`/group/${group.id}/slips/${slip.id}/results`);
+            router.replace(`/league/${group.id}/slips/${slip.id}/results`);
         }
     }, [group, currentUser, slip, router]);
 

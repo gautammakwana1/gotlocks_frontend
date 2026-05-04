@@ -31,13 +31,13 @@ type RootState = {
     group: GroupSliceState;
 };
 
-type GroupsTabVariant = "standalone" | "embedded";
+type LeaguesTabVariant = "standalone" | "embedded";
 
 type GroupsTabProps = {
-    variant?: GroupsTabVariant;
+    variant?: LeaguesTabVariant;
 };
 
-const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
+const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
     const router = useRouter();
     const dispatch = useDispatch();
     const { setToast } = useToast();
@@ -165,7 +165,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={() => setShowScoringModal(true)}
                     className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Group scoring</p>
+                    <p className="text-sm font-semibold text-white">League scoring</p>
                     <span className={actionIconClassName} aria-hidden>
                         <InfoIcon />
                     </span>
@@ -184,7 +184,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             <button
                                 key={group.id}
                                 type="button"
-                                onClick={() => router.push(`/group/${group.id}`)}
+                                onClick={() => router.push(`/league/${group.id}`)}
                                 className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
@@ -219,7 +219,7 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
                             <button
                                 key={group.id}
                                 type="button"
-                                onClick={() => router.push(`/group/${group.id}`)}
+                                onClick={() => router.push(`/league/${group.id}`)}
                                 className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
@@ -308,13 +308,13 @@ const GroupsTab = ({ variant = "standalone" }: GroupsTabProps) => {
             <ScoringModal
                 open={showScoringModal}
                 onClose={() => setShowScoringModal(false)}
-                variant="group"
+                variant="league"
             />
         </div>
     );
 };
 
-export default GroupsTab;
+export default LeaguesTab;
 
 const ModalShell = ({
     children,

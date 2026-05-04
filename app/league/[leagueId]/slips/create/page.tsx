@@ -95,7 +95,7 @@ const extractGroup = (data: GroupDataShape): Group | null => {
 
 const SlipCreationPage = () => {
     const dispatch = useDispatch();
-    const params = useParams<{ groupId: string }>();
+    const params = useParams<{ leagueId: string }>();
     const searchParams = useSearchParams();
     const router = useRouter();
     const { setToast } = useToast();
@@ -126,10 +126,10 @@ const SlipCreationPage = () => {
     const { leaderboardList: leaderboardListData } = useSelector((state: GroupSelector) => state.group);
 
     useEffect(() => {
-        if (!params.groupId || !currentUser) return;
-        dispatch(fetchGroupByIdRequest({ groupId: params.groupId }));
-        dispatch(fetchAllLeaderboardsRequest({ group_id: params.groupId }))
-    }, [params.groupId, currentUser, dispatch]);
+        if (!params.leagueId || !currentUser) return;
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
+        dispatch(fetchAllLeaderboardsRequest({ group_id: params.leagueId }));
+    }, [params.leagueId, currentUser, dispatch]);
     useEffect(() => {
         if (Array.isArray(leaderboardListData)) {
             setLeaderboardDataList(leaderboardListData)
@@ -147,7 +147,7 @@ const SlipCreationPage = () => {
             dispatch(clearCreateSlipMessage());
             if (group?.id && slip.id) {
                 // setSlipCreating(false)
-                router.replace(`/group/${group?.id}/slips/${slip.id}`)
+                router.replace(`/league/${group?.id}/slips/${slip.id}`)
             };
         }
         if (!slipLoading && slipError) {
@@ -450,7 +450,7 @@ const SlipCreationPage = () => {
                                                     </label>
                                                 ) : (
                                                     <p className="text-xs text-gray-500">
-                                                        Create a secondary leaderboard in Group Settings to add a second
+                                                        Create a secondary leaderboard in League Settings to add a second
                                                         leaderboard.
                                                     </p>
                                                 )
@@ -706,7 +706,7 @@ const SlipCreationPage = () => {
         <>
             <div className="flex flex-col gap-6">
                 <div className="flex items-center justify-between text-xs tracking-wide text-gray-500">
-                    <BackButton fallback={`/group/${group.id}?tab=slips${form.isGraded ? `` : `&mode=vibe`}`} preferFallback />
+                    <BackButton fallback={`/league/${group.id}?tab=slips${form.isGraded ? `` : `&mode=vibe`}`} preferFallback />
                     <span>step {step} / 2</span>
                 </div>
 
