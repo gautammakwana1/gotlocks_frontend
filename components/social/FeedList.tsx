@@ -176,7 +176,7 @@ const FeedList = ({
                     mode: "global",
                 });
                 const tierPrimary = tierMeta
-                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` \u2022 ${tierMeta.points} pts` : ""
+                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` \u2022 ${tierMeta.points} XP` : ""
                     }`
                     : "Tier \u2014";
                 const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;

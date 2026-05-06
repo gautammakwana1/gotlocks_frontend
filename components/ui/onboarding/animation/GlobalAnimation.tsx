@@ -2,9 +2,9 @@
 
 import type { ReactNode } from "react";
 import { EmbedStage } from "./engine";
-import { ProfileScene1 } from "./ProfileScene1";
-import { ProfileScene2 } from "./ProfileScene2";
-import { ProfileScene3 } from "./ProfileScene3";
+import { GlobalScene1 } from "./GlobalScene1";
+import { GlobalScene2 } from "./GlobalScene2";
+import { GlobalScene3 } from "./GlobalScene3";
 
 // Design defaults locked in from the design bundle (Profile Tutorial.html):
 // speed 1.15, duration 7.5, showText false. Scene 2 runs shorter per user
@@ -29,20 +29,20 @@ function StageWrap({
     );
 }
 
-export const ProfileStep1Animation = () => (
+export const GlobalStep1Animation = () => (
     <StageWrap>
-        <ProfileScene1 showText={false} />
+        <GlobalScene1 showText={false} />
     </StageWrap>
 );
 
-export const ProfileStep2Animation = () => (
+export const GlobalStep2Animation = () => (
     <StageWrap duration={SCENE2_DURATION}>
-        <ProfileScene2 showText={false} />
+        <GlobalScene2 showText={false} />
     </StageWrap>
 );
 
-export const ProfileStep3Animation = () => (
+export const GlobalStep3Animation = () => (
     <StageWrap>
-        <ProfileScene3 showText={false} />
+        <GlobalScene3 showText={false} />
     </StageWrap>
 );

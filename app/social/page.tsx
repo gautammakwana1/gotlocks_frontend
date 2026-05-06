@@ -226,7 +226,7 @@ const SocialPage = () => {
         }
     };
 
-    const handleCompleteSocialIntro = () => {
+    const handleCompleteGlobalIntro = () => {
         dispatch(updateTutorialProgressRequest({ tutorial_key: "social" }));
     }
 
@@ -276,7 +276,7 @@ const SocialPage = () => {
                     mode: "global",
                 });
                 const tierPrimary = tierMeta
-                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} pts` : ""
+                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} XP` : ""
                     }`
                     : "Tier —";
                 const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;
@@ -777,7 +777,7 @@ const SocialPage = () => {
                 open={hasSeenWelcomeIntro && !hasSeenSocialIntro}
                 steps={GLOBAL_TUTORIAL}
                 onClose={() => {
-                    handleCompleteSocialIntro();
+                    handleCompleteGlobalIntro();
                     router.push("/home");
                 }}
             />

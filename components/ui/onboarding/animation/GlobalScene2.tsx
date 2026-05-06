@@ -25,7 +25,7 @@ const TIERS: Tier[] = [
     { n: 14, range: "+25001 or greater", pts: 300, hue: 22 },
 ];
 
-export function ProfileScene2({ showText = false }: { showText?: boolean }) {
+export function GlobalScene2({ showText = false }: { showText?: boolean }) {
     const time = useTime();
     const W = 800;
     const H = 1000;
@@ -96,7 +96,7 @@ export function ProfileScene2({ showText = false }: { showText?: boolean }) {
                                 zIndex: 25,
                             }}
                         >
-                            bolder odds · bigger reward
+                            bolder odds · bigger post xp
                         </div>
                     );
                 })()}
@@ -191,7 +191,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "0.04em",
                         }}
                     >
-                        Win
+                        Win XP
                     </div>
                     <div
                         style={{
@@ -202,7 +202,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "-0.01em",
                         }}
                     >
-                        +{tier.pts}
+                        +{tier.pts} XP
                     </div>
                 </div>
             </div>

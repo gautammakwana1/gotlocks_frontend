@@ -28,14 +28,14 @@ type Stat = {
 };
 
 const STATS: Stat[] = [
-    { id: "chips", end: 7500, sub: "lock chips", accent: "#fcd34d", startT: 1.4, tickStart: 2.0, tickDur: 2.0 },
+    { id: "postXp", end: 7500, sub: "post xp", accent: "#fcd34d", startT: 1.4, tickStart: 2.0, tickDur: 2.0 },
     { id: "wins", end: 184, sub: "wins", accent: "#86efac", startT: 1.55, tickStart: 2.15, tickDur: 1.85 },
     { id: "losses", end: 71, sub: "losses", accent: "#fca5a5", startT: 1.7, tickStart: 2.3, tickDur: 1.7 },
     { id: "followers", end: 550, sub: "followers", accent: "#bef0ff", startT: 1.85, tickStart: 2.45, tickDur: 1.55 },
     { id: "following", end: 451, sub: "following", accent: "#bef0ff", startT: 2.0, tickStart: 2.6, tickDur: 1.4 },
 ];
 
-export function ProfileScene1({ showText = false }: { showText?: boolean }) {
+export function GlobalScene1({ showText = false }: { showText?: boolean }) {
     const time = useTime();
     const W = 800;
     const H = 1000;

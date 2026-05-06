@@ -2,9 +2,9 @@
 
 import type { ReactNode } from "react";
 import { EmbedStage } from "./engine";
-import { LeagueScene1 } from "./LeagueScene1";
-import { LeagueScene2 } from "./LeagueScene2";
-import { LeagueScene3 } from "./LeagueScene3";
+import { GroupScene1 } from "./GroupScene1";
+import { GroupScene2 } from "./GroupScene2";
+import { GroupScene3 } from "./GroupScene3";
 
 // Design defaults locked in from the design bundle (Group Tutorial.html):
 // speed 1.25, duration 6, showText false. Scene 3 runs slower/longer per
@@ -32,20 +32,20 @@ function StageWrap({
     );
 }
 
-export const LeagueStep1Animation = () => (
+export const GroupStep1Animation = () => (
     <StageWrap>
-        <LeagueScene1 showText={false} />
+        <GroupScene1 showText={false} />
     </StageWrap>
 );
 
-export const LeagueStep2Animation = () => (
+export const GroupStep2Animation = () => (
     <StageWrap>
-        <LeagueScene2 showText={false} />
+        <GroupScene2 showText={false} />
     </StageWrap>
 );
 
-export const LeagueStep3Animation = () => (
+export const GroupStep3Animation = () => (
     <StageWrap speed={SCENE3_SPEED} duration={SCENE3_DURATION}>
-        <LeagueScene3 showText={false} />
+        <GroupScene3 showText={false} />
     </StageWrap>
 );

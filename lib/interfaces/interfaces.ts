@@ -18,7 +18,7 @@ export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
 export type SlipConflictWarningMode = "competition" | "group_combo";
 
-export type TutorialKeys = "home" | "social" | "league" | "profile" | "global" | null;
+export type TutorialKeys = "home" | "social" | "group" | "profile" | "global" | null;
 
 export type TierIndex =
     | 1

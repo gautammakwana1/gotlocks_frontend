@@ -30,7 +30,6 @@ type ProfileHeaderStats = {
     followers: number;
     following: number;
     groups: number;
-    globalPoints: number;
     joinedAt?: string;
 };
 
@@ -220,46 +219,46 @@ const ProfileHeader = ({
         }
     };
 
-    const renderOptionsMenu = () => {
-        return (
-            <details ref={optionsMenuRef} className="relative z-20">
-                <summary
-                    aria-label="Profile options"
-                    className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
-                >
-                    <EditIcon />
-                </summary>
-                <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
-                    <button
-                        type="button"
-                        onClick={(event) => {
-                            handleEdit();
-                            closeDetailsMenu(event);
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition hover:bg-white/10"
-                    >
-                        edit name
-                    </button>
-                    <button
-                        type="button"
-                        onClick={(event) => {
-                            onPrivacyToggle();
-                            closeDetailsMenu(event);
-                        }}
-                        className={`mt-1 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-[11px] uppercase tracking-wide transition ${user.is_public
-                            ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
-                            : "border-white/20 bg-white/10 text-white"
-                            }`}
-                    >
-                        {user.is_public ? "Public profile" : "Private profile"}
-                        <span className="text-[10px] text-white/60">
-                            {user.is_public ? "visible" : "hidden"}
-                        </span>
-                    </button>
-                </div>
-            </details>
-        );
-    };
+    // const renderOptionsMenu = () => {
+    //     return (
+    //         <details ref={optionsMenuRef} className="relative z-20">
+    //             <summary
+    //                 aria-label="Profile options"
+    //                 className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
+    //             >
+    //                 <EditIcon />
+    //             </summary>
+    //             <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
+    //                 <button
+    //                     type="button"
+    //                     onClick={(event) => {
+    //                         handleEdit();
+    //                         closeDetailsMenu(event);
+    //                     }}
+    //                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition hover:bg-white/10"
+    //                 >
+    //                     edit name
+    //                 </button>
+    //                 <button
+    //                     type="button"
+    //                     onClick={(event) => {
+    //                         onPrivacyToggle();
+    //                         closeDetailsMenu(event);
+    //                     }}
+    //                     className={`mt-1 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-[11px] uppercase tracking-wide transition ${user.is_public
+    //                         ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
+    //                         : "border-white/20 bg-white/10 text-white"
+    //                         }`}
+    //                 >
+    //                     {user.is_public ? "Public profile" : "Private profile"}
+    //                     <span className="text-[10px] text-white/60">
+    //                         {user.is_public ? "visible" : "hidden"}
+    //                     </span>
+    //                 </button>
+    //             </div>
+    //         </details>
+    //     );
+    // };
 
     useEffect(() => {
         if (!user?.username) return;
@@ -313,9 +312,9 @@ const ProfileHeader = ({
         };
     }, []);
 
-    const handleEdit = () => {
-        setIsEditing(true);
-    };
+    // const handleEdit = () => {
+    //     setIsEditing(true);
+    // };
 
     const validate = useCallback((): boolean => {
         const nextErrors: FormErrors = {};
@@ -552,9 +551,6 @@ const ProfileHeader = ({
                             <div className={`flex h-full flex-col gap-4 ${!viewerBlockedTarget ? "border-l border-white/10" : ""} pl-4 sm:gap-5 sm:pl-5 lg:pl-6`}>
                                 {showRightSummary && (
                                     <div className="space-y-3 pt-2">
-                                        <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.2em]">
-                                            {stats.globalPoints} lock chips
-                                        </p>
                                         <div className="flex flex-nowrap items-center gap-3 text-xs uppercase tracking-[0.16em] text-white/80 sm:gap-4 sm:text-sm sm:tracking-[0.18em]">
                                             {recordItems.map((item) => (
                                                 <div

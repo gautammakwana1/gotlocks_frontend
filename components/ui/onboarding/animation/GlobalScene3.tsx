@@ -45,7 +45,7 @@ const FOR_YOU_PICKS: Pick[] = [
         hue: 220,
         league: "COMBO",
         leagueLine: "COMBO · 3 picks · posted at: May 2, 4:29 PM",
-        tier: "Tier 5 · 45 pts",
+        tier: "Tier 5 · 45 XP",
         confidence: "high",
         combo: true,
         comboOdds: "+659",
@@ -63,7 +63,7 @@ const FOR_YOU_PICKS: Pick[] = [
         hue: 200,
         league: "NBA",
         leagueLine: "NBA · 4 picks · posted at: May 2, 4:29 PM",
-        tier: "Tier 5 · 45 pts",
+        tier: "Tier 5 · 45 XP",
         confidence: "high",
         combo: true,
         comboOdds: "+577",
@@ -85,7 +85,7 @@ const FOLLOWING_PICKS: Pick[] = [
         hue: 160,
         league: "MLB",
         leagueLine: "MLB · 4 picks · posted at: May 2, 4:28 PM",
-        tier: "Tier 6 · 60 pts",
+        tier: "Tier 6 · 60 XP",
         confidence: "medium",
         combo: true,
         comboOdds: "+879",
@@ -110,7 +110,7 @@ const WINNERS_PICKS: Pick[] = [
         pickType: "game lines",
         name: "Philadelphia 76ers Moneyline",
         odds: "+640",
-        tier: "Tier 5 · 45 pts",
+        tier: "Tier 5 · 45 XP",
         confidence: "high",
         status: "win",
         startT: 4.7,
@@ -125,14 +125,14 @@ const WINNERS_PICKS: Pick[] = [
         pickType: "game lines",
         name: "Minnesota Timberwolves Moneyline",
         odds: "+240",
-        tier: "Tier 4 · 35 pts",
+        tier: "Tier 4 · 35 XP",
         confidence: "low",
         status: "win",
         startT: 5.2,
     },
 ];
 
-export function ProfileScene3({ showText = false }: { showText?: boolean }) {
+export function GlobalScene3({ showText = false }: { showText?: boolean }) {
     const time = useTime();
 
     const tabT = clamp(time / 0.6, 0, 1);

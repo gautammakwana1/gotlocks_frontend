@@ -1,4 +1,4 @@
-export const XP_DAILY_CAP = 300;
+export const XP_POST_DAILY_CAP = 1000;
 export const XP_LEVEL_BASE = 250;
 
 export const getLocalDateKey = (date: Date) => {

@@ -2337,7 +2337,7 @@ const DeadlinesOverviewModal = ({
                                         Pending picks stay locked until their games finish and grading can resolve
                                         them.
                                     </li>
-                                    <li>Not found and void settle at 0 XP impact by default.</li>
+                                    <li>Not found and void settle without any profile XP impact.</li>
                                     <li>As soon as every pick is graded, the slip finalizes automatically.</li>
                                 </>
                             )}

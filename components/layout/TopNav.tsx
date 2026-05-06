@@ -11,7 +11,7 @@ import type { CurrentUser, TutorialKeys } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
-import { GLOBAL_TUTORIAL, LEAGUE_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import * as Sentry from "@sentry/nextjs";
 
 type AuthUserPayload = {
@@ -41,14 +41,15 @@ export const TopNav = () => {
   const tutorialSteps =
     tutorialStage === "home"
       ? WELCOME_TUTORIAL
-      : tutorialStage === "league"
-        ? LEAGUE_TUTORIAL
+      : tutorialStage === "group"
+        ? GROUP_TUTORIAL
         : tutorialStage === "global"
           ? GLOBAL_TUTORIAL
           : WELCOME_TUTORIAL;
+  const tutorialFinalCta = tutorialStage === "global" ? "let's go 🔒" : "finish";
   const advanceTutorial = () => {
     setTutorialStage((prev) =>
-      prev === "home" ? "league" : prev === "league" ? "global" : null
+      prev === "home" ? "group" : prev === "group" ? "global" : null
     );
   };
 
@@ -217,7 +218,7 @@ export const TopNav = () => {
               </button>
               <Link
                 href="/global-points-shop"
-                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-amber-300/50 hover:bg-amber-400/10"
+                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-sky-300/50 hover:bg-sky-400/10"
                 onClick={() => setMenuOpen(false)}
               >
                 <span>the shop</span>
@@ -292,6 +293,7 @@ export const TopNav = () => {
         open={tutorialStage !== null}
         steps={tutorialSteps}
         onClose={advanceTutorial}
+        finalCtaLabel={tutorialFinalCta}
       />
     </>
   );

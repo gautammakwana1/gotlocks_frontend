@@ -606,8 +606,8 @@ const HomeTab = () => {
             value: String(slipsCount?.open_slip ?? 0),
         },
         {
-            label: "Lock chips",
-            value: String(progress?.lifetime_xp ?? 0),
+            label: "Post wins",
+            value: String(picksCount?.win ?? 0),
             highlight: true,
         },
         {
@@ -909,13 +909,11 @@ const HomeTab = () => {
                     )}
                 </div>
             </section>
-            {/* {showOnboarding && (
-                <OnboardingModal open={showOnboarding} onClose={handleCompleteIntro} />
-            )} */}
             <OnboardingModal
                 open={!hasSeenWelcomeIntro}
                 steps={WELCOME_TUTORIAL}
                 onClose={handleCompleteWelcomeIntro}
+                finalCtaLabel="finish"
             />
             {joinOpen && (
                 <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">

@@ -1273,7 +1273,7 @@ const GroupPage = () => {
                     <section className="space-y-4">
                       <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
                         <span className="text-xs font-normal normal-case text-gray-500">
-                          XP only
+                          Casual slips
                         </span>
                       </div>
                       <SlipCategorySection

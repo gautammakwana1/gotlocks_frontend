@@ -184,8 +184,10 @@ export const OnboardingModal = ({ open, steps, onClose, finalCtaLabel = "let's g
                     <ImageMedia step={current} />
                 )}
 
-                {/* Step content */}
-                <div className="mx-auto w-full max-w-xl px-6 pb-2 pt-4 sm:max-w-3xl sm:px-10 sm:pb-4 sm:pt-8">
+                {/* Step content — flex-1 so the text section always claims the same vertical
+            space between the fixed-height media and the fixed bottom row. Bodies of
+            varying length wrap inside this stable container without shifting layout. */}
+                <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-6 pb-2 pt-4 sm:max-w-3xl sm:px-10 sm:pb-4 sm:pt-8">
                     <h2 className="mb-2 text-xl font-bold text-white sm:mb-3 sm:text-3xl">
                         {current?.title}
                     </h2>
@@ -225,7 +227,8 @@ export const OnboardingModal = ({ open, steps, onClose, finalCtaLabel = "let's g
                 </div>
             </div>
 
-            {/* Bottom row: skip always visible; final CTA on last step */}
+            {/* Bottom row: skip always visible; CTA placeholder reserves space on every step
+          so the row height (and everything above it) doesn't shift on the final step. */}
             <div className="relative z-20 flex items-center justify-between gap-4 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 sm:px-10 sm:pb-8 sm:pt-6">
                 <button
                     type="button"
@@ -234,15 +237,16 @@ export const OnboardingModal = ({ open, steps, onClose, finalCtaLabel = "let's g
                 >
                     skip
                 </button>
-                {isLast && (
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="ui-accent-button rounded-xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition sm:px-7 sm:py-3 sm:text-sm"
-                    >
-                        {finalCtaLabel}
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onClick={onClose}
+                    aria-hidden={!isLast}
+                    tabIndex={isLast ? 0 : -1}
+                    className={`ui-accent-button rounded-xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition sm:px-7 sm:py-3 sm:text-sm ${isLast ? "" : "pointer-events-none invisible"
+                        }`}
+                >
+                    {finalCtaLabel}
+                </button>
             </div>
         </div>
     );

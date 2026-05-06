@@ -1,6 +1,6 @@
 import { OnboardingStep } from "@/components/modals/OnboardingModal";
-import { LeagueStep1Animation, LeagueStep2Animation, LeagueStep3Animation } from "@/components/ui/onboarding/animation/LeagueAnimation";
-import { ProfileStep1Animation, ProfileStep2Animation, ProfileStep3Animation } from "@/components/ui/onboarding/animation/ProfileAnimation";
+import { GroupStep1Animation, GroupStep2Animation, GroupStep3Animation } from "@/components/ui/onboarding/animation/GroupAnimation";
+import { GlobalStep1Animation, GlobalStep2Animation, GlobalStep3Animation } from "@/components/ui/onboarding/animation/GlobalAnimation";
 import { WelcomeStep1Animation, WelcomeStep2Animation, WelcomeStep3Animation } from "@/components/ui/onboarding/animation/WelcomeAnimation";
 
 export const WELCOME_TUTORIAL: OnboardingStep[] = [
@@ -24,21 +24,21 @@ export const WELCOME_TUTORIAL: OnboardingStep[] = [
     },
 ];
 
-export const LEAGUE_TUTORIAL: OnboardingStep[] = [
+export const GROUP_TUTORIAL: OnboardingStep[] = [
     {
-        mediaNode: <LeagueStep1Animation />,
+        mediaNode: <GroupStep1Animation />,
         mediaAlt: "Commissioner and members",
         title: "Know your role",
         body: "Leagues are where your crew gets organized. Every league has a commissioner and members — start your own and you're the commissioner by default. Move as a unit, compete against each other, or both.",
     },
     {
-        mediaNode: <LeagueStep2Animation />,
+        mediaNode: <GroupStep2Animation />,
         mediaAlt: "Leaderboard slip",
         title: "The leaderboard slip",
-        body: "Created by the commissioner. Choose from the available games and lock in one pick. Your odds determine your scoring tier, so the bolder the call the bigger the reward. Losses are -15 by default but the commissioner can adjust. Once finalized, results push straight to the league standings.",
+        body: "Created by the commissioner. Choose from the available games and lock in one pick. Your odds determine your league scoring tier, so the bolder the call the bigger the league score. Losses are -15 by default but the commissioner can adjust. Once finalized, results push straight to the private league standings.",
     },
     {
-        mediaNode: <LeagueStep3Animation />,
+        mediaNode: <GroupStep3Animation />,
         mediaAlt: "Vibe slips",
         title: "Just for fun? Vibe slips",
         body: "Anyone can create one. Bundle multiple picks into a single submission and let other members stack their own picks on top. No limit, no leaderboard impact, just gut feels, wild combos, and odds that stack up fast.",
@@ -47,19 +47,19 @@ export const LEAGUE_TUTORIAL: OnboardingStep[] = [
 
 export const GLOBAL_TUTORIAL: OnboardingStep[] = [
     {
-        mediaNode: <ProfileStep1Animation />,
+        mediaNode: <GlobalStep1Animation />,
         mediaAlt: "Public profile",
         title: "Your public profile",
         body: "Your public profile shows your level and your record. Drop single picks or bundle multiple into one post and let everyone see where you stand. Every post grades automatically when the games finish and your record updates in real time.",
     },
     {
-        mediaNode: <ProfileStep2Animation />,
+        mediaNode: <GlobalStep2Animation />,
         mediaAlt: "Rewards",
         title: "How you get rewarded",
-        body: "Wins earn both XP and Lock Chips based on your scoring tier. The bolder the call the bigger the reward. Losses deduct 15 chips by default. XP levels up your profile, Lock Chips are your currency to spend in The Shop.",
+        body: "Winning posts earn XP based on their odds tier. The bolder the call the bigger the XP reward. Losses only mark the post as a loss. Leveling up your profile automatically unlocks more Shop access.",
     },
     {
-        mediaNode: <ProfileStep3Animation />,
+        mediaNode: <GlobalStep3Animation />,
         mediaAlt: "Global feed tabs",
         title: "Discover & connect",
         body: "For You, Following, Winners. Three tabs that make up your global feed. Scroll to find picks worth tailing, react to boost the ones that deserve more eyes, and follow anyone whose record speaks for itself.",

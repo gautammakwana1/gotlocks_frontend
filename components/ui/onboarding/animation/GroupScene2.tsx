@@ -11,7 +11,7 @@ const TEXT_DIM = "#7a8aa6";
 const TEXT_DIMMER = "#566380";
 const CYAN = "#7dd3fc";
 
-export function LeagueScene2(_props: { showText?: boolean } = {}) {
+export function GroupScene2(_props: { showText?: boolean } = {}) {
     const time = useTime();
 
     const listInT = clamp(time / 0.5, 0, 1);

@@ -26,7 +26,7 @@ const decimalToAmerican = (dec: number) => {
 
 const formatAmerican = (am: number) => (am >= 0 ? "+" : "−") + Math.abs(am);
 
-export function LeagueScene3(_props: { showText?: boolean } = {}) {
+export function GroupScene3(_props: { showText?: boolean } = {}) {
     const time = useTime();
 
     const beat1Out = clamp((time - 2.0) / 0.4, 0, 1);

@@ -3,7 +3,7 @@
 import OnboardingModal from "@/components/modals/OnboardingModal";
 import LeaguesTab from "@/components/profile/GroupsTab";
 import { RootState } from "@/lib/interfaces/interfaces";
-import { LEAGUE_TUTORIAL } from "@/lib/onboarding/tutorials";
+import { GROUP_TUTORIAL } from "@/lib/onboarding/tutorials";
 import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -12,7 +12,7 @@ const FantasyPage = () => {
     const { hasSeenGroupIntro, hasSeenWelcomeIntro } = useSelector((state: RootState) => state.progress);
 
     const handleCompleteLeagueIntro = () => {
-        dispatch(updateTutorialProgressRequest({ tutorial_key: "league" }));
+        dispatch(updateTutorialProgressRequest({ tutorial_key: "group" }));
     }
 
     return (
@@ -20,8 +20,9 @@ const FantasyPage = () => {
             <LeaguesTab />
             <OnboardingModal
                 open={hasSeenWelcomeIntro && !hasSeenGroupIntro}
-                steps={LEAGUE_TUTORIAL}
+                steps={GROUP_TUTORIAL}
                 onClose={handleCompleteLeagueIntro}
+                finalCtaLabel="finish"
             />
         </>
     )

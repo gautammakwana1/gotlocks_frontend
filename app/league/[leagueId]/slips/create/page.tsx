@@ -40,7 +40,7 @@ const MODE_INFO = {
             </>,
             <>
                 <span className="font-semibold text-amber-200">Vibe slips</span> are casual,
-                XP-only, allow multiple picks, and can be created by any member.
+                allow multiple picks, and can be created by any member.
             </>,
         ] as ReactNode[],
     },
@@ -62,7 +62,7 @@ const MODE_INFO = {
     },
     vibe: {
         title: "Vibe slip",
-        summary: "Vibe slips are casual, award XP only, and skip review.",
+        summary: "Vibe slips are casual and skip review.",
         bullets: [
             <>any member can create one for quick, low-stakes bragging rights.</>,
             <>

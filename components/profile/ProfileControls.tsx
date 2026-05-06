@@ -11,7 +11,7 @@ export type ConfidenceFilter = "all" | "HIGH" | "MEDIUM" | "LOW";
 export type SortOption =
     | "newest"
     | "oldest"
-    | "highestPoints"
+    | "highestXp"
     | "mostLegs";
 
 type ProfileControlsProps = {
@@ -61,7 +61,7 @@ const ProfileControls = ({
     const sortOptions: Array<{ value: SortOption; label: string }> = [
         { value: "newest", label: "Newest" },
         { value: "oldest", label: "Oldest" },
-        { value: "highestPoints", label: "Most points" },
+        { value: "highestXp", label: "Highest XP" },
     ];
 
     const hasActiveFilters =

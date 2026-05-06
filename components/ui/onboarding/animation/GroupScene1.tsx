@@ -23,7 +23,7 @@ const memberOffsets = [
     { dx: 35, dy: 38 },
 ];
 
-export function LeagueScene1({ showText = false }: { showText?: boolean }) {
+export function GroupScene1({ showText = false }: { showText?: boolean }) {
     const time = useTime();
     const W = 800;
     const H = 1000;

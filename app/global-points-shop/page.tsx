@@ -1,49 +1,71 @@
 "use client";
 
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { clearRedeemGlobalPointsMessage, fetchProgressByUserIdRequest, redeemGlobalPointsRequest } from "@/lib/redux/slices/progressSlice";
+import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { RootState } from "@/lib/interfaces/interfaces";
-import { useToast } from "@/lib/state/ToastContext";
-import { ChevronUpDownIcon } from "@/components/ui/SvgIcons";
+import { getLevelProgress, getTotalXpToReachLevel } from "@/lib/utils/progression";
 
-const pointFormatter = new Intl.NumberFormat("en-US");
-const rewardSlots = [0, 1, 2];
+const numberFormatter = new Intl.NumberFormat("en-US");
 
-type RewardSelection = {
-    bucketPoints: number;
-    slotIndex: number;
+type ShopReward = {
+    name: string;
+    kind: "Virtual" | "Physical";
+    price: "Free" | `$${number}`;
 };
 
-const redemptionBuckets = [
+type ShopTier = {
+    level: number;
+    title: string;
+    rewards: ShopReward[];
+};
+
+const rewardTiers: ShopTier[] = [
     {
-        points: 1000,
-        title: "Redeem 1,000 pts",
-        description: "Starter-tier rewards.",
+        level: 5,
+        title: "Starter Access",
+        rewards: [
+            { name: "Profile frame", kind: "Virtual", price: "Free" },
+            { name: "Pick card theme", kind: "Virtual", price: "Free" },
+            { name: "Sticker pack", kind: "Physical", price: "$4" },
+        ],
     },
     {
-        points: 5000,
-        title: "Redeem 5,000 pts",
-        description: "Mid-tier rewards and bundles.",
+        level: 15,
+        title: "Riser Access",
+        rewards: [
+            { name: "Badge slot", kind: "Virtual", price: "Free" },
+            { name: "Profile banner", kind: "Virtual", price: "$8" },
+            { name: "League flair pack", kind: "Physical", price: "$12" },
+        ],
     },
     {
-        points: 20000,
-        title: "Redeem 20,000 pts",
-        description: "Top-tier premium rewards.",
+        level: 25,
+        title: "Contender Access",
+        rewards: [
+            { name: "Avatar frame", kind: "Virtual", price: "Free" },
+            { name: "Merch code", kind: "Virtual", price: "$15" },
+            { name: "Premium sticker kit", kind: "Physical", price: "$20" },
+        ],
+    },
+    {
+        level: 35,
+        title: "Legend Access",
+        rewards: [
+            { name: "Legend profile treatment", kind: "Virtual", price: "Free" },
+            { name: "gotLocks hat", kind: "Physical", price: "$28" },
+            { name: "gotLocks hoodie", kind: "Physical", price: "$55" },
+        ],
     },
 ];
 
 const GlobalPointsShopPage = () => {
     const dispatch = useDispatch();
-    const { setToast } = useToast();
     const currentUser = useCurrentUser();
     const currentUserId = currentUser?.userId ?? undefined;
-    const [openBuckets, setOpenBuckets] = useState<Record<number, boolean>>({});
-    const [selectedReward, setSelectedReward] = useState<RewardSelection | null>(null);
-    const [pendingRedemption, setPendingRedemption] = useState<RewardSelection | null>(null);
 
-    const { progress, loading, message, error } = useSelector((state: RootState) => state.progress);
+    const { progress } = useSelector((state: RootState) => state.progress);
 
     useEffect(() => {
         if (currentUserId) {
@@ -51,254 +73,110 @@ const GlobalPointsShopPage = () => {
         }
     }, [currentUserId, dispatch]);
 
-    useEffect(() => {
-        if (!loading && message) {
-            setToast({
-                id: Date.now(),
-                type: "success",
-                message: message,
-                duration: 3000
-            })
-            dispatch(clearRedeemGlobalPointsMessage());
-        }
-        if (!loading && error) {
-            setToast({
-                id: Date.now(),
-                type: "error",
-                message: error,
-                duration: 3000
-            })
-            dispatch(clearRedeemGlobalPointsMessage());
-        }
-    }, [dispatch, setToast, loading, message, error]);
-
     const currentBalance = progress?.lifetime_xp ?? 0;
 
-    const handleToggleBucket = (bucketPoints: number) => {
-        const isOpen = openBuckets[bucketPoints] ?? false;
-
-        if (isOpen && selectedReward?.bucketPoints === bucketPoints) {
-            setSelectedReward(null);
-        }
-
-        setOpenBuckets((prev) => ({
-            ...prev,
-            [bucketPoints]: !isOpen,
-        }));
-    };
-
-    const handleSelectReward = (
-        bucketPoints: number,
-        slotIndex: number,
-        canAfford: boolean
-    ) => {
-        if (!canAfford) return;
-
-        setSelectedReward((prev) =>
-            prev?.bucketPoints === bucketPoints && prev.slotIndex === slotIndex
-                ? null
-                : { bucketPoints, slotIndex }
-        );
-    };
-
-    const closeRedeemModal = () => setPendingRedemption(null);
-
-    const handleConfirmRedemption = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-
-        if (!pendingRedemption) return;
-        dispatch(redeemGlobalPointsRequest({ points: pendingRedemption.bucketPoints }));
-        setPendingRedemption(null);
-        setSelectedReward(null);
-    };
+    const userProgress = getLevelProgress(currentBalance);
+    const nextLockedTier = rewardTiers.find((tier) => userProgress.level < tier.level);
+    const nextUnlockXp = nextLockedTier
+        ? Math.max(
+            0,
+            getTotalXpToReachLevel(nextLockedTier.level) - currentBalance
+        )
+        : 0;
 
     if (!currentUser) return null;
 
     return (
         <div className="mx-auto w-full max-w-4xl" style={{ animation: "homeFadeUp 240ms ease-out both" }}>
-            <div>
-                <header className="flex items-start justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
-                    <div className="min-w-0">
-                        <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">
-                            <span className="block sm:inline">Shop</span>
-                        </h1>
-                    </div>
-                    <div className="shrink-0 pt-1 text-right">
-                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                            Current balance
-                        </p>
-                        <p className="mt-2 text-3xl font-semibold tracking-tight text-[var(--app-text)] sm:text-4xl">
-                            {pointFormatter.format(currentBalance)}
-                        </p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                            lock chips
-                        </p>
-                    </div>
-                </header>
+            <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
+                <div className="min-w-0">
+                    <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">
+                        Shop
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+                        Rewards unlock automatically as your profile level rises.
+                    </p>
+                </div>
+                <div className="shrink-0 text-right">
+                    <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        Profile level
+                    </p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-[var(--app-text)] sm:text-4xl">
+                        {userProgress.level}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        {nextLockedTier
+                            ? `${numberFormatter.format(nextUnlockXp)} XP to level ${nextLockedTier.level}`
+                            : "all tiers unlocked"}
+                    </p>
+                </div>
+            </header>
 
-                <section className="divide-y divide-[var(--border-soft)]">
-                    {redemptionBuckets.map((bucket) => {
-                        const remainingPoints = Math.max(bucket.points - currentBalance, 0);
-                        const canAfford = remainingPoints === 0;
-                        const isOpen = openBuckets[bucket.points] ?? false;
-                        const isSelectedBucket = selectedReward?.bucketPoints === bucket.points;
-                        const canRedeem = canAfford && isSelectedBucket;
+            <section className="divide-y divide-[var(--border-soft)]">
+                {rewardTiers.map((tier) => {
+                    const unlocked = userProgress.level >= tier.level;
+                    const xpRequired = getTotalXpToReachLevel(tier.level);
+                    const xpRemaining = Math.max(0, xpRequired - currentBalance);
 
-                        return (
-                            <div key={bucket.points} className="py-4">
-                                <div className="flex items-start justify-between gap-4 sm:gap-6">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleToggleBucket(bucket.points)}
-                                        className="group flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
-                                        aria-expanded={isOpen}
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="text-lg font-medium tracking-tight text-[var(--app-text)] sm:text-xl">
-                                                {bucket.title}
-                                            </p>
-                                            <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
-                                                {bucket.description}
-                                            </p>
-                                        </div>
-                                    </button>
-                                    <div className="w-[132px] shrink-0 space-y-3 text-right">
-                                        <div className="grid grid-cols-[92px_20px] justify-end items-center gap-1.5">
-                                            <button
-                                                type="button"
-                                                disabled={!canRedeem}
-                                                onClick={() => {
-                                                    if (!selectedReward || selectedReward.bucketPoints !== bucket.points) return;
-                                                    setPendingRedemption(selectedReward);
-                                                }}
-                                                className={`w-[92px] rounded-2xl px-2.5 py-2 text-xs font-semibold uppercase tracking-[0.04em] transition ${canRedeem
-                                                    ? "bg-sky-500/25 text-sky-100 hover:bg-sky-500/35"
-                                                    : "border border-white/10 bg-white/5 text-[var(--text-muted)] disabled:cursor-not-allowed"
-                                                    }`}
-                                            >
-                                                Redeem
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleToggleBucket(bucket.points)}
-                                                className="flex h-9 w-5 items-center justify-center text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
-                                                aria-expanded={isOpen}
-                                                aria-label={`${isOpen ? "Collapse" : "Expand"} ${bucket.title}`}
-                                            >
-                                                <ChevronUpDownIcon className={`h-5 w-5 transition ${isOpen ? "rotate-180" : ""}`} />
-                                            </button>
-                                        </div>
-                                        <p className="text-[10px] uppercase tracking-[0.12em] leading-tight text-[var(--text-muted)]">
-                                            {canAfford ? (
-                                                isSelectedBucket ? (
-                                                    "selected"
-                                                ) : (
-                                                    "available"
-                                                )
-                                            ) : (
-                                                <>
-                                                    <span className="block">{pointFormatter.format(remainingPoints)}</span>
-                                                    <span className="mt-0.5 block">pts away</span>
-                                                </>
-                                            )}
-                                        </p>
-                                    </div>
+                    return (
+                        <div key={tier.level} className="py-5">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-lg font-medium tracking-tight text-[var(--app-text)] sm:text-xl">
+                                        Level {tier.level} · {tier.title}
+                                    </p>
+                                    <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                                        {unlocked
+                                            ? "Unlocked"
+                                            : `${numberFormatter.format(xpRemaining)} XP remaining`}
+                                    </p>
                                 </div>
-
-                                {isOpen ? (
-                                    <div className="mt-4 grid grid-cols-3 gap-3">
-                                        {rewardSlots.map((slotIndex) => {
-                                            const isSelected =
-                                                selectedReward?.bucketPoints === bucket.points &&
-                                                selectedReward.slotIndex === slotIndex;
-
-                                            return (
-                                                <button
-                                                    key={slotIndex}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        handleSelectReward(bucket.points, slotIndex, canAfford)
-                                                    }
-                                                    disabled={!canAfford}
-                                                    aria-pressed={isSelected}
-                                                    aria-label={`Select ${pointFormatter.format(bucket.points)} point reward option ${slotIndex + 1}`}
-                                                    className={`h-20 rounded-2xl border transition ${isSelected
-                                                        ? "border-sky-300/70 bg-sky-500/10 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]"
-                                                        : "border-white/10 bg-white/5 hover:border-white/20"
-                                                        } ${!canAfford ? "cursor-not-allowed opacity-50" : ""}`}
-                                                >
-                                                    <span className="sr-only">
-                                                        Reward option {slotIndex + 1}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                ) : null}
+                                <span
+                                    className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${unlocked
+                                        ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-100"
+                                        : "border-white/10 bg-white/5 text-[var(--text-muted)]"
+                                        }`}
+                                >
+                                    {unlocked ? "available" : "locked"}
+                                </span>
                             </div>
-                        );
-                    })}
-                </section>
-            </div>
 
-            {pendingRedemption && (
-                <ModalShell onClose={closeRedeemModal} maxWidthClass="max-w-sm">
-                    <form onSubmit={handleConfirmRedemption} className="space-y-4">
-                        <div className="space-y-1 text-center">
-                            <h3 className="text-base font-semibold text-white">Redeem points</h3>
-                            <p className="text-xs text-gray-400">
-                                Redeem {pointFormatter.format(pendingRedemption.bucketPoints)} lock chips
-                                for this reward?
-                            </p>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                                {tier.rewards.map((reward) => (
+                                    <div
+                                        key={`${tier.level}-${reward.name}`}
+                                        className={`min-h-[118px] rounded-xl border p-4 transition ${unlocked
+                                            ? "border-white/12 bg-white/[0.055]"
+                                            : "border-white/10 bg-white/[0.025] opacity-55"
+                                            }`}
+                                    >
+                                        <div className="flex h-full flex-col justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm font-semibold text-[var(--app-text)]">
+                                                    {reward.name}
+                                                </p>
+                                                <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                                    {reward.kind}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-sm font-semibold text-sky-100">
+                                                    {reward.price}
+                                                </span>
+                                                <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                                                    {unlocked ? "access" : `lvl ${tier.level}`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex justify-center gap-3">
-                            <button
-                                type="button"
-                                onClick={closeRedeemModal}
-                                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition"
-                            >
-                                Confirm redeem
-                            </button>
-                        </div>
-                    </form>
-                </ModalShell>
-            )}
+                    );
+                })}
+            </section>
         </div>
     );
 };
-
-const ModalShell = ({
-    children,
-    onClose,
-    maxWidthClass = "max-w-3xl",
-    maxHeightClass = "max-h-[90vh]",
-    overflowClassName = "overflow-y-auto",
-    contentClassName = "",
-}: {
-    children: ReactNode;
-    onClose: () => void;
-    maxWidthClass?: string;
-    maxHeightClass?: string;
-    overflowClassName?: string;
-    contentClassName?: string;
-}) => (
-    <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
-        onClick={onClose}
-    >
-        <div
-            className={`relative w-full ${maxWidthClass} ${maxHeightClass} ${overflowClassName} ${contentClassName} rounded-3xl border border-white/10 bg-black p-5 shadow-2xl`}
-            onClick={(event) => event.stopPropagation()}
-        >
-            {children}
-        </div>
-    </div>
-);
 
 export default GlobalPointsShopPage;

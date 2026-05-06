@@ -138,7 +138,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
         mode: "global",
     });
     const tierPrimary = tierMeta
-        ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} pts` : ""
+        ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} XP` : ""
         }`
         : "Tier -";
     const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;

@@ -1,7 +1,7 @@
 # Scoring Modal — gotLocks
 
 ## Purpose
-Reusable component that displays the scoring breakdown for either **profiles (lock chips + XP)** or **groups (leaderboard scoring)**.  
+Reusable component that displays the scoring breakdown for either **profiles (post XP)** or **leagues (leaderboard scoring)**.  
 Lightweight and scrollable — opens as a centered overlay.
 
 ---
@@ -9,8 +9,8 @@ Lightweight and scrollable — opens as a centered overlay.
 ## Trigger Points
 
 - Profile screen → “Profile scoring rules” button (global)  
-- Group screens → “Group scoring” trigger (group)  
-- Pick builder → “Scoring” reference link (group)  
+- League screens → “League scoring” trigger (league)  
+- Pick builder → “Scoring” reference link (league)  
 
 ---
 
@@ -18,19 +18,19 @@ Lightweight and scrollable — opens as a centered overlay.
 
 ### 🧭 Scoring Modes
 
-**Profile scoring (XP + lock chips)**
+**Profile scoring (post XP)**
 - Uses the full Tier 1-14 table (see `ODDS_BRACKETS` in `lib/constants.ts`).  
-- Wins add tier points to lock chips. Losses are -15. Void/not found/pending stay at 0.  
-- XP is awarded on wins only and capped at **300 XP per day**.  
+- Wins add tier XP to profile progression. Losses only mark the post as a loss.  
+- Post XP is awarded on wins only and capped at **1,000 XP per day**.  
 
-**Group leaderboard scoring (Epic cap)**
+**League leaderboard scoring (Epic cap)**
 - Uses the same tier table, but caps at **Epic** (higher odds score as Epic).  
 - Awarded points can override tier points during review.  
-- Vibe slips award XP only and do not impact group standings.  
+- Vibe slips do not impact league standings or profile XP.  
 
 ---
 
-### 🏅 Group Table (Cap Preview)
+### 🏅 League Table (Cap Preview)
 
 | Name | Odds Range | Win Points |
 |------|------------|------------|

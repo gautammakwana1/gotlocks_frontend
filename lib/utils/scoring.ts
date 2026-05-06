@@ -184,7 +184,7 @@ export const getPickPoints = (
         const base = getBasePointsForPick(pick, mode);
         return mode === "leagueLeaderboard" ? Math.min(base, LEAGUE_CAP_POINTS) : base;
     }
-    if (result === "loss") return -15;
+    if (result === "loss") mode === "leagueLeaderboard" ? -15 : 0;
     if (result === "void" || result === "not_found") return 0;
     return 0;
 };

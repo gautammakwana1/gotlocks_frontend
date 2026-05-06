@@ -16,7 +16,7 @@ import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowe
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { getPickPoints } from "@/lib/utils/scoring";
+import { getBasePointsForPick, getPickPoints } from "@/lib/utils/scoring";
 import ScoringModal from "../modals/ScoringModal";
 import Link from "next/link";
 import Image from "next/image";
@@ -334,10 +334,10 @@ const ProfileView = ({
             const timeA = getPickTimestamp(a);
             const timeB = getPickTimestamp(b);
             if (sortOption === "oldest") return timeA - timeB;
-            if (sortOption === "highestPoints") {
-                const pointsA = getPickPoints(a);
-                const pointsB = getPickPoints(b);
-                if (pointsB !== pointsA) return pointsB - pointsA;
+            if (sortOption === "highestXp") {
+                const xpA = getBasePointsForPick(a);
+                const xpB = getBasePointsForPick(b);
+                if (xpB !== xpA) return xpB - xpA;
                 return timeB - timeA;
             }
             if (sortOption === "mostLegs") {
@@ -627,7 +627,6 @@ const ProfileView = ({
                     followers: isSelfMode ? followers?.length ?? 0 : followersById?.length ?? 0,
                     following: isSelfMode ? followings?.length ?? 0 : followingsById?.length ?? 0,
                     groups: targetUser?.groups ?? 0,
-                    globalPoints: showStats || showLockedPrivateHeaderSummary ? progress?.lifetime_xp ?? 0 : 0,
                     joinedAt: targetUser.created_at,
                 }}
                 progress={{

@@ -3,8 +3,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { formatTierPrimary, getGroupTierColor, getGroupTierName, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER } from "@/lib/utils/scoring";
-import { XP_DAILY_CAP } from "@/lib/utils/progression";
 import Link from "next/link";
+import { XP_POST_DAILY_CAP } from "@/lib/utils/progression";
 
 type Props = {
   open: boolean;
@@ -19,7 +19,7 @@ const GROUP_MODAL_TABS = [
 
 const GLOBAL_MODAL_TABS = [
   { id: "scoring", label: "Scoring & XP" },
-  { id: "shop", label: "Global Tier Table" },
+  { id: "shop", label: "Shop Access" },
 ] as const;
 
 type GroupModalTab = (typeof GROUP_MODAL_TABS)[number]["id"];
@@ -59,7 +59,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       : "League Scoring Rules";
   const modalSubtitle =
     variant === "global"
-      ? "How post scoring, XP, and lock chips connect to profiles and the shop."
+      ? "How post XP levels up your profile and unlocks shop access."
       : "How slips, scoring, and commissioner controls work inside your league.";
   const modalWidthClassName = "max-w-3xl";
   const modalHeaderClassName = "px-6 py-5 sm:px-7";
@@ -272,8 +272,10 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 : "flex flex-col items-end gap-1 text-right leading-tight"
           }
         >
-          <p className={pointsLabelClassName}>Win</p>
-          <p className={pointsValueClassName}>+{tier.points} pts</p>
+          <p className={pointsLabelClassName}>{isGlobalCard ? "Win XP" : "Win"}</p>
+          <p className={pointsValueClassName}>
+            +{tier.points} {isGlobalCard ? "XP" : "pts"}
+          </p>
         </div>
       </div>
     );
@@ -360,8 +362,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   get reviewed, scored, and finalized.
                 </li>
                 <li>
-                  <strong>Vibe Slips.</strong> Casual league play for profile
-                  progression. They never affect leaderboard totals.
+                  <strong>Vibe Slips.</strong> Casual league play. They never affect
+                  leaderboard totals or profile XP.
                 </li>
               </ul>
             ),
@@ -505,8 +507,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   their finalized Leaderboard Slip results.
                 </li>
                 <li>
-                  <strong>Vibe Slips.</strong> They can award XP, but they never change
-                  league standings.
+                  <strong>Vibe Slips.</strong> They never change league standings or
+                  profile XP.
                 </li>
               </ul>
             ),
@@ -560,31 +562,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   Losses do <strong>not</strong> remove XP.
                 </li>
                 <li>
-                  You can earn up to <strong>{XP_DAILY_CAP} XP per day</strong>.
-                </li>
-              </ul>
-            ),
-          })}
-
-          {renderRuleCard({
-            isOpen: openGlobalSections.scoring === "global-points",
-            onToggle: () => toggleGlobalSection("scoring", "global-points"),
-            panelId: "global-rule-scoring-global-points",
-            eyebrow: "Currency",
-            title: "What are Lock Chips?",
-            children: (
-              <ul className={groupBulletListClassName}>
-                <li>
-                  Lock chips are earned through your posts and used to unlock
-                  exclusive rewards.
-                </li>
-                <li>
-                  Winning posts add points based on their tier, while losses
-                  subtract points.
-                </li>
-                <li>
-                  The more success you have posting, the more lock chips you
-                  earn.
+                  Winning posts can award up to{" "}
+                  <strong>{XP_POST_DAILY_CAP} post XP per day</strong>.
                 </li>
               </ul>
             ),
@@ -595,19 +574,18 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGlobalSection("scoring", "settlement"),
             panelId: "global-rule-scoring-settlement",
             eyebrow: "Basics",
-            title: "When do points and XP get added?",
+            title: "When does XP get added?",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  Your posts need to settle before any points or XP are added to
-                  your profile.
+                  Posts need to settle as wins before XP is added to your profile.
                 </li>
                 <li>
-                  Once a post is graded, your rewards will update automatically.
+                  Losses only mark the post as a loss. They do not remove XP or
+                  create any profile penalty.
                 </li>
                 <li>
-                  You&apos;ll also receive a notification when points or XP are
-                  added.
+                  League slips and vibe slips do not award profile XP.
                 </li>
               </ul>
             ),
@@ -623,16 +601,16 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           onToggle: () => toggleGlobalSection("shop", "tiers"),
           panelId: "global-rule-shop-tiers",
           eyebrow: "Tiers",
-          title: "Global tier table",
+          title: "Post XP tier table",
           children: (
             <div className="space-y-4">
               <ul className={groupBulletListClassName}>
                 <li>
-                  Your posts are scored by tier based on their odds.
+                  Winning posts earn XP based on their odds tier.
                 </li>
                 <li>
-                  Higher-risk picks can earn more lock chips on wins, while
-                  losses are always <strong>-15 points</strong>.
+                  Higher-risk picks can earn more XP on wins. Losses carry no XP
+                  penalty.
                 </li>
               </ul>
               <div className={globalGridClassName}>
@@ -657,7 +635,10 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           title: "The Shop",
           children: (
             <div className="space-y-4">
-              <p>Redeem your lock chips for exclusive rewards.</p>
+              <p>
+                Shop tiers unlock automatically at levels 5, 15, 25, and 35.
+                Unlocked rewards can be free or purchasable by dollar price.
+              </p>
               <Link
                 href="/global-points-shop"
                 onClick={onClose}
