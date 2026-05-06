@@ -9,7 +9,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearUpdateProfileMessage, fetchMemberProfileRequest, updateProfilePublicOrPrivateRequest, updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { Profile } from "@/lib/interfaces/interfaces";
 import { calculateAge, checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
-import FootballAnimation from "@/components/animations/FootballAnimation";
+import AccountInformationSkeleton from "@/components/skeletons/app-settings/AccountInformationSkeleton";
 import { ArrowLeft } from "lucide-react";
 
 type AuthSliceState = {
@@ -213,14 +213,8 @@ const AccountInformationPage = () => {
     if (!currentUser) return null;
 
     if (loading) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
-        )
-    };
+        return <AccountInformationSkeleton />;
+    }
 
     return (
         <div className="mx-auto w-full max-w-2xl space-y-6">

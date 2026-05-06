@@ -1,73 +1,27 @@
 "use client";
 
-import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
-import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { formatDateTime } from "@/lib/utils/date";
-import {
-    DEFAULT_ELIGIBLE_WINDOW_DAYS,
-} from "@/lib/utils/games";
-import {
-    normalizeOddToLeg,
-    validateAddLeg,
-} from "@/lib/sgp/validateParlay";
-import {
-    formatTierPrimary,
-    getGroupTierForAmericanOdds,
-    getTierForAmericanOdds,
-    getTierMetaForPick,
-    parseAmericanOdds,
-    TierIndex,
-} from "@/lib/utils/scoring";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NCAABOdds, NCAABSchedules, NCAABSchedulesWithOdds, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBAOdds, NBASchedules, NBASchedulesWithOdds, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
+import { cleatNbaPickValidateMessage, fetchDraftkingsNBAOddsRequest, fetchFanduelNBAOddsRequest, fetchNBAScheduleByTimezoneRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { clearNcaabPickValidateMessage, fetchDraftkingsNCAABOddsRequest, fetchFanduelNCAABOddsRequest, fetchNCAABScheduleByTimezoneRequest, fetchNCAABScheduleRequest, ncaabPickValidateRequest } from "@/lib/redux/slices/ncaabSlice";
-import FootballAnimation from "../animations/FootballAnimation";
+import FootballAnimation from "../../animations/FootballAnimation";
+import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
+import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
+import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierMetaForPick, parseAmericanOdds, TierIndex } from "@/lib/utils/scoring";
+import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
-import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
+import { CachedReviewData, ReviewSheetState } from "../core/reviewSheetState";
+import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "../core/PickReviewSheet";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
-
-type OddsBlazeTeam = {
-    id: string;
-    name: string;
-    abbreviation?: string;
-};
-
-type OddsBlazePlayer = {
-    id: string;
-    name: string;
-    position?: string;
-    number?: number | null | string;
-    team: OddsBlazeTeam;
-};
-
-type OddsBlazeSelection = {
-    name?: string;
-    side?: string;
-    line?: number;
-};
-
-type OddsBlazeOdd = {
-    id: string;
-    market: string;
-    name: string;
-    price: string;
-    main: boolean;
-    sgp?: string;
-    links?: {
-        desktop?: string;
-        mobile?: string;
-    };
-    selection?: OddsBlazeSelection;
-    player?: OddsBlazePlayer;
-    updated?: string;
-};
+import NbaPickBuilderSkeleton from "./skeletons/NBAPickBuilderSkeleton";
+import NbaMatchupDetailSkeleton from "./skeletons/NbaMatchupDetailSkeleton";
 
 type GameOption = {
     id: string;
@@ -90,6 +44,10 @@ type SelectedOdd = {
     game: GameOption;
 };
 
+type SelectedOddState = SelectedOdd & {
+    displayLineOverride?: number | null;
+};
+
 type PointsTableRow = {
     player: OddsBlazePlayer;
     teamLabel: string;
@@ -109,24 +67,6 @@ type TotalLineEntry = {
     under?: OddsBlazeOdd;
 };
 
-type MainLineOdds = {
-    spreadAway?: OddsBlazeOdd;
-    spreadHome?: OddsBlazeOdd;
-    moneyAway?: OddsBlazeOdd;
-    moneyHome?: OddsBlazeOdd;
-    totalOver?: OddsBlazeOdd;
-    totalUnder?: OddsBlazeOdd;
-    totalLine?: number;
-};
-
-type SimpleMarketRow = {
-    id: string;
-    label: string;
-    sublabel?: string;
-    odd?: OddsBlazeOdd;
-    lineLabel?: string;
-};
-
 type Props = {
     sport: League | string;
     group: Group;
@@ -136,18 +76,20 @@ type Props = {
     initialPick?: Pick;
     onSave: (payload: BuiltPickPayload) => void;
     onCreatePostPick?: (payload: BuiltPickPayload) => void;
+    // onSaveVibePick?: (payload: BuiltPickPayload) => void;
     onPostToSlip?: (payload: BuiltPickPayload) => void;
+    // onPickOfDay?: (payload: BuiltPickPayload) => void;
+    onCancel?: () => void;
+    isCommissioner: boolean;
+    showCurrentPick?: boolean;
+    builderMode?: "post";
     draftPick?: DraftPick | null;
     onDraftPickChange?: (draftPick: DraftPick | null) => void;
     parlayLegs?: ParlayLeg[];
     onParlayLegsChange?: (
         legs: ParlayLeg[] | ((prev: ParlayLeg[]) => ParlayLeg[])
     ) => void;
-    onCancel?: () => void;
-    isCommissioner: boolean;
-    showCurrentPick?: boolean;
     enforceEligibilityWindow?: boolean;
-    builderMode?: "post";
     activeDateKey?: string;
     onDateChange?: (key: string, source?: "user" | "auto") => void;
     allowAutoDateAdvance?: boolean;
@@ -157,7 +99,7 @@ type Props = {
 };
 
 const eventKey = (event: OddsData) =>
-    event.id || `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
+    event.id || `${event.date.slice(0, 10)}|${event.teams.away.id}|${event.teams.home.id}`;
 
 const normalizeMergeToken = (value?: string | number | null) => {
     if (value === undefined || value === null) return "";
@@ -193,7 +135,7 @@ const dedupeOdds = (odds: OddsObject[]) => {
     });
 };
 
-const latestUpdatedAt = (snapshots: NCAABOdds[]) =>
+const latestUpdatedAt = (snapshots: NBAOdds[]) =>
     snapshots.reduce((latest, snapshot) => {
         const currentTime = Date.parse(snapshot.updated);
         const latestTime = Date.parse(latest);
@@ -204,13 +146,13 @@ const latestUpdatedAt = (snapshots: NCAABOdds[]) =>
         return latest;
     }, "");
 
-const mergeOddsSnapshots = (...snapshots: NCAABOdds[]): NCAABOdds => {
+const mergeOddsSnapshots = (...snapshots: NBAOdds[]): NBAOdds => {
     const baseSnapshot = snapshots[0];
 
     if (!baseSnapshot) {
         return {
             updated: "",
-            league: { id: "ncaab", name: "NCAAB", sport: "Basketball" },
+            league: { id: "nba", name: "NBA", sport: "Basketball" },
             sportsbook: { id: "multi", name: "Multiple" },
             events: [],
         };
@@ -245,36 +187,118 @@ const mergeOddsSnapshots = (...snapshots: NCAABOdds[]): NCAABOdds => {
 
 const TAB_ORDER = [
     "GAME_LINES",
-    "HALVES",
     "PLAYER_POINTS",
     "PLAYER_THREES",
     "PLAYER_REBOUNDS",
     "PLAYER_ASSISTS",
+    "QUICK_BETS",
     "PLAYER_COMBOS",
+    "PLAYER_DEFENSE",
+    "QUARTERS",
+    "HALVES",
 ] as const;
 
 type TabId = (typeof TAB_ORDER)[number];
 
 const TAB_LABELS: Record<TabId, string> = {
-    GAME_LINES: "Game lines",
+    QUARTERS: "Quarters",
     HALVES: "Halves",
+    GAME_LINES: "Game lines",
     PLAYER_POINTS: "Player points",
     PLAYER_THREES: "Player threes",
     PLAYER_REBOUNDS: "Player rebounds",
     PLAYER_ASSISTS: "Player assists",
+    QUICK_BETS: "Quick bets",
     PLAYER_COMBOS: "Player combos",
+    PLAYER_DEFENSE: "Player defense",
 };
 
 const ALT_POINTS_MARKET = "Alt Player Points";
+const ALT_THREES_MARKET = "Alt Player Threes";
+const ALT_REBOUNDS_MARKET = "Alt Player Rebounds";
+const ALT_ASSISTS_MARKET = "Alt Player Assists";
+const ALT_STEALS_MARKET = "Alt Player Steals";
+const ALT_BLOCKS_MARKET = "Alt Player Blocks";
+const ALT_PRA_MARKET = "Alt Player Points + Rebounds";
+const ALT_PA_MARKET = "Alt Player Points + Assists";
+const ALT_RA_MARKET = "Alt Player Rebounds + Assists";
+const ALT_PRA3_MARKET = "Alt Player Points + Rebounds + Assists";
 
-const GAME_SPECIAL_MARKETS = ["Overtime?"] as const;
+const MAIN_OVER_UNDER_MARKETS = new Set<string>([
+    "Player Points",
+    "Player Threes Made",
+    "Player Rebounds",
+    "Player Assists",
+    "Player Steals",
+    "Player Blocks",
+]);
+
+const COMBO_OVER_UNDER_MARKETS = new Set<string>([
+    "Player Points + Rebounds",
+    "Player Points + Assists",
+    "Player Rebounds + Assists",
+    "Player Points + Rebounds + Assists",
+]);
+
+const COMBO_YES_NO_MARKETS = new Set<string>([
+    "Player Double Double",
+    "Player Triple Double",
+]);
+
+const COMBO_ALT_MARKETS = new Set<string>([
+    ALT_PRA_MARKET,
+    ALT_PA_MARKET,
+    ALT_RA_MARKET,
+    ALT_PRA3_MARKET,
+]);
+
+const ALT_CATEGORY_MARKETS = new Set<string>([
+    ALT_POINTS_MARKET,
+    ALT_THREES_MARKET,
+    ALT_REBOUNDS_MARKET,
+    ALT_ASSISTS_MARKET,
+    ALT_STEALS_MARKET,
+    ALT_BLOCKS_MARKET,
+    ALT_PRA_MARKET,
+    ALT_PA_MARKET,
+    ALT_RA_MARKET,
+    ALT_PRA3_MARKET,
+]);
+
+const COMBO_ALT_TO_MAIN: Record<string, string> = {
+    [ALT_PRA_MARKET]: "Player Points + Rebounds",
+    [ALT_PA_MARKET]: "Player Points + Assists",
+    [ALT_RA_MARKET]: "Player Rebounds + Assists",
+    [ALT_PRA3_MARKET]: "Player Points + Rebounds + Assists",
+};
+
+const ALT_MARKET_MAP: Record<string, string> = {
+    "Player Points": ALT_POINTS_MARKET,
+    "Player Threes Made": ALT_THREES_MARKET,
+    "Player Rebounds": ALT_REBOUNDS_MARKET,
+    "Player Assists": ALT_ASSISTS_MARKET,
+    "Player Steals": ALT_STEALS_MARKET,
+    "Player Blocks": ALT_BLOCKS_MARKET,
+    "Player Points + Rebounds": ALT_PRA_MARKET,
+    "Player Points + Assists": ALT_PA_MARKET,
+    "Player Rebounds + Assists": ALT_RA_MARKET,
+    "Player Points + Rebounds + Assists": ALT_PRA3_MARKET,
+};
 
 const TAB_MARKETS: Record<TabId, string[]> = {
-    GAME_LINES: [
-        "Moneyline",
-        "Point Spread",
-        "Total Points",
-        ...GAME_SPECIAL_MARKETS,
+    QUARTERS: [
+        "1st Quarter Moneyline",
+        "1st Quarter Point Spread",
+        "1st Quarter Total Points",
+        "2nd Quarter Moneyline",
+        "2nd Quarter Point Spread",
+        "2nd Quarter Total Points",
+        "3rd Quarter Moneyline",
+        "3rd Quarter Point Spread",
+        "3rd Quarter Total Points",
+        "4th Quarter Moneyline",
+        "4th Quarter Point Spread",
+        "4th Quarter Total Points",
     ],
     HALVES: [
         "1st Half Moneyline",
@@ -286,30 +310,62 @@ const TAB_MARKETS: Record<TabId, string[]> = {
         "2nd Half Total Points",
         "2nd Half Total Points Odd/Even",
     ],
+    GAME_LINES: [
+        "Moneyline",
+        "Point Spread",
+        "Total Points",
+    ],
     PLAYER_POINTS: [
         "Player Points",
         ALT_POINTS_MARKET,
         "1st Quarter Player Points",
         "1st 3 Minutes Player Points",
     ],
-    PLAYER_THREES: ["Player Threes Made"],
-    PLAYER_REBOUNDS: ["Player Rebounds"],
-    PLAYER_ASSISTS: ["Player Assists"],
+    PLAYER_THREES: ["Player Threes Made", ALT_THREES_MARKET],
+    PLAYER_REBOUNDS: [
+        "Player Rebounds",
+        ALT_REBOUNDS_MARKET,
+        "1st Quarter Player Rebounds",
+        "1st 3 Minutes Player Rebounds",
+    ],
+    PLAYER_ASSISTS: [
+        "Player Assists",
+        ALT_ASSISTS_MARKET,
+        "1st Quarter Player Assists",
+        "1st 3 Minutes Player Assists",
+    ],
+    QUICK_BETS: [
+        "First Basket",
+        "Home Team First Basket",
+        "Away Team First Basket",
+        "Home Team First Field Goal",
+        "Away Team First Field Goal",
+        "Top Points Scorer",
+        "Total Points Odd/Even",
+        "Overtime?",
+        "1st Minute Both Teams To Score"
+    ],
     PLAYER_COMBOS: [
         "Player Points + Rebounds",
+        ALT_PRA_MARKET,
         "Player Points + Assists",
+        ALT_PA_MARKET,
         "Player Rebounds + Assists",
+        ALT_RA_MARKET,
         "Player Points + Rebounds + Assists",
+        ALT_PRA3_MARKET,
         "Player Double Double",
         "Player Triple Double",
+    ],
+    PLAYER_DEFENSE: [
+        "Player Steals",
+        ALT_STEALS_MARKET,
+        "Player Blocks",
+        ALT_BLOCKS_MARKET,
     ],
 };
 
 const tabForOdd = (odd: OddsBlazeOdd): TabId => {
-    if (!odd.market) return "GAME_LINES";
-    if (GAME_SPECIAL_MARKETS.includes(odd.market as (typeof GAME_SPECIAL_MARKETS)[number])) {
-        return "GAME_LINES";
-    }
     const entries = Object.entries(TAB_MARKETS) as [TabId, string[]][];
     for (const [tab, markets] of entries) {
         if (markets.includes(odd.market)) return tab;
@@ -319,16 +375,27 @@ const tabForOdd = (odd: OddsBlazeOdd): TabId => {
 
 const TABLE_MARKETS = new Set<string>([
     ALT_POINTS_MARKET,
+    ALT_THREES_MARKET,
+    ALT_REBOUNDS_MARKET,
+    ALT_ASSISTS_MARKET,
+    ALT_STEALS_MARKET,
+    ALT_BLOCKS_MARKET,
+    ALT_PRA_MARKET,
+    ALT_PA_MARKET,
+    ALT_RA_MARKET,
+    ALT_PRA3_MARKET,
     "1st Quarter Player Points",
     "1st 3 Minutes Player Points",
+    "1st Quarter Player Assists",
+    "1st 3 Minutes Player Assists",
     "Player Threes Made",
     "Player Rebounds",
+    "1st Quarter Player Rebounds",
+    "1st 3 Minutes Player Rebounds",
     "Player Assists",
-    "Player Points + Rebounds",
-    "Player Points + Assists",
-    "Player Rebounds + Assists",
-    "Player Points + Rebounds + Assists",
 ]);
+
+const CATEGORY_ROW_PREVIEW_LIMIT = 5;
 
 const tierMetaFromIndex = (tier?: TierIndex) =>
     typeof tier === "number" ? ODDS_BRACKETS[tier - 1] : undefined;
@@ -338,13 +405,11 @@ const tierNameFromIndex = (tier?: TierIndex) =>
 
 const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
 
-const CATEGORY_ROW_PREVIEW_LIMIT = 5;
-
 const normalizeAbbr = (team: OddsBlazeTeam) =>
     team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
 
 const buildGameOptions = (
-    snapshot: NCAABSchedulesWithOdds[],
+    snapshot: NBASchedulesWithOdds[],
     odds: OddsObject[],
     activeGameId?: string | null
 ): GameOption[] =>
@@ -361,7 +426,6 @@ const buildGameOptions = (
 
         return {
             id: event.id,
-            startTime: event.date,
             homeTeam: event.teams.home.name,
             awayTeam: event.teams.away.name,
             homeTeamId: event.teams.home.id,
@@ -378,7 +442,7 @@ const buildGameOptions = (
     });
 
 const buildScheduleOptions = (
-    snapshot: NCAABSchedulesWithOdds[],
+    snapshot: NBASchedulesWithOdds[],
     existingKeys: Set<string>,
     existingIds: Set<string>
 ): GameOption[] => {
@@ -416,7 +480,7 @@ const buildScheduleOptions = (
 
 const buildMergedGameOptions = (
     oddsSnapshot: OddsObject[],
-    scheduleSnapshot: NCAABSchedulesWithOdds[],
+    scheduleSnapshot: NBASchedulesWithOdds[],
     activeGameId?: string | null
 ): GameOption[] => {
     const oddsOptions = buildGameOptions(scheduleSnapshot, oddsSnapshot, activeGameId);
@@ -436,11 +500,11 @@ const buildMergedGameOptions = (
     );
 };
 
-const mergeNCAABSchedules = (
-    scheduledWithOdds: NCAABSchedulesWithOdds[] | null | undefined,
-    allSchedules: NCAABSchedules[] | null | undefined
-): NCAABSchedulesWithOdds[] => {
-    const mergedMap = new Map<string, NCAABSchedulesWithOdds>();
+const mergeNBASchedules = (
+    scheduledWithOdds: NBASchedulesWithOdds[] | null | undefined,
+    allSchedules: NBASchedules[] | null | undefined
+): NBASchedulesWithOdds[] => {
+    const mergedMap = new Map<string, NBASchedulesWithOdds>();
 
     // Rule 1: Use Matches with Odds First
     scheduledWithOdds?.forEach((match) => {
@@ -457,11 +521,12 @@ const mergeNCAABSchedules = (
         }
     });
 
-    // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
+    // Rule 3: Avoid Duplicate Matches - Map ensures uniqueness by id
     return Array.from(mergedMap.values()).sort((a, b) =>
         a.date.localeCompare(b.date)
     );
 };
+
 
 type DateFilterOption = {
     key: string;
@@ -572,13 +637,58 @@ const teamIdFromOdd = (odd: OddsBlazeOdd, game: GameOption) => {
     return undefined;
 };
 
-const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
+const normalizeAltPointsLine = (value: number) => value;
+
+const compareNumbersDesc = (
+    left?: number | null,
+    right?: number | null
+) => {
+    const leftValue =
+        typeof left === "number" && Number.isFinite(left)
+            ? left
+            : Number.NEGATIVE_INFINITY;
+    const rightValue =
+        typeof right === "number" && Number.isFinite(right)
+            ? right
+            : Number.NEGATIVE_INFINITY;
+    if (leftValue === rightValue) return 0;
+    return rightValue - leftValue;
+};
+
+const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
+    left.name.localeCompare(right.name);
+
+const inferAltPointsDisplayLineOverride = (
+    odd: OddsBlazeOdd,
+    description?: string | null
+) => {
+    if (!description || !odd.player || odd.main || odd.market !== "Player Points") {
+        return null;
+    }
+    const side = odd.selection?.side?.toLowerCase();
+    const line = odd.selection?.line;
+    if (!side || line === undefined) return null;
+    const match = description.match(/ - (Over|Under) (\d+(?:\.\d+)?) Points$/i);
+    if (!match) return null;
+    const [, describedSide, describedLine] = match;
+    if (describedSide.toLowerCase() !== side) return null;
+    const parsedLine = Number(describedLine);
+    if (!Number.isFinite(parsedLine)) return null;
+    return normalizeAltPointsLine(line) === parsedLine ? parsedLine : null;
+};
+
+const buildPickDescription = (
+    odd: OddsBlazeOdd,
+    game: GameOption,
+    options?: { displayLineOverride?: number | null }
+) => {
     const marketLabel = odd.market.replace("Player ", "");
     const side = odd.selection?.side;
-    const line = odd.selection?.line;
+    const line =
+        typeof options?.displayLineOverride === "number"
+            ? options.displayLineOverride
+            : odd.selection?.line;
     const matchup = matchupLabel(game);
-    const isFirstHalf = odd.market.startsWith("1st Half");
-    const halfPrefix = isFirstHalf ? "1st Half " : "";
 
     if (odd.player) {
         if (odd.market.includes("Double Double")) {
@@ -598,23 +708,22 @@ const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
 
     if (odd.market.includes("Moneyline")) {
         const team = odd.selection?.name ?? odd.name;
-        return `${team} ${halfPrefix}Moneyline`.trim();
+        return `${team} Moneyline`;
     }
     if (odd.market.includes("Point Spread")) {
         const team = odd.selection?.name ?? odd.name;
         const spread =
             line !== undefined ? `${line > 0 ? "+" : ""}${line}` : odd.name.replace(team, "");
-        return `${team} ${spread} ${halfPrefix}Spread`.trim();
+        return `${team} ${spread} Spread`.trim();
     }
     if (odd.market === "Total Points Odd/Even") {
         return `${matchup}${DASH_SEPARATOR}${odd.name} total points`;
     }
     if (odd.market.includes("Total Points")) {
-        const totalLabel = isFirstHalf ? "1st Half Total Points" : odd.market;
         if (side && line !== undefined) {
-            return `${matchup}${DASH_SEPARATOR}${side} ${line} ${totalLabel}`;
+            return `${matchup}${DASH_SEPARATOR}${side} ${line} ${odd.market}`;
         }
-        return `${matchup}${DASH_SEPARATOR}${odd.name} ${totalLabel}`;
+        return `${matchup}${DASH_SEPARATOR}${odd.name} ${odd.market}`;
     }
     if (odd.market === "Overtime?") {
         const label = odd.selection?.side ?? odd.name;
@@ -651,7 +760,7 @@ const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionM
         external_pick_key: odd.id,
         matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
         match_date: game.date,
-        sport: "NCAAB"
+        sport: "NBA"
     }
 };
 
@@ -715,7 +824,15 @@ const findMainTeamOdd = (
         (odd) => odd.market === market && odd.main && matchesTeamName(odd, teamName)
     );
 
-const findMainTotalOddByMarket = (
+const findMainTotalOdd = (game: GameOption, side: "Over" | "Under") =>
+    game.odds.find(
+        (odd) =>
+            odd.market === "Total Points" &&
+            odd.main &&
+            odd.selection?.side?.toLowerCase() === side.toLowerCase()
+    );
+
+const findMainTotalOddForMarket = (
     game: GameOption,
     market: string,
     side: "Over" | "Under"
@@ -727,8 +844,15 @@ const findMainTotalOddByMarket = (
             odd.selection?.side?.toLowerCase() === side.toLowerCase()
     );
 
-const findMainTotalOdd = (game: GameOption, side: "Over" | "Under") =>
-    findMainTotalOddByMarket(game, "Total Points", side);
+type MainLineOdds = {
+    spreadAway?: OddsBlazeOdd;
+    spreadHome?: OddsBlazeOdd;
+    moneyAway?: OddsBlazeOdd;
+    moneyHome?: OddsBlazeOdd;
+    totalOver?: OddsBlazeOdd;
+    totalUnder?: OddsBlazeOdd;
+    totalLine?: number;
+};
 
 const buildMainLineOddsForMarkets = (
     game: GameOption,
@@ -738,8 +862,8 @@ const buildMainLineOddsForMarkets = (
     const spreadHome = findMainTeamOdd(game, markets.spread, game.homeTeam);
     const moneyAway = findMainTeamOdd(game, markets.money, game.awayTeam);
     const moneyHome = findMainTeamOdd(game, markets.money, game.homeTeam);
-    const totalOver = findMainTotalOddByMarket(game, markets.total, "Over");
-    const totalUnder = findMainTotalOddByMarket(game, markets.total, "Under");
+    const totalOver = findMainTotalOddForMarket(game, markets.total, "Over");
+    const totalUnder = findMainTotalOddForMarket(game, markets.total, "Under");
     const totalLine = totalOver?.selection?.line ?? totalUnder?.selection?.line;
 
     return {
@@ -802,22 +926,6 @@ const formatNumberLine = (line?: number) => {
     return `${line}`;
 };
 
-const normalizeAltPointsLine = (value: number) => value;
-
-const compareNumbersDesc = (
-    left?: number | null,
-    right?: number | null
-) => {
-    if (left === undefined || left === null) {
-        return right === undefined || right === null ? 0 : 1;
-    }
-    if (right === undefined || right === null) return -1;
-    return right - left;
-};
-
-const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
-    left.name.localeCompare(right.name);
-
 const STICKY_COLUMN_BASE_CLASSES =
     "relative sticky left-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:inset-y-0 after:left-full after:w-8 after:bg-gradient-to-r after:to-transparent after:content-[''] sm:before:w-6 sm:after:w-10";
 
@@ -829,6 +937,20 @@ const stickyColumnRowClasses = (banded: boolean) =>
         : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
     } after:from-black/40`;
 
+const SCROLLER_STICKY_COLUMN_BASE_CLASSES =
+    "relative sticky left-0 pl-0 pr-3 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:bottom-0 after:left-[-100vw] after:h-px after:w-[200vw] after:content-[''] sm:before:w-6";
+
+const SCROLLER_STICKY_COLUMN_HEADER_CLASSES = `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-30 py-2 bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.72)_100%)] after:bg-white/10`;
+
+const scrollerStickyColumnRowClasses = (
+    banded: boolean,
+    selected = false
+) =>
+    `${SCROLLER_STICKY_COLUMN_BASE_CLASSES} z-20 py-3 ${banded
+        ? "bg-[linear-gradient(90deg,rgba(8,8,8,0.98)_0%,rgba(8,8,8,0.95)_76%,rgba(8,8,8,0.74)_100%)]"
+        : "bg-[linear-gradient(90deg,rgba(3,3,3,0.96)_0%,rgba(3,3,3,0.94)_76%,rgba(3,3,3,0.68)_100%)]"
+    } ${selected ? "after:bg-sky-300/60" : "after:bg-white/5"}`;
+
 const PropRowScroller = ({
     scrollerKey,
     lines,
@@ -836,7 +958,7 @@ const PropRowScroller = ({
 }: {
     scrollerKey: string;
     lines: number[];
-    renderChip: (line: number) => ReactNode;
+    renderChip: (line: number) => JSX.Element;
 }) => {
     return (
         <div
@@ -923,6 +1045,18 @@ const pickClosestLine = (lines: number[], preferred?: number) => {
     }, lines[0]);
 };
 
+const resolveLineSelection = (
+    lines: number[],
+    current?: number | null,
+    preferred?: number
+) => {
+    if (lines.length === 0) return null;
+    if (current !== undefined && current !== null && lines.includes(current)) {
+        return current;
+    }
+    return pickClosestLine(lines, preferred);
+};
+
 const buildPointsTable = (
     odds: SelectedOdd[],
     game: GameOption,
@@ -943,7 +1077,6 @@ const buildPointsTable = (
         if (line === undefined || !oddSide || oddSide !== sideLower) return;
 
         const normalizedLine = normalizeLine(line);
-
         lineSet.add(normalizedLine);
         const player = odd.player;
         if (!rowMap.has(player.id)) {
@@ -1090,26 +1223,73 @@ const buildMainPointsRows = (odds: SelectedOdd[], game: GameOption) => {
     });
 };
 
-export const NcaabPickBuilder = ({
+const buildYesNoRows = (odds: SelectedOdd[], game: GameOption) => {
+    const rowMap = new Map<
+        string,
+        {
+            odd: OddsBlazeOdd;
+            player: OddsBlazePlayer;
+            teamLabel: string;
+        }
+    >();
+
+    odds.forEach(({ odd }) => {
+        if (!odd.player) return;
+        const side = odd.selection?.side?.toLowerCase();
+        if (side && side !== "yes") return;
+        const existing = rowMap.get(odd.player.id);
+        if (existing && !existing.odd.main && odd.main) {
+            rowMap.set(odd.player.id, {
+                odd,
+                player: odd.player,
+                teamLabel: playerTeamLabel(odd.player, game),
+            });
+            return;
+        }
+        if (!existing) {
+            rowMap.set(odd.player.id, {
+                odd,
+                player: odd.player,
+                teamLabel: playerTeamLabel(odd.player, game),
+            });
+        }
+    });
+
+    return [...rowMap.values()].sort((left, right) => {
+        const leftPrice = parseAmericanOdds(left.odd.price);
+        const rightPrice = parseAmericanOdds(right.odd.price);
+        const priceDiff =
+            leftPrice !== null && rightPrice !== null
+                ? leftPrice - rightPrice
+                : leftPrice === null
+                    ? 1
+                    : rightPrice === null
+                        ? -1
+                        : 0;
+        if (priceDiff !== 0) return priceDiff;
+        return comparePlayerNames(left.player, right.player);
+    });
+};
+
+export const NbaPickBuilder = ({
     sport,
     slip,
     currentUser,
     picks,
     initialPick,
     onSave,
-    onCreatePostPick,
     onPostToSlip,
+    onCreatePostPick,
+    showCurrentPick = false,
+    builderMode,
     draftPick,
     onDraftPickChange,
     parlayLegs: externalParlayLegs,
     onParlayLegsChange,
-    showCurrentPick = false,
     enforceEligibilityWindow = false,
-    builderMode,
     activeDateKey,
     onDateChange,
-    allowAutoDateAdvance = false,
-    hideDateControls = false,
+    allowAutoDateAdvance,
     onDateOptionsChange,
     reviewSheetState,
 }: Props) => {
@@ -1127,14 +1307,23 @@ export const NcaabPickBuilder = ({
     const [expandedCategoryRows, setExpandedCategoryRows] = useState<
         Record<string, boolean>
     >({});
-    const [selected, setSelected] = useState<SelectedOdd | null>(null);
+    const [selected, setSelected] = useState<SelectedOddState | null>(null);
     const [altSpreadLine, setAltSpreadLine] = useState<number | null>(null);
     const [altTotalLine, setAltTotalLine] = useState<number | null>(null);
-    const [halfSpreadLines, setHalfSpreadLines] = useState<Record<string, number | null>>({});
-    const [halfTotalLines, setHalfTotalLines] = useState<Record<string, number | null>>({});
+    const [halfSpreadLines, setHalfSpreadLines] = useState<Record<string, number | null>>(
+        {}
+    );
+    const [halfTotalLines, setHalfTotalLines] = useState<Record<string, number | null>>(
+        {}
+    );
+    const [quarterAltSpreadLines, setQuarterAltSpreadLines] = useState<
+        Record<string, number | null>
+    >({});
+    const [quarterAltTotalLines, setQuarterAltTotalLines] = useState<
+        Record<string, number | null>
+    >({});
     const [localIsReviewOpen, setLocalIsReviewOpen] = useState(false);
-    const [localSelectedConfidence, setLocalSelectedConfidence] =
-        useState<ConfidenceLevel | null>(null);
+    const [localSelectedConfidence, setLocalSelectedConfidence] = useState<ConfidenceLevel | null>(null);
     const [localSameGameComboConfidences, setLocalSameGameComboConfidences] =
         useState<Record<string, ConfidenceLevel | null>>({});
     const [localStraightConfidences, setLocalStraightConfidences] = useState<
@@ -1175,49 +1364,6 @@ export const NcaabPickBuilder = ({
         reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
-    const [ncaabMatchSchedules, setNCAABMatchSchedules] = useState<NCAABSchedulesWithOdds[]>([]);
-    const [oddsData, setOddsData] = useState<OddsObject[]>([]);
-    // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
-
-    const { ncaabSchedulesWithOdds, ncaabSchedules, fanduelNcaabOdds, draftkingNcaabOdds, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.ncaab);
-
-    useEffect(() => {
-        dispatch(fetchNCAABScheduleRequest({ is_pick_of_day: true, is_range: false }));
-    }, [dispatch]);
-
-    useEffect(() => {
-        if (activeDateKey) {
-            dispatch(fetchNCAABScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
-        }
-    }, [dispatch, activeDateKey]);
-
-    useEffect(() => {
-        const mergedEvents = mergeNCAABSchedules(ncaabSchedulesWithOdds?.events, ncaabSchedules?.events);
-        if (mergedEvents.length > 0) {
-            setNCAABMatchSchedules(mergedEvents);
-        }
-
-        if (fanduelNcaabOdds?.events?.length) {
-            const activeEvent = activeGameId
-                ? fanduelNcaabOdds.events.find(e => e.id === activeGameId)
-                : fanduelNcaabOdds.events[0];
-
-            setOddsData(activeEvent?.odds ?? []);
-        } else if (fanduelNcaabOdds?.updated) {
-            setOddsData([]);
-        }
-    }, [ncaabSchedulesWithOdds, ncaabSchedules, fanduelNcaabOdds, activeGameId]);
-
-    useEffect(() => {
-        if (fanduelNcaabOdds?.events?.length && draftkingNcaabOdds?.events?.length) {
-            const mergedOdds = mergeOddsSnapshots(fanduelNcaabOdds, draftkingNcaabOdds);
-            const activeEvent = activeGameId
-                ? mergedOdds.events.find(e => e.id === activeGameId)
-                : mergedOdds.events[0];
-            setOddsData(activeEvent?.odds ?? []);
-        }
-    }, [activeGameId, fanduelNcaabOdds, draftkingNcaabOdds]);
-
     const resolveTierMetaForOdds = useCallback(
         (americanOdds: number) =>
             useGroupScoring
@@ -1225,7 +1371,6 @@ export const NcaabPickBuilder = ({
                 : getTierForAmericanOdds(americanOdds),
         [useGroupScoring]
     );
-
     const resolveReviewTierMetaForOdds = useCallback(
         (americanOdds: number) =>
             reviewTierScoringMode === "leagueLeaderboard"
@@ -1234,33 +1379,82 @@ export const NcaabPickBuilder = ({
         [reviewTierScoringMode]
     );
 
+    const [nbaMatchSchedules, setNBAMatchSchedules] = useState<NBASchedulesWithOdds[]>([]);
+    const [oddsData, setOddsData] = useState<OddsObject[]>([]);
+    // const [isAnyLiveMatch, setIsAnyLiveMatch] = useState(false);
+
+    const { nbaSchedulesWithOdds, nbaSchedules, fanduelNbaOdds, draftkingNbaOdds, oddsLoading, validatePickMessage, validatePickError, loading, validateLoading } = useSelector((state: RootState) => state.nba);
+
+    const currentPick = useMemo(() => {
+        if (initialPick) return initialPick;
+        if (!showCurrentPick) return undefined;
+        if (slip.pick_limit === 1) {
+            return picks.find(
+                (entry) => entry.slip_id === slip.id && entry.user_id === currentUser?.userId
+            );
+        }
+        return undefined;
+    }, [initialPick, showCurrentPick, picks, slip.id, slip.pick_limit, currentUser?.userId]);
+
+    useEffect(() => {
+        if (slip?.results_deadline_at && slip?.pick_deadline_at) {
+            const resultDate = new Date(slip.results_deadline_at).toISOString().split('T')[0];
+            const pickDate = new Date(slip.pick_deadline_at).toISOString().split('T')[0];
+            dispatch(fetchNBAScheduleRequest({ result_deadline: String(resultDate), pick_deadline: String(pickDate), is_range: false, is_pick_of_day: false }));
+        } else {
+            dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
+        }
+    }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
+
+    useEffect(() => {
+        if (activeDateKey) {
+            dispatch(fetchNBAScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: false, is_range: false }));
+        }
+    }, [dispatch, slip?.pick_deadline_at, slip?.results_deadline_at]);
+
+    useEffect(() => {
+        const mergedEvents = mergeNBASchedules(nbaSchedulesWithOdds?.events, nbaSchedules?.events);
+        if (mergedEvents.length > 0) {
+            setNBAMatchSchedules(mergedEvents);
+        }
+
+        if (fanduelNbaOdds?.events?.length) {
+            const activeEvent = activeGameId
+                ? fanduelNbaOdds.events.find(e => e.id === activeGameId)
+                : fanduelNbaOdds.events[0];
+
+            setOddsData(activeEvent?.odds ?? []);
+        } else if (fanduelNbaOdds?.updated) {
+            setOddsData([]);
+        }
+    }, [nbaSchedulesWithOdds, nbaSchedules, fanduelNbaOdds, activeGameId]);
+
+
+    useEffect(() => {
+        if (fanduelNbaOdds?.events?.length && draftkingNbaOdds?.events?.length) {
+            const mergedOdds = mergeOddsSnapshots(fanduelNbaOdds, draftkingNbaOdds);
+            const activeEvent = activeGameId
+                ? mergedOdds.events.find(e => e.id === activeGameId)
+                : mergedOdds.events[0];
+            setOddsData(activeEvent?.odds ?? []);
+        }
+    }, [activeGameId, fanduelNbaOdds, draftkingNbaOdds]);
+
     const games = useMemo<GameOption[]>(() => {
-        if (!ncaabMatchSchedules) return [];
-        return buildMergedGameOptions(oddsData, ncaabMatchSchedules, activeGameId);
-        // }, [ncaabMatchSchedules, oddsData, fanduelNcaabOdds?.updated, activeGameId]);
-    }, [ncaabMatchSchedules, oddsData, activeGameId]);
-
-    // const upcomingGames = useMemo(() => {
-    //     const base = games.filter((game) => !isPast(game.date));
-    //     if (!enforceEligibilityWindow) {
-    //         return filterUpcomingWindowGames(base, 6, false);
-    //     }
-    //     return base;
-    // }, [enforceEligibilityWindow, games]);
-
-    // const eligibleGames = useMemo(() => {
-    //     if (!enforceEligibilityWindow) return upcomingGames;
-    //     return filterEligibleGames(upcomingGames, slip.pick_deadline_at, windowDays);
-    // }, [enforceEligibilityWindow, upcomingGames, slip.pick_deadline_at, windowDays]);
+        if (!nbaMatchSchedules) return [];
+        return buildMergedGameOptions(oddsData, nbaMatchSchedules, activeGameId);
+        // }, [nbaMatchSchedules, oddsData, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated, activeGameId]);
+    }, [nbaMatchSchedules, oddsData, activeGameId]);
 
     const todayIso = useMemo(() => new Date().toISOString(), []);
     const visibleGames = useMemo(() => {
         return games.filter(
             (game) => !game.live
         );
+        // }, [games, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
     }, [games]);
     const shouldFilterByDate = true;
-    const showDateFilters = shouldFilterByDate && !hideDateControls;
+    // const showDateFilters = shouldFilterByDate && !hideDateControls;
     const todayKey = useMemo(() => toDateKey(todayIso), [todayIso]);
     const selectedDateKey = activeDateKey?.trim() || "";
     const dateOptions = useMemo(() => {
@@ -1273,7 +1467,6 @@ export const NcaabPickBuilder = ({
             option.key === todayKey ? { ...option, label: "Today" } : option
         );
     }, [enforceEligibilityWindow, shouldFilterByDate, slip.pick_deadline_at, todayKey, windowDays]);
-
     const isSelectedDateValid = useMemo(
         () => dateOptions.some((option) => option.key === selectedDateKey),
         [dateOptions, selectedDateKey]
@@ -1292,7 +1485,11 @@ export const NcaabPickBuilder = ({
     }, [visibleGames]);
     const filteredGames = useMemo(() => {
         if (!shouldFilterByDate || !effectiveDateKey) return visibleGames;
-        return visibleGames.filter((game) => toDateKey(game.date) === effectiveDateKey);
+        return visibleGames.filter((game) => {
+            if (toDateKey(game.date) === effectiveDateKey) {
+                return game
+            }
+        });
     }, [effectiveDateKey, visibleGames, shouldFilterByDate]);
     const noGamesForSelectedDate =
         shouldFilterByDate && dateOptions.length > 0 && filteredGames.length === 0;
@@ -1330,22 +1527,17 @@ export const NcaabPickBuilder = ({
         shouldFilterByDate,
     ]);
 
-    const currentPick = useMemo(() => {
-        if (initialPick) return initialPick;
-        if (!showCurrentPick) return undefined;
-        if (slip.pick_limit === 1) {
-            return picks.find(
-                (entry) => entry.slip_id === slip.id && entry.user_id === currentUser?.userId
-            );
-        }
-        return undefined;
-    }, [initialPick, showCurrentPick, picks, slip.id, slip.pick_limit, currentUser?.userId]);
-
     useEffect(() => {
         if (!currentPick) return;
         const match = findMatchingOdd(games, currentPick);
         if (match) {
-            setSelected(match);
+            setSelected({
+                ...match,
+                displayLineOverride: inferAltPointsDisplayLineOverride(
+                    match.odd,
+                    currentPick.description
+                ),
+            });
             setActiveGameId(match.game.id);
         }
     }, [currentPick, games]);
@@ -1354,7 +1546,7 @@ export const NcaabPickBuilder = ({
         if (!isParlayMode) {
             setParlayLegs([]);
         }
-    }, [isParlayMode]);
+    }, [isParlayMode, setParlayLegs]);
 
     useEffect(() => {
         if (!validateLoading && validatePickMessage) {
@@ -1364,7 +1556,7 @@ export const NcaabPickBuilder = ({
             //     message: validatePickMessage,
             //     duration: 3000
             // });
-            dispatch(clearNcaabPickValidateMessage());
+            dispatch(cleatNbaPickValidateMessage());
         }
         if (!validateLoading && validatePickError) {
             setToast({
@@ -1373,14 +1565,62 @@ export const NcaabPickBuilder = ({
                 message: validatePickError,
                 duration: 3000
             });
-            dispatch(clearNcaabPickValidateMessage());
+            dispatch(cleatNbaPickValidateMessage());
         }
     }, [dispatch, validateLoading, validatePickMessage, validatePickError, setToast]);
+
+    const smoothScrollTo = (
+        element: HTMLElement,
+        target: number,
+        duration = 400
+    ) => {
+        const start = element.scrollLeft;
+        const distance = target - start;
+        let startTime: number | null = null;
+
+        const animate = (currentTime: number) => {
+            if (startTime === null) startTime = currentTime;
+            const timeElapsed = currentTime - startTime;
+            const progress = Math.min(timeElapsed / duration, 1);
+
+            const ease =
+                progress < 0.5
+                    ? 2 * progress * progress
+                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+            element.scrollLeft = start + distance * ease;
+
+            if (timeElapsed < duration) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
+    };
+
+    const handleTabChange = (tab: TabId) => {
+        setActiveTab(tab)
+        setTimeout(() => {
+            const container = document.querySelector('#game-prop-details-tabs-container') as HTMLDivElement;
+            const activeTab = document.querySelector('#game-prop-details-tabs-container button.active') as HTMLButtonElement;
+
+            if (container && activeTab) {
+                const containerRect = container.getBoundingClientRect();
+                const tabRect = activeTab.getBoundingClientRect();
+
+                const scrollLeft = container.scrollLeft;
+                const offset = tabRect.left - containerRect.left + scrollLeft - (containerRect.width / 2) + (tabRect.width / 2);
+
+                smoothScrollTo(container, offset, 300)
+            }
+        }, 100);
+    }
 
     const locked = !currentUser || !canUserEditSlipPicks(slip);
 
     const activeGame = useMemo(
         () => visibleGames.find((game) => game.id === activeGameId) ?? null,
+        // [activeGameId, visibleGames, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]
         [activeGameId, visibleGames]
     );
 
@@ -1388,7 +1628,14 @@ export const NcaabPickBuilder = ({
     //     if (!activeGame?.id || !activeGame.live) return;
     //     const interval = setInterval(() => {
     //         dispatch(
-    //             fetchNCAABOddsRequest({
+    //             fetchFanduelNBAOddsRequest({
+    //                 match_id: activeGame.id,
+    //                 is_live: activeGame.live,
+    //                 silent: true,
+    //             })
+    //         );
+    //         dispatch(
+    //             fetchDraftkingsNBAOddsRequest({
     //                 match_id: activeGame.id,
     //                 is_live: activeGame.live,
     //                 silent: true,
@@ -1404,7 +1651,7 @@ export const NcaabPickBuilder = ({
     // useEffect(() => {
     //     if (!isAnyLiveMatch) return;
     //     const interval = setInterval(() => {
-    //         dispatch(fetchNCAABScheduleRequest({ is_pick_of_day: true, is_range: false }));
+    //         dispatch(fetchNBAScheduleRequest({ is_pick_of_day: true, is_range: false }));
     //     }, 310 * 1000); // 5 min 10 sec
 
     //     return () => {
@@ -1415,22 +1662,21 @@ export const NcaabPickBuilder = ({
     const activeMarketMap = useMemo(() => {
         if (!activeGame) return new Map<string, SelectedOdd[]>();
         const markets = TAB_MARKETS[activeTab];
-        const isPointsTab = activeTab === "PLAYER_POINTS";
         const term = search.trim().toLowerCase();
         const marketMap = new Map<string, SelectedOdd[]>();
         markets.forEach((market) => marketMap.set(market, []));
 
-        activeGame.odds.forEach((odd) => {
+        oddsData.forEach((odd) => {
             const bucketKeys = new Set<string>();
-            if (isPointsTab && odd.market === "Player Points") {
-                bucketKeys.add(odd.main ? "Player Points" : ALT_POINTS_MARKET);
-                if (odd.main) {
-                    bucketKeys.add(ALT_POINTS_MARKET);
+            const altMarket = ALT_MARKET_MAP[odd.market];
+            if (altMarket && markets.includes(altMarket)) {
+                bucketKeys.add(altMarket);
+                if (odd.main && markets.includes(odd.market)) {
+                    bucketKeys.add(odd.market);
                 }
             } else if (markets.includes(odd.market)) {
                 bucketKeys.add(odd.market);
             }
-
             if (bucketKeys.size === 0) return;
             if (term) {
                 const haystack = buildSearchHaystack(odd, activeGame)
@@ -1447,11 +1693,15 @@ export const NcaabPickBuilder = ({
 
         marketMap.forEach((list) => list.sort(compareOddsByLine));
         return marketMap;
-    }, [activeGame, activeTab, search]);
+    }, [activeGame, activeTab, search, oddsData]);
 
     const buildDraftPick = useCallback(
-        (odd: OddsBlazeOdd, game: GameOption): DraftPick => {
-            const description = buildPickDescription(odd, game);
+        (
+            odd: OddsBlazeOdd,
+            game: GameOption,
+            options?: { displayLineOverride?: number | null }
+        ): DraftPick => {
+            const description = buildPickDescription(odd, game, options);
             const americanOdds = parseAmericanOdds(odd.price);
             const tierMeta = americanOdds !== null ? resolveTierMetaForOdds(americanOdds) : undefined;
             const odds = formatOdds(americanOdds ?? odd.price);
@@ -1459,7 +1709,10 @@ export const NcaabPickBuilder = ({
             const points = tierMeta?.points;
             const selectionMeta = buildSelectionMeta(odd, game);
             const sourceTab = TAB_LABELS[tabForOdd(odd)];
-            const line = odd.selection?.line;
+            const line =
+                typeof options?.displayLineOverride === "number"
+                    ? options.displayLineOverride
+                    : odd.selection?.line;
             const side = odd.selection?.side;
             const lineLabel =
                 line !== undefined && side
@@ -1473,6 +1726,7 @@ export const NcaabPickBuilder = ({
                 sport,
                 description,
                 odds,
+                // difficulty_label: slip.isGraded ? null : difficultyLabel,
                 difficulty_label: difficultyLabel,
                 buildMode: "ODDS",
                 points,
@@ -1489,7 +1743,7 @@ export const NcaabPickBuilder = ({
                 difficultyTier: tierMeta ? tierMeta.tier : undefined,
                 sourceTab,
             };
-        }, [sport, slip.isGraded]
+        }, [resolveTierMetaForOdds, sport, slip.isGraded]
     );
 
     const cacheReviewFromDraft = useCallback(
@@ -1503,7 +1757,12 @@ export const NcaabPickBuilder = ({
     );
 
     const localDraft = useMemo(
-        () => (selected ? buildDraftPick(selected.odd, selected.game) : null),
+        () =>
+            selected
+                ? buildDraftPick(selected.odd, selected.game, {
+                    displayLineOverride: selected.displayLineOverride,
+                })
+                : null,
         [selected, buildDraftPick]
     );
     const hasMultipick = isParlayMode && parlayLegs.length > 1;
@@ -1530,8 +1789,8 @@ export const NcaabPickBuilder = ({
                     selection: {
                         gameId: leg.eventId,
                         market: leg.market,
-                        playerId: leg.playerId,
                         teamId: leg.teamId,
+                        playerId: leg.playerId,
                         side: normalizeSide(leg.side),
                         scope: leg.playerId ? "PLAYER_PROP" : "GAME_LINE",
                         threshold: leg.line ?? undefined,
@@ -1599,15 +1858,7 @@ export const NcaabPickBuilder = ({
             difficultyTier: comboTierMeta?.tier,
             sourceTab: "Combo",
         } satisfies DraftPick;
-    }, [
-        comboLegs,
-        comboOddsValue,
-        comboTierMeta,
-        comboSport,
-        hasMultipick,
-        slip.isGraded,
-        activeGame
-    ]);
+    }, [comboLegs, comboOddsValue, comboTierMeta, hasMultipick, slip.isGraded, comboSport, activeGame]);
 
     const activeDraft = comboDraft ?? localDraft ?? draftPick ?? null;
     const reviewDrafts = useMemo(() => (activeDraft ? [activeDraft] : []), [activeDraft]);
@@ -1655,7 +1906,6 @@ export const NcaabPickBuilder = ({
                 : [],
         [conflictWarningsEnabled, slipConflictAnalysis]
     );
-
     const lastDraftKeyRef = useRef<string>("");
     const lastConfidenceSeedKeyRef = useRef<string>("");
 
@@ -1670,7 +1920,7 @@ export const NcaabPickBuilder = ({
         if (!showReviewSheet) {
             setIsReviewOpen(false);
         }
-    }, [showReviewSheet]);
+    }, [setIsReviewOpen, showReviewSheet]);
 
     useEffect(() => {
         if (!activeDraft) {
@@ -1707,7 +1957,14 @@ export const NcaabPickBuilder = ({
         if (!context) return;
         setActiveGameId(context.game.id);
         setActiveTab(tabForOdd(context.odd));
-        handleSelectOdd(context.odd, context.game, { skipParlay: true, forceSelect: true });
+        handleSelectOdd(context.odd, context.game, {
+            skipParlay: true,
+            forceSelect: true,
+            displayLineOverride: inferAltPointsDisplayLineOverride(
+                context.odd,
+                leg.cachedReview?.summary ?? leg.displayName
+            ),
+        });
     };
 
     const handleRemoveParlayLeg = (legId: string) => {
@@ -1729,6 +1986,10 @@ export const NcaabPickBuilder = ({
                 handleSelectOdd(fallbackContext.odd, fallbackContext.game, {
                     skipParlay: true,
                     forceSelect: true,
+                    displayLineOverride: inferAltPointsDisplayLineOverride(
+                        fallbackContext.odd,
+                        fallbackLeg.cachedReview?.summary ?? fallbackLeg.displayName
+                    ),
                 });
                 return;
             }
@@ -1736,15 +1997,6 @@ export const NcaabPickBuilder = ({
         if (draftPick?.source === sport) {
             onDraftPickChange?.(null);
         }
-        setSelected(null);
-    };
-
-    const handleRemoveSinglePick = () => {
-        if (isParlayMode && parlayLegs.length > 0) {
-            handleRemoveParlayLeg(parlayLegs[0].id);
-            return;
-        }
-        onDraftPickChange?.(null);
         setSelected(null);
     };
 
@@ -1813,7 +2065,7 @@ export const NcaabPickBuilder = ({
                             odds: string;
                             sourceTabLabel: string;
                             payload: BuiltPickPayload;
-                            metaLine: string | null,
+                            metaLine: string | null;
                             tierLine: string;
                             tierCard: ReturnType<typeof resolveTierCardAppearance>;
                         } => item !== null
@@ -1829,6 +2081,15 @@ export const NcaabPickBuilder = ({
             reviewTierScoringMode,
         ]
     );
+
+    const handleRemoveSinglePick = () => {
+        if (isParlayMode && parlayLegs.length > 0) {
+            handleRemoveParlayLeg(parlayLegs[0].id);
+            return;
+        }
+        onDraftPickChange?.(null);
+        setSelected(null);
+    };
 
     const resetAfterPost = () => {
         setIsReviewOpen(false);
@@ -1855,56 +2116,48 @@ export const NcaabPickBuilder = ({
         });
     }, [hasMultipick, setStraightConfidences, straightReviewItems]);
 
-    const comboReviewItems = useMemo(
-        () =>
-            hasMultipick
-                ? parlayLegs.map((leg) => {
-                    const legContext = findLegContext(leg);
-                    const sourceTabLabel = legContext
-                        ? TAB_LABELS[tabForOdd(legContext.odd)]
-                        : leg.cachedReview?.sourceTabLabel ?? "Pick";
-                    const legTierMeta = getTierMetaForPick({
-                        odds: leg.price,
-                        mode: reviewTierScoringMode,
-                    });
-                    const legPoints = legTierMeta?.points;
-                    const legTierLine = formatReviewSheetTierLine({
-                        tierMeta: legTierMeta,
-                        points: legPoints,
-                        includeName: reviewTierDisplayMode === "league",
-                        mode: reviewTierDisplayMode,
-                    });
-                    return {
-                        id: leg.id,
-                        description: leg.displayName,
-                        odds: leg.price,
-                        sourceTabLabel,
-                        metaLine: formatPickMetaLine({
-                            description: leg.displayName,
-                            matchup: leg.matchup ?? null,
-                            gameStartTime: leg.startTime ?? null,
-                        }),
-                        tierLine: legTierLine,
-                        onEdit: () => handleEditParlayLeg(leg),
-                        onDelete: () => handleRemoveParlayLeg(leg.id),
-                    };
-                })
-                : activeDraft
-                    ? []
-                    : [],
-        [
-            activeDraft,
-            findLegContext,
-            hasMultipick,
-            parlayLegs,
-            reviewTierDisplayMode,
-            reviewTierScoringMode,
-        ]
-    );
+    const comboReviewItems = hasMultipick
+        ? parlayLegs.map((leg) => {
+            const legContext = findLegContext(leg);
+            const sourceTabLabel = legContext
+                ? TAB_LABELS[tabForOdd(legContext.odd)]
+                : leg.cachedReview?.sourceTabLabel ?? "Pick";
+            const legTierMeta = getTierMetaForPick({
+                odds: leg.price,
+                mode: reviewTierScoringMode,
+            });
+            const legTierPrimary = legTierMeta
+                ? formatTierPrimary(legTierMeta.tier)
+                : "Tier —";
+            const legPoints = legTierMeta?.points;
+            const legTierLine = formatReviewSheetTierLine({
+                tierMeta: legTierMeta,
+                points: legPoints,
+                includeName: reviewTierDisplayMode === "league",
+                mode: reviewTierDisplayMode,
+            });
+            return {
+                id: leg.id,
+                description: leg.displayName,
+                odds: leg.price,
+                sourceTabLabel,
+                metaLine: formatPickMetaLine({
+                    description: leg.displayName,
+                    matchup: leg.matchup ?? null,
+                    gameStartTime: leg.startTime ?? null,
+                }),
+                tierLine: legTierLine,
+                onEdit: () => handleEditParlayLeg(leg),
+                onDelete: () => handleRemoveParlayLeg(leg.id),
+            };
+        })
+        : activeDraft
+            ? []
+            : [];
 
-    const sameGameComboGroups = useMemo<
-        Array<SameGameComboReviewGroup & { payload: BuiltPickPayload }>
-    >(() => {
+    const sameGameComboGroups: Array<
+        SameGameComboReviewGroup & { payload: BuiltPickPayload }
+    > = useMemo(() => {
         if (!hasMultipick) return [];
 
         const entries = parlayLegs
@@ -1920,10 +2173,13 @@ export const NcaabPickBuilder = ({
                     leg: ParlayLeg;
                     comboLeg: (typeof comboLegs)[number];
                     reviewItem: (typeof comboReviewItems)[number];
-                } => entry.comboLeg !== null && entry.reviewItem !== null
+                } =>
+                    entry.comboLeg !== null &&
+                    entry.reviewItem !== null
             );
 
         const eventGroups = new Map<string, typeof entries>();
+
         entries.forEach((entry) => {
             const groupKey = `${entry.leg.sport ?? "sport"}:${entry.leg.eventId}`;
             const group = eventGroups.get(groupKey) ?? [];
@@ -1945,9 +2201,15 @@ export const NcaabPickBuilder = ({
 
                 const groupOddsValue = groupQuote.americanOdds;
                 const groupOddsLabel =
-                    groupOddsValue === null ? null : formatOdds(groupOddsValue);
+                    groupOddsValue === null
+                        ? null
+                        : formatOdds(groupOddsValue);
+
                 const payloadGroupTierMeta =
-                    groupOddsValue !== null ? resolveTierMetaForOdds(groupOddsValue) : null;
+                    groupOddsValue !== null
+                        ? resolveTierMetaForOdds(groupOddsValue)
+                        : null;
+
                 const reviewGroupTierMeta =
                     groupOddsValue !== null
                         ? resolveReviewTierMetaForOdds(groupOddsValue)
@@ -1955,7 +2217,8 @@ export const NcaabPickBuilder = ({
                 const groupTierLine = formatReviewSheetTierLine({
                     tierMeta: reviewGroupTierMeta,
                     points: reviewGroupTierMeta?.points,
-                    includeName: reviewTierDisplayMode === "league",
+                    includeName:
+                        reviewTierDisplayMode === "league",
                     mode: reviewTierDisplayMode,
                 });
                 const description = group
@@ -1998,12 +2261,10 @@ export const NcaabPickBuilder = ({
 
         return groups;
     }, [
-        comboLegs,
-        comboReviewItems,
         hasMultipick,
         parlayLegs,
-        resolveReviewTierMetaForOdds,
-        resolveTierMetaForOdds,
+        comboLegs,
+        comboReviewItems,
         reviewTierDisplayMode,
         slip.isGraded,
         sport,
@@ -2022,7 +2283,7 @@ export const NcaabPickBuilder = ({
             });
             return next;
         });
-    }, [hasMultipick, sameGameComboGroups, setSameGameComboConfidences]);
+    }, [hasMultipick, setSameGameComboConfidences]);
 
     const reviewListItems = !hasMultipick && activeDraft
         ? [
@@ -2044,11 +2305,16 @@ export const NcaabPickBuilder = ({
     const handleSelectOdd = (
         odd: OddsBlazeOdd,
         game: GameOption,
-        options?: { skipParlay?: boolean; forceSelect?: boolean }
+        options?: {
+            skipParlay?: boolean;
+            forceSelect?: boolean;
+            displayLineOverride?: number | null;
+        }
     ) => {
         if (locked) return;
         const skipParlay = options?.skipParlay ?? false;
         const forceSelect = options?.forceSelect ?? false;
+        const displayLineOverride = options?.displayLineOverride ?? null;
         if (isParlayMode && !skipParlay) {
             const eventForLeg: OddsEvent = {
                 id: game.id,
@@ -2069,7 +2335,7 @@ export const NcaabPickBuilder = ({
                 odds: game.odds as OddsEvent["odds"],
             };
             const matchup = matchupLabel(game);
-            const legDraft = buildDraftPick(odd, game);
+            const legDraft = buildDraftPick(odd, game, { displayLineOverride });
             const incomingLeg = {
                 ...normalizeOddToLeg(eventForLeg, {
                     ...odd,
@@ -2089,7 +2355,7 @@ export const NcaabPickBuilder = ({
             const existingLeg = parlayLegs.find((leg) => leg.id === incomingLeg.id);
             if (!existingLeg) {
                 if (game.id && odd.id) {
-                    dispatch(ncaabPickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
+                    dispatch(nbaPickValidateRequest({ match_id: game.id, external_pick_key: odd.id }));
                 }
             }
             if (existingLeg) {
@@ -2106,6 +2372,10 @@ export const NcaabPickBuilder = ({
                             handleSelectOdd(fallbackContext.odd, fallbackContext.game, {
                                 skipParlay: true,
                                 forceSelect: true,
+                                displayLineOverride: inferAltPointsDisplayLineOverride(
+                                    fallbackContext.odd,
+                                    fallbackLeg.cachedReview?.summary ?? fallbackLeg.displayName
+                                ),
                             });
                             return;
                         }
@@ -2141,8 +2411,9 @@ export const NcaabPickBuilder = ({
                 setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
             }
             setParlayLegs((prev) => [...prev, incomingLeg]);
+            // const nextDraft = buildDraftPick(odd, game);
             onDraftPickChange?.(legDraft);
-            setSelected({ odd, game });
+            setSelected({ odd, game, displayLineOverride });
             return;
         }
         if (!forceSelect && selected?.odd.id === odd.id) {
@@ -2153,7 +2424,8 @@ export const NcaabPickBuilder = ({
             }
             return;
         }
-        const nextDraft = buildDraftPick(odd, game);
+        const nextDraft = buildDraftPick(odd, game, { displayLineOverride });
+
         const slipSelectionAnalysis = analyzeSlipPayloadAgainstPicks(picks, nextDraft, {
             ignorePickId: initialPick?.id,
         });
@@ -2167,20 +2439,8 @@ export const NcaabPickBuilder = ({
         if (slipSelectionMessages.length > 0) {
             setToast({ id: Date.now(), type: "info", message: slipSelectionMessages[0], duration: 3000 });
         }
-        setSelected({ odd, game });
         onDraftPickChange?.(nextDraft);
-    };
-
-    const resolveLineSelection = (
-        lines: number[],
-        current?: number | null,
-        preferred?: number
-    ) => {
-        if (lines.length === 0) return null;
-        if (current !== undefined && current !== null && lines.includes(current)) {
-            return current;
-        }
-        return pickClosestLine(lines, preferred);
+        setSelected({ odd, game, displayLineOverride });
     };
 
     const isSectionCollapsed = (key: string, defaultOpen = true) =>
@@ -2410,16 +2670,108 @@ export const NcaabPickBuilder = ({
         }
 
         if (!activeDraft) return;
-        dispatchPayloads(
-            [
-                {
-                    ...activeDraft,
-                    confidence: action === "post" ? selectedConfidence ?? null : null,
-                },
-            ],
-            action
-        );
+        dispatchPayloads([
+            {
+                ...activeDraft,
+                confidence: action === "post" ? selectedConfidence ?? null : null,
+            },
+        ], action);
     };
+
+    // const buildParlayLegPayloads = () => {
+    //     const payloads: BuiltPickPayload[] = [];
+    //     for (const leg of parlayLegs) {
+    //         const context = findLegContext(leg);
+    //         if (!context) return null;
+    //         payloads.push(buildDraftPick(context.odd, context.game));
+    //     }
+    //     return payloads;
+    // };
+
+    // const submitPick = (action: "post" | "slip") => {
+    //     if (locked) return;
+
+    //     if (action === "post" && !selectedConfidence) {
+    //         setToast({
+    //             id: Date.now(),
+    //             type: "error",
+    //             message: "Select a confidence level to post.",
+    //             duration: 3000
+    //         });
+    //         return;
+    //     }
+
+    //     const handler = action === "post"
+    //         ? onCreatePostPick ?? onSave
+    //         : onPostToSlip ?? onSave;
+
+    //     if (hasMultipick) {
+    //         if (action === "post") {
+    //             if (!activeDraft) return;
+    //             handler({
+    //                 ...activeDraft,
+    //                 confidence: selectedConfidence ?? activeDraft.confidence ?? null,
+    //             });
+    //             resetAfterPost();
+    //             return;
+    //         }
+
+    //         const payloads = buildParlayLegPayloads();
+    //         if (!payloads || payloads.length === 0) {
+    //             setToast({
+    //                 id: Date.now(),
+    //                 type: "error",
+    //                 message: "Couldn't build your picks. Please try again.",
+    //                 duration: 3000
+    //             });
+    //             return;
+    //         }
+
+    //         if (slip.pick_limit !== "unlimited") {
+    //             const existingCount = picks.filter(
+    //                 (entry) => entry.slip_id === slip.id && entry.user_id === currentUser.userId
+    //             ).length;
+    //             const isEditing =
+    //                 Boolean(
+    //                     initialPick &&
+    //                     initialPick.slip_id === slip.id &&
+    //                     initialPick.user_id === currentUser.userId
+    //                 );
+    //             const adjustedCount = isEditing
+    //                 ? Math.max(0, existingCount - 1)
+    //                 : existingCount;
+    //             if (adjustedCount + payloads.length > slip.pick_limit) {
+    //                 setToast({
+    //                     id: Date.now(),
+    //                     type: "error",
+    //                     message: "Pick limit reached for this slip.",
+    //                     duration: 3000
+    //                 });
+
+    //                 return;
+    //             }
+    //         }
+
+    //         payloads.forEach((payload) => {
+    //             handler({
+    //                 ...payload,
+    //                 confidence: selectedConfidence ?? payload.confidence ?? null,
+    //             });
+    //         });
+    //         resetAfterPost();
+    //         return;
+    //     }
+    //     if (!activeDraft) return;
+
+    //     handler({
+    //         ...activeDraft,
+    //         confidence:
+    //             action === "post"
+    //                 ? selectedConfidence ?? activeDraft.confidence ?? null
+    //                 : null,
+    //     });
+    //     resetAfterPost();
+    // };
 
     const buildOddsBoxClasses = (
         base: string,
@@ -2435,12 +2787,23 @@ export const NcaabPickBuilder = ({
         return `${base} border-sky-400/50 text-sky-200 hover:border-sky-300/70`;
     };
 
-    const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
+    const oddsBoxClasses = (selected?: boolean, muted?: boolean) =>
         buildOddsBoxClasses(
-            "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap overflow-hidden rounded-md border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
+            "min-w-[88px] h-[44px] shrink-0 rounded-md border bg-black/70 px-3 text-sm font-semibold transition sm:min-w-[104px] sm:h-[52px] sm:px-4 flex items-center justify-center",
             selected,
             muted
         );
+
+    const tableOddsBoxClasses = (selected?: boolean, muted?: boolean) =>
+        buildOddsBoxClasses(
+            "h-[40px] w-[var(--table-chip-width,60px)] shrink-0 whitespace-nowrap rounded-md border bg-black/70 px-1 text-[11px] font-semibold tabular-nums transition sm:h-[52px] sm:px-3 sm:text-sm flex items-center justify-center",
+            selected,
+            muted
+        );
+
+    const renderOddsBox = (value: string, selected?: boolean, muted?: boolean) => (
+        <div className={oddsBoxClasses(selected, muted)}>{value}</div>
+    );
 
     const renderTableOddsBox = (
         value: string,
@@ -2457,14 +2820,12 @@ export const NcaabPickBuilder = ({
         <div className={tableOddsBoxClasses(selected, muted)}>
             <div className="flex flex-col items-center leading-tight">
                 <span
-                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-white"
-                        }`}
+                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-white"}`}
                 >
                     {lineLabel}
                 </span>
                 <span
-                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-sky-100"
-                        }`}
+                    className={`whitespace-nowrap text-[10px] sm:text-xs ${muted ? "text-gray-500" : "text-sky-100"}`}
                 >
                     {oddsLabel}
                 </span>
@@ -2500,10 +2861,6 @@ export const NcaabPickBuilder = ({
             </button>
         );
     };
-
-    type OddsCardEntry = OddsBlazeOdd | SelectedOdd;
-    const normalizeOddEntry = (entry: OddsCardEntry) =>
-        "odd" in entry ? entry.odd : entry;
 
     const renderMainLinesGrid = (lines: MainLineOdds | null) => {
         if (!activeGame) return null;
@@ -2600,8 +2957,17 @@ export const NcaabPickBuilder = ({
         );
     };
 
+    type SimpleMarketRow = {
+        id: string;
+        label: string;
+        sublabel?: string;
+        odd?: OddsBlazeOdd;
+        lineLabel?: string;
+    };
+
     const renderSimpleMarketTable = (
         rows: SimpleMarketRow[],
+        sectionKey: string,
         options?: {
             headerLabel?: string;
             emptyMessage?: string;
@@ -2618,65 +2984,73 @@ export const NcaabPickBuilder = ({
         }
         const headerLabel = options?.headerLabel ?? "Selection";
         const className = options?.className ?? "mt-4 -mx-5 sm:-mx-6";
+        const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
         return (
-            <div className={className}>
-                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                    <div
-                        className="grid border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
-                        style={{
-                            gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
-                        }}
-                    >
-                        <div className={STICKY_COLUMN_HEADER_CLASSES}>{headerLabel}</div>
-                        <div className="px-3 py-2 text-center">Odds</div>
+            <>
+                <div className={className}>
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                            style={{
+                                gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                            }}
+                        >
+                            <div className={STICKY_COLUMN_HEADER_CLASSES}>
+                                {headerLabel}
+                            </div>
+                            <div className="px-3 py-2 text-center">Odds</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const isSelected = row.odd ? isOddSelected(row.odd) : false;
+                            const oddsLabel = row.odd ? formatOdds(row.odd.price) : "-";
+                            return (
+                                <button
+                                    key={row.id}
+                                    type="button"
+                                    onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
+                                    disabled={!row.odd || locked}
+                                    className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelected
+                                        ? "border-sky-300/60 bg-sky-500/10"
+                                        : "hover:bg-white/[0.02]"
+                                        } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                    style={{
+                                        gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
+                                    }}
+                                >
+                                    <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
+                                        <p className="text-sm font-semibold text-white">{row.label}</p>
+                                        {row.sublabel ? (
+                                            <p className="mt-1 text-xs text-gray-400">{row.sublabel}</p>
+                                        ) : null}
+                                    </div>
+                                    <div className="flex justify-center px-3 py-3">
+                                        {row.lineLabel
+                                            ? renderLineOddsBox(row.lineLabel, oddsLabel, isSelected, !row.odd)
+                                            : renderTableOddsBox(oddsLabel, isSelected, !row.odd)}
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
-                    {rows.map((row, rowIndex) => {
-                        const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                        const isSelected = row.odd ? isOddSelected(row.odd) : false;
-                        const oddsLabel = row.odd ? formatOdds(row.odd.price) : "-";
-                        return (
-                            <button
-                                key={row.id}
-                                type="button"
-                                onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                disabled={!row.odd || locked}
-                                className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelected
-                                    ? "border-sky-300/60 bg-sky-500/10"
-                                    : "hover:bg-white/[0.02]"
-                                    } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                style={{
-                                    gridTemplateColumns: "minmax(0,1fr) var(--table-chip-width)",
-                                }}
-                            >
-                                <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
-                                    <p className="text-sm font-semibold text-white">{row.label}</p>
-                                    {row.sublabel ? (
-                                        <p className="mt-1 text-xs text-gray-400">{row.sublabel}</p>
-                                    ) : null}
-                                </div>
-                                <div className="flex justify-center px-3 py-3">
-                                    {row.lineLabel
-                                        ? renderLineOddsBox(row.lineLabel, oddsLabel, isSelected, !row.odd)
-                                        : renderTableOddsBox(oddsLabel, isSelected, !row.odd)}
-                                </div>
-                            </button>
-                        );
-                    })}
                 </div>
-            </div>
+                {renderCategoryRowsToggle(sectionKey, rows.length)}
+            </>
         );
     };
 
-    const renderOddCards = (odds: OddsCardEntry[]) => {
+    const renderOddCards = (odds: SelectedOdd[], sectionKey: string) => {
         if (!activeGame) return null;
-        const rows: SimpleMarketRow[] = odds.map((entry) => {
-            const odd = normalizeOddEntry(entry);
-            const label = odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection";
+        const rows: SimpleMarketRow[] = odds.map(({ odd }) => {
+            const baseLabel = odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection";
             const side = odd.selection?.side;
             const line = odd.selection?.line;
             const isPlayer = Boolean(odd.player);
             const teamLabel = odd.player ? playerTeamLabel(odd.player, activeGame) : "";
-            const subtitle = isPlayer ? teamLabel || matchupLabel(activeGame) : matchupLabel(activeGame);
+            const subtitle = isPlayer
+                ? teamLabel || matchupLabel(activeGame)
+                : matchupLabel(activeGame);
+            const label = baseLabel;
             const lineLabel =
                 line !== undefined
                     ? `${side ? `${side[0]?.toUpperCase()} ` : ""}${line}`.trim()
@@ -2689,7 +3063,7 @@ export const NcaabPickBuilder = ({
                 lineLabel,
             };
         });
-        return renderSimpleMarketTable(rows, {
+        return renderSimpleMarketTable(rows, sectionKey, {
             headerLabel: "Selection",
             emptyMessage: "No lines available for this market yet.",
             className: "mt-4 -mx-5 sm:-mx-6",
@@ -2717,7 +3091,8 @@ export const NcaabPickBuilder = ({
                         <div
                             className="grid gap-2 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
                             style={{
-                                gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                                gridTemplateColumns:
+                                    "minmax(0,1fr) repeat(2, var(--table-chip-width))",
                             }}
                         >
                             <div className="pl-0 pr-3 py-2">Player</div>
@@ -2740,8 +3115,10 @@ export const NcaabPickBuilder = ({
                                         type="button"
                                         onClick={() => odd && handleSelectOdd(odd, activeGame)}
                                         disabled={!odd || locked}
-                                        className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
-                                            }`}
+                                        className={`${tableOddsBoxClasses(
+                                            isSelected,
+                                            !odd
+                                        )} ${!odd ? "cursor-not-allowed" : ""}`}
                                     >
                                         <div className="flex flex-col items-center leading-tight">
                                             <span
@@ -2766,7 +3143,8 @@ export const NcaabPickBuilder = ({
                                     key={row.player.id}
                                     className={`grid items-center gap-2 border-b border-white/5 px-5 text-left sm:px-6 ${rowBand}`}
                                     style={{
-                                        gridTemplateColumns: "minmax(0,1fr) repeat(2, var(--table-chip-width))",
+                                        gridTemplateColumns:
+                                            "minmax(0,1fr) repeat(2, var(--table-chip-width))",
                                     }}
                                 >
                                     <div className="min-w-0 pl-0 pr-3 py-2.5">
@@ -2819,7 +3197,7 @@ export const NcaabPickBuilder = ({
                                     <div
                                         className="grid grid-cols-[minmax(112px,132px)_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)]"
                                     >
-                                        <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                        <div className="flex min-w-0 min-h-[56px] flex-col justify-center pr-1">
                                             <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
                                                 {row.player.name}
                                             </p>
@@ -2839,29 +3217,31 @@ export const NcaabPickBuilder = ({
                                                     const odd = row.lines.get(line);
                                                     const isSelected = isOddSelected(odd);
                                                     const oddsLabel = odd ? formatOdds(odd.price) : "-";
-                                                    const lineLabel = showPointsSuffix
-                                                        ? `${formatLineLabel(line)} pts`
-                                                        : formatLineLabel(line);
                                                     return (
                                                         <button
                                                             key={`${row.player.id}-${line}`}
                                                             type="button"
                                                             data-line={line}
-                                                            onClick={() => odd && handleSelectOdd(odd, activeGame)}
+                                                            onClick={() =>
+                                                                odd &&
+                                                                handleSelectOdd(odd, activeGame, {
+                                                                    displayLineOverride: showPointsSuffix ? line : undefined,
+                                                                })
+                                                            }
                                                             disabled={!odd || locked}
-                                                            className={`${tableOddsBoxClasses(isSelected, !odd)} ${!odd ? "cursor-not-allowed" : ""
-                                                                }`}
+                                                            className={`${tableOddsBoxClasses(
+                                                                isSelected,
+                                                                !odd
+                                                            )} ${!odd ? "cursor-not-allowed" : ""}`}
                                                         >
                                                             <div className="flex flex-col items-center leading-tight">
                                                                 <span
-                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
-                                                                        }`}
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"}`}
                                                                 >
-                                                                    {lineLabel}
+                                                                    {formatLineLabel(line)}
                                                                 </span>
                                                                 <span
-                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-sky-100" : "text-gray-500"
-                                                                        }`}
+                                                                    className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-sky-100" : "text-gray-500"}`}
                                                                 >
                                                                     {oddsLabel}
                                                                 </span>
@@ -2882,9 +3262,141 @@ export const NcaabPickBuilder = ({
         );
     };
 
+    const renderYesNoTable = (
+        rows: ReturnType<typeof buildYesNoRows>,
+        sectionKey: string,
+        className = "mt-4 -mx-5 sm:-mx-6"
+    ) => {
+        if (!activeGame) return null;
+        if (rows.length === 0) {
+            return (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
+                    No lines available for this market yet.
+                </div>
+            );
+        }
+        const { rows: visibleRows } = getVisibleCategoryRows(rows, sectionKey);
+        return (
+            <>
+                <div className={className}>
+                    <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                        <div
+                            className="grid border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                            style={{
+                                gridTemplateColumns:
+                                    "minmax(0,1fr) var(--table-chip-width)",
+                            }}
+                        >
+                            <div className={STICKY_COLUMN_HEADER_CLASSES}>
+                                Player
+                            </div>
+                            <div className="px-3 py-2 text-center">Odds</div>
+                        </div>
+                        {visibleRows.map((row, rowIndex) => {
+                            const rowBand = rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                            const isSelected = isOddSelected(row.odd);
+                            return (
+                                <button
+                                    key={row.player.id}
+                                    type="button"
+                                    onClick={() => handleSelectOdd(row.odd, activeGame)}
+                                    disabled={!row.odd || locked}
+                                    className={`grid w-full items-center border-b border-white/5 px-5 text-left transition sm:px-6 ${rowBand} ${isSelected
+                                        ? "border-sky-300/60 bg-sky-500/10"
+                                        : "hover:bg-white/[0.02]"
+                                        } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                    style={{
+                                        gridTemplateColumns:
+                                            "minmax(0,1fr) var(--table-chip-width)",
+                                    }}
+                                >
+                                    <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
+                                        <p className="text-sm font-semibold text-white">{row.player.name}</p>
+                                        <p className="mt-1 text-xs text-gray-400">{row.teamLabel}</p>
+                                    </div>
+                                    <div className="flex justify-center px-3 py-3">
+                                        {renderTableOddsBox(
+                                            row.odd ? formatOdds(row.odd.price) : "-",
+                                            isSelected,
+                                            !row.odd
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+                {renderCategoryRowsToggle(sectionKey, rows.length)}
+            </>
+        );
+    };
+
+    const renderMainLineOddCards = (odds: OddsObject[], marketOverride?: string) => {
+        if (!activeGame) return null;
+        return (
+            <div className="mt-4 grid gap-2 md:grid-cols-2">
+                {odds.map((odd) => {
+                    const isSelected = isOddSelected(odd);;
+                    const label = odd.player?.name ?? odd.selection?.name ?? odd.name ?? "Selection";
+                    const side = odd.selection?.side;
+                    const line = odd.selection?.line;
+                    const isPlayer = Boolean(odd.player);
+                    const playerTeam = odd.player?.team?.abbreviation ?? "";
+                    const opponent =
+                        odd.player?.team?.id === activeGame.homeTeamId
+                            ? activeGame.awayAbbr
+                            : activeGame.homeAbbr;
+                    return (
+                        <>
+                            <button
+                                key={odd.id}
+                                type="button"
+                                onClick={() => handleSelectOdd(odd, activeGame)}
+                                className={`rounded-2xl border px-3 py-3 text-left transition ${isSelected
+                                    ? "border-emerald-300/60 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(52,211,153,0.35)]"
+                                    : "border-white/10 bg-black/70 hover:border-white/20"
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <p className="text-sm font-semibold text-white">{label}</p>
+                                        <p className="mt-1 text-xs text-gray-400">
+                                            {isPlayer
+                                                ? `${playerTeam} vs ${opponent} - ${matchupLabel(activeGame)}`
+                                                : matchupLabel(activeGame)}
+                                        </p>
+                                        <p className="mt-1 text-xs text-gray-500">
+                                            {marketOverride ?? odd.market}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        {renderOddsBox(formatOdds(odd.price), isSelected)}
+                                        {line !== undefined ? (
+                                            <p className="text-xs text-gray-400">
+                                                {side ? `${side} ` : ""}
+                                                {line}
+                                            </p>
+                                        ) : side ? (
+                                            <p className="text-xs text-gray-400">{side}</p>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
+                                    <span>{formatDateTime(activeGame.date)}</span>
+                                    <span>{odd.main ? "Main" : "Alt"}</span>
+                                </div>
+                            </button>
+                        </>
+                    );
+                })}
+            </div>
+        );
+    };
+
     const renderAlternateSpreadSection = (
         data: { lines: number[]; map: Map<number, SpreadLineEntry> },
         activeLine: number | null,
+        sectionKey: string,
         onSelectLine: (line: number) => void,
         options?: { className?: string; emptyMessage?: string }
     ) => {
@@ -2898,7 +3410,8 @@ export const NcaabPickBuilder = ({
         }
         const resolvedLine = resolveLineSelection(data.lines, activeLine);
         const homeEntry = resolvedLine !== null ? data.map.get(resolvedLine) : undefined;
-        const awayEntry = resolvedLine !== null ? data.map.get(-resolvedLine) : undefined;
+        const awayEntry =
+            resolvedLine !== null ? data.map.get(-resolvedLine) : undefined;
         const homeOdd = homeEntry?.home;
         const awayOdd = awayEntry?.away;
         const homeLine = resolvedLine ?? homeOdd?.selection?.line;
@@ -2909,26 +3422,20 @@ export const NcaabPickBuilder = ({
         const rows: SimpleMarketRow[] = [
             {
                 id: `${activeGame.id}-alt-spread-away`,
-                label:
-                    awayLineLabel !== "-"
-                        ? `${activeGame.awayTeam} ${awayLineLabel}`
-                        : activeGame.awayTeam,
+                label: awayLineLabel !== "-" ? `${activeGame.awayTeam} ${awayLineLabel}` : activeGame.awayTeam,
                 sublabel: activeGame.awayAbbr,
                 odd: awayOdd,
             },
             {
                 id: `${activeGame.id}-alt-spread-home`,
-                label:
-                    homeLineLabel !== "-"
-                        ? `${activeGame.homeTeam} ${homeLineLabel}`
-                        : activeGame.homeTeam,
+                label: homeLineLabel !== "-" ? `${activeGame.homeTeam} ${homeLineLabel}` : activeGame.homeTeam,
                 sublabel: activeGame.homeAbbr,
                 odd: homeOdd,
             },
         ];
         return (
             <div className={options?.className ?? "mt-4 space-y-3"}>
-                {renderSimpleMarketTable(rows, {
+                {renderSimpleMarketTable(rows, sectionKey, {
                     headerLabel: "Team",
                     className: "mt-0 -mx-5 sm:-mx-6",
                 })}
@@ -2946,6 +3453,7 @@ export const NcaabPickBuilder = ({
     const renderAlternateTotalSection = (
         data: { lines: number[]; map: Map<number, TotalLineEntry> },
         activeLine: number | null,
+        sectionKey: string,
         onSelectLine: (line: number) => void,
         options?: { className?: string; emptyMessage?: string }
     ) => {
@@ -2981,7 +3489,7 @@ export const NcaabPickBuilder = ({
         ];
         return (
             <div className={options?.className ?? "mt-4 space-y-3"}>
-                {renderSimpleMarketTable(rows, {
+                {renderSimpleMarketTable(rows, sectionKey, {
                     headerLabel: "Side",
                     className: "mt-0 -mx-5 sm:-mx-6",
                 })}
@@ -3039,6 +3547,7 @@ export const NcaabPickBuilder = ({
         : confirmationVariant === "post"
             ? "Post Slip"
             : "selected pick";
+
     const renderReviewSheet = () => (
         <PickReviewSheet
             show={showReviewSheet}
@@ -3047,7 +3556,11 @@ export const NcaabPickBuilder = ({
             hasMultiSelection={hasMultiSelection}
             multiSelectionCount={multiSelectionCount}
             sheetHeaderLabel={sheetHeaderLabel}
-            sheetSummary={sheetSummary}
+            sheetSummary={
+                !hasMultiSelection && confirmationVariant === "post"
+                    ? "1 pick selected"
+                    : sheetSummary
+            }
             confirmationVariant={confirmationVariant}
             locked={locked}
             comboHasInvalidSelections={comboHasInvalidSelections}
@@ -3089,47 +3602,40 @@ export const NcaabPickBuilder = ({
             money: "Moneyline",
             total: "Total Points",
         });
+        // }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
     }, [activeGame]);
 
-    const altSpreadOdds = useMemo(
-        () =>
-            activeGame
-                ? activeGame.odds.filter((odd) => odd.market === "Point Spread" && !odd.main)
-                : [],
-        [activeGame]
-    );
-
-    const altTotalOdds = useMemo(
-        () =>
-            activeGame
-                ? activeGame.odds.filter((odd) => odd.market === "Total Points" && !odd.main)
-                : [],
-        [activeGame]
-    );
-
-    const altSpreadLineData = useMemo(() => {
-        if (!activeGame) {
-            return { lines: [] as number[], map: new Map<number, SpreadLineEntry>() };
-        }
-        return buildAltSpreadLineData(altSpreadOdds, activeGame);
-    }, [activeGame, altSpreadOdds]);
-
-    const altTotalLineData = useMemo(
-        () => buildAltTotalLineData(altTotalOdds),
-        [altTotalOdds]
-    );
-
-    const gameSpecialOdds = useMemo(
-        () =>
-            activeGame
-                ? activeGame.odds.filter((odd) =>
-                    GAME_SPECIAL_MARKETS.includes(
-                        odd.market as (typeof GAME_SPECIAL_MARKETS)[number]
-                    )
+    const quarterSections = useMemo(() => {
+        if (!activeGame) return [];
+        const quarters = [
+            { key: "quarters-1st", title: "1st Quarter", shortLabel: "Q1", prefix: "1st Quarter" },
+            { key: "quarters-2nd", title: "2nd Quarter", shortLabel: "Q2", prefix: "2nd Quarter" },
+            { key: "quarters-3rd", title: "3rd Quarter", shortLabel: "Q3", prefix: "3rd Quarter" },
+            { key: "quarters-4th", title: "4th Quarter", shortLabel: "Q4", prefix: "4th Quarter" },
+        ];
+        return quarters.map((quarter) => ({
+            key: quarter.key,
+            title: quarter.title,
+            shortLabel: quarter.shortLabel,
+            lines: buildMainLineOddsForMarkets(activeGame, {
+                spread: `${quarter.prefix} Point Spread`,
+                money: `${quarter.prefix} Moneyline`,
+                total: `${quarter.prefix} Total Points`,
+            }),
+            altSpread: buildAltSpreadLineData(
+                activeGame.odds.filter(
+                    (odd) => odd.market === `${quarter.prefix} Point Spread`
+                ),
+                activeGame
+            ),
+            altTotal: buildAltTotalLineData(
+                activeGame.odds.filter(
+                    (odd) => odd.market === `${quarter.prefix} Total Points`
                 )
-                : [],
-        [activeGame]
-    );
+            ),
+        }));
+        // }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
+    }, [activeGame]);
 
     const halfSections = useMemo(() => {
         if (!activeGame) return [];
@@ -3147,59 +3653,184 @@ export const NcaabPickBuilder = ({
                 total: `${half.prefix} Total Points`,
             }),
             spread: buildAltSpreadLineData(
-                activeGame.odds.filter((odd) => odd.market === `${half.prefix} Point Spread`),
+                activeGame.odds.filter(
+                    (odd) => odd.market === `${half.prefix} Point Spread`
+                ),
                 activeGame
             ),
             total: buildAltTotalLineData(
-                activeGame.odds.filter((odd) => odd.market === `${half.prefix} Total Points`)
+                activeGame.odds.filter(
+                    (odd) => odd.market === `${half.prefix} Total Points`
+                )
             ),
-            oddEven: activeGame.odds
-                .filter((odd) => odd.market === `${half.prefix} Total Points Odd/Even`)
-                .map((odd) => ({ odd, game: activeGame }))
-                .sort(compareOddsByLine),
         }));
+        // }, [activeGame, fanduelNbaOdds?.updated, draftkingNbaOdds?.updated]);
     }, [activeGame]);
 
-    const hasMainLines = (lines: MainLineOdds | null) =>
+    const halfDropdownSections = useMemo(
+        () =>
+            halfSections.flatMap((section) => [
+                {
+                    key: `${section.key}-main`,
+                    title: section.title,
+                    type: "main" as const,
+                    section,
+                },
+                {
+                    key: `${section.key}-spread`,
+                    title: `Alternate Spread - ${section.shortLabel}`,
+                    type: "spread" as const,
+                    section,
+                },
+                {
+                    key: `${section.key}-total`,
+                    title: `Alternate Total - ${section.shortLabel}`,
+                    type: "total" as const,
+                    section,
+                },
+            ]),
+        [halfSections]
+    );
+
+    const quarterDropdownSections = useMemo(
+        () =>
+            quarterSections.flatMap((section) => [
+                {
+                    key: `${section.key}-main`,
+                    title: section.title,
+                    type: "main" as const,
+                    section,
+                },
+                {
+                    key: `${section.key}-alt-spread`,
+                    title: `Alternate Spread - ${section.shortLabel}`,
+                    type: "alt-spread" as const,
+                    section,
+                },
+                {
+                    key: `${section.key}-alt-total`,
+                    title: `Alternate Total - ${section.shortLabel}`,
+                    type: "alt-total" as const,
+                    section,
+                },
+            ]),
+        [quarterSections]
+    );
+
+    const hasQuarterLines = useMemo(
+        () =>
+            quarterSections.some(
+                (section) =>
+                    Boolean(
+                        section.lines.spreadAway ||
+                        section.lines.spreadHome ||
+                        section.lines.moneyAway ||
+                        section.lines.moneyHome ||
+                        section.lines.totalOver ||
+                        section.lines.totalUnder
+                    ) ||
+                    section.altSpread.lines.length > 0 ||
+                    section.altTotal.lines.length > 0
+            ),
+        [quarterSections]
+    );
+
+    const hasHalfLines = useMemo(
+        () =>
+            halfSections.some(
+                (section) =>
+                    Boolean(
+                        section.lines.spreadAway ||
+                        section.lines.spreadHome ||
+                        section.lines.moneyAway ||
+                        section.lines.moneyHome ||
+                        section.lines.totalOver ||
+                        section.lines.totalUnder
+                    ) ||
+                    section.spread.lines.length > 0 ||
+                    section.total.lines.length > 0
+            ),
+        [halfSections]
+    );
+
+    const altSpreadOdds = useMemo(
+        () =>
+            oddsData
+                ? oddsData.filter((odd) => odd.market === "Point Spread" && !odd.main)
+                : [],
+        [oddsData]
+    );
+
+    const altTotalOdds = useMemo(
+        () =>
+            oddsData
+                ? oddsData.filter((odd) => odd.market === "Total Points" && !odd.main)
+                : [],
+        [oddsData]
+    );
+
+    const spreadOddsAll = useMemo(
+        () =>
+            oddsData
+                ? oddsData.filter((odd) => odd.market === "Point Spread")
+                : [],
+        [oddsData]
+    );
+
+    const totalOddsAll = useMemo(
+        () =>
+            oddsData
+                ? oddsData.filter((odd) => odd.market === "Total Points")
+                : [],
+        [oddsData]
+    );
+
+    const altSpreadLineData = useMemo(
+        () =>
+            activeGame
+                ? buildAltSpreadLineData(spreadOddsAll, activeGame)
+                : { lines: [] as number[], map: new Map<number, SpreadLineEntry>() },
+        [activeGame, spreadOddsAll]
+    );
+
+    const altTotalLineData = useMemo(
+        () => buildAltTotalLineData(totalOddsAll),
+        [totalOddsAll]
+    );
+
+    const firstBasketOdds = useMemo(
+        () =>
+            oddsData
+                ? oddsData.filter((odd) =>
+                    ["First Basket", "Home Team First Basket", "Away Team First Basket"].includes(
+                        odd.market
+                    )
+                )
+                : [],
+        [oddsData]
+    );
+
+    const hasMainLines =
         Boolean(
-            lines?.spreadAway ||
-            lines?.spreadHome ||
-            lines?.moneyAway ||
-            lines?.moneyHome ||
-            lines?.totalOver ||
-            lines?.totalUnder
+            mainLineOdds?.spreadAway ||
+            mainLineOdds?.spreadHome ||
+            mainLineOdds?.moneyAway ||
+            mainLineOdds?.moneyHome ||
+            mainLineOdds?.totalOver ||
+            mainLineOdds?.totalUnder
         );
 
     const hasGameLinesData =
-        hasMainLines(mainLineOdds) || altSpreadOdds.length > 0 || altTotalOdds.length > 0 || gameSpecialOdds.length > 0;
-
-    const hasHalvesData = halfSections.some(
-        (section) =>
-            hasMainLines(section.lines) ||
-            section.spread.lines.length > 0 ||
-            section.total.lines.length > 0 ||
-            section.oddEven.length > 0
-    );
-
-    const availableTabs = useMemo(() => {
-        if (!activeGame) return TAB_ORDER;
-        return TAB_ORDER.filter((tab) => {
-            if (tab === "GAME_LINES") return hasGameLinesData;
-            if (tab === "HALVES") return hasHalvesData;
-            return activeGame.odds.some((odd) => {
-                if (tab === "PLAYER_POINTS" && odd.market === "Player Points") return true;
-                return TAB_MARKETS[tab].includes(odd.market);
-            });
-        });
-    }, [activeGame, hasGameLinesData, hasHalvesData]);
-
+        hasMainLines || altSpreadOdds.length > 0 || altTotalOdds.length > 0 || firstBasketOdds.length > 0;
 
     const hasActiveMarketLines = activeGame
         ? activeTab === "GAME_LINES"
             ? hasGameLinesData
-            : activeTab === "HALVES"
-                ? hasHalvesData
-                : [...activeMarketMap.values()].some((list) => list.length > 0)
+            : activeTab === "QUARTERS"
+                ? hasQuarterLines
+                : activeTab === "HALVES"
+                    ? hasHalfLines
+                    : [...activeMarketMap.values()].some((list) => list.length > 0)
         : false;
 
     useEffect(() => {
@@ -3233,122 +3864,145 @@ export const NcaabPickBuilder = ({
 
     useEffect(() => {
         if (!activeGame) {
+            setQuarterAltSpreadLines({});
+            setQuarterAltTotalLines({});
+            return;
+        }
+        setQuarterAltSpreadLines((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            quarterSections.forEach((section) => {
+                const preferred =
+                    section.lines.spreadHome?.selection?.line ??
+                    section.lines.spreadAway?.selection?.line;
+                const resolved = resolveLineSelection(
+                    section.altSpread.lines,
+                    prev[section.key],
+                    preferred
+                );
+                if (resolved === null) {
+                    if (prev[section.key] !== null) {
+                        next[section.key] = null;
+                        changed = true;
+                    }
+                    return;
+                }
+                if (prev[section.key] !== resolved) {
+                    next[section.key] = resolved;
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+        setQuarterAltTotalLines((prev) => {
+            let changed = false;
+            const next = { ...prev };
+            quarterSections.forEach((section) => {
+                const preferred = section.lines.totalLine;
+                const resolved = resolveLineSelection(
+                    section.altTotal.lines,
+                    prev[section.key],
+                    preferred
+                );
+                if (resolved === null) {
+                    if (prev[section.key] !== null) {
+                        next[section.key] = null;
+                        changed = true;
+                    }
+                    return;
+                }
+                if (prev[section.key] !== resolved) {
+                    next[section.key] = resolved;
+                    changed = true;
+                }
+            });
+            return changed ? next : prev;
+        });
+    }, [activeGame, quarterSections]);
+
+    useEffect(() => {
+        if (!activeGame) {
             setHalfSpreadLines({});
+            setHalfTotalLines({});
             return;
         }
         setHalfSpreadLines((prev) => {
-            const next: Record<string, number | null> = {};
+            let changed = false;
+            const next = { ...prev };
             halfSections.forEach((section) => {
                 const preferred =
                     section.lines.spreadHome?.selection?.line ??
                     section.lines.spreadAway?.selection?.line;
-                next[section.key] = resolveLineSelection(
+                const preferredLine = resolveLineSelection(
                     section.spread.lines,
                     prev[section.key],
                     preferred
                 );
+                if (preferredLine === null) {
+                    if (prev[section.key] !== null) {
+                        next[section.key] = null;
+                        changed = true;
+                    }
+                    return;
+                }
+                if (prev[section.key] !== preferredLine) {
+                    next[section.key] = preferredLine;
+                    changed = true;
+                }
             });
-            return next;
+            return changed ? next : prev;
         });
-    }, [activeGame, halfSections]);
-
-    useEffect(() => {
-        if (!activeGame) {
-            setHalfTotalLines({});
-            return;
-        }
         setHalfTotalLines((prev) => {
-            const next: Record<string, number | null> = {};
+            let changed = false;
+            const next = { ...prev };
             halfSections.forEach((section) => {
-                next[section.key] = resolveLineSelection(
+                const preferredLine = resolveLineSelection(
                     section.total.lines,
                     prev[section.key],
                     section.lines.totalLine
                 );
+                if (preferredLine === null) {
+                    if (prev[section.key] !== null) {
+                        next[section.key] = null;
+                        changed = true;
+                    }
+                    return;
+                }
+                if (prev[section.key] !== preferredLine) {
+                    next[section.key] = preferredLine;
+                    changed = true;
+                }
             });
-            return next;
+            return changed ? next : prev;
         });
     }, [activeGame, halfSections]);
 
-    useEffect(() => {
-        if (!activeGame) return;
-        if (availableTabs.includes(activeTab)) return;
-        setActiveTab(availableTabs[0] ?? "GAME_LINES");
-    }, [activeGame, activeTab, availableTabs]);
-
     const handleSelectGame = (game: GameOption) => {
         if (locked) return;
+        // setSelectedMatch(game);
         setActiveGameId(game.id);
         if (game.id) {
-            dispatch(fetchFanduelNCAABOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
-            dispatch(fetchDraftkingsNCAABOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            dispatch(fetchFanduelNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            dispatch(fetchDraftkingsNBAOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
         }
         setActiveTab("GAME_LINES");
         setSearch("");
         setSelected(null);
     };
 
-    const smoothScrollTo = (
-        element: HTMLElement,
-        target: number,
-        duration = 400
-    ) => {
-        const start = element.scrollLeft;
-        const distance = target - start;
-        let startTime: number | null = null;
-
-        const animate = (currentTime: number) => {
-            if (startTime === null) startTime = currentTime;
-            const timeElapsed = currentTime - startTime;
-            const progress = Math.min(timeElapsed / duration, 1);
-
-            const ease =
-                progress < 0.5
-                    ? 2 * progress * progress
-                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-            element.scrollLeft = start + distance * ease;
-
-            if (timeElapsed < duration) {
-                requestAnimationFrame(animate);
-            }
-        };
-
-        requestAnimationFrame(animate);
-    };
-
-    const handleTabChange = (tab: TabId) => {
-        setActiveTab(tab)
-        setTimeout(() => {
-            const container = document.querySelector('#game-prop-details-tabs-container') as HTMLDivElement;
-            const activeTab = document.querySelector('#game-prop-details-tabs-container button.active') as HTMLButtonElement;
-
-            if (container && activeTab) {
-                const containerRect = container.getBoundingClientRect();
-                const tabRect = activeTab.getBoundingClientRect();
-
-                const scrollLeft = container.scrollLeft;
-                const offset = tabRect.left - containerRect.left + scrollLeft - (containerRect.width / 2) + (tabRect.width / 2);
-
-                smoothScrollTo(container, offset, 300)
-            }
-        }, 100);
-    }
-
     const handleBackToMatchups = () => {
         setActiveGameId(null);
         setSearch("");
         setSelected(null);
+        setOddsData([]);
     };
 
+    if (activeGame && oddsLoading) {
+        return <NbaMatchupDetailSkeleton />;
+    }
+
     if (loading) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
-        )
+        return <NbaPickBuilderSkeleton />
     }
 
     return (
@@ -3364,26 +4018,6 @@ export const NcaabPickBuilder = ({
                                 game lines + props
                             </span>
                         </div>
-                        {/* {showDateFilters && dateOptions.length > 0 && (
-                            <div className="flex w-full items-center gap-3 overflow-x-auto pb-1">
-                                {dateOptions.map((option) => {
-                                    const active = option.key === effectiveDateKey;
-                                    return (
-                                        <button
-                                            key={option.key}
-                                            type="button"
-                                            onClick={() => onDateChange?.(option.key, "user")}
-                                            className={`shrink-0 border-b-2 pb-1 text-xs font-semibold transition ${active
-                                                ? "border-sky-300 text-white"
-                                                : "border-transparent text-gray-400 hover:border-white/30 hover:text-white"
-                                                }`}
-                                        >
-                                            {option.label}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )} */}
                         {filteredGames.length === 0 ? (
                             <div className="rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
                                 <p className="font-semibold text-white">
@@ -3527,7 +4161,7 @@ export const NcaabPickBuilder = ({
                                             >
                                                 <div className="px-3">
                                                     <div className="relative flex items-center h-px w-full overflow-hidden">
-                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/100 to-transparent shimmer-divider"></div>
+                                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/90 to-transparent shimmer-divider"></div>
                                                     </div>
                                                 </div>
                                                 <div></div>
@@ -3613,7 +4247,7 @@ export const NcaabPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="flex text-xs text-gray-500 gap-2">
-                                <span>Updated {formatDateTime(ncaabSchedulesWithOdds?.updated)}</span>
+                                <span>Updated {formatDateTime(nbaSchedulesWithOdds?.updated)}</span>
                                 {/* {activeGame.live && (
                                     <span className="flex items-center gap-1 text-red-500 font-medium">
                                         <span className="relative flex h-3 w-3">
@@ -3639,7 +4273,7 @@ export const NcaabPickBuilder = ({
                             id="game-prop-details-tabs-container"
                             className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0"
                         >
-                            {availableTabs.map((tab) => {
+                            {TAB_ORDER.map((tab) => {
                                 const active = tab === activeTab;
                                 return (
                                     <button
@@ -3656,7 +4290,6 @@ export const NcaabPickBuilder = ({
                                 );
                             })}
                         </div>
-
                     </div>
 
                     {!hasActiveMarketLines ? (
@@ -3694,146 +4327,42 @@ export const NcaabPickBuilder = ({
                                 })()}
                             </section>
 
-                            {[
-                                {
-                                    key: "game-lines-alt-spread",
-                                    title: "Alternate Spread",
-                                    show: altSpreadLineData.lines.length > 1,
-                                    render: () =>
-                                        renderAlternateSpreadSection(
-                                            altSpreadLineData,
-                                            altSpreadLine,
-                                            setAltSpreadLine
-                                        ),
-                                },
-                                {
-                                    key: "game-lines-alt-total",
-                                    title: "Alternate Total",
-                                    show: altTotalLineData.lines.length > 1,
-                                    render: () =>
-                                        renderAlternateTotalSection(
-                                            altTotalLineData,
-                                            altTotalLine,
-                                            setAltTotalLine
-                                        ),
-                                },
-                                {
-                                    key: "game-lines-specials",
-                                    title: "Specials",
-                                    show: gameSpecialOdds.length > 0,
-                                    render: () => renderOddCards(gameSpecialOdds),
-                                },
-                            ].map((section) => {
-                                const collapsed = isSectionCollapsed(section.key, false);
-                                if (!section.show) return null;
-                                return (
-                                    <section
-                                        key={section.key}
-                                        className="px-5 py-6 sm:px-6"
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleSection(section.key, false)}
-                                            aria-expanded={!collapsed}
-                                            className="flex w-full items-center justify-between pb-0 text-left"
-                                        >
-                                            <span className="text-sm font-semibold text-white">
-                                                {section.title}
-                                            </span>
-                                            <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
-                                                <span
-                                                    className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
-                                                        }`}
-                                                >
-                                                    v
-                                                </span>
-                                            </span>
-                                        </button>
-                                        {!collapsed && section.render()}
-                                    </section>
+                            {(() => {
+                                const spreadPreferred =
+                                    mainLineOdds?.spreadHome?.selection?.line ??
+                                    mainLineOdds?.spreadAway?.selection?.line;
+                                const spreadActiveLine = resolveLineSelection(
+                                    altSpreadLineData.lines,
+                                    altSpreadLine,
+                                    spreadPreferred
                                 );
-                            })}
-                        </div>
-                    ) : activeTab === "HALVES" ? (
-                        <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
-                            {halfSections
-                                .flatMap((section) => {
-                                    const spreadPreferred =
-                                        section.lines.spreadHome?.selection?.line ??
-                                        section.lines.spreadAway?.selection?.line;
-                                    const spreadActiveLine = resolveLineSelection(
-                                        section.spread.lines,
-                                        halfSpreadLines[section.key],
-                                        spreadPreferred
-                                    );
-                                    const totalActiveLine = resolveLineSelection(
-                                        section.total.lines,
-                                        halfTotalLines[section.key],
-                                        section.lines.totalLine
-                                    );
-                                    return [
-                                        {
-                                            key: `${section.key}-main`,
-                                            title: section.title,
-                                            show: hasMainLines(section.lines),
-                                            render: () => renderMainLinesGrid(section.lines),
-                                        },
-                                        {
-                                            key: `${section.key}-spread`,
-                                            title: `Alternate Spread - ${section.shortLabel}`,
-                                            show: section.spread.lines.length > 1,
-                                            render: () =>
-                                                renderAlternateSpreadSection(
-                                                    section.spread,
-                                                    spreadActiveLine,
-                                                    (line) =>
-                                                        setHalfSpreadLines((prev) => ({
-                                                            ...prev,
-                                                            [section.key]: line,
-                                                        })),
-                                                    {
-                                                        className: "mt-3 space-y-3",
-                                                        emptyMessage:
-                                                            "No alternate spreads available for this half yet.",
-                                                    }
-                                                ),
-                                        },
-                                        {
-                                            key: `${section.key}-total`,
-                                            title: `Alternate Total - ${section.shortLabel}`,
-                                            show: section.total.lines.length > 1,
-                                            render: () =>
-                                                renderAlternateTotalSection(
-                                                    section.total,
-                                                    totalActiveLine,
-                                                    (line) =>
-                                                        setHalfTotalLines((prev) => ({
-                                                            ...prev,
-                                                            [section.key]: line,
-                                                        })),
-                                                    {
-                                                        className: "mt-3 space-y-3",
-                                                        emptyMessage:
-                                                            "No alternate totals available for this half yet.",
-                                                    }
-                                                ),
-                                        },
-                                        {
-                                            key: `${section.key}-odd-even`,
-                                            title: `${section.title} Odd/Even`,
-                                            show: section.oddEven.length > 0,
-                                            render: () => renderOddCards(section.oddEven),
-                                        },
-                                    ];
-                                })
-                                .filter((section) => section.show)
-                                .map((section, index) => {
-                                    const collapsed = isSectionCollapsed(section.key, index === 0);
+                                const totalActiveLine = resolveLineSelection(
+                                    altTotalLineData.lines,
+                                    altTotalLine,
+                                    mainLineOdds?.totalLine
+                                );
+                                return [
+                                    {
+                                        key: "game-lines-alt-spread",
+                                        title: "Alternate Spread",
+                                        odds: altSpreadOdds,
+                                    },
+                                    {
+                                        key: "game-lines-alt-total",
+                                        title: "Alternate Total",
+                                        odds: altTotalOdds,
+                                    },
+                                ].map((section) => {
+                                    const collapsed = isSectionCollapsed(section.key, false);
+                                    if (section.odds.length === 0) return null;
                                     return (
-                                        <section key={section.key} className="px-5 py-6 sm:px-6">
+                                        <section
+                                            key={section.key}
+                                            className="px-5 py-6 sm:px-6"
+                                        >
                                             <button
                                                 type="button"
-                                                onClick={() => toggleSection(section.key, index === 0)}
+                                                onClick={() => toggleSection(section.key, false)}
                                                 aria-expanded={!collapsed}
                                                 className="flex w-full items-center justify-between pb-0 text-left"
                                             >
@@ -3849,20 +4378,205 @@ export const NcaabPickBuilder = ({
                                                     </span>
                                                 </span>
                                             </button>
-                                            {!collapsed && section.render()}
+                                            {!collapsed &&
+                                                (section.key === "game-lines-alt-spread"
+                                                    ? renderAlternateSpreadSection(
+                                                        altSpreadLineData,
+                                                        spreadActiveLine,
+                                                        "game-lines-alt-spread",
+                                                        setAltSpreadLine
+                                                    )
+                                                    : section.key === "game-lines-alt-total"
+                                                        ? renderAlternateTotalSection(
+                                                            altTotalLineData,
+                                                            totalActiveLine,
+                                                            "game-lines-alt-total",
+                                                            setAltTotalLine
+                                                        )
+                                                        : renderMainLineOddCards(section.odds, section.key))}
                                         </section>
                                     );
-                                })}
+                                });
+                            })()
+                            }
+                        </div>
+                    ) : activeTab === "QUARTERS" ? (
+                        <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                            {quarterDropdownSections.map((item, index) => {
+                                const { section } = item;
+                                const collapsed = isSectionCollapsed(item.key, index === 0);
+                                const spreadPreferred =
+                                    section.lines.spreadHome?.selection?.line ??
+                                    section.lines.spreadAway?.selection?.line;
+                                const totalPreferred = section.lines.totalLine;
+                                const spreadActiveLine = resolveLineSelection(
+                                    section.altSpread.lines,
+                                    quarterAltSpreadLines[section.key],
+                                    spreadPreferred
+                                );
+                                const totalActiveLine = resolveLineSelection(
+                                    section.altTotal.lines,
+                                    quarterAltTotalLines[section.key],
+                                    totalPreferred
+                                );
+                                return (
+                                    <section key={item.key} className="px-5 py-6 sm:px-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSection(item.key, index === 0)}
+                                            aria-expanded={!collapsed}
+                                            className="flex w-full items-center justify-between pb-0 text-left"
+                                        >
+                                            <span className="text-sm font-semibold text-white">
+                                                {item.title}
+                                            </span>
+                                            <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
+                                                <span
+                                                    className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
+                                                        }`}
+                                                >
+                                                    v
+                                                </span>
+                                            </span>
+                                        </button>
+                                        {!collapsed &&
+                                            (item.type === "main" ? (
+                                                renderMainLinesGrid(section.lines)
+                                            ) : item.type === "alt-spread" ? (
+                                                renderAlternateSpreadSection(
+                                                    section.altSpread,
+                                                    spreadActiveLine,
+                                                    "alt-spread",
+                                                    (line) =>
+                                                        setQuarterAltSpreadLines((prev) => ({
+                                                            ...prev,
+                                                            [section.key]: line,
+                                                        })),
+                                                    {
+                                                        className: "mt-3 space-y-3",
+                                                        emptyMessage:
+                                                            "No alternate spreads available for this quarter yet.",
+                                                    }
+                                                )
+                                            ) : (
+                                                renderAlternateTotalSection(
+                                                    section.altTotal,
+                                                    totalActiveLine,
+                                                    "alt-total",
+                                                    (line) =>
+                                                        setQuarterAltTotalLines((prev) => ({
+                                                            ...prev,
+                                                            [section.key]: line,
+                                                        })),
+                                                    {
+                                                        className: "mt-3 space-y-3",
+                                                        emptyMessage:
+                                                            "No alternate totals available for this quarter yet.",
+                                                    }
+                                                )
+                                            ))}
+                                    </section>
+                                );
+                            })}
+                        </div>
+                    ) : activeTab === "HALVES" ? (
+                        <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+                            {halfDropdownSections.map((item, index) => {
+                                const { section } = item;
+                                const collapsed = isSectionCollapsed(item.key, index === 0);
+                                const spreadPreferred =
+                                    section.lines.spreadHome?.selection?.line ??
+                                    section.lines.spreadAway?.selection?.line;
+                                const spreadActiveLine = resolveLineSelection(
+                                    section.spread.lines,
+                                    halfSpreadLines[section.key],
+                                    spreadPreferred
+                                );
+                                const totalActiveLine = resolveLineSelection(
+                                    section.total.lines,
+                                    halfTotalLines[section.key],
+                                    section.lines.totalLine
+                                );
+                                return (
+                                    <section key={item.key} className="px-5 py-6 sm:px-6">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSection(item.key, index === 0)}
+                                            aria-expanded={!collapsed}
+                                            className="flex w-full items-center justify-between pb-0 text-left"
+                                        >
+                                            <span className="text-sm font-semibold text-white">
+                                                {item.title}
+                                            </span>
+                                            <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
+                                                <span
+                                                    className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
+                                                        }`}
+                                                >
+                                                    v
+                                                </span>
+                                            </span>
+                                        </button>
+                                        {!collapsed &&
+                                            (item.type === "main" ? (
+                                                renderMainLinesGrid(section.lines)
+                                            ) : item.type === "spread" ? (
+                                                renderAlternateSpreadSection(
+                                                    section.spread,
+                                                    spreadActiveLine,
+                                                    "spread",
+                                                    (line) =>
+                                                        setHalfSpreadLines((prev) => ({
+                                                            ...prev,
+                                                            [section.key]: line,
+                                                        })),
+                                                    {
+                                                        className: "mt-3 space-y-3",
+                                                        emptyMessage:
+                                                            "No alternate spreads available for this half yet.",
+                                                    }
+                                                )
+                                            ) : (
+                                                renderAlternateTotalSection(
+                                                    section.total,
+                                                    totalActiveLine,
+                                                    "total",
+                                                    (line) =>
+                                                        setHalfTotalLines((prev) => ({
+                                                            ...prev,
+                                                            [section.key]: line,
+                                                        })),
+                                                    {
+                                                        className: "mt-3 space-y-3",
+                                                        emptyMessage:
+                                                            "No alternate totals available for this half yet.",
+                                                    }
+                                                )
+                                            ))}
+                                    </section>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
                             {TAB_MARKETS[activeTab].map((market, index) => {
                                 const odds = activeMarketMap.get(market) ?? [];
-                                if (odds.length === 0 || !activeGame) return null;
+                                const showEmptyMarket = ALT_CATEGORY_MARKETS.has(market);
+                                if (!activeGame) return null;
+                                if (odds.length === 0 && !showEmptyMarket) return null;
 
                                 const isAltPlayerPoints = market === ALT_POINTS_MARKET;
-                                const isMainPlayerPoints = market === "Player Points";
                                 const isTableMarket = isAltPlayerPoints || TABLE_MARKETS.has(market);
+                                const isMainOverUnderMarket = MAIN_OVER_UNDER_MARKETS.has(market);
+                                const isComboTab = activeTab === "PLAYER_COMBOS";
+                                const isComboAltMarket = isComboTab && COMBO_ALT_MARKETS.has(market);
+                                const comboBaseMarket = isComboAltMarket
+                                    ? COMBO_ALT_TO_MAIN[market]
+                                    : market;
+                                const isComboOverUnderMarket =
+                                    isComboTab && COMBO_OVER_UNDER_MARKETS.has(comboBaseMarket);
+                                const isComboYesNoMarket =
+                                    isComboTab && COMBO_YES_NO_MARKETS.has(market);
                                 const sides = new Set(
                                     odds
                                         .map((item) => item.odd.selection?.side?.toLowerCase())
@@ -3877,27 +4591,43 @@ export const NcaabPickBuilder = ({
                                     })
                                     : { lines: [], rows: [] };
                                 const showTable =
-                                    isTableMarket && table.lines.length > 1 && table.rows.length > 0;
+                                    isTableMarket &&
+                                    activeSide === "Over" &&
+                                    table.lines.length > 1 &&
+                                    table.rows.length > 0;
                                 const simpleRows = isTableMarket
                                     ? buildSimplePropRows(odds, activeGame, activeSide, {
                                         normalizeToFive: isAltPlayerPoints,
                                     })
                                     : [];
-                                const mainPointsRows = isMainPlayerPoints
+                                const mainPointsRows = isMainOverUnderMarket
                                     ? buildMainPointsRows(odds, activeGame)
                                     : [];
+                                const comboMainRows =
+                                    isComboOverUnderMarket && !isComboAltMarket
+                                        ? buildMainPointsRows(odds, activeGame)
+                                        : [];
+                                const comboAltOdds = isComboAltMarket
+                                    ? odds.filter(
+                                        ({ odd }) => odd.selection?.side?.toLowerCase() === "over"
+                                    )
+                                    : [];
+                                const comboAltTable = isComboAltMarket
+                                    ? buildPointsTable(comboAltOdds, activeGame, "Over")
+                                    : { lines: [], rows: [] };
+                                const showComboAltTable =
+                                    isComboAltMarket &&
+                                    comboAltTable.lines.length > 0 &&
+                                    comboAltTable.rows.length > 0;
+                                const comboYesNoRows = isComboYesNoMarket
+                                    ? buildYesNoRows(odds, activeGame)
+                                    : [];
                                 const sectionKey = `${activeTab}-${market}`;
-                                const collapsed = isSectionCollapsed(sectionKey, index === 0);
                                 const { rows: visibleSimpleRows } = getVisibleCategoryRows(
                                     simpleRows,
                                     sectionKey
                                 );
-                                const primaryPointsOdds = activeMarketMap.get("Player Points") ?? [];
-                                const marketTitle = isAltPlayerPoints
-                                    ? primaryPointsOdds.length > 0
-                                        ? ALT_POINTS_MARKET
-                                        : "Player Points"
-                                    : market;
+                                const collapsed = isSectionCollapsed(sectionKey, index === 0);
 
                                 const sectionPadding =
                                     index === 0 ? "px-5 pb-6 pt-3 sm:px-6" : "px-5 py-6 sm:px-6";
@@ -3912,9 +4642,7 @@ export const NcaabPickBuilder = ({
                                             aria-expanded={!collapsed}
                                             className="flex w-full items-center justify-between pb-0 text-left"
                                         >
-                                            <span className="text-sm font-semibold text-white">
-                                                {marketTitle}
-                                            </span>
+                                            <span className="text-sm font-semibold text-white">{market}</span>
                                             <span className="flex items-center gap-2 text-xs uppercase tracking-wide">
                                                 <span
                                                     className={`text-gray-400 transition-transform ${collapsed ? "" : "rotate-180"
@@ -3926,81 +4654,118 @@ export const NcaabPickBuilder = ({
                                         </button>
 
                                         {!collapsed && (
-                                            <>
-                                                {isMainPlayerPoints ? (
-                                                    renderMainOverUnderTable(mainPointsRows, sectionKey)
-                                                ) : showTable ? (
-                                                    renderScrollablePropTable(
-                                                        table,
-                                                        market,
-                                                        isAltPlayerPoints,
-                                                        sectionKey
-                                                    )
-                                                ) : isTableMarket ? (
-                                                    <>
-                                                        <div className="mt-4 overflow-x-auto">
-                                                            <div className="min-w-[320px] text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                                                <div
-                                                                    className="grid border-b border-white/10 text-xs uppercase tracking-wide text-gray-400"
-                                                                    style={{
-                                                                        gridTemplateColumns:
-                                                                            "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                    }}
-                                                                >
-                                                                    <div className={STICKY_COLUMN_HEADER_CLASSES}>Player</div>
-                                                                    <div className="px-3 py-2 text-center">
-                                                                        {activeSide} line
-                                                                    </div>
-                                                                    <div className="px-3 py-2 text-center">Odds</div>
-                                                                </div>
-                                                                {visibleSimpleRows.map((row, rowIndex) => {
-                                                                    const isSelected = isOddSelected(row.odd);
-                                                                    const rowBand =
-                                                                        rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
-                                                                    return (
-                                                                        <button
-                                                                            key={`${market}-${row.player.id}`}
-                                                                            type="button"
-                                                                            onClick={() => row.odd && handleSelectOdd(row.odd, activeGame)}
-                                                                            disabled={!row.odd || locked}
-                                                                            className={`grid w-full items-center border-b border-white/5 px-0 text-left transition ${rowBand} ${isSelected
-                                                                                ? "border-sky-300/60 bg-sky-500/10"
-                                                                                : "hover:bg-white/[0.02]"
-                                                                                } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
-                                                                            style={{
-                                                                                gridTemplateColumns:
-                                                                                    "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
-                                                                            }}
-                                                                        >
-                                                                            <div className={stickyColumnRowClasses(rowIndex % 2 === 1)}>
-                                                                                <p className="text-sm font-semibold text-white">
-                                                                                    {row.player.name}
-                                                                                </p>
-                                                                                <p className="mt-1 text-xs text-gray-400">
-                                                                                    {row.teamLabel}
-                                                                                </p>
-                                                                            </div>
-                                                                            <div className="px-3 py-2.5 text-center text-xs text-gray-300">
-                                                                                {row.displayLine ?? row.line ?? "-"}
-                                                                            </div>
-                                                                            <div className="flex justify-center px-3 py-2.5">
-                                                                                {renderTableOddsBox(
-                                                                                    row.odd ? formatOdds(row.odd.price) : "-",
-                                                                                    isSelected,
-                                                                                    !row.odd
-                                                                                )}
-                                                                            </div>
-                                                                        </button>
-                                                                    );
-                                                                })}
+                                            odds.length === 0 ? (
+                                                <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
+                                                    No alternate lines available for this market yet.
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {isComboOverUnderMarket && !isComboAltMarket ? (
+                                                        renderMainOverUnderTable(comboMainRows, sectionKey)
+                                                    ) : isComboAltMarket ? (
+                                                        showComboAltTable ? (
+                                                            renderScrollablePropTable(
+                                                                comboAltTable,
+                                                                market,
+                                                                false,
+                                                                sectionKey
+                                                            )
+                                                        ) : (
+                                                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 p-4 text-sm text-gray-300">
+                                                                No alternate lines available for this market yet.
                                                             </div>
-                                                        </div>
-                                                        {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
-                                                    </>
-                                                ) : (
-                                                    renderOddCards(odds)
-                                                )}
-                                            </>
+                                                        )
+                                                    ) : isComboYesNoMarket ? (
+                                                        renderYesNoTable(comboYesNoRows, sectionKey)
+                                                    ) : isMainOverUnderMarket ? (
+                                                        renderMainOverUnderTable(mainPointsRows, sectionKey)
+                                                    ) : showTable ? (
+                                                        renderScrollablePropTable(
+                                                            table,
+                                                            market,
+                                                            isAltPlayerPoints,
+                                                            sectionKey
+                                                        )
+                                                    ) : isTableMarket ? (
+                                                        <>
+                                                            <div className="mt-4 -mx-5 overflow-x-auto px-5 sm:-mx-6 sm:px-6">
+                                                                <div className="min-w-full w-max text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                                                    <div
+                                                                        className="grid text-xs uppercase tracking-wide text-gray-400"
+                                                                        style={{
+                                                                            gridTemplateColumns:
+                                                                                "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                        }}
+                                                                    >
+                                                                        <div className={SCROLLER_STICKY_COLUMN_HEADER_CLASSES}>
+                                                                            Player
+                                                                        </div>
+                                                                        <div className="px-3 py-2 text-center">
+                                                                            {activeSide} line
+                                                                        </div>
+                                                                        <div className="px-3 py-2 text-center">Odds</div>
+                                                                    </div>
+                                                                    {visibleSimpleRows.map((row, rowIndex) => {
+                                                                        const isSelected = isOddSelected(row.odd);
+                                                                        const rowBand =
+                                                                            rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                                                                        return (
+                                                                            <button
+                                                                                key={`${market}-${row.player.id}`}
+                                                                                type="button"
+                                                                                onClick={() =>
+                                                                                    row.odd &&
+                                                                                    handleSelectOdd(row.odd, activeGame, {
+                                                                                        displayLineOverride: isAltPlayerPoints
+                                                                                            ? row.displayLine
+                                                                                            : undefined,
+                                                                                    })
+                                                                                }
+                                                                                disabled={!row.odd || locked}
+                                                                                className={`grid w-full items-center text-left transition ${rowBand} ${isSelected
+                                                                                    ? "border-sky-300/60 bg-sky-500/10"
+                                                                                    : "hover:bg-white/[0.02]"
+                                                                                    } ${!row.odd ? "cursor-not-allowed text-gray-600" : ""}`}
+                                                                                style={{
+                                                                                    gridTemplateColumns:
+                                                                                        "minmax(0,1fr) var(--table-chip-width) var(--table-chip-width)",
+                                                                                }}
+                                                                            >
+                                                                                <div
+                                                                                    className={scrollerStickyColumnRowClasses(
+                                                                                        rowIndex % 2 === 1,
+                                                                                        isSelected
+                                                                                    )}
+                                                                                >
+                                                                                    <p className="text-sm font-semibold text-white">
+                                                                                        {row.player.name}
+                                                                                    </p>
+                                                                                    <p className="mt-1 text-xs text-gray-400">
+                                                                                        {row.teamLabel}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <div className="px-3 py-3 text-center text-xs text-gray-300">
+                                                                                    {row.displayLine ?? row.line ?? "-"}
+                                                                                </div>
+                                                                                <div className="flex justify-center px-3 py-3">
+                                                                                    {renderTableOddsBox(
+                                                                                        row.odd ? formatOdds(row.odd.price) : "-",
+                                                                                        isSelected,
+                                                                                        !row.odd
+                                                                                    )}
+                                                                                </div>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                            {renderCategoryRowsToggle(sectionKey, simpleRows.length)}
+                                                        </>
+                                                    ) : (
+                                                        renderOddCards(odds.map((odd) => odd), sectionKey)
+                                                    )}
+                                                </>
+                                            )
                                         )}
                                     </section>
                                 );
@@ -4008,12 +4773,11 @@ export const NcaabPickBuilder = ({
                         </div>
                     )}
                 </>
-            )
-            }
+            )}
 
             {renderReviewSheet()}
         </div >
     );
 };
 
-export default NcaabPickBuilder;
+export default NbaPickBuilder;

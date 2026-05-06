@@ -2,7 +2,7 @@
 
 import { Pick, PickReaction, Picks } from "@/lib/interfaces/interfaces";
 import PostCard from "./PostCard";
-import { PostCardSkeleton } from "./ProfileSkeleton";
+import { PostCardSkeleton } from "../skeletons/profile/ProfileSkeleton";
 
 type PostFeedProps = {
     picks: Picks;

@@ -10,7 +10,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
-import GroupsTabSkeleton from "./GroupsTabSkeleton";
+import GroupsTabSkeleton from "../skeletons/fantasy/GroupsTabSkeleton";
 
 type GroupSliceState = {
     group: {

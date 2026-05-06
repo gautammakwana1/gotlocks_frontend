@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BuiltPickPayload, Group, GroupObject, PickSliceState, PickType, Slip, SlipState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { isGameEligible } from "@/lib/utils/games";
-import PickBuilderShell from "@/components/pick-builder/PickBuilderShell";
+import PickBuilderShell from "@/components/pick-builder/core/PickBuilderShell";
 import { fetchMyGroupsRequest } from "@/lib/redux/slices/groupsSlice";
 import { formatDateTime, toLocalDateKeyFromUTC } from "@/lib/utils/date";
 import { clearCreatePostPickMessage, createPickRequest, createPostPickRequest } from "@/lib/redux/slices/pickSlice";

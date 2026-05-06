@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Feed, FeedSelector } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllActivitiesRequest } from "@/lib/redux/slices/activitySlice";
-import ActivitiesSkeleton from "./ActivitiesSkeleton";
+import ActivitiesSkeleton from "../skeletons/leagues/ActivitiesSkeleton";
 
 type Props = {
   groupId?: string;

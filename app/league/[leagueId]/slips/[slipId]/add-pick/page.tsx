@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { PickBuilderShell } from "@/components/pick-builder/PickBuilderShell";
+import { PickBuilderShell } from "@/components/pick-builder/core/PickBuilderShell";
 import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";

@@ -22,6 +22,7 @@ import OnboardingModal from "../modals/OnboardingModal";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import Image from "next/image";
+import HomeTabSkeleton from "../skeletons/home/HomeTabSkeleton";
 
 type GroupSliceState = {
     group: {
@@ -164,7 +165,7 @@ const HomeTab = () => {
 
     const { joinLoading, message, error, hasMore: myGroupsHasMore, myGroups, loading: groupLoading } = useSelector((state: GroupRootState) => state.group);
     const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
-    const { progress, picksCount, slipsCount, hasSeenIntro } = useSelector((state: RootState) => state.progress);
+    const { progress, picksCount, slipsCount, hasSeenIntro, loading: progressLoading } = useSelector((state: RootState) => state.progress);
     const { notification } = useSelector((state: RootState) => state.notifications);
     const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
@@ -648,6 +649,12 @@ const HomeTab = () => {
             ),
         },
     ];
+
+    const isInitialLoading = groupLoading || progressLoading;
+
+    if (isInitialLoading) {
+        return <HomeTabSkeleton />;
+    }
 
     return (
         <div className="flex flex-col gap-4 sm:gap-6">

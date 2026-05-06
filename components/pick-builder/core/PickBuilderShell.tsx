@@ -9,18 +9,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, GroupObject, League, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
-import NbaPickBuilder from "./NbaPickBuilder";
-import NflPickBuilder from "./NflPickBuilder";
+import NbaPickBuilder from "../nba/NbaPickBuilder";
+import NflPickBuilder from "../nfl/NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
-import NcaabPickBuilder from "./NcaabPickBuilder";
-import NhlPickBuilder from "./NhlPickBuilder";
+import NcaabPickBuilder from "../ncaab/NcaabPickBuilder";
+import NhlPickBuilder from "../nhl/NhlPickBuilder";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchLeaguesCountsRequest } from "@/lib/redux/slices/leagueSlice";
 import { ReviewSheetState } from "./reviewSheetState";
-import MlbPickBuilder from "./MlbPickBuilder";
-import FootballAnimation from "../animations/FootballAnimation";
+import MlbPickBuilder from "../mlb/MlbPickBuilder";
+import FootballAnimation from "../../animations/FootballAnimation";
 import { FALLBACK_LEAGUE } from "@/lib/constants";
-import SoccerPickBuilder from "./SoccerPickBuilder";
+import SoccerPickBuilder from "../soccer/SoccerPickBuilder";
+import PickBuilderShellSkeleton from "./skeletons/PickBuilderShellSkeleton";
 
 type SlipBuilderContext = {
     mode: "slip";
@@ -238,6 +239,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     const [hasAutoSelectedLeague, setHasAutoSelectedLeague] = useState(false);
 
     const { leagueCounts, loading } = useSelector((state: RootState) => state.league);
+    const { loading: pickLoading } = useSelector((state: RootState) => state.pick);
 
     useEffect(() => {
         // const todayDateKey = toLocalDateKeyFromUTC(new Date().toISOString());
@@ -832,6 +834,10 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     })();
 
     if (loading) {
+        return <PickBuilderShellSkeleton />
+    }
+
+    if (pickLoading) {
         return (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
                 <div className="w-48 max-w-[70vw] sm:w-60">

@@ -13,6 +13,7 @@ const initialState: SoccerState = {
     draftkingEnglandPremierLeagueOdds: null,
     fanduelGermanyBundesligaOdds: null,
     draftkingGermanyBundesligaOdds: null,
+    oddsLoading: false,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -63,16 +64,16 @@ const soccerSlice = createSlice({
         fetchFanduelSoccerEnglandPremierLeagueOddsRequest: (state, action: PayloadAction<FetchSoccerEnglandPremierLeagueOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchFanduelSoccerEnglandPremierLeagueOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.fanduelEnglandPremierLeagueOdds = action.payload.odds;
         },
         fetchFanduelSoccerEnglandPremierLeagueOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchFanduelSoccerEnglandPremierLeagueOddsMessage: (state) => {
@@ -83,16 +84,16 @@ const soccerSlice = createSlice({
         fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest: (state, action: PayloadAction<FetchSoccerEnglandPremierLeagueOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchDraftkingsSoccerEnglandPremierLeagueOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.draftkingEnglandPremierLeagueOdds = action.payload.odds;
         },
         fetchDraftkingsSoccerEnglandPremierLeagueOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchDraftkingsSoccerEnglandPremierLeagueOddsMessage: (state) => {
@@ -158,16 +159,16 @@ const soccerSlice = createSlice({
         fetchFanduelSoccerGermanyBundesligaOddsRequest: (state, action: PayloadAction<FetchSoccerGermanyBundesligaOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchFanduelSoccerGermanyBundesligaOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.fanduelGermanyBundesligaOdds = action.payload.odds;
         },
         fetchFanduelSoccerGermanyBundesligaOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchFanduelSoccerGermanyBundesligaOddsMessage: (state) => {
@@ -178,16 +179,16 @@ const soccerSlice = createSlice({
         fetchDraftkingsSoccerGermanyBundesligaOddsRequest: (state, action: PayloadAction<FetchSoccerGermanyBundesligaOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchDraftkingsSoccerGermanyBundesligaOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.draftkingGermanyBundesligaOdds = action.payload.odds;
         },
         fetchDraftkingsSoccerGermanyBundesligaOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchDraftkingsSoccerGermanyBundesligaOddsMessage: (state) => {

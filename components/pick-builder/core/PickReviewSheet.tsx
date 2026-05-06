@@ -2,10 +2,10 @@
 
 import { ConfidenceLevel } from "@/lib/interfaces/interfaces";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import ConfidenceDropdown from "../ui/ConfidenceDropdown";
+import ConfidenceDropdown from "../../ui/ConfidenceDropdown";
 import { useEffect } from "react";
 import { extractPickLine } from "@/lib/utils/pickDescription";
-import { ChevronUpDownIcon } from "../ui/SvgIcons";
+import { ChevronUpDownIcon } from "../../ui/SvgIcons";
 
 export type ReviewSheetItem = {
   id: string;

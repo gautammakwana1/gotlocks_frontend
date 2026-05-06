@@ -5,11 +5,11 @@ import {
     PickReviewSheet,
     type ReviewSheetPostSelection,
     type SameGameComboReviewGroup,
-} from "@/components/pick-builder/PickReviewSheet";
+} from "@/components/pick-builder/core/PickReviewSheet";
 import type {
     CachedReviewData,
     ReviewSheetState,
-} from "@/components/pick-builder/reviewSheetState";
+} from "@/components/pick-builder/core/reviewSheetState";
 import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { formatDateTime, isPast } from "@/lib/utils/date";
 import {
@@ -47,6 +47,8 @@ import { ODDS_BRACKETS } from "@/lib/constants";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 import { House } from "lucide-react";
+import SoccerPickBuilderSkeleton from "./skeletons/SoccerPickBuilderSkeleton";
+import SoccerMatchupDetailSkeleton from "./skeletons/SoccerMatchupDetailSkeleton";
 
 type OddsBlazeTeam = {
     id: string;
@@ -1022,6 +1024,8 @@ export const SoccerPickBuilder = ({
         draftkingEnglandPremierLeagueOdds,
         fanduelGermanyBundesligaOdds,
         draftkingGermanyBundesligaOdds,
+        oddsLoading,
+        loading
     } = useSelector((state: RootState) => state.soccer);
 
     useEffect(() => {
@@ -2571,6 +2575,14 @@ export const SoccerPickBuilder = ({
         : confirmationVariant === "post"
             ? "Post Slip"
             : "selected pick";
+
+    if (activeGame && oddsLoading) {
+        return <SoccerMatchupDetailSkeleton />
+    }
+
+    if (loading) {
+        return <SoccerPickBuilderSkeleton />
+    }
 
     return (
         <div

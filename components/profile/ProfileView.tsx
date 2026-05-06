@@ -26,7 +26,7 @@ import { getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { LeftChevronIcon } from "../ui/SvgIcons";
-import ProfileSkeleton from "./ProfileSkeleton";
+import ProfileSkeleton from "../skeletons/profile/ProfileSkeleton";
 
 type ProfileViewProps = {
     targetUserId: string;

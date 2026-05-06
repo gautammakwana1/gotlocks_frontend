@@ -13,6 +13,7 @@ import { UserIcon } from "@/components/layout/MainTabBar";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import ScrollUpButton from "@/components/ui/ScrollUpButton";
+import BlockedAccountsSkeleton from "@/components/skeletons/app-settings/BlockedAccountsSkeleton";
 
 const BlockedAccountsPage = () => {
     const dispatch = useDispatch();
@@ -93,6 +94,10 @@ const BlockedAccountsPage = () => {
     };
 
     if (!currentUser) return null;
+
+    if (loading && (!blockedUsers || blockedUsers.length === 0)) {
+        return <BlockedAccountsSkeleton />;
+    }
 
     return (
         <div className="mx-auto w-full max-w-2xl space-y-6 pb-20">

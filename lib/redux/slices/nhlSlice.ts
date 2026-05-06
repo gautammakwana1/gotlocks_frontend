@@ -8,6 +8,7 @@ const initialState: NHLState = {
     nhlSchedulesWithOdds: null,
     nhlSchedules: null,
     nhlOdds: null,
+    oddsLoading: false,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -56,16 +57,16 @@ const nhlSlice = createSlice({
         fetchNHLOddsRequest: (state, action: PayloadAction<FetchNHLOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchNHLOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.nhlOdds = action.payload.odds;
         },
         fetchNHLOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchNHLOddsMessage: (state) => {

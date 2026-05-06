@@ -13,17 +13,19 @@ import { clearValidateMyNFLPickMessage, fetchLiveNFLScheduleByTimezoneRequest, f
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
-import FootballAnimation from "../animations/FootballAnimation";
+import FootballAnimation from "../../animations/FootballAnimation";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierForLabel, getTierMetaForPick, parseAmericanOdds } from "@/lib/utils/scoring";
 import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { CachedReviewData, ReviewSheetState } from "./reviewSheetState";
-import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "./PickReviewSheet";
+import { CachedReviewData, ReviewSheetState } from "../core/reviewSheetState";
+import { PickReviewSheet, ReviewSheetPostSelection, SameGameComboReviewGroup } from "../core/PickReviewSheet";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { formatReviewSheetTierLine, resolveReviewSheetTierCardAppearance } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
+import NflPickBuilderSkeleton from "./skeletons/NflPickBuilderSkeleton";
+import NflMatchupDetailSkeleton from "./skeletons/NflMatchupDetailSkeleton";
 
 type BookOdds = {
     book?: string;
@@ -1225,7 +1227,7 @@ export const NflPickBuilder = ({
         return resolved ? tierMetaFromIndex(resolved) : undefined;
     };
 
-    const { nflSchedulesWithOdds, nflSchedules, nflOdds, validPickError, validPickMessage, loading, validateLoading } = useSelector((state: RootState) => state.nfl);
+    const { nflSchedulesWithOdds, nflSchedules, nflOdds, validPickError, validPickMessage, loading, oddsLoading, validateLoading } = useSelector((state: RootState) => state.nfl);
 
     useEffect(() => {
         if (slip?.results_deadline_at && slip?.pick_deadline_at) {
@@ -4999,14 +5001,12 @@ export const NflPickBuilder = ({
         return renderGameDetailShell(renderGameDetailContent());
     };
 
+    if (activeGame && oddsLoading) {
+        return <NflMatchupDetailSkeleton />
+    }
+
     if (loading) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
-        )
+        return <NflPickBuilderSkeleton />
     }
 
     return (

@@ -21,6 +21,7 @@ import { EM_DASH, extractMatchup, parsePickDescription } from "@/lib/utils/pickD
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { ShareIcon } from "@/components/ui/SvgIcons";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import SlipResultsSkeleton from "@/components/skeletons/slips/SlipResultsSkeleton";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -277,8 +278,8 @@ const SlipResultsPage = () => {
         }
     }, [searchParams]);
 
-    if (!group || !activeSlip || !currentUser) {
-        return null;
+    if (slipLoader || !group || !activeSlip || !currentUser) {
+        return <SlipResultsSkeleton />;
     }
 
     const isFinalized = isSlipFinal(activeSlip);

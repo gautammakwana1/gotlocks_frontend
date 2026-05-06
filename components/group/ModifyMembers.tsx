@@ -11,6 +11,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { clearLeaveGroupMessage, fetchGroupMembersByGroupIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useRouter } from "next/navigation";
+import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -351,6 +352,10 @@ export const ModifyMembers = ({
         setConfirming(false);
         setPendingAction(null);
     };
+
+    if (loadingMembers) {
+        return <MembersSkeleton />;
+    }
 
     return (
         <section className="space-y-5">

@@ -8,6 +8,7 @@ const initialState: MLBState = {
     mlbSchedulesWithOdds: null,
     mlbSchedules: null,
     mlbOdds: null,
+    oddsLoading: false,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -56,16 +57,16 @@ const mlbSlice = createSlice({
         fetchMLBOddsRequest: (state, action: PayloadAction<FetchMLBOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchMLBOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.mlbOdds = action.payload.odds;
         },
         fetchMLBOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchMLBOddsMessage: (state) => {

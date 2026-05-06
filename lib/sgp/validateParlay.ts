@@ -1,4 +1,4 @@
-import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
+import { CachedReviewData } from "@/components/pick-builder/core/reviewSheetState";
 import {
     DEFAULT_VALIDATION_CONFIG,
     prepareSlipPricing,

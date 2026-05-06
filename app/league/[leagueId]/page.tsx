@@ -13,16 +13,16 @@ import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
 import SlipCategorySection from "@/components/slips/SlipCategorySection";
 import ScoringModal from "@/components/modals/ScoringModal";
 import FeedTab from "@/components/group/FeedTab";
-import FootballAnimation from "@/components/animations/FootballAnimation";
+import LeaguePageSkeleton from "@/components/skeletons/leagues/LeaguePageSkeleton";
 import BackButton from "@/components/ui/BackButton";
 import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGroupModal";
 import { PlusIcon, X } from "lucide-react";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { ChatIcon, ChevronIcon, ChevronUpDownIcon, EditIcon, EditPencilIcon, FeedIcon, LeaderboardIcon, MembersIcon, SettingIcon, SlipIcon } from "@/components/ui/SvgIcons";
-import LeaderboardSkeleton from "@/components/leaderboard/LeaderboardSkeleton";
-import SlipsSkeleton from "@/components/slips/SlipsSkeleton";
-import MembersSkeleton from "@/components/group/MembersSkeleton";
+import LeaderboardSkeleton from "@/components/skeletons/leagues/LeaderboardSkeleton";
+import SlipsSkeleton from "@/components/skeletons/slips/SlipsSkeleton";
+import LeagueSettingsSkeleton from "@/components/skeletons/leagues/LeagueSettingsSkeleton";
 
 interface FormErrors {
   name?: string;
@@ -976,13 +976,7 @@ const GroupPage = () => {
   );
 
   if ((loading && !group) || !currentUser) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-        <div className="w-48 max-w-[70vw] sm:w-60">
-          <FootballAnimation />
-        </div>
-      </div>
-    )
+    return <LeaguePageSkeleton />;
   }
 
   return (
@@ -1319,18 +1313,14 @@ const GroupPage = () => {
 
         {activeTab === "members" && (
           <div className="space-y-4 pt-2">
-            {loadingMembers && !members.length ? (
-              <MembersSkeleton />
-            ) : (
-              <ModifyMembers
-                currentUser={currentUser}
-                onRemoveMember={handleRemoveMember}
-                onMakeCommissioner={handleTransferCommissioner}
-                onLeaveGroup={handleLeaveGroup}
-                leavingGroup={leavingLeague}
-                groupId={leagueId}
-              />
-            )}
+            <ModifyMembers
+              currentUser={currentUser}
+              onRemoveMember={handleRemoveMember}
+              onMakeCommissioner={handleTransferCommissioner}
+              onLeaveGroup={handleLeaveGroup}
+              leavingGroup={leavingLeague}
+              groupId={leagueId}
+            />
           </div>
         )}
 
@@ -1352,414 +1342,420 @@ const GroupPage = () => {
 
         {activeTab === "settings" && isCommissioner && (
           <div className="pt-2">
-            <section
-              id="main-leaderboard-panel"
-              className={mainLeaderboardDetailsOpen ? "pb-6" : "pb-4"}
-            >
-              <button
-                type="button"
-                onClick={() => setMainLeaderboardDetailsOpen((prev) => !prev)}
-                aria-expanded={mainLeaderboardDetailsOpen}
-                aria-controls="main-leaderboard-details"
-                className="flex w-full items-start justify-between gap-4 text-left"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                    Main leaderboard
-                  </p>
-                </div>
-                <span className="text-gray-400">
-                  {mainLeaderboardDetailsOpen ? "▴" : "▾"}
-                </span>
-              </button>
-              <p className="mt-1 text-xs text-gray-500">
-                This board is always on. Restarting it archives the current main leaderboard and
-                every active secondary leaderboard.
-              </p>
-
-              {mainLeaderboardDetailsOpen && (
-                <div id="main-leaderboard-details" className="space-y-4 pt-4">
-                  {activeMainLeaderboard ? (
-                    <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-white">
-                              {activeMainLeaderboard.name}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                editingLeaderboardId === activeMainLeaderboard.id
-                                  ? cancelLeaderboardNameEdit()
-                                  : startLeaderboardNameEdit(
-                                    activeMainLeaderboard.id,
-                                    activeMainLeaderboard.name
-                                  )
-                              }
-                              className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
-                              aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
-                            >
-                              <EditIcon />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              // activeMainLeaderboard.isDefault
-                              //   ? handleRestartDefault()
-                              //   : handleArchiveSide(activeMainLeaderboard.id)
-                              setPendingLeaderboardAction({
-                                kind: "restart-main",
-                                leaderboardId: activeMainLeaderboard.id,
-                                leaderboardName: activeMainLeaderboard.name,
-                              })
-                            }
-                            disabled={activeMainLeaderboard.hasAnyOpenSlips}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Archive & restart
-                          </button>
-                        </div>
-                      </div>
-                      {editingLeaderboardId === activeMainLeaderboard.id && (
-                        <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
-                              <span className="block pb-2">Leaderboard name</span>
-                              <input
-                                value={leaderboardNameDraft}
-                                onChange={(event) => setLeaderboardNameDraft(event.target.value)}
-                                maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
-                              />
-                            </label>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => saveLeaderboardName(activeMainLeaderboard.id)}
-                                disabled={
-                                  !leaderboardNameDraft.trim() ||
-                                  leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
-                                }
-                                className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                onClick={cancelLeaderboardNameEdit}
-                                className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {activeMainLeaderboard.hasAnyOpenSlips && (
-                        <p className="mt-3 text-xs text-amber-200">
-                          Finalize or delete any open slips in order to archive and restart
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-                      No active main leaderboard found.
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
-
-            <div
-              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${mainLeaderboardDetailsOpen ? "my-6" : "my-4"}`}
-            />
-
-            <section
-              id="secondary-leaderboards-panel"
-              className={
-                secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
-                  ? "pb-6"
-                  : "pb-4"
-              }
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                    Secondary leaderboards
-                  </p>
+            {loading && !leaderboardListData ? (
+              <LeagueSettingsSkeleton />
+            ) : (
+              <>
+                <section
+                  id="main-leaderboard-panel"
+                  className={mainLeaderboardDetailsOpen ? "pb-6" : "pb-4"}
+                >
                   <button
                     type="button"
-                    onClick={() => setShowSecondaryInfo(true)}
-                    aria-haspopup="dialog"
-                    aria-controls="secondary-leaderboards-info-modal"
-                    aria-label="Secondary leaderboards info"
-                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px] font-semibold text-gray-300 transition hover:border-sky-300/60 hover:text-white"
+                    onClick={() => setMainLeaderboardDetailsOpen((prev) => !prev)}
+                    aria-expanded={mainLeaderboardDetailsOpen}
+                    aria-controls="main-leaderboard-details"
+                    className="flex w-full items-start justify-between gap-4 text-left"
                   >
-                    i
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                        Main leaderboard
+                      </p>
+                    </div>
+                    <span className="text-gray-400">
+                      {mainLeaderboardDetailsOpen ? "▴" : "▾"}
+                    </span>
                   </button>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={secondaryLeaderboardsEnabled}
-                      onChange={handleSecondaryLeaderboardsToggle}
-                      className="h-4 w-4 rounded border border-white/20 bg-black text-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                    />
-                    Enable
-                  </label>
-                  {secondaryLeaderboardsEnabled && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSecondaryLeaderboardsDetailsOpen((prev) => !prev)
-                      }
-                      aria-expanded={secondaryLeaderboardsDetailsOpen}
-                      aria-controls="secondary-leaderboards-details"
-                      className="text-gray-400 transition hover:text-gray-200"
-                    >
-                      {secondaryLeaderboardsDetailsOpen ? "▴" : "▾"}
-                    </button>
-                  )}
-                </div>
-              </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    This board is always on. Restarting it archives the current main leaderboard and
+                    every active secondary leaderboard.
+                  </p>
 
-              {!secondaryLeaderboardsEnabled && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Turn this on to track separate side standings. Any archived leaderboards stay
-                  viewable below.
-                </p>
-              )}
-
-              {secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen && (
-                <div id="secondary-leaderboards-details" className="mt-4 space-y-4">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateSideModal(true)}
-                      disabled={sideLimitReached}
-                      className={`${primaryActionButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      <span className="text-sm font-semibold text-white">
-                        Create a secondary leaderboard
-                      </span>
-                      <span className={primaryActionIconClass} aria-hidden>
-                        <PlusIcon />
-                      </span>
-                    </button>
-                  </div>
-
-                  {sideLimitReached && (
-                    <p className="text-xs text-amber-200">
-                      You already have two active secondary leaderboards. Archive one to start
-                      another.
-                    </p>
-                  )}
-
-                  {activeSecondaryLeaderboards.length ? (
-                    <div className="grid grid-cols-1 gap-3">
-                      {activeSecondaryLeaderboards.map((board) => {
-                        const blockedReason = board.hasAnyOpenSlips
-                          ? "You have open slips still running in this leaderboard."
-                          : board.totalSlipCount === 0
-                            ? "This leaderboard can't be archived because it has no slips yet."
-                            : null;
-                        return (
-                          <div key={board.id} className={secondaryLeaderboardCardClass}>
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-semibold text-white">{board.name}</p>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      editingLeaderboardId === board.id
-                                        ? cancelLeaderboardNameEdit()
-                                        : startLeaderboardNameEdit(board.id, board.name)
-                                    }
-                                    className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
-                                    aria-label={`Edit ${board.name} leaderboard name`}
-                                  >
-                                    <EditIcon />
-                                  </button>
-                                </div>
-                                {board.sport_scope && (
-                                  <p className="text-[11px] uppercase tracking-wide text-gray-400">
-                                    {board.sport_scope}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex flex-col items-end gap-2">
+                  {mainLeaderboardDetailsOpen && (
+                    <div id="main-leaderboard-details" className="space-y-4 pt-4">
+                      {activeMainLeaderboard ? (
+                        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold text-white">
+                                  {activeMainLeaderboard.name}
+                                </p>
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    // handleArchiveSide(board.id)
-                                    setPendingLeaderboardAction({
-                                      kind: "archive-secondary",
-                                      leaderboardId: board.id,
-                                      leaderboardName: board.name,
-                                    })
+                                    editingLeaderboardId === activeMainLeaderboard.id
+                                      ? cancelLeaderboardNameEdit()
+                                      : startLeaderboardNameEdit(
+                                        activeMainLeaderboard.id,
+                                        activeMainLeaderboard.name
+                                      )
                                   }
-                                  disabled={Boolean(blockedReason) || board.hasAnyOpenSlips}
-                                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
+                                  aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
                                 >
-                                  Archive
+                                  <EditIcon />
                                 </button>
                               </div>
                             </div>
-                            {editingLeaderboardId === board.id && (
-                              <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                  <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
-                                    <span className="block pb-2">Leaderboard name</span>
-                                    <input
-                                      value={leaderboardNameDraft}
-                                      onChange={(event) =>
-                                        setLeaderboardNameDraft(event.target.value)
-                                      }
-                                      maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                      className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
-                                    />
-                                  </label>
-                                  <div className="flex gap-2">
+                            <div className="flex flex-col items-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  // activeMainLeaderboard.isDefault
+                                  //   ? handleRestartDefault()
+                                  //   : handleArchiveSide(activeMainLeaderboard.id)
+                                  setPendingLeaderboardAction({
+                                    kind: "restart-main",
+                                    leaderboardId: activeMainLeaderboard.id,
+                                    leaderboardName: activeMainLeaderboard.name,
+                                  })
+                                }
+                                disabled={activeMainLeaderboard.hasAnyOpenSlips}
+                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Archive & restart
+                              </button>
+                            </div>
+                          </div>
+                          {editingLeaderboardId === activeMainLeaderboard.id && (
+                            <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
+                                  <span className="block pb-2">Leaderboard name</span>
+                                  <input
+                                    value={leaderboardNameDraft}
+                                    onChange={(event) => setLeaderboardNameDraft(event.target.value)}
+                                    maxLength={MAX_LEADERBOARD_NAME_LENGTH}
+                                    className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
+                                  />
+                                </label>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => saveLeaderboardName(activeMainLeaderboard.id)}
+                                    disabled={
+                                      !leaderboardNameDraft.trim() ||
+                                      leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
+                                    }
+                                    className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelLeaderboardNameEdit}
+                                    className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          {activeMainLeaderboard.hasAnyOpenSlips && (
+                            <p className="mt-3 text-xs text-amber-200">
+                              Finalize or delete any open slips in order to archive and restart
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
+                          No active main leaderboard found.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+
+                <div
+                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${mainLeaderboardDetailsOpen ? "my-6" : "my-4"}`}
+                />
+
+                <section
+                  id="secondary-leaderboards-panel"
+                  className={
+                    secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
+                      ? "pb-6"
+                      : "pb-4"
+                  }
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                        Secondary leaderboards
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecondaryInfo(true)}
+                        aria-haspopup="dialog"
+                        aria-controls="secondary-leaderboards-info-modal"
+                        aria-label="Secondary leaderboards info"
+                        className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px] font-semibold text-gray-300 transition hover:border-sky-300/60 hover:text-white"
+                      >
+                        i
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={secondaryLeaderboardsEnabled}
+                          onChange={handleSecondaryLeaderboardsToggle}
+                          className="h-4 w-4 rounded border border-white/20 bg-black text-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+                        />
+                        Enable
+                      </label>
+                      {secondaryLeaderboardsEnabled && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSecondaryLeaderboardsDetailsOpen((prev) => !prev)
+                          }
+                          aria-expanded={secondaryLeaderboardsDetailsOpen}
+                          aria-controls="secondary-leaderboards-details"
+                          className="text-gray-400 transition hover:text-gray-200"
+                        >
+                          {secondaryLeaderboardsDetailsOpen ? "▴" : "▾"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {!secondaryLeaderboardsEnabled && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Turn this on to track separate side standings. Any archived leaderboards stay
+                      viewable below.
+                    </p>
+                  )}
+
+                  {secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen && (
+                    <div id="secondary-leaderboards-details" className="mt-4 space-y-4">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateSideModal(true)}
+                          disabled={sideLimitReached}
+                          className={`${primaryActionButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
+                        >
+                          <span className="text-sm font-semibold text-white">
+                            Create a secondary leaderboard
+                          </span>
+                          <span className={primaryActionIconClass} aria-hidden>
+                            <PlusIcon />
+                          </span>
+                        </button>
+                      </div>
+
+                      {sideLimitReached && (
+                        <p className="text-xs text-amber-200">
+                          You already have two active secondary leaderboards. Archive one to start
+                          another.
+                        </p>
+                      )}
+
+                      {activeSecondaryLeaderboards.length ? (
+                        <div className="grid grid-cols-1 gap-3">
+                          {activeSecondaryLeaderboards.map((board) => {
+                            const blockedReason = board.hasAnyOpenSlips
+                              ? "You have open slips still running in this leaderboard."
+                              : board.totalSlipCount === 0
+                                ? "This leaderboard can't be archived because it has no slips yet."
+                                : null;
+                            return (
+                              <div key={board.id} className={secondaryLeaderboardCardClass}>
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-white">{board.name}</p>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          editingLeaderboardId === board.id
+                                            ? cancelLeaderboardNameEdit()
+                                            : startLeaderboardNameEdit(board.id, board.name)
+                                        }
+                                        className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
+                                        aria-label={`Edit ${board.name} leaderboard name`}
+                                      >
+                                        <EditIcon />
+                                      </button>
+                                    </div>
+                                    {board.sport_scope && (
+                                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                                        {board.sport_scope}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => saveLeaderboardName(board.id)}
-                                      disabled={
-                                        !leaderboardNameDraft.trim() ||
-                                        leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
+                                      onClick={() =>
+                                        // handleArchiveSide(board.id)
+                                        setPendingLeaderboardAction({
+                                          kind: "archive-secondary",
+                                          leaderboardId: board.id,
+                                          leaderboardName: board.name,
+                                        })
                                       }
-                                      className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
+                                      disabled={Boolean(blockedReason) || board.hasAnyOpenSlips}
+                                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                                     >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={cancelLeaderboardNameEdit}
-                                      className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                                    >
-                                      Cancel
+                                      Archive
                                     </button>
                                   </div>
                                 </div>
+                                {editingLeaderboardId === board.id && (
+                                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                      <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
+                                        <span className="block pb-2">Leaderboard name</span>
+                                        <input
+                                          value={leaderboardNameDraft}
+                                          onChange={(event) =>
+                                            setLeaderboardNameDraft(event.target.value)
+                                          }
+                                          maxLength={MAX_LEADERBOARD_NAME_LENGTH}
+                                          className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
+                                        />
+                                      </label>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => saveLeaderboardName(board.id)}
+                                          disabled={
+                                            !leaderboardNameDraft.trim() ||
+                                            leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
+                                          }
+                                          className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                          Save
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelLeaderboardNameEdit}
+                                          className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                {blockedReason && (
+                                  <p className="mt-3 text-xs text-amber-200">{blockedReason}</p>
+                                )}
                               </div>
-                            )}
-                            {blockedReason && (
-                              <p className="mt-3 text-xs text-amber-200">{blockedReason}</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-                      No active secondary leaderboards yet.
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
+                          No active secondary leaderboards yet.
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
-            </section>
+                </section>
 
-            <div
-              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
-                ? "my-6"
-                : "my-4"
-                }`}
-            />
+                <div
+                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
+                    ? "my-6"
+                    : "my-4"
+                    }`}
+                />
 
-            <section
-              id="archived-leaderboards-panel"
-              className={showSettingsArchivedLeaderboards ? "pb-6" : "pb-4"}
-            >
-              <button
-                type="button"
-                onClick={() => setShowSettingsArchivedLeaderboards((prev) => !prev)}
-                aria-expanded={showSettingsArchivedLeaderboards}
-                aria-controls="archived-leaderboards-details"
-                className="flex w-full items-start justify-between gap-4 text-left"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                    Archived leaderboards
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Main leaderboard restarts and archived secondary boards are organized here.
-                  </p>
-                </div>
-                <span className="text-gray-400">
-                  {showSettingsArchivedLeaderboards ? "▴" : "▾"}
-                </span>
-              </button>
-              {showSettingsArchivedLeaderboards && (
-                <div id="archived-leaderboards-details" className="mt-4">
-                  {archivedLeaderboardsContent}
-                </div>
-              )}
-            </section>
-
-            <div
-              className={`-mx-5 h-px bg-white/10 sm:mx-0 ${showSettingsArchivedLeaderboards ? "my-6" : "my-4"
-                }`}
-            />
-
-            <section className="pt-2">
-              <button
-                type="button"
-                onClick={() => setDangerZoneOpen((prev) => !prev)}
-                aria-expanded={dangerZoneOpen}
-                aria-controls="danger-zone-content"
-                className="flex w-full items-start justify-between gap-4 text-left"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm uppercase tracking-wide text-red-300">Delete league</p>
-                </div>
-                <span className="text-red-200">{dangerZoneOpen ? "▴" : "▾"}</span>
-              </button>
-              {dangerZoneOpen && (
-                <div id="danger-zone-content" className="mt-4 space-y-3">
-                  <p className="text-xs text-red-100">
-                    delete this league and all associated leaderboards and slips.
-                  </p>
-                  <label className="flex flex-col gap-2 text-sm text-gray-200">
-                    <span className="text-xs uppercase tracking-wide text-gray-400">
-                      Type{" "}
-                      <span className="font-semibold text-rose-200">{confirmationCode}</span> to
-                      confirm
+                <section
+                  id="archived-leaderboards-panel"
+                  className={showSettingsArchivedLeaderboards ? "pb-6" : "pb-4"}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowSettingsArchivedLeaderboards((prev) => !prev)}
+                    aria-expanded={showSettingsArchivedLeaderboards}
+                    aria-controls="archived-leaderboards-details"
+                    className="flex w-full items-start justify-between gap-4 text-left"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
+                        Archived leaderboards
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Main leaderboard restarts and archived secondary boards are organized here.
+                      </p>
+                    </div>
+                    <span className="text-gray-400">
+                      {showSettingsArchivedLeaderboards ? "▴" : "▾"}
                     </span>
-                    <input
-                      value={deleteConfirmation}
-                      onChange={(event) => setDeleteConfirmation(event.target.value)}
-                      className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
-                    />
-                  </label>
+                  </button>
+                  {showSettingsArchivedLeaderboards && (
+                    <div id="archived-leaderboards-details" className="mt-4">
+                      {archivedLeaderboardsContent}
+                    </div>
+                  )}
+                </section>
 
-                  <label className="flex items-center gap-3 text-sm text-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={acknowledged}
-                      onChange={(event) => setAcknowledged(event.target.checked)}
-                      className="h-4 w-4 rounded border border-white/20 bg-black text-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-                    />
-                    I understand this action is permanent.
-                  </label>
+                <div
+                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${showSettingsArchivedLeaderboards ? "my-6" : "my-4"
+                    }`}
+                />
 
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleDeleteGroup}
-                      disabled={deleteConfirmation !== confirmationCode || !acknowledged}
-                      className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Delete league permanently
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
+                <section className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDangerZoneOpen((prev) => !prev)}
+                    aria-expanded={dangerZoneOpen}
+                    aria-controls="danger-zone-content"
+                    className="flex w-full items-start justify-between gap-4 text-left"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm uppercase tracking-wide text-red-300">Delete league</p>
+                    </div>
+                    <span className="text-red-200">{dangerZoneOpen ? "▴" : "▾"}</span>
+                  </button>
+                  {dangerZoneOpen && (
+                    <div id="danger-zone-content" className="mt-4 space-y-3">
+                      <p className="text-xs text-red-100">
+                        delete this league and all associated leaderboards and slips.
+                      </p>
+                      <label className="flex flex-col gap-2 text-sm text-gray-200">
+                        <span className="text-xs uppercase tracking-wide text-gray-400">
+                          Type{" "}
+                          <span className="font-semibold text-rose-200">{confirmationCode}</span> to
+                          confirm
+                        </span>
+                        <input
+                          value={deleteConfirmation}
+                          onChange={(event) => setDeleteConfirmation(event.target.value)}
+                          className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
+                        />
+                      </label>
+
+                      <label className="flex items-center gap-3 text-sm text-gray-200">
+                        <input
+                          type="checkbox"
+                          checked={acknowledged}
+                          onChange={(event) => setAcknowledged(event.target.checked)}
+                          className="h-4 w-4 rounded border border-white/20 bg-black text-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+                        />
+                        I understand this action is permanent.
+                      </label>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleDeleteGroup}
+                          disabled={deleteConfirmation !== confirmationCode || !acknowledged}
+                          className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Delete league permanently
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
           </div>
         )}
       </section>

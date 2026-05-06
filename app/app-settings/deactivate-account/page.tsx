@@ -8,7 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchMyGroupsRequest } from "@/lib/redux/slices/groupsSlice";
 import { useRouter } from "next/navigation";
 import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/redux/slices/authSlice";
-import FootballAnimation from "@/components/animations/FootballAnimation";
+import DeactivateAccountSkeleton from "@/components/skeletons/app-settings/DeactivateAccountSkeleton";
 import { AuthSliceState, Group, GroupObject } from "@/lib/interfaces/interfaces";
 import { ArrowLeft } from "lucide-react";
 import * as Sentry from "@sentry/nextjs";
@@ -169,11 +169,7 @@ const DeleteAccountPage = () => {
     };
 
     if (groupLoading && (!myGroups || page === 1)) {
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="w-48 max-w-[70vw] sm:w-60">
-                <FootballAnimation />
-            </div>
-        </div>
+        return <DeactivateAccountSkeleton />;
     }
 
     return (

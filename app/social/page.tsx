@@ -21,6 +21,7 @@ import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE }
 import OnboardingModal from "@/components/modals/OnboardingModal";
 import { GLOBAL_TUTORIAL } from "@/lib/onboarding/tutorials";
 import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
+import PostPickSkeleton from "@/components/skeletons/social/PostPickSkeleton";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 
@@ -624,8 +625,16 @@ const SocialPage = () => {
             )}
 
             {pickLoader && (
-                <div className="flex justify-center py-8">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+                <div className="divide-y divide-white/10">
+                    {[1, 2, 3].map((i) => (
+                        <PostPickSkeleton key={i} />
+                    ))}
+                </div>
+            )}
+
+            {pickLoader && items.length > 0 && (
+                <div className="border-t border-white/10">
+                    <PostPickSkeleton />
                 </div>
             )}
         </div>

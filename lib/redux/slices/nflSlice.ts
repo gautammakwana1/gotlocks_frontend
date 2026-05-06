@@ -12,6 +12,7 @@ const initialState: NFLState = {
     session: null,
     hasSeenIntro: false,
     loading: false,
+    oddsLoading: false,
     validateLoading: false,
     error: null,
     message: null,
@@ -62,16 +63,16 @@ const nflSlice = createSlice({
         fetchLiveOddsRequest: (state, action: PayloadAction<FetchLiveNFLOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchLiveOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.nflOdds = action.payload.odds;
         },
         fetchLiveOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         cleatFetchLiveOddsMessage: (state) => {

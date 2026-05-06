@@ -9,6 +9,7 @@ const initialState: NBAState = {
     nbaSchedules: null,
     fanduelNbaOdds: null,
     draftkingNbaOdds: null,
+    oddsLoading: false,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -57,16 +58,16 @@ const nbaSlice = createSlice({
         fetchFanduelNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchFanduelNBAOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.fanduelNbaOdds = action.payload.odds;
         },
         fetchFanduelNBAOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         cleatFetchFanduelNBAOddsMessage: (state) => {
@@ -77,16 +78,16 @@ const nbaSlice = createSlice({
         fetchDraftkingsNBAOddsRequest: (state, action: PayloadAction<FetchNBAOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchDraftkingsNBAOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.draftkingNbaOdds = action.payload.odds;
         },
         fetchDraftkingsNBAOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         cleatFetchDraftkingsNBAOddsMessage: (state) => {

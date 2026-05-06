@@ -1,6 +1,6 @@
 
 import { LeaderboardStatus } from "@/app/league/[leagueId]/leaderboard/page";
-import { CachedReviewData } from "@/components/pick-builder/reviewSheetState";
+import { CachedReviewData } from "@/components/pick-builder/core/reviewSheetState";
 
 export type Role = "member" | "commissioner";
 
@@ -1703,6 +1703,7 @@ export type NFLState = {
     session: SessionState | null;
     hasSeenIntro: boolean;
     loading: boolean;
+    oddsLoading: boolean;
     validateLoading: boolean;
     error: string | null;
     message: string | null;
@@ -1781,6 +1782,7 @@ export type NBAState = {
     fanduelNbaOdds: NBAOdds | null;
     draftkingNbaOdds: NBAOdds | null;
     loading: boolean;
+    oddsLoading: boolean;
     error: string | null;
     message: string | null;
     validateLoading: boolean;
@@ -1804,6 +1806,7 @@ export type NCAABState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+    oddsLoading: boolean;
     validateLoading: boolean;
     validatePickMessage: string | null;
     validatePickError: string | null;
@@ -1823,6 +1826,7 @@ export type NHLState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+    oddsLoading: boolean;
     validateLoading: boolean;
     validatePickMessage: string | null;
     validatePickError: string | null;
@@ -1856,6 +1860,7 @@ export type SoccerState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+    oddsLoading: boolean;
     validateLoading: boolean;
     validatePickMessage: string | null;
     validatePickError: string | null;
@@ -1875,6 +1880,7 @@ export type MLBState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+    oddsLoading: boolean;
     validateLoading: boolean;
     validatePickMessage: string | null;
     validatePickError: string | null;

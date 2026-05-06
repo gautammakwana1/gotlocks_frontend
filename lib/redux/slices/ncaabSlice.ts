@@ -10,6 +10,7 @@ const initialState: NCAABState = {
     ncaabOdds: null,
     fanduelNcaabOdds: null,
     draftkingNcaabOdds: null,
+    oddsLoading: false,
     validateLoading: false,
     validatePickError: null,
     validatePickMessage: null,
@@ -58,16 +59,16 @@ const ncaabSlice = createSlice({
         fetchFanduelNCAABOddsRequest: (state, action: PayloadAction<FetchNCAABOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchFanduelNCAABOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.fanduelNcaabOdds = action.payload.odds;
         },
         fetchFanduelNCAABOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchFanduelNCAABOddsMessage: (state) => {
@@ -78,16 +79,16 @@ const ncaabSlice = createSlice({
         fetchDraftkingsNCAABOddsRequest: (state, action: PayloadAction<FetchNCAABOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchDraftkingsNCAABOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.draftkingNcaabOdds = action.payload.odds;
         },
         fetchDraftkingsNCAABOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchDraftkingsNCAABOddsMessage: (state) => {
@@ -98,16 +99,16 @@ const ncaabSlice = createSlice({
         fetchNCAABOddsRequest: (state, action: PayloadAction<FetchNCAABOddsPayload & { silent?: boolean } | undefined>) => {
             void action;
             if (!action.payload?.silent) {
-                state.loading = true;
+                state.oddsLoading = true;
             }
             state.error = null;
         },
         fetchNCAABOddsSuccess: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.ncaabOdds = action.payload.odds;
         },
         fetchNCAABOddsFailure: (state, action) => {
-            state.loading = false;
+            state.oddsLoading = false;
             state.error = action.payload;
         },
         clearFetchNCAABOddsMessage: (state) => {

@@ -39,6 +39,7 @@ import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
 import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import SlipDetailsSkeleton from "@/components/skeletons/slips/SlipDetailsSkeleton";
 
 interface FormErrors {
     name?: string;
@@ -559,8 +560,8 @@ const SlipDetailsPage = () => {
         return Object.keys(nextErrors).length === 0;
     }, [editingName]);
 
-    if (!group || !currentUser || !slip) {
-        return null;
+    if (slipLoader || !group || !currentUser || !slip) {
+        return <SlipDetailsSkeleton />;
     }
 
     if (isFinalized) {
@@ -895,11 +896,7 @@ const SlipDetailsPage = () => {
 
     if (slipLoader) {
         return (
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                <div className="w-48 max-w-[70vw] sm:w-60">
-                    <FootballAnimation />
-                </div>
-            </div>
+            <SlipDetailsSkeleton />
         )
     }
 
