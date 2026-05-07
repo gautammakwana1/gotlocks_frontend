@@ -649,9 +649,6 @@ const GroupPage = () => {
 
   useEffect(() => {
     if (!loading && !groupData && currentUser) {
-      console.log(`loading -------->`, loading);
-      console.log(`groupData -------->`, groupData);
-      console.log(`currentUser -------->`, currentUser);
       const timer = setTimeout(() => {
         router.replace("/home");
       }, 1000);
