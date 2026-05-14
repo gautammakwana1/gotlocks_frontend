@@ -862,6 +862,7 @@ export type leaderboardSlip = {
     pick_difficulty_tier: TierIndex | null;
     pick_difficulty_label: DifficultyLabel | null;
     pick_result: PickResult;
+    pick_id: string | null;
     slip_id: string;
     slip_points: number;
     bonus_points: number;

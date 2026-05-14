@@ -179,7 +179,7 @@ const computeResultPoints = (pick_difficulty_label?: DifficultyLabel | null, res
 
 function mapSlipToPick(user: Leaderboard, slip: leaderboardSlip): Pick {
     return {
-        id: slip.slip_id,
+        id: slip.pick_id ?? "",
         slip_id: slip.slip_id,
         user_id: user.user_id,
         description: slip.pick_description ?? "",
@@ -633,8 +633,7 @@ export const LeaderboardGrid = ({
                     slip,
                     leaderboardAllPicks.filter(
                         (pick) =>
-                            pick.slip_id === slip.id &&
-                            memberIds.has(pick.user_id)
+                            pick.slip_id === slip.id && memberIds.has(pick.user_id) && (pick.id || pick.selection)
                     )
                 ),
             ])
