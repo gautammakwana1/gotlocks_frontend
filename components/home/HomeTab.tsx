@@ -900,6 +900,7 @@ const HomeTab = () => {
                             showTopBorder={true}
                             loading={pickLoader}
                             lastItemRef={lastItemRef}
+                            emptyCopy="There are no pending public posts at the moment."
                         />
                     ) : (
                         <NotificationsFeed

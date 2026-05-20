@@ -12,6 +12,7 @@ import { UserIcon } from "../layout/MainTabBar";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 import { SearchIcon } from "../ui/SvgIcons";
+import UserSearchSkeleton from "../skeletons/social/UserSearchSkeleton";
 
 type UserSearchDialogProps = {
     open: boolean;
@@ -297,7 +298,9 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                         </div>
                     ) : null}
 
-                    {visibleList.length > 0 ? (
+                    {loading && hasQuery && visibleList.length === 0 ? (
+                        <UserSearchSkeleton count={5} />
+                    ) : visibleList.length > 0 ? (
                         visibleList.map((user, index) => {
                             const isLast = index === visibleList.length - 1 && hasQuery;
                             const following = isFollowing(currentUser.userId, user.id);
@@ -368,6 +371,8 @@ const UserSearchDialog = ({ open, onClose }: UserSearchDialogProps) => {
                                 : "Start typing a username to search the platform. Selected profiles will appear here as recent searches."}
                         </div>
                     )}
+
+                    {/* ── Pagination loading indicator (more pages fetching) ─── */}
                     {loading && visibleList.length > 0 && (
                         <div className="flex items-center justify-center gap-2 py-4">
                             <span className="h-2 w-2 animate-bounce rounded-full bg-white/40" style={{ animationDelay: "0ms" }} />

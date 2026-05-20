@@ -332,6 +332,27 @@ body {
   }
 }
 
+/* ── Skeleton / shimmer loading placeholders ─────────────────────────────── */
+@keyframes skeletonShimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.05) 80%
+  );
+  background-size: 800px 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+}
+
 @keyframes float {
 
   0%,

@@ -443,7 +443,7 @@ const SlipCellCard = ({
             ? "border-emerald-400/40 bg-gradient-to-br from-emerald-500/30 via-emerald-400/10 to-black/40 text-emerald-100"
             : pick?.pick_result === "loss"
                 ? "border-rose-400/40 bg-gradient-to-br from-rose-500/30 via-rose-400/10 to-black/40 text-rose-100"
-                : pick?.pick_result === "void" || pick?.pick_result === "not_found"
+                : (pick?.pick_result === "not_found" || pick?.pick_result === "void")
                     ? "border-amber-400/30 bg-amber-500/15 text-amber-50"
                     : "border-white/12 bg-white/[0.06] text-slate-100";
     const sourceTabLabel = (
@@ -455,7 +455,7 @@ const SlipCellCard = ({
             className="relative flex h-full w-full overflow-hidden p-1 md:p-0"
         >
             <div className="flex h-full w-full flex-col gap-1 md:flex-row md:items-stretch md:gap-2">
-                <div className={`order-1 flex min-h-0 w-full flex-1 flex-col justify-between rounded-md border p-1.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.4)] md:order-2 md:h-full md:rounded-md md:border-white/10 md:bg-white/[0.04] md:p-3 md:shadow-[inset_0_0_16px_rgba(15,23,42,0.6)] ${resultCardTone}`}>
+                <div className={`order-1 flex min-h-0 w-full flex-1 flex-col justify-between rounded-md border p-1.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.4)] md:order-2 md:h-full md:rounded-md md:p-3 md:shadow-[inset_0_0_16px_rgba(15,23,42,0.6)] ${resultCardTone}`}>
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                             <span className="block text-[7px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">

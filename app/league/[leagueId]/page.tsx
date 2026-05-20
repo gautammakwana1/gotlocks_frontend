@@ -217,7 +217,6 @@ const GroupPage = () => {
     ArchiveLeaderboardList,
     archivedLeaderboard: ArchivedLeaderboardObject,
     hasMoreLeaderboard,
-    loadingMembers,
   } = useSelector((state: GroupSelector) => state.group);
   const { openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews, loading: slipLoader } = useSelector((state: RootState) => state.slip);
   const rawGroup = useSelector((state: GroupSelector) => state.group.group);
@@ -986,14 +985,16 @@ const GroupPage = () => {
             preferFallback
             className="inline-flex items-center justify-center gap-2 text-[11px] font-semibold normal-case py-2 tracking-[0.12em] text-gray-300 transition hover:text-white"
           />
-          <button
-            type="button"
-            onClick={handleOpenEditGroup}
-            className="ui-accent-outline-hover inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition sm:ml-auto"
-            aria-label="Edit league"
-          >
-            <EditPencilIcon />
-          </button>
+          {isCommissioner && (
+            <button
+              type="button"
+              onClick={handleOpenEditGroup}
+              className="ui-accent-outline-hover inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition sm:ml-auto"
+              aria-label="Edit league"
+            >
+              <EditPencilIcon />
+            </button>
+          )}
         </div>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-10 sm:flex-nowrap">
@@ -1954,7 +1955,7 @@ const GroupPage = () => {
                   }
                   className="rounded-lg bg-sky-500/25 px-5 py-2 text-xs font-semibold tracking-wide text-sky-100 transition hover:bg-sky-500/35 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  create
+                  {loading ? `creating...` : `create`}
                 </button>
               </div>
             </div>
