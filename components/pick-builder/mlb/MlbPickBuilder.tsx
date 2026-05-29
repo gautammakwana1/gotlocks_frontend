@@ -3140,7 +3140,7 @@ export const MlbPickBuilder = ({
     };
 
     const renderMainOverUnderTable = (
-        rows: ReturnType<typeof buildMainPointsRows>,
+        rows: PairedPropRow[],
         sectionKey: string,
         options?: { className?: string; emptyMessage?: string }
     ) => {

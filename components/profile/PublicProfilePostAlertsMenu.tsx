@@ -2,8 +2,7 @@
 
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { FollowersList, FollowingsList, PickSliceState, PostAlerts, Profile, ProgressState } from "@/lib/interfaces/interfaces";
-import { disablePostAlertRequest, enablePostAlertRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchMemberProfileRequest, fetchPostAlertsRequest } from "@/lib/redux/slices/authSlice";
-import { useToast } from "@/lib/state/ToastContext";
+import { disablePostAlertRequest, enablePostAlertRequest, fetchPostAlertsRequest } from "@/lib/redux/slices/authSlice";
 import { useCallback, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { BellIcon } from "../ui/SvgIcons";
@@ -34,13 +33,11 @@ type PublicProfilePostAlertsMenuProps = {
 
 const PublicProfilePostAlertsMenu = ({
     targetUserId,
-    mode,
 }: PublicProfilePostAlertsMenuProps) => {
     const currentUser = useCurrentUser();
     const dispatch = useDispatch();
-    const { setToast } = useToast();
 
-    const { followings, postAlerts, user, error } = useSelector((state: RootState) => state.user);
+    const { followings, postAlerts, user } = useSelector((state: RootState) => state.user);
 
     useEffect(() => {
         if (!targetUserId) return;

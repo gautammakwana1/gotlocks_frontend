@@ -16,14 +16,12 @@ import BackButton from "@/components/ui/BackButton";
 import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
 import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
-import { GradingPayload, Group, GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
+import { GradingPayload, GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { GroupDataShape } from "../../page";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
-import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchAllSlipsRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
-import FootballAnimation from "@/components/animations/FootballAnimation";
+import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import Image from "next/image";
 import { getPickPoints, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
 import { X } from "lucide-react";
@@ -35,11 +33,12 @@ import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
 import { checkAnyRestrictedWords, generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
-import { extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
+import { extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
 import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import SlipDetailsSkeleton from "@/components/skeletons/slips/SlipDetailsSkeleton";
+import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
 
 interface FormErrors {
     name?: string;
@@ -78,28 +77,10 @@ const sortPicksByOdds = (picks: Pick[]) => {
 
 const DEFAULT_SPORT = "NFL";
 const WINDOW_DAY_OPTIONS = [1, 2, 3, 4, 5];
-const deepJaggedStyle: CSSProperties = {
+const deepJaggedStyle: CSSProperties & Record<"--jagged-valley" | "--jagged-tip", string> = {
     clipPath: JAGGED_CLIP_PATH,
     "--jagged-valley": "34px",
     "--jagged-tip": "0px",
-} as CSSProperties;
-
-const hasNestedGroup = (
-    value: GroupDataShape
-): value is { group?: Group | null } => {
-    return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-    if (!data) {
-        return null;
-    }
-
-    if (hasNestedGroup(data)) {
-        return data.group ?? null;
-    }
-
-    return data;
 };
 
 const PICK_RESULT_ACCENTS = {
@@ -130,16 +111,16 @@ const SlipDetailsPage = () => {
     const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
-    const activeSlip = group?.active_slip ?? null;
-    const members = useMemo(() => group?.members ?? [], [group?.members]);
     const { slips, loading: slipLoader, message: slipMessage, error: slipError, deleteLoading, deleteMessage, deleteError } = useSelector((state: RootState) => state.slip);
     const { picks: pickList, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
+    const { contest } = useSelector((state: RootState) => state.contest);
     const {
+        group,
         leaderboard: leaderboardData,
         leaderboardList: leaderboardListData,
     } = useSelector((state: GroupSelector) => state.group);
+    const activeSlip = group?.active_slip ?? null;
+    const members = useMemo(() => group?.members ?? [], [group?.members]);
 
     const [windowDaysDraft, setWindowDaysDraft] = useState<number>(
         DEFAULT_ELIGIBLE_WINDOW_DAYS
@@ -166,10 +147,17 @@ const SlipDetailsPage = () => {
         dispatch(clearCreatePickMessage());
     }, [params.leagueId, currentUser, dispatch, params.slipId]);
 
+
     const slip = useMemo(() => {
         if (!Array.isArray(slips) || !params?.slipId) return undefined;
         return slips.find((candidate) => candidate.id === params.slipId)
     }, [params.slipId, slips]);
+
+    useEffect(() => {
+        if (slip?.contest_id) {
+            dispatch(fetchContestByIdRequest({ contest_id: slip?.contest_id }));
+        }
+    }, [slip?.contest_id, dispatch]);
 
     const isFinalized = slip ? isSlipFinal(slip) : false;
     const secondaryLeaderboardsEnabled =
@@ -188,8 +176,8 @@ const SlipDetailsPage = () => {
         [groupLeaderboards, secondaryLeaderboardsEnabled]
     );
     const currentSecondaryLeaderboard = useMemo(() => {
-        if (!slip || !slip.leaderboard_ids) return null;
-        const sideId = slip.leaderboard_ids.find((id) => {
+        if (!slip) return null;
+        const sideId = (slip.leaderboard_ids ?? []).find((id) => {
             const board = groupLeaderboards.find((candidate) => candidate.id === id);
             return board && !board.isDefault;
         });
@@ -320,7 +308,7 @@ const SlipDetailsPage = () => {
                 duration: 3000,
             })
             dispatch(clearUpdateSlipsMessage())
-            dispatch(fetchAllSlipsRequest({ group_id: params.leagueId }));
+            // dispatch(fetchAllSlipsRequest({ group_id: params.leagueId }));
         }
         if (!slipLoader && slipError) {
             setToast({
@@ -343,7 +331,11 @@ const SlipDetailsPage = () => {
             })
             dispatch(clearDeleteSlipMessage());
             if (params.leagueId) {
-                router.replace(`/league/${params.leagueId}?tab=slips`);
+                router.replace(
+                    contest?.id
+                        ? `/league/${params.leagueId}/contests/${contest.id}`
+                        : `/league/${params.leagueId}`
+                );
             } else {
                 router.replace('/fantasy');
             }
@@ -357,7 +349,7 @@ const SlipDetailsPage = () => {
             })
             dispatch(clearDeleteSlipMessage());
         }
-    }, [setToast, deleteLoading, deleteMessage, deleteError, dispatch, params.leagueId, router]);
+    }, [setToast, deleteLoading, deleteMessage, deleteError, dispatch, params.leagueId, contest?.id, router]);
 
     useEffect(() => {
         if (!slip) return;
@@ -455,7 +447,7 @@ const SlipDetailsPage = () => {
     useEffect(() => {
         if (!group || !isSlipFinal(slip)) return;
         if (!slip) {
-            router.replace(`/league/${group.id}?tab=slips`);
+            router.replace(`/league/${group.id}`);
         }
         if (group.id && slip?.id) {
             router.replace(`/league/${group.id}/slips/${slip.id}/results`);
@@ -486,37 +478,38 @@ const SlipDetailsPage = () => {
         return map;
     }, [slipPicks]);
 
-    const matchupByGameId = useMemo(() => {
-        const map = new Map<string, string>();
+    // const matchupByGameId = useMemo(() => {
+    //     const map = new Map<string, string>();
 
-        slipPicks.forEach((pick) => {
-            const gameId = pick.selection?.gameId;
-            const matchup = extractMatchup(pick.description, pick.selection?.matchup);
-            if (gameId && matchup && !map.has(gameId)) {
-                map.set(gameId, matchup);
-            }
+    //     slipPicks.forEach((pick) => {
+    //         const gameId = pick.selection?.gameId;
+    //         const matchup = extractMatchup(pick.description, pick.selection?.matchup);
+    //         if (gameId && matchup && !map.has(gameId)) {
+    //             map.set(gameId, matchup);
+    //         }
 
-            pick.legs?.forEach((leg) => {
-                const legGameId = leg.selection?.gameId;
-                const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
-                if (legGameId && legMatchup && !map.has(legGameId)) {
-                    map.set(legGameId, legMatchup);
-                }
-            });
-        });
+    //         pick.legs?.forEach((leg) => {
+    //             const legGameId = leg.selection?.gameId;
+    //             const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
+    //             if (legGameId && legMatchup && !map.has(legGameId)) {
+    //                 map.set(legGameId, legMatchup);
+    //             }
+    //         });
+    //     });
 
-        return map;
-    }, [slipPicks]);
+    //     return map;
+    // }, [slipPicks]);
 
     const preflightIsCommissioner = group?.created_by === currentUser?.userId;
     const preflightIsCreator = slip?.created_by === currentUser?.userId;
+    const preflightIsContestManager = contest?.created_by === currentUser?.userId;
     // const isVibeSlip = Boolean(slip && !slip.isGraded && slip.slip_type === "vibe");
     const availableSports = Array.isArray(slip?.sports) && slip.sports.length > 0
         ? slip.sports
         : [DEFAULT_SPORT];
-    const showReviewTab = Boolean(slip && slip.isGraded && preflightIsCommissioner && isSlipTimeLocked(slip));
+    const showReviewTab = Boolean(slip && slip.isGraded && (preflightIsCommissioner || preflightIsContestManager) && isSlipTimeLocked(slip));
     const showActionsTab = Boolean(
-        slip && (preflightIsCommissioner || (!slip.isGraded && preflightIsCreator))
+        slip && (preflightIsCommissioner || preflightIsContestManager || (!slip.isGraded && preflightIsCreator))
     );
     const tabs = useMemo<{ id: SlipTab; label: string }[]>(() => {
         const baseTabs: { id: SlipTab; label: string }[] = [
@@ -571,24 +564,25 @@ const SlipDetailsPage = () => {
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const isCommissioner = group.created_by === currentUser.userId;
     const isCreator = slip.created_by === currentUser.userId;
+    const isContestManager = contest?.created_by === currentUser.userId;
     const hasVibeControl = !slip.isGraded && isCreator;
-    const hasReviewControl = isCommissioner || hasVibeControl;
+    const hasReviewControl = isCommissioner || isContestManager || hasVibeControl;
     const limitValue = slip.pick_limit === "unlimited" ? Infinity : slip.pick_limit;
     const isTimeLocked = isSlipTimeLocked(slip);
     const canManagePicks = canUserEditSlipPicks(slip);
     const canAddPick = canManagePicks && userPicks.length < limitValue;
     const canReview = canCommissionerReview(slip);
-    const canAdjustPoints = isCommissioner && canReview;
+    const canAdjustPoints = (isCommissioner || isContestManager) && canReview;
     const canAutoGrade = hasReviewControl && canReview;
     const canReopen = hasReviewControl && isTimeLocked && !isFinalized;
     const canFinalizeSlip = canFinalize(slip, {
         isCommissioner: hasReviewControl,
         picks: slipPicks,
     });
-    const canRenameSlip = isCommissioner || (!slip.isGraded && isCreator);
+    const canRenameSlip = isCommissioner || isContestManager || (!slip.isGraded && isCreator);
     const canEditDeadlines =
-        (isCommissioner || (!slip.isGraded && isCreator)) && canManagePicks;
-    const canEditWarningMode = slip.isGraded && isCommissioner && canManagePicks
+        (isCommissioner || isContestManager || (!slip.isGraded && isCreator)) && canManagePicks;
+    const canEditWarningMode = slip.isGraded && (isCommissioner || isContestManager) && canManagePicks;
     const canAssignSecondaryLeaderboard =
         isCommissioner &&
         secondaryLeaderboardsEnabled &&
@@ -710,6 +704,8 @@ const SlipDetailsPage = () => {
     const handleDeadlineSave = (event: FormEvent) => {
         event.preventDefault();
         if (!canEditDeadlines) return;
+        if (slip.pick_deadline_at === pickDeadlineDraft && slip.window_days === activeWindowDays) return;
+
         if (slip.id && group.id) {
             dispatch(updateSlipsRequest({ group_id: group.id, slip_id: slip.id, pick_deadline_at: pickDeadlineDraft, windowDays: activeWindowDays }));
         }
@@ -924,7 +920,11 @@ const SlipDetailsPage = () => {
                     />
                     <div className="relative z-10 flex flex-col gap-6 p-5 pb-32 sm:p-6 sm:pb-36">
                         <BackButton
-                            fallback={`/league/${group.id}?tab=slips${slip.isGraded ? "" : "&mode=vibe"}`}
+                            fallback={
+                                contest?.id
+                                    ? `/league/${group.id}/contests/${contest.id}`
+                                    : `/league/${group.id}`
+                            }
                             preferFallback
                             className="self-start"
                         />

@@ -1,13 +1,12 @@
 "use client";
 
-import { JSX, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils/date";
 import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, NBAOdds, NBASchedules, NBASchedulesWithOdds, OddsBlazeOdd, OddsBlazePlayer, OddsBlazeTeam, OddsData, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { cleatNbaPickValidateMessage, fetchDraftkingsNBAOddsRequest, fetchFanduelNBAOddsRequest, fetchNBAScheduleByTimezoneRequest, fetchNBAScheduleRequest, nbaPickValidateRequest } from "@/lib/redux/slices/nbaSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import FootballAnimation from "../../animations/FootballAnimation";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierMetaForPick, parseAmericanOdds, TierIndex } from "@/lib/utils/scoring";
@@ -958,7 +957,7 @@ const PropRowScroller = ({
 }: {
     scrollerKey: string;
     lines: number[];
-    renderChip: (line: number) => JSX.Element;
+    renderChip: (line: number) => ReactElement;
 }) => {
     return (
         <div
@@ -3435,7 +3434,7 @@ export const NbaPickBuilder = ({
         ];
         return (
             <div className={options?.className ?? "mt-4 space-y-3"}>
-                {renderSimpleMarketTable(rows, sectionKey, {
+                {renderSimpleMarketTable(rows, "alternate-spread", {
                     headerLabel: "Team",
                     className: "mt-0 -mx-5 sm:-mx-6",
                 })}
@@ -3489,7 +3488,7 @@ export const NbaPickBuilder = ({
         ];
         return (
             <div className={options?.className ?? "mt-4 space-y-3"}>
-                {renderSimpleMarketTable(rows, sectionKey, {
+                {renderSimpleMarketTable(rows, "alternate-total", {
                     headerLabel: "Side",
                     className: "mt-0 -mx-5 sm:-mx-6",
                 })}

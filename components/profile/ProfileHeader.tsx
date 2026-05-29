@@ -17,7 +17,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
 import { checkAnyRestrictedWords, checkForReservedWords, generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "../layout/MainTabBar";
-import { EditIcon, StartIcon } from "../ui/SvgIcons";
+import { StartIcon } from "../ui/SvgIcons";
 
 interface FormErrors {
     username?: string;
@@ -35,6 +35,7 @@ type ProfileHeaderStats = {
 
 type ProfileHeaderProgress = {
     level: number;
+    lifetimeXp: number;
     xpToday: number;
     xpIntoLevel: number;
     xpToNext: number;
@@ -72,6 +73,7 @@ type ProfileHeaderProps = {
 };
 
 const BADGE_PLACEHOLDERS = Array.from({ length: 3 }, (_, index) => `Locked badge ${index + 1}`);
+const numberFormatter = new Intl.NumberFormat("en-US");
 
 const buildInitials = (handle: string) => {
     const segments = handle.split(/[^a-zA-Z0-9]+/).filter(Boolean);
@@ -172,7 +174,6 @@ const ProfileHeader = ({
     showLockedPrivateSummary = false,
     isSelf,
     showFollowControls,
-    targetBlockedViewer,
     viewerBlockedTarget,
     isFollowing,
     isFollowRequested = false,
@@ -183,7 +184,6 @@ const ProfileHeader = ({
     onFollowToggle,
     onAvatarChange,
     onRemoveAvatar,
-    onPrivacyToggle,
     onFollowersClick,
     onFollowingClick,
 }: ProfileHeaderProps) => {
@@ -204,6 +204,7 @@ const ProfileHeader = ({
     const showFollowSection = mode === "public" && showFollowControls && !isSelf && !viewerBlockedTarget;
     const showFollowerStats = showStats || showFollowSection;
     const privacyStatusLabel = user.is_public ? "public profile" : "private profile";
+    const formattedLifetimeXp = numberFormatter.format(progress.lifetimeXp);
     const recordItems = [
         { label: "W", value: record?.wins ?? 0, tone: "text-emerald-100" },
         { label: "L", value: record?.losses ?? 0, tone: "text-red-100" },
@@ -311,10 +312,6 @@ const ProfileHeader = ({
             document.removeEventListener("keydown", handleEscape);
         };
     }, []);
-
-    // const handleEdit = () => {
-    //     setIsEditing(true);
-    // };
 
     const validate = useCallback((): boolean => {
         const nextErrors: FormErrors = {};
@@ -497,19 +494,27 @@ const ProfileHeader = ({
                                     {showFollowerStats && (
                                         <div className="min-w-0 col-start-2 row-start-2 flex flex-col gap-3 self-center sm:col-start-2 sm:row-start-2 sm:h-full sm:self-auto">
                                             {showStats && (
-                                                <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-wide text-sky-100/75">
-                                                    <span className="shrink-0">Lvl {progress.level}</span>
-                                                    <div className="h-1.5 min-w-[100px] flex-1 rounded-full bg-white/10 sm:min-w-[140px]">
-                                                        <div
-                                                            className="h-1.5 rounded-full bg-sky-400/80 transition-all"
-                                                            style={{ width: `${progress.levelProgressPercent}%` }}
-                                                        />
+                                                <div className="w-full text-[11px] uppercase tracking-wide text-sky-100/75">
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <span className="shrink-0">Lvl {progress.level}</span>
+                                                        <div className="h-1.5 min-w-[100px] flex-1 rounded-full bg-white/10 sm:min-w-[140px]">
+                                                            <div
+                                                                className="h-1.5 rounded-full bg-sky-400/80 transition-all"
+                                                                style={{ width: `${progress.levelProgressPercent}%` }}
+                                                            />
+                                                        </div>
+                                                        {showNumericProgress && (
+                                                            <span className="ml-auto shrink-0 text-right text-sky-100/70">
+                                                                {progress.xpRemaining} XP to next
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    {showNumericProgress && (
-                                                        <span className="shrink-0 text-sky-100/70">
-                                                            {progress.xpRemaining} XP to next
+                                                    <div className="mt-1 text-right text-sky-100/70">
+                                                        <span className="text-white/55">Total XP </span>
+                                                        <span className="font-semibold text-white">
+                                                            {formattedLifetimeXp}
                                                         </span>
-                                                    )}
+                                                    </div>
                                                 </div>
                                             )}
                                             <div className={`flex flex-col gap-2 ${showStats ? "mt-auto" : ""}`}>

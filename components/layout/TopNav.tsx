@@ -221,7 +221,7 @@ export const TopNav = () => {
                 className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-sky-300/50 hover:bg-sky-400/10"
                 onClick={() => setMenuOpen(false)}
               >
-                <span>the shop</span>
+                <span>reward room</span>
                 <Image
                   src="/icons/money.png"
                   alt="coin"

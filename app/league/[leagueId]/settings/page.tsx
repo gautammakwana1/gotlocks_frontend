@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-const GroupSettingsRedirectPage = () => {
+const LeagueSettingsRedirectPage = () => {
     const params = useParams<{ leagueId: string }>();
     const router = useRouter();
 
@@ -15,4 +15,4 @@ const GroupSettingsRedirectPage = () => {
     return null;
 };
 
-export default GroupSettingsRedirectPage;
+export default LeagueSettingsRedirectPage;

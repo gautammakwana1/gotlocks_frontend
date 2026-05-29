@@ -1,7 +1,7 @@
 "use client";
 
 import { clamp, Easing, useTime } from "./engine";
-import { AMBER, AMBER_GLOW, AMBER_SOFT, APP_BG, Avatar, FONT_MONO, FONT_SANS, TEXT, TEXT_MUTED } from "./primitives";
+import { AMBER, AMBER_GLOW, AMBER_SOFT, APP_BG, Avatar, FONT_MONO, FONT_SANS } from "./primitives";
 
 // Scene 3 V2 — Follow Graph.
 // Central "YOU" avatar; 16 nodes evenly distributed on a ring (radius 320),

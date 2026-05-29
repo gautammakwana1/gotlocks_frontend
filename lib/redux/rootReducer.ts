@@ -15,6 +15,7 @@ import notificationReducer from "./slices/notificationSlice";
 import mlbReducer from "./slices/mlbSlice";
 import socialReducer from "./slices/socialSlice";
 import soccerReducer from "./slices/soccerSlice";
+import contestReducer from "./slices/contestSlice";
 
 const appReducer = combineReducers({
 	user: authReducer,
@@ -33,6 +34,7 @@ const appReducer = combineReducers({
 	mlb: mlbReducer,
 	social: socialReducer,
 	soccer: soccerReducer,
+	contest: contestReducer,
 });
 
 export const rootReducer: Reducer = (state: ReturnType<typeof appReducer> | undefined, action: AnyAction) => {

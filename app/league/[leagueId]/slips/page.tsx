@@ -1,30 +1,12 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Group, GroupSelector } from "@/lib/interfaces/interfaces";
+import { GroupSelector } from "@/lib/interfaces/interfaces";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useDispatch, useSelector } from "react-redux";
-import { GroupDataShape } from "../page";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 
-const hasNestedGroup = (
-    value: GroupDataShape
-): value is { group?: Group | null } => {
-    return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-    if (!data) {
-        return null;
-    }
-
-    if (hasNestedGroup(data)) {
-        return data.group ?? null;
-    }
-
-    return data;
-};
 
 const SlipsPage = () => {
     const dispatch = useDispatch();
@@ -32,8 +14,7 @@ const SlipsPage = () => {
     const router = useRouter();
     const currentUser = useCurrentUser();
 
-    const rawLeague = useSelector((state: GroupSelector) => state.group.group);
-    const league = useMemo(() => extractGroup(rawLeague as GroupDataShape), [rawLeague]);
+    const { group: league } = useSelector((state: GroupSelector) => state.group);
 
     useEffect(() => {
         if (!params.leagueId || !currentUser) return;
@@ -42,7 +23,7 @@ const SlipsPage = () => {
 
     useEffect(() => {
         if (!league || !currentUser) return;
-        router.replace(`/league/${league.id}?tab=slips`);
+        router.replace(`/league/${league.id}`);
     }, [currentUser, league, router]);
 
     if (!league || !currentUser) {

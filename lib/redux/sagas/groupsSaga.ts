@@ -191,13 +191,13 @@ function* handleConfirmDeleteGroup(action: PayloadAction<ConfirmDeletePayload>):
 
 function* handleFetchLeaderboard(action: PayloadAction<LeaderboardPayload | undefined>): SagaIterator {
 	try {
-		const { groupId = "", leaderboard_id, page = 1, limit = 10 } = action.payload || {};
+		const { groupId = "", contest_id = "", leaderboard_id = "", page = 1, limit = 10 } = action.payload || {};
 
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.get,
 			`${API_BASE_URL}/group/leaderboard`,
 			{
-				params: { groupId, leaderboard_id, page, limit }
+				params: { groupId, contest_id, leaderboard_id, page, limit }
 			}
 		);
 		const payload = response.data as { data?: unknown };

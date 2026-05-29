@@ -9,6 +9,8 @@ import { fetchNotificationListRequest } from "@/lib/redux/slices/notificationSli
 import { accpetFollowRequest, clearAccpetFollowMessage, clearDeclineFollowMessage, declineFollowRequest } from "@/lib/redux/slices/authSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
+import Image from "next/image";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 type NotificationsFeedProps = {
     onOpenProfile: (userId: string) => void;
@@ -134,7 +136,7 @@ const NotificationsFeed = ({
                         }
                         : null;
 
-                const memberProfilePicture = actor?.profile_image ? `${process.env.NEXT_PUBLIC_SUPABASE_S3_URL}/${actor.profile_image}` : undefined;
+                const memberProfilePicture = generateProfileImageUrl(actor?.profile_image);
 
                 return (
                     <div
@@ -159,10 +161,15 @@ const NotificationsFeed = ({
                             >
                                 {actor ? (
                                     memberProfilePicture ? (
-                                        <img
+                                        <Image
                                             src={memberProfilePicture}
-                                            alt={`${actorLabel} avatar`}
-                                            className="h-full w-full rounded-full object-cover"
+                                            alt="Profile image"
+                                            width={52}
+                                            height={52}
+                                            className={`h-9 w-9 rounded-full object-cover`}
+                                            draggable={false}
+                                            onDragStart={(e) => e.preventDefault()}
+                                            unoptimized
                                         />
                                     ) : (
                                         <UserIcon className="h-6 w-6 text-white/80 sm:h-9 sm:w-9" />

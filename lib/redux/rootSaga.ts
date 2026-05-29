@@ -15,6 +15,7 @@ import notificationSaga from "./sagas/notificationSaga";
 import mlbSaga from "./sagas/mlbSaga";
 import socialSaga from "./sagas/socialSaga";
 import soccerSaga from "./sagas/soccerSaga";
+import contestSaga from "./sagas/contestSaga";
 
 export default function* rootSaga() {
 	yield all([
@@ -34,5 +35,6 @@ export default function* rootSaga() {
 		fork(mlbSaga),
 		fork(socialSaga),
 		fork(soccerSaga),
+		fork(contestSaga),
 	]);
 }

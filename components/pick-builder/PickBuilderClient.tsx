@@ -374,7 +374,7 @@ const PickBuilderClientPage = () => {
                         <button
                             key={group.id}
                             type="button"
-                            onClick={() => router.push(`/league/${group.id}?tab=slips`)}
+                            onClick={() => router.push(`/league/${group.id}`)}
                             className="flex items-center justify-between rounded-2xl border border-white/12 bg-white/[0.04] px-4 py-3 text-left transition hover:border-sky-300/50 hover:text-white"
                         >
                             <div>

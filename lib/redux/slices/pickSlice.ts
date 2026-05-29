@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
@@ -149,6 +149,7 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
+        // Post pick
         createPostPickRequest: (state, action: PayloadAction<CreatePostPickPayload>) => {
             void action;
             state.loading = true;
@@ -396,6 +397,24 @@ const pickSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        fetchAllContestsPicksRequest: (state, action: PayloadAction<FetchContestPicksPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchAllContestsPicksSuccess: (state, action) => {
+            state.loading = false;
+            state.picks = action.payload.picks;
+        },
+        fetchAllContestsPicksFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchAllContestsPicksMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -472,6 +491,10 @@ export const {
     fetchGlobalPendingReactedPostsSuccess,
     fetchGlobalPendingReactedPostsFailure,
     clearFetchGlobalPendingReactedPostsMessage,
+    fetchAllContestsPicksRequest,
+    fetchAllContestsPicksSuccess,
+    fetchAllContestsPicksFailure,
+    clearFetchAllContestsPicksMessage,
 } = pickSlice.actions;
 
 export default pickSlice.reducer;

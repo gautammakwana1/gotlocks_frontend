@@ -15,9 +15,17 @@ const COMPACT_ROUTES = new Set([
 export const AppShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const compact = pathname ? COMPACT_ROUTES.has(pathname) : false;
+  const leagueDetailRoute = pathname ? /^\/league\/[^/]+$/.test(pathname) : false;
+  const contestDetailRoute = pathname
+    ? /^\/league\/[^/]+\/contests\/[^/]+$/.test(pathname)
+    : false;
   const tightTop =
     pathname === "/profile" || (pathname ? pathname.startsWith("/user/") : false);
-  const topPadding = tightTop ? "pt-4 sm:pt-5" : "pt-8";
+  const topPadding = leagueDetailRoute || contestDetailRoute
+    ? "pt-2 sm:pt-3"
+    : tightTop
+      ? "pt-4 sm:pt-5"
+      : "pt-8";
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text)]">

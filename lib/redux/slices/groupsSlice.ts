@@ -9,7 +9,6 @@ import type {
 	GroupDeletePayload,
 	ConfirmDeletePayload,
 	Group,
-	Leaderboard,
 	SessionState,
 	LeaderboardPayload,
 	UpdateGroupPayload,
@@ -163,7 +162,7 @@ const groupSlice = createSlice({
 		},
 		fetchGroupByIdSuccess: (state, action) => {
 			state.loading = false;
-			state.group = action.payload;
+			state.group = action.payload.group;
 		},
 		fetchGroupByIdFailure: (state, action) => {
 			state.loading = false;

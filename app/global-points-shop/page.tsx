@@ -11,7 +11,7 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 
 type ShopReward = {
     name: string;
-    kind: "Virtual" | "Physical";
+    kind: "Virtual";
     price: "Free" | `$${number}`;
 };
 
@@ -28,7 +28,7 @@ const rewardTiers: ShopTier[] = [
         rewards: [
             { name: "Profile frame", kind: "Virtual", price: "Free" },
             { name: "Pick card theme", kind: "Virtual", price: "Free" },
-            { name: "Sticker pack", kind: "Physical", price: "$4" },
+            { name: "Reaction sticker pack", kind: "Virtual", price: "$4" },
         ],
     },
     {
@@ -37,7 +37,7 @@ const rewardTiers: ShopTier[] = [
         rewards: [
             { name: "Badge slot", kind: "Virtual", price: "Free" },
             { name: "Profile banner", kind: "Virtual", price: "$8" },
-            { name: "League flair pack", kind: "Physical", price: "$12" },
+            { name: "League flair set", kind: "Virtual", price: "$12" },
         ],
     },
     {
@@ -45,8 +45,8 @@ const rewardTiers: ShopTier[] = [
         title: "Contender Access",
         rewards: [
             { name: "Avatar frame", kind: "Virtual", price: "Free" },
-            { name: "Merch code", kind: "Virtual", price: "$15" },
-            { name: "Premium sticker kit", kind: "Physical", price: "$20" },
+            { name: "Animated profile glow", kind: "Virtual", price: "$15" },
+            { name: "Premium reaction pack", kind: "Virtual", price: "$20" },
         ],
     },
     {
@@ -54,8 +54,8 @@ const rewardTiers: ShopTier[] = [
         title: "Legend Access",
         rewards: [
             { name: "Legend profile treatment", kind: "Virtual", price: "Free" },
-            { name: "gotLocks hat", kind: "Physical", price: "$28" },
-            { name: "gotLocks hoodie", kind: "Physical", price: "$55" },
+            { name: "Legend badge trail", kind: "Virtual", price: "$28" },
+            { name: "Winner card theme", kind: "Virtual", price: "$55" },
         ],
     },
 ];
@@ -76,28 +76,22 @@ const GlobalPointsShopPage = () => {
     const currentBalance = progress?.lifetime_xp ?? 0;
 
     const userProgress = getLevelProgress(currentBalance);
-    const nextLockedTier = rewardTiers.find((tier) => userProgress.level < tier.level);
-    const nextUnlockXp = nextLockedTier
-        ? Math.max(
-            0,
-            getTotalXpToReachLevel(nextLockedTier.level) - currentBalance
-        )
-        : 0;
+    const totalXp = currentBalance;
 
     if (!currentUser) return null;
 
     return (
         <div className="mx-auto w-full max-w-4xl" style={{ animation: "homeFadeUp 240ms ease-out both" }}>
-            <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
-                <div className="min-w-0">
+            <header className="flex items-end justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
+                <div className="min-w-0 flex-1">
                     <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">
-                        Shop
+                        Reward Room
                     </h1>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
                         Rewards unlock automatically as your profile level rises.
                     </p>
                 </div>
-                <div className="shrink-0 text-right">
+                <div className="ml-auto shrink-0 text-right">
                     <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
                         Profile level
                     </p>
@@ -105,9 +99,7 @@ const GlobalPointsShopPage = () => {
                         {userProgress.level}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        {nextLockedTier
-                            ? `${numberFormatter.format(nextUnlockXp)} XP to level ${nextLockedTier.level}`
-                            : "all tiers unlocked"}
+                        {numberFormatter.format(totalXp)} total XP
                     </p>
                 </div>
             </header>
@@ -128,7 +120,9 @@ const GlobalPointsShopPage = () => {
                                     <p className="mt-1 text-sm text-[var(--text-secondary)]">
                                         {unlocked
                                             ? "Unlocked"
-                                            : `${numberFormatter.format(xpRemaining)} XP remaining`}
+                                            : `Earn ${numberFormatter.format(
+                                                xpRemaining
+                                            )} more XP to unlock these rewards`}
                                     </p>
                                 </div>
                                 <span

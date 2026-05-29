@@ -2,7 +2,7 @@
 
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { BlockedUsers, FollowersList, FollowingsList, PickSliceState, Profile, ProgressState } from "@/lib/interfaces/interfaces";
-import { blockUserRequest, fetchBlockedUsersRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchMemberProfileRequest, unblockUserRequest } from "@/lib/redux/slices/authSlice";
+import { blockUserRequest, unblockUserRequest } from "@/lib/redux/slices/authSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -32,7 +32,7 @@ type PublicProfileActionsMenuProps = {
     mode: "self" | "public";
 };
 
-const PublicProfileActionsMenu = ({ targetUserId, mode }: PublicProfileActionsMenuProps) => {
+const PublicProfileActionsMenu = ({ targetUserId }: PublicProfileActionsMenuProps) => {
     const currentUser = useCurrentUser();
     const dispatch = useDispatch();
     const { setToast } = useToast();

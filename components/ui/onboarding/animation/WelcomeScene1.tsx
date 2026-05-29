@@ -1,7 +1,7 @@
 "use client";
 
 import { clamp, Easing, useTime } from "./engine";
-import { APP_BG, Avatar, BRAND_HIGHLIGHT, FONT_MONO, PointsBurst, TEXT_MUTED } from "./primitives";
+import { APP_BG, BRAND_HIGHLIGHT, FONT_MONO, TEXT_MUTED } from "./primitives";
 
 // Scene 1 V3 — Central lock surrounded by graffiti-style number stickers
 // and scattered sparkle dots popping all over the canvas.

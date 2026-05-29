@@ -3,8 +3,7 @@
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
-import { GroupDataShape } from "../../../page";
-import { Group, GroupSelector, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { GroupSelector, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { clearUpdateSlipsMessage, deleteSlipRequest, fetchSlipByIdRequest } from "@/lib/redux/slices/slipSlice";
@@ -22,6 +21,7 @@ import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { ShareIcon } from "@/components/ui/SvgIcons";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import SlipResultsSkeleton from "@/components/skeletons/slips/SlipResultsSkeleton";
+import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -61,11 +61,11 @@ const normalizeResult = (result: string | null | undefined) =>
 
 type SlipResultsTab = "league" | "actions";
 
-const deepJaggedStyle: CSSProperties = {
+const deepJaggedStyle: CSSProperties & Record<"--jagged-valley" | "--jagged-tip", string> = {
     clipPath: JAGGED_CLIP_PATH,
     "--jagged-valley": "34px",
     "--jagged-tip": "0px",
-} as CSSProperties;
+};
 
 const RESULTS_TABS: Array<{ id: SlipResultsTab; label: string }> = [
     { id: "league", label: "finalized league slips" },
@@ -85,25 +85,6 @@ const preventOrphanWord = (value: string) => {
     return `${parts.join(" ")} ${penultimate}\u00A0${last}`.trim();
 };
 
-
-const hasNestedGroup = (
-    value: GroupDataShape
-): value is { group?: Group | null } => {
-    return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-    if (!data) {
-        return null;
-    }
-
-    if (hasNestedGroup(data)) {
-        return data.group ?? null;
-    }
-
-    return data;
-};
-
 const SlipResultsPage = () => {
     const params = useParams<{ leagueId: string; slipId: string }>();
     const router = useRouter();
@@ -116,10 +97,10 @@ const SlipResultsPage = () => {
     const [isDeleteSlipOpen, setIsDeleteSlipOpen] = useState(false);
     const [isDeleteSlipModalOpen, setIsDeleteSlipModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+    const { group } = useSelector((state: GroupSelector) => state.group);
     const { slips, loading: slipLoader, message: slipMessage } = useSelector((state: RootState) => state.slip);
     const { picks: pickList } = useSelector((state: RootState) => state.pick);
+    const { contest } = useSelector((state: RootState) => state.contest);
 
     const activeSlip = useMemo<Slip | null>(() => {
         if (!Array.isArray(slips) || !params?.slipId) return null;
@@ -129,9 +110,15 @@ const SlipResultsPage = () => {
     useEffect(() => {
         if (!params.slipId && !params.leagueId) return;
         dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
-        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }))
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
         dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
     }, [dispatch, params.slipId, params.leagueId]);
+
+    useEffect(() => {
+        if (activeSlip?.contest_id) {
+            dispatch(fetchContestByIdRequest({ contest_id: activeSlip?.contest_id }));
+        }
+    }, [activeSlip?.contest_id, dispatch]);
 
     useEffect(() => {
         if (!slipLoader && slipMessage) {
@@ -150,7 +137,7 @@ const SlipResultsPage = () => {
     //         router.replace("/home");
     //     }
     //     if (!activeSlip && group?.id) {
-    //         router.replace(`/league/${group?.id}?tab=slips`);
+    //         router.replace(`/league/${group?.id}`);
     //     }
     // }, [group, router, activeSlip, currentUser]);
 
@@ -283,11 +270,14 @@ const SlipResultsPage = () => {
     }
 
     const isFinalized = isSlipFinal(activeSlip);
-    const slipsTabPath = `/league/${group.id}?tab=slips`;
-    const fallbackPath = fallbackFromQuery ?? `/league/${group.id}?tab=slips${activeSlip.slip_type === "vibe" ? "&mode=vibe" : ""}`;
+    const contestPath = contest?.id
+        ? `/league/${group.id}/contests/${contest.id}`
+        : `/league/${group.id}`;
+    const fallbackPath = fallbackFromQuery ?? contestPath;
     const isCommissioner = group.created_by === currentUser.userId;
     const isCreator = activeSlip.created_by === currentUser.userId;
-    const canDeleteSlip = isCommissioner || isCreator;
+    const isContestManager = contest?.created_by === currentUser.userId;
+    const canDeleteSlip = isCommissioner || isCreator || isContestManager;
     const slipHeader = (
         <div className="space-y-2">
             <h1 className="truncate text-2xl font-semibold text-white sm:text-3xl">
@@ -328,7 +318,7 @@ const SlipResultsPage = () => {
             dispatch(deleteSlipRequest({ slip_id: activeSlip.id }));
         }
         setIsDeleteSlipModalOpen(false);
-        router.replace(slipsTabPath);
+        router.replace(contestPath);
     };
 
     return (

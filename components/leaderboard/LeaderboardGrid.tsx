@@ -8,7 +8,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { ArchiveLeaderboardSlip, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, TierIndex } from "@/lib/interfaces/interfaces";
+import { ArchiveLeaderboardSlip, ContestBadgeAward, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { getGroupTierColor, getGroupTierName, getTierMetaForPick, LEAGUE_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
 import Link from "next/link";
@@ -33,6 +33,7 @@ type Props = {
     hasMore?: boolean;
     loadingMore?: boolean;
     isArchived: boolean;
+    contestName?: string;
 };
 
 const resultMeta = (pick_result?: PickResult) => {
@@ -198,39 +199,47 @@ function mapSlipToPick(user: Leaderboard, slip: leaderboardSlip): Pick {
     };
 }
 
-const RankCell = ({
+const PlayerCell = ({
     rank,
-    isMobile,
-    profile_image,
-    username,
-    user_id,
+    cumulative,
+    badgeBonus,
+    badgeAwards,
+    winLoss,
     currentUserId,
+    user_id,
+    username,
+    profile_image,
+    isMobile,
 }: {
+    username: string;
     rank: number;
-    isMobile: boolean;
-    profile_image: string | undefined;
-    username: string | undefined;
+    cumulative: number;
+    badgeBonus: number;
+    badgeAwards: ContestBadgeAward[];
+    winLoss: { wins: number; losses: number };
     user_id: string;
     currentUserId: string | undefined;
+    profile_image: string | undefined;
+    isMobile: boolean;
 }) => {
     const router = useRouter();
     const [imgError, setImgError] = useState(false);
-    const isCurrentUser = user_id === currentUserId;
     const displayName = username ?? "Member";
     const usernameCopy =
         displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
+    const initials = displayName.slice(0, 2).toUpperCase();
+    const isCurrentUser = user_id === currentUserId;
     const profileImg = generateProfileImageUrl(profile_image);
-    const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
+    const imageSize = isMobile ? "h-8 w-8" : "h-9 w-9";
 
     const avatarSize = isMobile
-        ? `h-8 w-8 text-[9px] ${isCurrentUser ? "ring-[1.5px]" : "ring-1"} ring-offset-1`
-        : `h-14 w-14 text-[13px] ${isCurrentUser ? "ring-[3.5px]" : "ring-[2.5px]"} ring-offset-[3px]`;
-    const badgeSize = isMobile
-        ? "h-[18px] w-[18px] text-[9px]"
-        : "h-[28px] w-[28px] text-[12px]";
+        ? `h-8 w-8 text-[5px] ${isCurrentUser ? "ring-[0.5px]" : "ring-0.5"} ring-offset-1`
+        : `h-9 w-9 text-[10px] ${isCurrentUser ? "ring-[1px]" : "ring-[1px]"} ring-offset-[2px]`;
     const avatarTone = isCurrentUser
-        ? "bg-sky-500/[0.14] text-sky-50 ring-sky-200/80 shadow-[0_0_20px_rgba(125,211,252,0.22)]"
+        ? "bg-sky-500/[0.10] text-sky-50 ring-sky-200/80 shadow-[0_0_16px_rgba(125,211,252,0.2)]"
         : "bg-white/[0.08] text-slate-100 ring-white/20";
+    const pointsTone =
+        cumulative < 0 ? "text-rose-300" : cumulative > 0 ? "text-emerald-300" : "text-slate-200";
 
     const hasValidImage =
         profile_image && !imgError;
@@ -247,91 +256,241 @@ const RankCell = ({
     );
 
     return (
-        < div className="flex w-full min-w-0 flex-col items-start gap-1 pt-[8px] md:gap-1.5 md:pt-[10px]" >
-            <div className="relative inline-flex">
-                <button
-                    className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
-                    onClick={() => handleViewProfile(user_id)}
-                    disabled={currentUserId === user_id}
-                >
-                    {profileImg && hasValidImage ? (
-                        <Image
-                            src={profileImg}
-                            alt="Profile image"
-                            width={56}
-                            height={56}
-                            className={`tracking-wide rounded-full object-cover ${imageSize}`}
-                            draggable={false}
-                            onDragStart={(e) => e.preventDefault()}
-                            unoptimized
-                            onError={() => setImgError(true)}
-                        />
-                    ) : (
-                        <div className="flex items-center justify-center text-white/80 text-[12px] sm:text-[18px]" >
-                            <span>{userInitial}</span>
-                        </div>
-                    )}
-                </button>
+        <div className="flex h-full w-full min-w-0 flex-col justify-center gap-2.5 md:gap-3">
+            <div className="flex min-w-0 items-center gap-2">
                 <div
-                    className={`absolute -bottom-1 -right-1 flex items-center justify-center rounded-full border border-white/20 bg-black font-semibold text-slate-100 shadow-sm ${badgeSize}`}
+                    className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase ring-1 ring-offset-1 ring-offset-black md:h-9 md:w-9 md:text-[11px] ${avatarTone}`}
                 >
-                    {rank}
+                    <button
+                        className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
+                        onClick={() => handleViewProfile(user_id)}
+                        disabled={currentUserId === user_id}
+                    >
+                        {profileImg && hasValidImage ? (
+                            <Image
+                                src={profileImg}
+                                alt="Profile image"
+                                width={52}
+                                height={52}
+                                className={`tracking-wide rounded-full object-cover ${imageSize}`}
+                                draggable={false}
+                                onDragStart={(e) => e.preventDefault()}
+                                unoptimized
+                                onError={() => setImgError(true)}
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center text-white/80 text-[10px] sm:text-[12px]" >
+                                <span>{userInitial}</span>
+                            </div>
+                        )}
+                    </button>
+                    <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/20 bg-black px-1 text-[8px] font-semibold text-slate-100 shadow-sm md:h-[18px] md:min-w-[18px] md:text-[9px]">
+                        {rank}
+                    </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        <span
+                            className="truncate text-[11px] font-semibold text-white md:text-sm"
+                            title={displayName}
+                        >
+                            {usernameCopy}
+                        </span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
+                        <span className={pointsTone}>
+                            {cumulative}
+                            <span className="text-[6px] md:text-[10px] ml-0.5 text-slate-400">pts</span>
+                        </span>
+                        <span className="text-[6px] md:text-[10px]">
+                            {winLoss.wins}-{winLoss.losses}
+                        </span>
+                        {badgeBonus > 0 && (
+                            <span className="text-[6px] md:text-[10px] text-sky-200">+{badgeBonus} badge pts</span>
+                        )}
+                    </div>
                 </div>
             </div>
-            <div className="flex max-w-full items-center gap-1">
-                <span
-                    className="max-w-full truncate text-left text-[9px] font-medium text-slate-400 md:text-[11px]"
-                    title={username}
-                >
-                    {usernameCopy}
-                </span>
+            <div className="min-w-0 rounded-md border border-white/10 bg-black/25 px-1.5 py-1">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500 md:text-[9px]">
+                        badges
+                    </span>
+                    {badgeAwards.length > 0 && (
+                        <span className="text-[8px] font-semibold uppercase tracking-wide text-sky-200 md:text-[9px]">
+                            {badgeAwards.length}
+                        </span>
+                    )}
+                </div>
+                <div className="scrollbar-hide mt-1 flex min-w-0 gap-1 overflow-x-auto whitespace-nowrap">
+                    {badgeAwards.length > 0 ? (
+                        badgeAwards.map((award) => (
+                            <span
+                                key={award.definition.id}
+                                aria-label={`${award.definition.name}: ${award.valueLabel}, +${award.points} points`}
+                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border bg-black/40 text-[7px] font-semibold uppercase leading-none md:h-6 md:w-6 md:text-[8px] ${award.definition.display.borderClass} ${award.definition.display.toneClass}`}
+                                title={`${award.definition.name}: ${award.valueLabel}, +${award.points} pts`}
+                            >
+                                {award.definition.display.icon.slice(0, 2)}
+                            </span>
+                        ))
+                    ) : (
+                        <span className="text-[9px] font-medium text-slate-500 md:text-[10px]">
+                            No badges
+                        </span>
+                    )}
+                </div>
             </div>
-        </div >
-    );
-};
-
-const PlayerCard = ({
-    cumulative,
-    winLoss = { losses: 0, wins: 0 },
-    isMobile,
-}: {
-    cumulative: number;
-    winLoss: { wins: number; losses: number };
-    isMobile: boolean;
-}) => {
-    const pointsTone =
-        cumulative < 0 ? "text-rose-300" : cumulative > 0 ? "text-emerald-300" : "text-slate-200";
-
-    return (
-        <div className="flex h-full w-full min-w-0 items-start">
-            {isMobile ? (
-                <div className="flex w-full min-w-0 flex-col items-start gap-1 pt-0.5">
-                    <span className={`text-xs font-semibold ${pointsTone}`}>
-                        {cumulative}
-                        <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">
-                            pts
-                        </span>
-                    </span>
-                    <span className="text-[10px] font-semibold tracking-wide text-gray-300">
-                        {winLoss.wins} - {winLoss.losses}
-                    </span>
-                </div>
-            ) : (
-                <div className="relative flex w-full min-w-0 flex-col items-start gap-1.5 md:gap-2">
-                    <span className={`text-lg font-semibold ${pointsTone} md:text-2xl`}>
-                        {cumulative}
-                        <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-gray-300 md:text-sm">
-                            pts
-                        </span>
-                    </span>
-                    <span className="text-[11px] font-semibold tracking-wide text-gray-300 md:text-xs">
-                        {winLoss.wins} - {winLoss.losses}
-                    </span>
-                </div>
-            )}
         </div>
     );
 };
+
+// const RankCell = ({
+//     rank,
+//     isMobile,
+//     profile_image,
+//     username,
+//     user_id,
+//     currentUserId,
+// }: {
+//     rank: number;
+//     isMobile: boolean;
+//     profile_image: string | undefined;
+//     username: string | undefined;
+//     user_id: string;
+//     currentUserId: string | undefined;
+// }) => {
+//     const router = useRouter();
+//     const [imgError, setImgError] = useState(false);
+//     const isCurrentUser = user_id === currentUserId;
+//     const displayName = username ?? "Member";
+//     const usernameCopy =
+//         displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
+//     const profileImg = generateProfileImageUrl(profile_image);
+//     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
+
+//     const avatarSize = isMobile
+//         ? `h-8 w-8 text-[9px] ${isCurrentUser ? "ring-[1.5px]" : "ring-1"} ring-offset-1`
+//         : `h-14 w-14 text-[13px] ${isCurrentUser ? "ring-[3.5px]" : "ring-[2.5px]"} ring-offset-[3px]`;
+//     const badgeSize = isMobile
+//         ? "h-[18px] w-[18px] text-[9px]"
+//         : "h-[28px] w-[28px] text-[12px]";
+//     const avatarTone = isCurrentUser
+//         ? "bg-sky-500/[0.14] text-sky-50 ring-sky-200/80 shadow-[0_0_20px_rgba(125,211,252,0.22)]"
+//         : "bg-white/[0.08] text-slate-100 ring-white/20";
+
+//     const hasValidImage =
+//         profile_image && !imgError;
+
+//     const userInitial = getMemberInitials(displayName);
+
+//     const handleViewProfile = useCallback(
+//         (userId: string) => {
+//             if (currentUserId && userId) {
+//                 router.push(getProfilePath(userId, currentUserId));
+//             }
+//         },
+//         [currentUserId, router]
+//     );
+
+//     return (
+//         < div className="flex w-full min-w-0 flex-col items-start gap-1 pt-[8px] md:gap-1.5 md:pt-[10px]" >
+//             <div className="relative inline-flex">
+//                 <button
+//                     className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
+//                     onClick={() => handleViewProfile(user_id)}
+//                     disabled={currentUserId === user_id}
+//                 >
+//                     {profileImg && hasValidImage ? (
+//                         <Image
+//                             src={profileImg}
+//                             alt="Profile image"
+//                             width={56}
+//                             height={56}
+//                             className={`tracking-wide rounded-full object-cover ${imageSize}`}
+//                             draggable={false}
+//                             onDragStart={(e) => e.preventDefault()}
+//                             unoptimized
+//                             onError={() => setImgError(true)}
+//                         />
+//                     ) : (
+//                         <div className="flex items-center justify-center text-white/80 text-[12px] sm:text-[18px]" >
+//                             <span>{userInitial}</span>
+//                         </div>
+//                     )}
+//                 </button>
+//                 <div
+//                     className={`absolute -bottom-1 -right-1 flex items-center justify-center rounded-full border border-white/20 bg-black font-semibold text-slate-100 shadow-sm ${badgeSize}`}
+//                 >
+//                     {rank}
+//                 </div>
+//             </div>
+//             <div className="flex max-w-full items-center gap-1">
+//                 <span
+//                     className="max-w-full truncate text-left text-[9px] font-medium text-slate-400 md:text-[11px]"
+//                     title={username}
+//                 >
+//                     {usernameCopy}
+//                 </span>
+//             </div>
+//         </div >
+//     );
+// };
+
+// const PlayerCard = ({
+//     cumulative,
+//     badgeBonus,
+//     winLoss = { losses: 0, wins: 0 },
+//     isMobile,
+// }: {
+//     cumulative: number;
+//     badgeBonus: number;
+//     winLoss: { wins: number; losses: number };
+//     isMobile: boolean;
+// }) => {
+//     const pointsTone =
+//         cumulative < 0 ? "text-rose-300" : cumulative > 0 ? "text-emerald-300" : "text-slate-200";
+
+//     return (
+//         <div className="flex h-full w-full min-w-0 items-start">
+//             {isMobile ? (
+//                 <div className="flex w-full min-w-0 flex-col items-start gap-1 pt-0.5">
+//                     <span className={`text-xs font-semibold ${pointsTone}`}>
+//                         {cumulative}
+//                         <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">
+//                             pts
+//                         </span>
+//                     </span>
+//                     <span className="text-[10px] font-semibold tracking-wide text-gray-300">
+//                         {winLoss.wins} - {winLoss.losses}
+//                     </span>
+//                     {badgeBonus > 0 && (
+//                         <span className="text-[9px] font-semibold uppercase tracking-wide text-sky-200">
+//                             +{badgeBonus} badge
+//                         </span>
+//                     )}
+//                 </div>
+//             ) : (
+//                 <div className="relative flex w-full min-w-0 flex-col items-start gap-1.5 md:gap-2">
+//                     <span className={`text-lg font-semibold ${pointsTone} md:text-2xl`}>
+//                         {cumulative}
+//                         <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-gray-300 md:text-sm">
+//                             pts
+//                         </span>
+//                     </span>
+//                     <span className="text-[11px] font-semibold tracking-wide text-gray-300 md:text-xs">
+//                         {winLoss.wins} - {winLoss.losses}
+//                     </span>
+//                     {badgeBonus > 0 && (
+//                         <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-200 md:text-[11px]">
+//                             +{badgeBonus} badge pts
+//                         </span>
+//                     )}
+//                 </div>
+//             )}
+//         </div>
+//     );
+// };
 
 const SlipCellCard = ({
     pick,
@@ -370,17 +529,17 @@ const SlipCellCard = ({
     if (!hasPick) {
         if (isOwnerCell && isOpen) {
             return (
-                <div className="flex h-full w-full flex-col items-start gap-8">
-                    <p className="text-[10px] leading-snug text-white md:text-sm">
+                <div className="flex h-full w-full items-center justify-between gap-2 rounded-md border border-dashed border-sky-400/30 bg-white/[0.03] px-2 py-2">
+                    <p className="min-w-0 text-[10px] leading-snug text-white md:text-xs">
                         {emptyCopy}
                     </p>
                     <Link
                         href={`/league/${groupId}/slips/${slip.id}`}
-                        className="mt-auto flex w-full items-center justify-between rounded-md border border-dashed border-sky-400/40 bg-white/[0.04] px-4 py-3 text-left text-[11px] font-semibold text-sky-100 shadow-sm transition hover:border-emerald-300/70 md:text-xs"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300/40 bg-sky-500/10 px-2 py-1.5 text-[10px] font-semibold text-sky-100 shadow-sm transition hover:border-sky-300/70 md:text-xs"
                     >
                         <span>Add your pick</span>
                         <span
-                            className="flex h-8 w-8 items-center justify-center rounded-full border border-sky-300/40 bg-sky-500/10 text-lg text-sky-100"
+                            className="flex h-4 w-4 items-center justify-center rounded-full border border-sky-300/40 text-xs text-sky-100"
                             aria-hidden
                         >
                             +
@@ -391,7 +550,7 @@ const SlipCellCard = ({
         }
 
         return (
-            <p className="text-[10px] leading-snug text-white md:text-sm">
+            <p className="flex h-full w-full items-center rounded-md border border-white/10 bg-white/[0.03] px-2 text-[10px] leading-snug text-white md:text-xs">
                 {emptyCopy}
             </p>
         );
@@ -433,7 +592,7 @@ const SlipCellCard = ({
     const pointsDisplay = formatPointsValue(pointsValue);
     const pointsLabel = resultPoints !== null ? "Points" : isPending ? "Potential" : "Points";
     const pointsLabelText = pointsLabel.toLowerCase();
-    const showPointsSuffix = pointsDisplay !== "—";
+    const showPointsSuffix = pointsDisplay !== EM_DASH;
     const tierCardStyle = tierMeta
         ? { backgroundImage: getGroupTierGradient(tierMeta.tier) }
         : undefined;
@@ -452,74 +611,69 @@ const SlipCellCard = ({
 
     return (
         <div
-            className="relative flex h-full w-full overflow-hidden p-1 md:p-0"
+            className="relative flex h-full w-full"
         >
-            <div className="flex h-full w-full flex-col gap-1 md:flex-row md:items-stretch md:gap-2">
-                <div className={`order-1 flex min-h-0 w-full flex-1 flex-col justify-between rounded-md border p-1.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.4)] md:order-2 md:h-full md:rounded-md md:p-3 md:shadow-[inset_0_0_16px_rgba(15,23,42,0.6)] ${resultCardTone}`}>
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                            <span className="block text-[7px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
-                                {sourceTabLabel}
-                            </span>
-                            <p
-                                className={`mt-1 min-w-0 text-[11px] font-semibold leading-snug drop-shadow-[0_1px_4px_rgba(226,232,240,0.25)] line-clamp-2 md:line-clamp-none md:text-base ${accent}`}
-                                title={displayPick}
-                            >
-                                {pickLine}
-                            </p>
-                        </div>
+            <div className="grid h-full w-full min-w-0 grid-cols-[minmax(0,1fr)_66px] gap-1 md:grid-cols-[minmax(0,1fr)_116px] md:gap-2">
+                <div className={`flex min-h-0 min-w-0 flex-col justify-between rounded-md border border-white/10 bg-white/[0.035] px-2 py-1.5 shadow-[inset_0_0_12px_rgba(15,23,42,0.45)] md:px-3 md:py-2 ${resultCardTone}`}>
+                    <div className="flex min-w-0 items-start justify-between gap-2">
+                        <span className="shrink-0 text-[8px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
+                            {sourceTabLabel}
+                        </span>
                         <span
-                            className={`shrink-0 pr-1 text-[11px] font-semibold md:pr-2 md:text-sm ${accent}`}
+                            className={`shrink-0 text-[10px] font-semibold text-slate-100 md:text-xs ${accent}`}
                         >
                             {oddsCopy}
                         </span>
                     </div>
-                    <div className="text-[10px] md:text-xs">
-                        <span className="text-[7px] font-semibold uppercase tracking-wide text-slate-400 md:text-xs">
-                            matchup
-                        </span>
+                    <p
+                        className={`line-clamp-2 min-w-0 break-words text-[10px] font-semibold leading-tight text-slate-100 md:text-sm ${accent}`}
+                        title={displayPick}
+                    >
+                        {pickLine}
+                    </p>
+                    <div className="flex min-w-0 items-center gap-1 text-[8px] md:text-[10px]">
                         {metaLabel ? (
-                            <span className="mt-0.5 block truncate text-[7px] text-slate-200 md:text-xs">
+                            <span className="min-w-0 truncate text-slate-200">
                                 {metaLabel}
                             </span>
                         ) : (
-                            <span className="mt-0.5 block text-[7px] text-slate-500 md:text-xs">—</span>
+                            <span className="text-slate-500">{EM_DASH}</span>
                         )}
                         {legsCopy && (
-                            <span className="mt-1 block text-[7px] font-semibold uppercase tracking-wide text-slate-500 md:text-[10px]">
+                            <span className="shrink-0 font-semibold uppercase tracking-wide text-slate-500">
                                 {legsCopy}
                             </span>
                         )}
                     </div>
                 </div>
 
-                <div className="order-2 flex w-full gap-1 text-left md:order-1 md:h-full md:w-[26%] md:min-w-[96px] md:max-w-[140px] md:flex-col md:justify-between md:border-r md:border-white/10 md:pr-2 md:gap-2">
+                <div className="grid min-h-0 min-w-0 grid-rows-2 gap-1 text-left">
                     <div
-                        className={`flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-white/10 px-1.5 py-1 shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] md:rounded-md md:px-2 md:py-2 md:shadow-[inset_0_0_16px_rgba(15,23,42,0.35)] ${tierCardTone}`}
+                        className={`flex min-h-0 min-w-0 flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] md:px-2 ${tierCardTone}`}
                         style={tierCardStyle}
                     >
-                        <span className="block truncate text-[11px] font-semibold text-white md:text-base">
+                        <span className="block truncate text-[10px] font-semibold leading-tight text-white md:text-[13px]">
                             {tierName}
                         </span>
-                        <span className="mt-0.5 block truncate text-[9px] text-slate-100/70 md:text-[10px]">
+                        <span className="block truncate text-[8px] leading-tight text-slate-100/70 md:text-[10px]">
                             {tierRange}
                         </span>
                     </div>
                     <div
-                        className={`flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border px-1.5 py-1 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:rounded-md md:px-2 md:py-1.5 md:leading-tight md:shadow-[inset_0_0_12px_rgba(15,23,42,0.25)] ${resultCardTone}`}
+                        className={`flex min-h-0 min-w-0 flex-col justify-center overflow-hidden rounded-md border px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:px-2 ${resultCardTone}`}
                     >
-                        <span className="block truncate text-[9px] font-semibold uppercase tracking-wide text-slate-100/80 md:text-[10px]">
+                        <span className="block truncate text-[8px] font-semibold uppercase tracking-wide text-slate-100/75 md:text-[9px]">
                             {pointsLabelText}
                         </span>
-                        <div className="text-[11px] font-semibold md:text-base">
+                        <div className="text-[10px] font-semibold leading-tight md:text-[13px]">
                             {pointsDisplay}
                             {showPointsSuffix && (
-                                <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-slate-100/70">
+                                <span className="ml-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
                                     pts
                                 </span>
                             )}
                         </div>
-                        <span className="block truncate text-[9px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[10px]">
+                        <span className="block truncate text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
                             {!isFinal ? "Pending" : result.label}
                         </span>
                     </div>
@@ -541,6 +695,7 @@ export const LeaderboardGrid = ({
     hasMore,
     loadingMore,
     isArchived,
+    contestName,
 }: Props) => {
     const isMobile = useIsMobile();
     const scrollerRef = useRef<HTMLDivElement>(null);
@@ -568,21 +723,22 @@ export const LeaderboardGrid = ({
         return () => observer.disconnect();
     }, [isMobile]);
 
-    const MOBILE_PLAYER_COL_RATIO = 0.12;
-    const DESKTOP_PLAYER_COL_RATIO = 0.14;
-    const RANK_COL_W = useMemo(() => (isMobile ? 60 : 96), [isMobile]);
-    const ROW_H = isMobile ? 160 : 184;
-    const HEADER_H = isMobile ? 50 : 62;
+    const MOBILE_PLAYER_COL_RATIO = 0.3;
+    const DESKTOP_PLAYER_COL_RATIO = 0.165;
+    const RANK_COL_W = useMemo(() => (isMobile ? 108 : 158), [isMobile]);
+    const ROW_H = isMobile ? 112 : 132;
+    const HEADER_H = isMobile ? 44 : 48;
     const SLIP_GAP = 0;
     const effectiveWidth = containerWidth ?? 0;
 
     const PLAYER_CARD_W = useMemo(() => {
-        if (!effectiveWidth) return isMobile ? 72 : 130; // safe desktop fallback
+        if (!effectiveWidth) return isMobile ? 108 : 158; // safe desktop fallback
 
         const ratio = isMobile ? MOBILE_PLAYER_COL_RATIO : DESKTOP_PLAYER_COL_RATIO;
         const raw = Math.round(effectiveWidth * ratio);
-        const min = isMobile ? 72 : 130;
-        const max = Math.round(effectiveWidth * 0.18);
+        const min = isMobile ? 108 : 158;
+        // const max = Math.round(effectiveWidth * 0.18);
+        const max = isMobile ? 123 : 210;
 
         return Math.max(Math.min(raw, max), min);
     }, [effectiveWidth, isMobile]);
@@ -658,7 +814,7 @@ export const LeaderboardGrid = ({
         scrollerRef.current?.scrollTo({ left: 0, behavior: "auto" });
     }, [leaderboardId]);
 
-    const label = leaderboardName ?? "Leaderboard";
+    const label = contestName ?? leaderboardName ?? "Contest";
 
     const showStandingsNote = leaderboardAllSlips.length > 0 && gradedSlips.length === 0;
 
@@ -684,18 +840,18 @@ export const LeaderboardGrid = ({
 
     return (
         <div ref={containerRef} className="space-y-3 opacity-100 transition-opacity duration-300">
-            {showStandingsNote && (
-                <div className="rounded-md border border-white/10 bg-black/50 px-4 py-2 text-xs text-gray-400">
-                    Standings count finalized slips only.
-                </div>
-            )}
             <div className="rounded-md border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] overflow-hidden">
                 <div
                     ref={scrollerRef}
-                    className={`leaderboard-scroll w-full min-w-0 -m-[2px] p-[2px] ${leaderboardAllSlips.length > 1
-                        ? "overflow-x-auto overscroll-x-contain"
+                    className={`leaderboard-scroll w-full min-w-0 ${leaderboardAllSlips.length > 1
+                        ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
                         : "overflow-x-hidden"
                         }`}
+                    style={
+                        leaderboardAllSlips.length > 1
+                            ? { scrollPaddingLeft: STICKY_WIDTH }
+                            : undefined
+                    }
                 >
                     <div className="min-w-max text-xs text-white md:text-sm">
                         <div className="flex">
@@ -707,20 +863,22 @@ export const LeaderboardGrid = ({
                                 }}
                             >
                                 <div
-                                    className="flex items-center border-b border-white/10 px-1.5 text-[10px] uppercase tracking-wide text-gray-400 box-border md:px-4 md:text-xs"
+                                    className="box-border flex items-center border-b border-white/10 px-2 text-[9px] uppercase tracking-wide text-gray-500 md:px-3 md:text-[10px]"
                                     style={{ height: HEADER_H }}
-                                />
-                                {leaderboard.map(({ cumulative_points, profile_image, username, user_id, win, loss }, rowIndex) => {
+                                >
+                                    <span>Player</span>
+                                </div>
+                                {leaderboard.map(({ cumulative_points, badge_points, badge_awards, profile_image, username, user_id, win, loss }, rowIndex) => {
                                     const rowBand = "bg-transparent";
                                     const isLastRow = rowIndex === leaderboard.length - 1;
                                     return (
                                         <div
                                             key={user_id}
-                                            className={`relative flex items-center overflow-hidden border-white/10 px-1.5 pt-3 pb-2 md:px-4 md:pt-4 md:pb-3 ${rowBand} ${isLastRow ? "border-b-0" : "border-b"
+                                            className={`relative flex items-center border-white/10 px-2 py-2 md:px-3 ${rowBand} ${isLastRow ? "border-b-0" : "border-b"
                                                 }`}
                                             style={{ height: ROW_H }}
                                         >
-                                            <div className="flex h-full w-full min-w-0 flex-col justify-center gap-[20px] pl-2 md:gap-2 md:pl-3">
+                                            {/* <div className="flex h-full w-full min-w-0 flex-col justify-center gap-[20px] pl-2 md:gap-2 md:pl-3">
                                                 <RankCell
                                                     rank={rowIndex + 1}
                                                     isMobile={isMobile}
@@ -731,10 +889,24 @@ export const LeaderboardGrid = ({
                                                 />
                                                 <PlayerCard
                                                     cumulative={cumulative_points}
+                                                    badgeBonus={badge_points}
                                                     winLoss={{ losses: loss, wins: win }}
                                                     isMobile={isMobile}
                                                 />
-                                            </div>
+                                            </div> */}
+                                            <PlayerCell
+                                                key={user_id}
+                                                username={username ?? "Member"}
+                                                rank={rowIndex + 1}
+                                                cumulative={cumulative_points}
+                                                badgeBonus={badge_points}
+                                                badgeAwards={badge_awards}
+                                                winLoss={{ losses: loss, wins: win }}
+                                                user_id={user_id}
+                                                currentUserId={currentUserId}
+                                                isMobile={isMobile}
+                                                profile_image={profile_image}
+                                            />
                                         </div>
                                     );
                                 })}
@@ -759,44 +931,42 @@ export const LeaderboardGrid = ({
                                         return (
                                             <div
                                                 key={slip.id}
-                                                className={`relative flex-shrink-0 overflow-hidden border-white/10 box-border ${slipBg} ${isLastSlip ? "border-r-0" : "border-r"
+                                                className={`relative box-border flex-shrink-0 snap-start overflow-hidden border-white/10 ${slipBg} ${isLastSlip ? "border-r-0" : "border-r"
                                                     }`}
                                                 style={{
                                                     width: `${SLIP_WIDTH}px`,
                                                 }}
                                             >
                                                 <div
-                                                    className={`flex items-center justify-between gap-3 border-b border-white/10 px-3 py-3 text-[10px] uppercase tracking-wide box-border md:px-5 md:text-xs ${slipTone}`}
+                                                    className={`box-border flex flex-col justify-center gap-0.5 border-b border-white/10 px-2 py-1.5 text-[9px] uppercase tracking-wide md:px-3 md:text-[10px] ${slipTone}`}
                                                     style={{ height: HEADER_H }}
                                                 >
-                                                    <div className="flex min-w-0 flex-col leading-tight">
+                                                    <div className="flex min-w-0 items-center justify-between gap-2 leading-tight">
                                                         <span
-                                                            className={`allow-caps truncate text-[14px] font-semibold md:text-[19px] ${isFinal ? "text-white" : "text-slate-200"}`}
+                                                            className={`allow-caps min-w-0 truncate text-[12px] font-semibold leading-tight md:text-base md:leading-tight ${isFinal ? "text-white" : "text-slate-200"}`}
                                                             title={`${slip.name} (leaderboard slip)`}
                                                         >
                                                             {slip.name}
                                                         </span>
-                                                        {!isFinal && (
-                                                            <span className="text-[10px] font-medium text-slate-500">
-                                                                Counts when finalized
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex shrink-0 flex-col items-end leading-tight">
-                                                        <span className={`text-[10px] font-semibold uppercase tracking-wide md:text-xs ${statusMeta.tone}`}>
+                                                        <span className={`shrink-0 text-[9px] font-semibold uppercase leading-tight tracking-wide md:text-[10px] ${statusMeta.tone}`}>
                                                             {statusMeta.label}
                                                         </span>
-                                                        {groupComboOddsSummary && (
-                                                            <span className="mt-1 inline-flex items-center justify-end whitespace-nowrap text-[8px] font-semibold uppercase tracking-wide text-cyan-200 md:text-[10px]">
-                                                                <span>
-                                                                    League Combo+ odds:
-                                                                    <span className="ml-1 text-cyan-100">
-                                                                        {groupComboOddsSummary.label}
-                                                                    </span>
-                                                                </span>
-                                                            </span>
-                                                        )}
                                                     </div>
+                                                    <span
+                                                        className={`truncate text-left text-[7px] font-semibold uppercase leading-tight tracking-wide md:text-[9px] ${groupComboOddsSummary ? "text-cyan-200" : "invisible"
+                                                            }`}
+                                                    >
+                                                        {groupComboOddsSummary ? (
+                                                            <>
+                                                                League Combo+ odds:
+                                                                <span className="ml-1 text-cyan-100">
+                                                                    {groupComboOddsSummary.label}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            "League Combo+ odds: pending"
+                                                        )}
+                                                    </span>
                                                 </div>
 
                                                 {leaderboard.map(({ user_id, slips }, rowIndex) => {
@@ -812,7 +982,7 @@ export const LeaderboardGrid = ({
                                                     return (
                                                         <div
                                                             key={`${user_id}-${slip.id}`}
-                                                            className={`border-white/10 px-3 py-2 md:px-5 md:py-3 ${rowBand} ${isLastRow ? "border-b-0" : "border-b"
+                                                            className={`border-white/10 px-2 py-2 md:px-3 ${rowBand} ${isLastRow ? "border-b-0" : "border-b"
                                                                 }`}
                                                             style={{ height: ROW_H }}
                                                         >
@@ -855,6 +1025,12 @@ export const LeaderboardGrid = ({
                             "show all members"
                         )}
                     </button>
+                </div>
+            )}
+
+            {showStandingsNote && (
+                <div className="rounded-md border border-white/10 bg-black/50 px-4 py-2 text-xs text-gray-400">
+                    Standings count finalized slips only.
                 </div>
             )}
         </div>

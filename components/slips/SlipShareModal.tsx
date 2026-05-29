@@ -22,11 +22,12 @@ type SlipShareModalProps = {
 const EM_DASH = "\u2014";
 const PLACEHOLDER = EM_DASH;
 
-const deepJaggedStyle = {
+const deepJaggedStyle: CSSProperties &
+    Record<"--jagged-valley" | "--jagged-tip", string> = {
     clipPath: JAGGED_CLIP_PATH,
     "--jagged-valley": "34px",
     "--jagged-tip": "0px",
-} as CSSProperties;
+};
 
 const PICK_RESULT_ACCENTS = {
     win: {

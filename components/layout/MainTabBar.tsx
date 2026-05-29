@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { JSX } from "react";
+import type { ReactElement } from "react";
 import { SlipIcon } from "../ui/SvgIcons";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/interfaces/interfaces";
@@ -16,7 +16,7 @@ type TabDefinition = {
     id: string;
     label: string;
     href: string;
-    icon: (props: TabIconProps) => JSX.Element;
+    icon: (props: TabIconProps) => ReactElement;
     matchers: string[];
 };
 

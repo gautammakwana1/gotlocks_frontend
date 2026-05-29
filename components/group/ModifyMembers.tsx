@@ -470,7 +470,7 @@ export const ModifyMembers = ({
                         type="button"
                         onClick={handleLoadMore}
                         disabled={loadingMembers}
-                        className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-6 py-2 text-xs font-semibold uppercase tracking-widest text-emerald-100 transition hover:border-emerald-400/60 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full border border-sky-500/30 bg-sky-500/10 px-6 py-2 text-xs font-semibold tracking-widest text-sky-100 transition hover:border-sky-400/60 hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {loadingMembers ? "Loading..." : "Show more members"}
                     </button>

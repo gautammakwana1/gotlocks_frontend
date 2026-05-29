@@ -23,7 +23,6 @@ import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, Leagu
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { clearNcaabPickValidateMessage, fetchDraftkingsNCAABOddsRequest, fetchFanduelNCAABOddsRequest, fetchNCAABScheduleByTimezoneRequest, fetchNCAABScheduleRequest, ncaabPickValidateRequest } from "@/lib/redux/slices/ncaabSlice";
-import FootballAnimation from "../../animations/FootballAnimation";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
 import { CachedReviewData, ReviewSheetState } from "../core/reviewSheetState";

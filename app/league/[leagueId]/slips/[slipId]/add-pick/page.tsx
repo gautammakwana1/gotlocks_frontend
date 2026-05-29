@@ -7,28 +7,9 @@ import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { BuiltPickPayload, Group, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { createPickRequest } from "@/lib/redux/slices/pickSlice";
-import { GroupDataShape } from "../../../page";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage } from "@/lib/slips/pickConflicts";
-
-const hasNestedGroup = (
-    value: GroupDataShape
-): value is { group?: Group | null } => {
-    return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-    if (!data) {
-        return null;
-    }
-
-    if (hasNestedGroup(data)) {
-        return data.group ?? null;
-    }
-
-    return data;
-};
 
 const DEFAULT_SPORT = "NFL";
 
@@ -40,8 +21,7 @@ const SlipAddPickPage = () => {
     const currentUser = useCurrentUser();
     const [isReturningToSlip, setIsReturningToSlip] = useState(false);
 
-    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+    const { group } = useSelector((state: GroupSelector) => state.group);
     const { slips } = useSelector((state: RootState) => state.slip);
     const { picks: pickList } = useSelector((state: RootState) => state.pick);
 
@@ -93,7 +73,7 @@ const SlipAddPickPage = () => {
             return;
         }
         if (!slip) {
-            router.replace(`/league/${group.id}?tab=slips`);
+            router.replace(`/league/${group.id}`);
             return;
         }
         if (isSlipFinal(slip)) {

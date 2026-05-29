@@ -38,7 +38,7 @@ import {
     withMatchupDescription,
 } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, LeagueObject, OddsData, OddsEvent, OddsObject, Pick, PickLeg, PickSelectionMeta, RootState, Slip, SoccerOdds, SoccerSchedules, SoccerSchedulesWithOdds, TeamsObject, TierIndex } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, LeagueObject, OddsData, OddsEvent, OddsObject, Pick, PickLeg, PickSelectionMeta, RootState, Slip, SoccerOdds, SoccerSchedules, SoccerSchedulesWithOdds, TierIndex } from "@/lib/interfaces/interfaces";
 import { useIsMobile } from "@/lib/utils/helpers";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
@@ -2451,7 +2451,8 @@ export const SoccerPickBuilder = ({
                 }
 
                 if (market === "Team Total Goals") {
-                    return [
+                    const teamSections: MarketSection[] = [];
+                    [
                         {
                             teamName: activeGame.awayTeam,
                             teamId: activeGame.awayTeamId,
@@ -2460,19 +2461,18 @@ export const SoccerPickBuilder = ({
                             teamName: activeGame.homeTeam,
                             teamId: activeGame.homeTeamId,
                         },
-                    ]
-                        .map(({ teamName, teamId }): TotalMarketSection | null => {
-                            const teamOdds = marketOdds.filter((odd) => matchesTeamName(odd, teamName));
-                            if (teamOdds.length === 0) return null;
-                            return {
-                                key: `${activeGame.id}:${market}:${teamId}`,
-                                title: `${teamName} Total Goals`,
-                                kind: "total",
-                                lineData: buildTotalLineData(teamOdds),
-                                emptyMessage: `No ${teamName} team total lines available for this matchup yet.`,
-                            };
-                        })
-                        .filter((section): section is TotalMarketSection => section !== null);
+                    ].forEach(({ teamName, teamId }) => {
+                        const teamOdds = marketOdds.filter((odd) => matchesTeamName(odd, teamName));
+                        if (teamOdds.length === 0) return;
+                        teamSections.push({
+                            key: `${activeGame.id}:${market}:${teamId}`,
+                            title: `${teamName} Total Goals`,
+                            kind: "total",
+                            lineData: buildTotalLineData(teamOdds),
+                            emptyMessage: `No ${teamName} team total lines available for this matchup yet.`,
+                        } satisfies TotalMarketSection);
+                    });
+                    return teamSections;
                 }
 
                 const rows = marketOdds.map((odd) => {
@@ -2493,7 +2493,7 @@ export const SoccerPickBuilder = ({
                         headerLabel: market.includes("Player") ? "Player" : "Selection",
                         rows,
                     } satisfies StandardMarketSection,
-                ]
+                ];
             })
             .filter((section) =>
                 section.kind === "standard" ? section.rows.length > 0 : true

@@ -56,7 +56,7 @@ export const GLOBAL_TUTORIAL: OnboardingStep[] = [
         mediaNode: <GlobalStep2Animation />,
         mediaAlt: "Rewards",
         title: "How you get rewarded",
-        body: "Winning posts earn XP based on their odds tier. The bolder the call the bigger the XP reward. Losses only mark the post as a loss. Leveling up your profile automatically unlocks more Shop access.",
+        body: "Winning posts earn XP based on their odds tier. The bolder the call the bigger the XP reward. Losses only mark the post as a loss. Leveling up your profile automatically unlocks more Reward Room access.",
     },
     {
         mediaNode: <GlobalStep3Animation />,

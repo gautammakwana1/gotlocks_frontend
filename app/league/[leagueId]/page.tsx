@@ -1,619 +1,188 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, createNewLeaderboardRequest, enableSecondaryLeaderboardRequest, fetchAllLeaderboardsRequest, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardListRequest, fetchGroupByIdRequest, fetchLeaderboardRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest, updateLeaderboardRequest, updateLeaderboardToArchivedRequest } from "@/lib/redux/slices/groupsSlice";
-import { archiveLeaderBoardObject, ArchiveLeaderboardSlip, Group, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
-import { useToast } from "@/lib/state/ToastContext";
-import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeOpenSlipsRequest, fetchAllVibeReviewSlipsRequest, startNewContestRequest } from "@/lib/redux/slices/slipSlice";
-import ModifyMembers from "@/components/group/ModifyMembers";
+import BackButton from "@/components/ui/BackButton";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
-import SlipCategorySection from "@/components/slips/SlipCategorySection";
+import { formatDateTime } from "@/lib/utils/date";
+import { Contest, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
+import { useToast } from "@/lib/state/ToastContext";
+import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { useDispatch, useSelector } from "react-redux";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
+import ModifyMembers from "@/components/group/ModifyMembers";
+import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import ScoringModal from "@/components/modals/ScoringModal";
 import FeedTab from "@/components/group/FeedTab";
-import LeaguePageSkeleton from "@/components/skeletons/leagues/LeaguePageSkeleton";
-import BackButton from "@/components/ui/BackButton";
 import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGroupModal";
-import { PlusIcon, X } from "lucide-react";
-import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
-import { ChatIcon, ChevronIcon, ChevronUpDownIcon, EditIcon, EditPencilIcon, FeedIcon, LeaderboardIcon, MembersIcon, SettingIcon, SlipIcon } from "@/components/ui/SvgIcons";
-import LeaderboardSkeleton from "@/components/skeletons/leagues/LeaderboardSkeleton";
-import SlipsSkeleton from "@/components/skeletons/slips/SlipsSkeleton";
-import LeagueSettingsSkeleton from "@/components/skeletons/leagues/LeagueSettingsSkeleton";
+import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/leagues/LeaguePageSkeleton";
+import GroupChatTab from "@/components/group/GroupChatTab";
 
 interface FormErrors {
   name?: string;
   description?: string;
 }
 
-export type GroupDataShape = Group | { group?: Group | null } | null;
-
-const hasNestedGroup = (
-  value: GroupDataShape
-): value is { group?: Group | null } => {
-  return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-  if (!data) {
-    return null;
-  }
-
-  if (hasNestedGroup(data)) {
-    return data.group ?? null;
-  }
-
-  return data;
-};
-
-const BASE_TABS = [
-  {
-    id: "leaderboard",
-    label: "Leaderboard",
-  },
-  {
-    id: "slips",
-    label: "Slips",
-  },
-  {
-    id: "members",
-    label: "Members",
-  },
-  {
-    id: "chat",
-    label: "Chat",
-  },
-  {
-    id: "feed",
-    label: "Feed",
-  },
-  {
-    id: "settings",
-    label: "League Settings",
-  },
+const TABS = [
+  { id: "contests", label: "Contests" },
+  { id: "members", label: "Members" },
+  { id: "chat", label: "Chat" },
+  { id: "feed", label: "Feed" },
+  { id: "settings", label: "Settings" },
 ] as const;
 
-const archivedLeaderboardDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-const MAX_LEADERBOARD_NAME_LENGTH = 16;
+type TabId = (typeof TABS)[number]["id"];
 
-type PendingLeaderboardAction =
-  | {
-    kind: "archive-secondary";
-    leaderboardId: string;
-    leaderboardName: string;
-  }
-  | {
-    kind: "restart-main";
-    leaderboardId: string;
-    leaderboardName: string;
-  };
-
-const formatArchivedLeaderboardMeta = (board: archiveLeaderBoardObject) => {
-  const archiveTimestamp = board?.leaderboards.archived_at ?? board.created_at;
-  const archiveDate = new Date(archiveTimestamp);
-  const archiveLabel = Number.isNaN(archiveDate.getTime())
-    ? null
-    : archivedLeaderboardDateFormatter.format(archiveDate);
-  const typeLabel = board.leaderboards.isDefault ? "main" : "secondary";
-  return archiveLabel ? `${typeLabel} / ${archiveLabel}` : typeLabel;
+const normalizeTab = (value: string | null, isCommissioner: boolean): TabId => {
+  if (value === "settings") return isCommissioner ? "settings" : "contests";
+  if (value === "members" || value === "chat" || value === "feed") return value;
+  return "contests";
 };
 
-const GroupPage = () => {
+const tabIcon = (tabId: TabId) => {
+  const common = {
+    className: "h-4 w-4",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.7,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (tabId === "contests") {
+    return (
+      <svg viewBox="0 0 24 24" {...common}>
+        <path d="M8 21h8" />
+        <path d="M12 17v4" />
+        <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
+        <path d="M17 6h3v2a3 3 0 0 1-3 3" />
+        <path d="M7 6H4v2a3 3 0 0 0 3 3" />
+      </svg>
+    );
+  }
+  if (tabId === "members") {
+    return (
+      <svg viewBox="0 0 24 24" {...common}>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+        <circle cx="9.5" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    );
+  }
+  if (tabId === "chat") {
+    return (
+      <svg viewBox="0 0 24 24" {...common}>
+        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.6-4.8A4 4 0 0 1 3 14V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" />
+        <path d="M8 9h8M8 13h5" />
+      </svg>
+    );
+  }
+  if (tabId === "feed") {
+    return (
+      <svg viewBox="0 0 24 24" {...common}>
+        <path d="M4 6h16M4 12h12M4 18h9" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" {...common}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19a1.7 1.7 0 0 0-1.88-.34l-.04.02a2 2 0 1 1-2-3.46l.04-.02A1.7 1.7 0 0 0 5.4 14a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3.6a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5.4 7a1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 2.6a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 10.4.9V.8a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15.4 3a1.7 1.7 0 0 0 1.88.34l.04-.02a2 2 0 1 1 2 3.46l-.04.02A1.7 1.7 0 0 0 18.6 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1A1.7 1.7 0 0 0 19.4 15Z" />
+    </svg>
+  );
+};
+
+const contestSportLabels = (contest: Contest) =>
+  contest.sports.length > 1 ? ["Multi"] : contest.sports;
+
+const LeagueDashboardPage = () => {
   const dispatch = useDispatch();
+  const params = useParams<{ leagueId: string }>();
   const router = useRouter();
   const { setToast } = useToast();
   const currentUser = useCurrentUser();
-  const params = useParams();
   const searchParams = useSearchParams();
   const leagueId = params.leagueId as string;
   const fetchedGroupId = useRef<string | null>(null);
-  const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
-  const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slip[]>([]);
-  const [archivedLeaderboardSlipsList, setArchivedLeaderboardSlipsList] = useState<ArchiveLeaderboardSlip[]>([]);
-  const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
-  const [leaderboardPage, setLeaderboardPage] = useState(1);
-
-  type TabId = (typeof BASE_TABS)[number]["id"];
-
-  const iconForTab = (tabId: TabId) => {
-    const commonProps = {
-      className: "h-4 w-4",
-      stroke: "currentColor",
-      fill: "none",
-      strokeWidth: 1.5,
-      "aria-hidden": true,
-    };
-    switch (tabId) {
-      case "leaderboard":
-        return (
-          <LeaderboardIcon {...commonProps} />
-        );
-      case "slips":
-        return (
-          <SlipIcon {...commonProps} />
-        );
-      case "members":
-        return (
-          <MembersIcon />
-        );
-      case "feed":
-        return (
-          <FeedIcon {...commonProps} />
-        );
-      case "chat":
-        return (
-          <ChatIcon {...commonProps} />
-        );
-      case "settings":
-        return (
-          <SettingIcon {...commonProps} />
-        );
-      default:
-        return null;
-    }
-  };
-  const [showScoringModal, setShowScoringModal] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [showEditLeagueModal, setShowEditLeagueModal] = useState(false);
-  const [editLeagueName, setEditLeagueName] = useState("");
-  const [editLeagueDescription, setEditLeagueDescription] = useState("");
-  const [leavingLeague, setLeavingLeague] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
-  const [showCreateSideModal, setShowCreateSideModal] = useState(false);
-  const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
-  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
-  const [sideContestName, setSideContestName] = useState("");
-  const [activeLeaderboardId, setActiveLeaderboardId] = useState<string | null>(null);
-  const [showLeaderboardMenu, setShowLeaderboardMenu] = useState(false);
-  const [archivedLeaderboardId, setArchivedLeaderboardId] = useState<string | null>(null);
-  const [editingLeaderboardId, setEditingLeaderboardId] = useState<string | null>(null);
-  const [leaderboardNameDraft, setLeaderboardNameDraft] = useState("");
-  const [pendingLeaderboardAction, setPendingLeaderboardAction] =
-    useState<PendingLeaderboardAction | null>(null);
-  const [showSecondaryInfo, setShowSecondaryInfo] = useState(false);
-  const [mainLeaderboardDetailsOpen, setMainLeaderboardDetailsOpen] = useState(false);
-  const [secondaryLeaderboardsDetailsOpen, setSecondaryLeaderboardsDetailsOpen] = useState(true);
-  const [showSettingsArchivedLeaderboards, setShowSettingsArchivedLeaderboards] =
-    useState(false);
-  const [showLeaderboardArchivedLeaderboards, setShowLeaderboardArchivedLeaderboards] =
-    useState(false);
-  const [dangerZoneOpen, setDangerZoneOpen] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [slipTab, setSlipTab] = useState<"leaderboard" | "vibe">(() =>
-    searchParams.get("mode") === "vibe" ? "vibe" : "leaderboard"
-  );
-  const [openPage, setOpenPage] = useState(1);
-  const [reviewPage, setReviewPage] = useState(1);
-  const [finalPage, setFinalPage] = useState(1);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [activePage, setActivePage] = useState(1);
+  const [archivedPage, setArchivedPage] = useState(1);
 
   useEffect(() => {
-    setOpenPage(1);
-    setReviewPage(1);
-    setFinalPage(1);
-  }, [slipTab]);
-  const [archiveLeaderboardData, setArchiveLeaderboardData] = useState<Leaderboard[]>([]);
-  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const leaderboardMenuRef = useRef<HTMLDivElement>(null);
+    setActivePage(1);
+    setArchivedPage(1);
+  }, [leagueId]);
+
+  const handleLoadMoreActive = () => {
+    const nextPage = activePage + 1;
+    setActivePage(nextPage);
+    dispatch(fetchActiveContestsRequest({ group_id: leagueId, page: nextPage, limit: 10 }));
+  };
+
+  const handleLoadMoreArchived = () => {
+    const nextPage = archivedPage + 1;
+    setArchivedPage(nextPage);
+    dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: nextPage, limit: 10 }));
+  };
 
   const {
-    group: groupData,
+    group,
     loading,
-    leaderboard: leaderboardData,
-    leaderboardList: leaderboardListData,
-    loadingLeaderboard,
     message: groupMessage,
     error: errorMessage,
     deleteLoading,
     deleteMessage,
-    ArchiveLeaderboardList,
-    archivedLeaderboard: ArchivedLeaderboardObject,
-    hasMoreLeaderboard,
   } = useSelector((state: GroupSelector) => state.group);
-  const { openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews, loading: slipLoader } = useSelector((state: RootState) => state.slip);
-  const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-  const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
+  const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
 
   useEffect(() => {
     if (!leagueId || !currentUser) return;
-    if (fetchedGroupId.current === leagueId) return;
+    // if (fetchedGroupId.current === leagueId) return;
 
     dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
+    dispatch(fetchActiveContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
+    dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     fetchedGroupId.current = leagueId;
   }, [leagueId, currentUser, dispatch]);
 
-  useEffect(() => {
-    if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.leaderboard)) {
-      setArchiveLeaderboardData(ArchivedLeaderboardObject.leaderboard);
-    }
-    if (ArchivedLeaderboardObject && Array.isArray(ArchivedLeaderboardObject.slips)) {
-      setArchivedLeaderboardSlipsList(ArchivedLeaderboardObject.slips);
-    }
-  }, [ArchivedLeaderboardObject]);
-
-  const isCommissioner =
-    !!group && !!currentUser && group.created_by === currentUser.userId;
-  const secondaryLeaderboardsEnabled =
-    group?.is_enable_secondary_leaderboard ?? false;
-
-  // const activeSlip = group?.active_slip ?? null;
-  const members = useMemo(() => group?.members ?? [], [group?.members]);
-
-  const tabs = useMemo(
-    () =>
-      isCommissioner
-        ? BASE_TABS
-        : BASE_TABS.filter((tab) => tab.id !== "settings"),
+  const isCommissioner = !!group && !!currentUser && group.created_by === currentUser.userId;
+  const activeTab = normalizeTab(searchParams.get("tab"), isCommissioner);
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => isCommissioner || tab.id !== "settings"),
     [isCommissioner]
   );
-
-  const primaryActionButtonClass =
-    "ui-accent-card group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 px-5 py-4 text-left shadow-sm transition";
-  const primaryActionIconClass =
-    "ui-accent-card-icon flex h-10 w-10 items-center justify-center";
-  const secondaryLeaderboardCardClass =
-    "rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20";
-  const createSlipButtonClass =
-    "group flex w-full items-center justify-between gap-4 rounded-3xl border border-white/10 bg-gradient-to-br from-blue-950/70 via-slate-950/60 to-black/60 px-5 py-4 text-left transition hover:border-sky-400/70 hover:bg-blue-950/60";
-  const createSlipIconClass =
-    "flex h-10 w-10 items-center justify-center text-blue-100 transition group-hover:text-blue-50";
-
-  const normalizeTab = useCallback(
-    (value: string | null): TabId => {
-      if (value === "settings") {
-        return isCommissioner ? "settings" : "leaderboard";
-      }
-      return value === "slips" ||
-        value === "members" ||
-        value === "feed" ||
-        value === "chat"
-        ? value
-        : "leaderboard";
-    },
-    [isCommissioner]
-  );
-  const [activeTab, setActiveTab] = useState<TabId>(() =>
-    normalizeTab(searchParams.get("tab"))
+  const activeTabIndex = Math.max(
+    0,
+    visibleTabs.findIndex((tab) => tab.id === activeTab)
   );
 
   useEffect(() => {
-    if (!leagueId) return;
-    if (activeTab === "leaderboard" || activeTab === "settings") {
-      dispatch(fetchAllLeaderboardsRequest({ group_id: leagueId }));
-      dispatch(fetchArchivedLeaderboardListRequest({ groupId: leagueId }));
+    const rawTab = searchParams.get("tab");
+    if (rawTab === "leaderboard" || rawTab === "slips") {
+      router.replace(`/league/${params.leagueId}`);
     }
-  }, [dispatch, leagueId, activeTab]);
+  }, [params.leagueId, router, searchParams]);
 
-  const leaderboardActiveSlips = openSlips;
-  const leaderboardLockedSlips = reviewSlips;
-  const leaderboardCompletedSlips = finalizeSlips;
-  const vibeActiveSlips = openSlips;
-  const vibeLockedSlips = reviewSlips;
-  const vibeCompletedSlips = finalizeSlips;
-
-  const tabParam = searchParams.get("tab");
-  useEffect(() => {
-    const nextTab = normalizeTab(tabParam);
-    setActiveTab((prev) => (prev === nextTab ? prev : nextTab));
-  }, [normalizeTab, tabParam]);
+  const [showScoringModal, setShowScoringModal] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [editLeagueName, setEditLeagueName] = useState("");
+  const [editLeagueDescription, setEditLeagueDescription] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
+  const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
+  const [leavingLeague, setLeavingLeague] = useState(false);
 
   useEffect(() => {
     if (!group) return;
-    setEditLeagueName(group.name);
+    setEditLeagueName(group.name ?? "");
     setEditLeagueDescription(group.description ?? "");
   }, [group]);
-
-  useEffect(() => {
-    return () => {
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const groupLeaderboards = useMemo(
-    () => leaderboardDataList.filter((board) => board.group_id === group?.id),
-    [group?.id, leaderboardDataList]
-  );
-  const visibleLeaderboards = useMemo(
-    () =>
-      secondaryLeaderboardsEnabled
-        ? groupLeaderboards
-        : groupLeaderboards.filter((board) => board.isDefault),
-    [groupLeaderboards, secondaryLeaderboardsEnabled]
-  );
-  const activeLeaderboards = useMemo(
-    () => groupLeaderboards.filter((board) => board.status === "ACTIVE"),
-    [groupLeaderboards]
-  );
-
-  const visibleActiveLeaderboards = useMemo(
-    () => visibleLeaderboards.filter((board) => board.status === "ACTIVE"),
-    [visibleLeaderboards]
-  );
-
-  const activeMainLeaderboard = useMemo(
-    () => activeLeaderboards.find((board) => board.isDefault) ?? null,
-    [activeLeaderboards]
-  );
-  const activeSecondaryLeaderboards = useMemo(
-    () =>
-      [...activeLeaderboards]
-        .filter((board) => !board.isDefault)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
-    [activeLeaderboards]
-  );
-
-  const sortedActiveLeaderboardsForView = useMemo(() => {
-    const defaultBoard = visibleActiveLeaderboards.find((board) => board.isDefault);
-    const sides = visibleActiveLeaderboards
-      .filter((board) => !board.isDefault)
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
-    return defaultBoard ? [defaultBoard, ...sides] : sides;
-  }, [visibleActiveLeaderboards]);
-
-  const selectedLeaderboard = useMemo(
-    () =>
-      visibleLeaderboards.find((board) => board.id === activeLeaderboardId) ??
-      visibleLeaderboards.find((board) => board.isDefault) ??
-      null,
-    [activeLeaderboardId, visibleLeaderboards]
-  );
-
-  const editingLeaderboard = useMemo(
-    () =>
-      groupLeaderboards.find((board) => board.id === editingLeaderboardId) ?? null,
-    [editingLeaderboardId, groupLeaderboards]
-  );
-
-  const handleSelectArchivedLeaderboard = (boardId: string, archivedId: string) => {
-    setArchivedLeaderboardId(boardId)
-    setActiveLeaderboardId(boardId)
-    if (archivedId && group?.id) {
-      dispatch(fetchArchivedLeaderboardByIdRequest({ groupId: group?.id, archivedLeaderboard_id: archivedId }))
-    }
-  }
-
-  const sideLimitReached = activeSecondaryLeaderboards.length >= 2;
-
-  const confirmationCode = useMemo(() => {
-    if (!group?.id) return "";
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 8; i += 1) {
-      code += alphabet[Math.floor(Math.random() * alphabet.length)];
-    }
-    return code;
-  }, [group?.id]);
-
-  const handleArchiveSide = (leaderboardId: string) => {
-    if (!currentUser) return;
-    if (group?.id && leaderboardId) {
-      dispatch(updateLeaderboardToArchivedRequest({ group_id: group.id, leaderboard_id: leaderboardId }));
-    };
-    setPendingLeaderboardAction(null);
-  };
-
-  const handleRestartDefault = () => {
-    if (!currentUser) return;
-    if (group?.id) {
-      dispatch(startNewContestRequest({ group_id: group.id }));
-    };
-    setPendingLeaderboardAction(null);
-  };
-
-  const closeLeaderboardActionModal = () => setPendingLeaderboardAction(null);
-
-  const confirmPendingLeaderboardAction = () => {
-    if (!pendingLeaderboardAction) return;
-    if (pendingLeaderboardAction.kind === "archive-secondary") {
-      handleArchiveSide(pendingLeaderboardAction.leaderboardId);
-      return;
-    }
-    handleRestartDefault();
-  };
-
-  const startLeaderboardNameEdit = (leaderboardId: string, currentName: string) => {
-    setEditingLeaderboardId(leaderboardId);
-    setLeaderboardNameDraft(currentName);
-  };
-
-  const cancelLeaderboardNameEdit = () => {
-    setEditingLeaderboardId(null);
-    setLeaderboardNameDraft("");
-  };
-
-  const handleTabChange = (tabId: TabId) => {
-    if (!group) return;
-    setActiveTab(tabId);
-    const query = tabId === "leaderboard" ? "" : `?tab=${tabId}`;
-    router.replace(`/league/${group.id}${query}`);
-  };
-
-  const toggleLeaderboardMenu = () => {
-    setShowLeaderboardMenu((prev) => !prev);
-  };
-
-  const handleLeaderboardSelect = (leaderboardId: string) => {
-    setActiveLeaderboardId(leaderboardId);
-    setShowLeaderboardMenu(false);
-  };
-
-  const handleSlipSelect = (slipId?: string) => {
-    if (!group || !slipId) return;
-
-    const slipOpen = openSlips?.find(
-      (slip) => slip.id === slipId
-    );
-
-    const slipInReview = reviewSlips?.find(
-      (slip) => slip.id === slipId
-    );
-
-    const finalSlip = finalizeSlips?.find(
-      (slip) => slip.id === slipId
-    );
-
-    if (!slipOpen && !slipInReview && !finalSlip) return;
-    const basePath = `/league/${group.id}/slips/${slipId}`;
-
-    if (finalSlip?.status === "final") {
-      router.push(`${basePath}/results`);
-      return;
-    }
-    router.push(basePath);
-  };
-
-  const handleCreateSlipNavigation = () => {
-    if (!group) return;
-    if (navigationTimeoutRef.current) {
-      clearTimeout(navigationTimeoutRef.current);
-    }
-    const modeQuery = slipTab === "vibe" ? "?mode=vibe" : "";
-    navigationTimeoutRef.current = setTimeout(
-      () => router.push(`/league/${group.id}/slips/create${modeQuery}`),
-      800
-    );
-  };
-
-  const handleOpenEditGroup = () => {
-    if (!group) return;
-    if (!isCommissioner) {
-      setToast({
-        id: Date.now(),
-        type: "error",
-        message: "Only the commissioner can edit the League.",
-        duration: 3000,
-      });
-      return;
-    }
-    setEditLeagueName(group.name);
-    setEditLeagueDescription(group.description ?? "");
-    setShowEditLeagueModal(true);
-  };
-
-  const handleLoadMoreOpen = () => {
-    if (!group?.id) return;
-    const nextPage = openPage + 1;
-    setOpenPage(nextPage);
-    if (slipTab === "vibe") {
-      dispatch(fetchAllVibeOpenSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    } else {
-      dispatch(fetchAllOpenSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    }
-  };
-
-  const handleLoadMoreReview = () => {
-    if (!group?.id) return;
-    const nextPage = reviewPage + 1;
-    setReviewPage(nextPage);
-    if (slipTab === "vibe") {
-      dispatch(fetchAllVibeReviewSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    } else {
-      dispatch(fetchAllReviewSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    }
-  };
-
-  const handleLoadMoreFinal = () => {
-    if (!group?.id) return;
-    const nextPage = finalPage + 1;
-    setFinalPage(nextPage);
-    if (slipTab === "vibe") {
-      dispatch(fetchAllVibeFinalizedSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    } else {
-      dispatch(fetchAllFinalizedSlipsRequest({ group_id: group.id, page: nextPage, limit: 12 }));
-    }
-  };
-
-  const handleLoadMoreLeaderboard = () => {
-    if (!group?.id || !selectedLeaderboard?.id) return;
-    const nextPage = leaderboardPage + 1;
-    setLeaderboardPage(nextPage);
-    dispatch(fetchLeaderboardRequest({
-      groupId: group.id,
-      leaderboard_id: selectedLeaderboard.id,
-      page: nextPage,
-      limit: 5
-    }));
-  };
-
-  useEffect(() => {
-    if (activeTab === "leaderboard" && !archivedLeaderboardId) {
-      const defaultLeaderboard = groupLeaderboards.find((l) => l.isDefault && l.status === "ACTIVE")
-      if (defaultLeaderboard?.id) {
-        setActiveLeaderboardId(defaultLeaderboard?.id)
-      }
-    }
-    setLeaderboardPage(1);
-  }, [groupLeaderboards, activeTab, archivedLeaderboardId]);
-
-  useEffect(() => {
-    if (activeTab !== "settings") {
-      setEditingLeaderboardId(null);
-      setLeaderboardNameDraft("");
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (secondaryLeaderboardsEnabled) {
-      setSecondaryLeaderboardsDetailsOpen(true);
-      return;
-    }
-    setShowCreateSideModal(false);
-    setSecondaryLeaderboardsDetailsOpen(false);
-    if (editingLeaderboard && !editingLeaderboard.isDefault) {
-      setEditingLeaderboardId(null);
-      setLeaderboardNameDraft("");
-    }
-  }, [editingLeaderboard, secondaryLeaderboardsEnabled]);
-
-  useEffect(() => {
-    if (!visibleLeaderboards.length) return;
-    if (
-      activeLeaderboardId &&
-      visibleLeaderboards.some((board) => board.id === activeLeaderboardId)
-    ) {
-      return;
-    }
-    const fallback =
-      visibleLeaderboards.find((board) => board.isDefault && board.status === "ACTIVE")?.id ??
-      visibleLeaderboards[0]?.id ??
-      null;
-    if (fallback && fallback !== activeLeaderboardId) {
-      setActiveLeaderboardId(fallback);
-    }
-  }, [activeLeaderboardId, visibleLeaderboards]);
-
-  useEffect(() => {
-    if (!showLeaderboardMenu) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!leaderboardMenuRef.current?.contains(event.target as Node)) {
-        setShowLeaderboardMenu(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowLeaderboardMenu(false);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [showLeaderboardMenu]);
 
   useEffect(() => {
     if (!loading && groupMessage) {
@@ -646,60 +215,6 @@ const GroupPage = () => {
     }
   }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, router, errorMessage]);
 
-  useEffect(() => {
-    if (!loading && !groupData && currentUser) {
-      const timer = setTimeout(() => {
-        router.replace("/home");
-      }, 1000);
-      return () => clearTimeout(timer)
-    }
-  }, [loading, groupData, router, currentUser]);
-
-  // Fetch specific leaderboard data
-  useEffect(() => {
-    if (
-      group?.id &&
-      selectedLeaderboard?.id &&
-      (activeTab === "leaderboard" || activeTab === "settings") &&
-      !archivedLeaderboardId
-    ) {
-      setLeaderboardPage(1);
-      dispatch(fetchLeaderboardRequest({
-        groupId: group?.id,
-        leaderboard_id: selectedLeaderboard?.id,
-        page: 1,
-        limit: 5
-      }));
-    }
-  }, [group?.id, selectedLeaderboard?.id, activeTab, archivedLeaderboardId, dispatch]);
-
-  // Fetch granular slips for "Slips" tab
-  useEffect(() => {
-    if (activeTab === "slips" && group?.id) {
-      if (slipTab === "vibe") {
-        dispatch(fetchAllVibeOpenSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-        dispatch(fetchAllVibeReviewSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-        dispatch(fetchAllVibeFinalizedSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-      } else {
-        dispatch(fetchAllOpenSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-        dispatch(fetchAllReviewSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-        dispatch(fetchAllFinalizedSlipsRequest({ group_id: group?.id, page: 1, limit: 12 }));
-      }
-    }
-  }, [group?.id, activeTab, slipTab, dispatch]);
-
-  useEffect(() => {
-    if (Array.isArray(leaderboardData?.leaderboard)) {
-      setLeaderboardList(leaderboardData?.leaderboard)
-    }
-    if (Array.isArray(leaderboardData?.slips)) {
-      setLeaderboardSlipsList(leaderboardData?.slips)
-    }
-    if (Array.isArray(leaderboardListData)) {
-      setLeaderboardDataList(leaderboardListData)
-    }
-  }, [leaderboardData?.leaderboard, leaderboardListData, leaderboardData?.slips]);
-
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
 
@@ -729,115 +244,12 @@ const GroupPage = () => {
     return Object.keys(nextErrors).length === 0;
   }, [editLeagueName, editLeagueDescription]);
 
-  if (!rawGroup && !loading) {
-    return (
-      <div className="rounded-3xl border border-white/10 bg-black/60 p-6 text-sm text-gray-400">
-        Group not found. Head back to Home and pick a different crew.
-      </div>
-    );
-  }
-
-  const handleDeleteGroup = async () => {
-    if (!isCommissioner) {
-      setDeleteError("Only the commissioner can delete this league.");
-      return;
+  const handleTabChange = (tabId: TabId) => {
+    if (!group) return;
+    const query = tabId === "contests" ? "" : `?tab=${tabId}`;
+    if (group?.id) {
+      router.replace(`/league/${group.id}${query}`);
     }
-
-    const phraseMatches = deleteConfirmation === confirmationCode;
-    if (!phraseMatches || !acknowledged || isDeletingGroup) {
-      setToast({
-        id: Date.now(),
-        type: "error",
-        message: "Type the confirmation code and acknowledge the warning.",
-        duration: 3000,
-      })
-      return;
-    }
-
-    try {
-      setIsDeletingGroup(true);
-      setIsConfirmDeleteModalOpen(true);
-      setDeleteError(null);
-      if (group.id) {
-        dispatch(initialGroupDeleteRequest({ group_id: group?.id }));
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to delete league.";
-      setDeleteError(message);
-    }
-  };
-
-  const handleLeaveGroup = () => {
-    if (!group || !currentUser) return;
-    if (isCommissioner) {
-      setToast({
-        id: Date.now(),
-        type: "error",
-        message: "Commissioners need to transfer ownership before leaving.",
-        duration: 3000,
-      });
-      return;
-    }
-    if (group.id) {
-      setLeavingLeague(true);
-      dispatch(leaveGroupRequest({ group_id: group.id }));
-    }
-    setLeavingLeague(false);
-  };
-
-  const closeSideContestModal = () => {
-    setShowCreateSideModal(false);
-    setSideContestName("");
-  };
-
-  const handleCreateSideContest = () => {
-    if (!group || !currentUser) return;
-    if (group.id) {
-      dispatch(createNewLeaderboardRequest({
-        group_id: group.id,
-        name: sideContestName,
-        sport_scope: null,
-      }));
-      closeSideContestModal();
-    }
-  };
-
-  const saveLeaderboardName = (leaderboardId: string) => {
-    if (!currentUser) return;
-    if (leaderboardId && group?.id) {
-      dispatch(updateLeaderboardRequest({
-        group_id: group.id,
-        leaderboard_id: leaderboardId,
-        name: leaderboardNameDraft,
-      }))
-    }
-    cancelLeaderboardNameEdit();
-  };
-
-  const handleSaveGroupDetails = async () => {
-    if (!group || !currentUser) return;
-
-    if (!validate()) return;
-
-    const name = editLeagueName.trim();
-    const description = editLeagueDescription.trim();
-
-    if (group.name === name && (group.description || "") === description) {
-      setShowEditLeagueModal(false);
-      return;
-    }
-
-    if (group.id) {
-      dispatch(
-        updateGroupRequest({
-          group_id: group.id,
-          name,
-          description,
-        })
-      );
-    }
-    setShowEditLeagueModal(false);
   };
 
   const handleRemoveMember = async (
@@ -907,6 +319,77 @@ const GroupPage = () => {
     }
   };
 
+  const handleLeaveLeague = () => {
+    if (!group || !currentUser) return;
+    if (isCommissioner) {
+      setToast({
+        id: Date.now(),
+        type: "error",
+        message: "Commissioners need to transfer ownership before leaving.",
+        duration: 3000,
+      });
+      return;
+    }
+    if (group.id) {
+      setLeavingLeague(true);
+      dispatch(leaveGroupRequest({ group_id: group.id }));
+    }
+    setLeavingLeague(false);
+  };
+
+  const handleSaveLeague = () => {
+    if (!group || !currentUser) return;
+
+    if (!validate()) return;
+
+    const name = editLeagueName.trim();
+    const description = editLeagueDescription.trim();
+
+    if (group.name === name && (group.description || "") === description) {
+      return;
+    }
+
+    if (group.id) {
+      dispatch(
+        updateGroupRequest({
+          group_id: group.id,
+          name,
+          description,
+        })
+      );
+    }
+  };
+
+  const handleDeleteLeague = () => {
+    if (!isCommissioner) {
+      setDeleteError("Only the commissioner can delete this league.");
+      return;
+    }
+
+    if (deleteConfirmation !== group.name) {
+      setToast({
+        id: Date.now(),
+        type: "error",
+        message: "Please type exact same phrase word as group name for confirm delete.",
+        duration: 3000
+      })
+      return;
+    }
+
+    try {
+      setIsDeletingGroup(true);
+      setIsConfirmDeleteModalOpen(true);
+      setDeleteError(null);
+      if (group.id) {
+        dispatch(initialGroupDeleteRequest({ group_id: group?.id }));
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete league.";
+      setDeleteError(message);
+    }
+  };
+
   const handleCloseConfirmDeleteModal = () => {
     setIsConfirmDeleteModalOpen(false);
     setIsDeletingGroup(false);
@@ -925,7 +408,6 @@ const GroupPage = () => {
       setIsConfirmDeleteModalOpen(false);
       setDeleteConfirmationCode("");
       setDeleteConfirmation("");
-      setAcknowledged(false);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to delete league.";
@@ -933,1078 +415,318 @@ const GroupPage = () => {
     }
   };
 
-  const handleSecondaryLeaderboardsToggle = () => {
-    if (!group || !currentUser) return;
-    if (group.id) {
-      dispatch(enableSecondaryLeaderboardRequest({ group_id: group.id, isEnable: !secondaryLeaderboardsEnabled }));
-    }
+  const renderContestCard = (contest: Contest) => {
+    return (
+      <Link
+        key={contest.id}
+        href={`/league/${group?.id}/contests/${contest.id}`}
+        className="block rounded-lg border border-white/10 bg-white/[0.04] p-4 transition hover:border-sky-300/60 hover:bg-white/[0.07]"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-white">{contest.name}</h3>
+            </div>
+          </div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-sky-200">
+            {contest.included_members_count ?? 0} players
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
+            <p className="font-semibold text-white">{contest.slips_count?.open_count}</p>
+            <p className="uppercase tracking-wide text-gray-500">open</p>
+          </div>
+          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
+            <p className="font-semibold text-white">{contest.slips_count?.review_count}</p>
+            <p className="uppercase tracking-wide text-gray-500">review</p>
+          </div>
+          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
+            <p className="font-semibold text-white">{contest.slips_count?.finalized_count}</p>
+            <p className="uppercase tracking-wide text-gray-500">final</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {contestSportLabels(contest).map((sport) => (
+            <span
+              key={sport}
+              className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-300"
+            >
+              {sport}
+            </span>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] text-gray-500">
+          {formatDateTime(contest.starts_at)} to {formatDateTime(contest.ends_at)}
+        </p>
+      </Link>
+    );
   };
 
-  const archivedLeaderboardsContent = ArchiveLeaderboardList && ArchiveLeaderboardList?.archivedLeaderboards?.length ? (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
-      {ArchiveLeaderboardList.archivedLeaderboards.map((board, index) => (
-        <button
-          key={board.id}
-          type="button"
-          onClick={() => handleSelectArchivedLeaderboard(board.leaderboard_id, board.id)}
-          className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.04] ${index > 0 ? "border-t border-white/10" : ""
-            }`}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm font-semibold text-white">{board.label}</p>
-              <p className="flex-none text-[10px] uppercase tracking-wide text-gray-500">
-                {formatArchivedLeaderboardMeta(board)}
-              </p>
-            </div>
-            {board.leaderboards.sport_scope && (
-              <p className="mt-1 text-[11px] text-gray-500">Scope: {board.leaderboards.sport_scope}</p>
-            )}
-          </div>
-          <ChevronIcon className="h-4 w-4 flex-none text-gray-500" />
-        </button>
-      ))}
-    </div>
-  ) : (
-    <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-      No archived leaderboards yet.
-    </div>
-  );
+  if (!group && !loading) {
+    return (
+      <div className="rounded-3xl border border-white/10 bg-black/60 p-6 text-sm text-gray-400">
+        Group not found. Head back to Home and pick a different crew.
+      </div>
+    );
+  }
 
-  if ((loading && !group) || !currentUser) {
+  const isInitialLoading = loading || (contestLoader && activeContests === null && archivedContests === null);
+
+  if (isInitialLoading) {
     return <LeaguePageSkeleton />;
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-4">
-        <div className="flex items-center justify-between ">
-          <BackButton
-            label="back to all leagues"
-            fallback="/fantasy"
-            preferFallback
-            className="inline-flex items-center justify-center gap-2 text-[11px] font-semibold normal-case py-2 tracking-[0.12em] text-gray-300 transition hover:text-white"
-          />
-          {isCommissioner && (
-            <button
-              type="button"
-              onClick={handleOpenEditGroup}
-              className="ui-accent-outline-hover inline-flex items-center justify-center rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition sm:ml-auto"
-              aria-label="Edit league"
-            >
-              <EditPencilIcon />
-            </button>
-          )}
-        </div>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-10 sm:flex-nowrap">
+    <div className="flex flex-col gap-6 pb-10">
+      <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
+      <header className="-mx-5 space-y-3 border-b border-white/10 px-5 pb-5 sm:mx-0 sm:px-0">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
             <h1
-              className={`allow-caps text-2xl min-[326px]:text-3xl font-extrabold text-transparent bg-clip-text`}
+              className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
               style={displayNameGradientStyle}
             >
               {group?.name}
             </h1>
-          </div>
-          {group?.description &&
-            <p className="text-sm text-gray-400 break-words line-clamp-2">
-              {group.description}
-            </p>}
-        </div>
-      </header>
-
-      <section className="space-y-4">
-        <div className="-mx-5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
-          <div className="flex min-w-0 flex-wrap gap-1 overflow-y-hidden sm:flex-nowrap sm:gap-2 sm:overflow-x-auto lg:gap-3">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`relative whitespace-nowrap px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-2 sm:text-xs md:px-4 md:py-2.5 md:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
-                    }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <span className="sm:hidden" aria-hidden>
-                      {iconForTab(tab.id)}
-                    </span>
-                    <span className="hidden sm:inline">{tab.label}</span>
-                    <span className="sr-only">{tab.label}</span>
-                  </div>
-                  <span
-                    className={`absolute inset-x-1 -bottom-[1px] h-0.5 rounded-full transition ${isActive ? "bg-white" : "bg-transparent"
-                      }`}
-                  />
-                </button>
-              );
-            })}
+            {group?.description && (
+              <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                {group.description}
+              </p>
+            )}
           </div>
           <button
             type="button"
             onClick={() => setShowScoringModal(true)}
-            className="mb-1 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-gray-300 transition hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:h-7 sm:w-7 sm:text-[11px]"
-            aria-label="League scoring"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-xs font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
+            aria-label="Contest scoring"
             aria-haspopup="dialog"
           >
             i
           </button>
         </div>
+      </header>
 
-        {activeTab === "leaderboard" && (
-          <div className="space-y-5 pt-2">
-            <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] uppercase tracking-wide text-gray-500">
-              <div className="flex flex-wrap items-center gap-3">
-                <div ref={leaderboardMenuRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={toggleLeaderboardMenu}
-                    aria-expanded={showLeaderboardMenu}
-                    aria-controls="leaderboard-switcher"
-                    aria-haspopup="menu"
-                    className="inline-flex items-center gap-2 font-semibold text-gray-300 transition hover:text-white"
-                  >
-                    <span className="normal-case">
-                      {selectedLeaderboard?.name ?? "Leaderboard"}
-                    </span>
-                    <ChevronUpDownIcon className={`h-3 w-3 transition ${showLeaderboardMenu
-                      ? "rotate-180 text-sky-300"
-                      : "text-gray-500"
-                      }`} />
-                  </button>
-                  {showLeaderboardMenu && (
-                    <div
-                      id="leaderboard-switcher"
-                      role="menu"
-                      className="absolute left-0 top-full z-20 mt-2 w-64 max-w-[85vw] rounded-2xl border border-white/10 bg-black/90 p-2 shadow-xl backdrop-blur"
-                    >
-                      <div className="space-y-1">
-                        <p className="px-2 pb-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-gray-500">
-                          Active boards
-                        </p>
-                        {sortedActiveLeaderboardsForView.length ? (
-                          sortedActiveLeaderboardsForView.map((board) => {
-                            const isSelected = selectedLeaderboard?.id === board.id;
-                            return (
-                              <button
-                                key={board.id}
-                                type="button"
-                                role="menuitem"
-                                onClick={() => handleLeaderboardSelect(board.id)}
-                                className={`flex w-full flex-col gap-1 rounded-xl px-3 py-2 text-left transition ${isSelected
-                                  ? "bg-sky-500/15 text-sky-100"
-                                  : "text-gray-200 hover:bg-white/5"
-                                  }`}
-                                aria-current={isSelected ? "true" : undefined}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-semibold normal-case">
-                                    {board.name}
-                                  </span>
-                                  <span
-                                    className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${board.isDefault
-                                      ? "border-sky-300/40 text-sky-100"
-                                      : "border-white/10 text-gray-400"
-                                      }`}
-                                  >
-                                    {board.isDefault ? "Main" : "Secondary"}
-                                  </span>
-                                </div>
-                                {board?.sport_scope && (
-                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                    {board?.sport_scope}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="px-3 py-2 text-[10px] text-gray-500">
-                            No leaderboards yet.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <span>
-                  {leaderboardSlipsList.length
-                    ? `${leaderboardSlipsList.length} leaderboard slips`
-                    : "No leaderboard slips yet"}
-                </span>
-              </div>
-            </div>
-
-            {loadingLeaderboard ? (
-              <LeaderboardSkeleton />
-            ) : selectedLeaderboard ? (
-              <LeaderboardGrid
-                group={group}
-                leaderboard={archivedLeaderboardId ? archiveLeaderboardData : leaderboardList}
-                leaderboardId={selectedLeaderboard.id}
-                leaderboardName={selectedLeaderboard.name}
-                currentUserId={currentUser?.userId}
-                leaderboardSlips={leaderboardSlipsList}
-                onLoadMore={handleLoadMoreLeaderboard}
-                hasMore={hasMoreLeaderboard}
-                loadingMore={loadingLeaderboard}
-                isArchived={!!archivedLeaderboardId}
-                archivedLeaderboardSlips={archivedLeaderboardSlipsList}
-              />
-            ) : (
-              <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-                No leaderboard found yet.
-              </div>
-            )}
-
-            <section id="leaderboard-archived-leaderboards-panel" className="space-y-3">
+      <section className="-mx-5 -mt-6 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
+        <div
+          className="relative grid w-full gap-1 py-1"
+          style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.08] transition-transform duration-300 ease-out"
+            style={{
+              width: `calc(100% / ${visibleTabs.length})`,
+              transform: `translateX(${activeTabIndex * 100}%)`,
+            }}
+          />
+          {visibleTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
               <button
+                key={tab.id}
                 type="button"
-                onClick={() => setShowLeaderboardArchivedLeaderboards((prev) => !prev)}
-                aria-expanded={showLeaderboardArchivedLeaderboards}
-                aria-controls="leaderboard-archived-leaderboards-details"
-                className="flex w-full items-start justify-between gap-4 text-left"
+                onClick={() => handleTabChange(tab.id)}
+                aria-label={tab.label}
+                className={`relative z-10 flex h-11 min-w-0 items-center justify-center px-1 text-center text-[10px] font-semibold uppercase tracking-wide transition sm:h-10 sm:px-3 sm:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
+                  }`}
               >
-                <div className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-300">
-                    Archived leaderboards
-                  </p>
-                  <p className="text-[10px] text-gray-500">
-                    View past main and secondary boards.
-                  </p>
-                </div>
-                <span className="text-gray-400">
-                  {showLeaderboardArchivedLeaderboards ? "▴" : "▾"}
+                <span className="flex min-w-0 items-center justify-center gap-1.5">
+                  <span className="shrink-0 sm:hidden">{tabIcon(tab.id)}</span>
+                  <span className="hidden sm:inline">{tab.label}</span>
                 </span>
               </button>
-              {showLeaderboardArchivedLeaderboards && (
-                <div id="leaderboard-archived-leaderboards-details">
-                  {archivedLeaderboardsContent}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
-
-        {activeTab === "slips" && (
-          <>
-            {slipLoader ? (
-              <SlipsSkeleton />
-            ) : (
-              <div className="space-y-6 pt-2">
-                <button
-                  type="button"
-                  onClick={handleCreateSlipNavigation}
-                  className={createSlipButtonClass}
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-white">Create a new slip</p>
-                  </div>
-                  <span
-                    className={createSlipIconClass}
-                    aria-hidden
-                  >
-                    <PlusIcon />
-                  </span>
-                </button>
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      choose slip type
-                    </div>
-                    <div className="inline-flex items-center gap-4">
-                      {(["leaderboard", "vibe"] as const).map((tab) => {
-                        const isActive = slipTab === tab;
-                        return (
-                          <button
-                            key={tab}
-                            type="button"
-                            onClick={() => setSlipTab(tab)}
-                            className={`border-b-2 pb-1 text-[11px] font-semibold uppercase tracking-wide transition ${isActive
-                              ? "border-white text-white"
-                              : "border-transparent text-gray-400 hover:border-white/40 hover:text-white"
-                              }`}
-                          >
-                            {tab === "leaderboard" ? "leaderboard slips" : "vibe slips"}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {slipTab === "leaderboard" ? (
-                    <section className="space-y-4">
-                      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        <span className="text-xs font-normal normal-case text-gray-500">
-                          Count toward leaderboards
-                        </span>
-                      </div>
-                      <SlipCategorySection
-                        title="open for picks"
-                        slips={leaderboardActiveSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreOpen}
-                        layout="grid"
-                        emptyCopy="No leaderboard slips open yet — create one to kick things off."
-                        hasMore={hasMoreOpens}
-                      />
-                      <SlipCategorySection
-                        title="slips in review"
-                        slips={leaderboardLockedSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreReview}
-                        layout="grid"
-                        emptyCopy="No locked leaderboard slips right now."
-                        hasMore={hasMoreReviews}
-                      />
-                      <SlipCategorySection
-                        title="finalized slips"
-                        slips={leaderboardCompletedSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreFinal}
-                        layout="grid"
-                        emptyCopy="No finalized leaderboard slips yet."
-                        hasMore={hasMoreFinalizes}
-                      />
-                    </section>
-                  ) : (
-                    <section className="space-y-4">
-                      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        <span className="text-xs font-normal normal-case text-gray-500">
-                          Casual slips
-                        </span>
-                      </div>
-                      <SlipCategorySection
-                        title="open for picks"
-                        slips={vibeActiveSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreOpen}
-                        layout="grid"
-                        emptyCopy="No vibe slips open yet — drop one to set the tone."
-                        hasMore={hasMoreOpens}
-                      />
-                      <SlipCategorySection
-                        title="locked picks"
-                        slips={vibeLockedSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreReview}
-                        layout="grid"
-                        emptyCopy="No locked vibe slips right now."
-                        hasMore={hasMoreReviews}
-                      />
-                      <SlipCategorySection
-                        title="finalized slips"
-                        slips={vibeCompletedSlips || []}
-                        onSelect={handleSlipSelect}
-                        onLoadMore={handleLoadMoreFinal}
-                        layout="grid"
-                        emptyCopy="No finalized vibe slips yet."
-                        hasMore={hasMoreFinalizes}
-                      />
-                    </section>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === "members" && (
-          <div className="space-y-4 pt-2">
-            <ModifyMembers
-              currentUser={currentUser}
-              onRemoveMember={handleRemoveMember}
-              onMakeCommissioner={handleTransferCommissioner}
-              onLeaveGroup={handleLeaveGroup}
-              leavingGroup={leavingLeague}
-              groupId={leagueId}
-            />
-          </div>
-        )}
-
-        {activeTab === "feed" && (
-          <div className="space-y-4 pt-2">
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-5 text-sm text-gray-300 shadow-lg">
-              <FeedTab groupId={group?.id} />
-            </div>
-          </div>
-        )}
-
-        {activeTab === "chat" && (
-          <div className="space-y-4 pt-2">
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-5 text-sm text-gray-300 shadow-lg">
-              Chat is coming soon. Rally the crew here once it launches.
-            </div>
-          </div>
-        )}
-
-        {activeTab === "settings" && isCommissioner && (
-          <div className="pt-2">
-            {loading && !leaderboardListData ? (
-              <LeagueSettingsSkeleton />
-            ) : (
-              <>
-                <section
-                  id="main-leaderboard-panel"
-                  className={mainLeaderboardDetailsOpen ? "pb-6" : "pb-4"}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setMainLeaderboardDetailsOpen((prev) => !prev)}
-                    aria-expanded={mainLeaderboardDetailsOpen}
-                    aria-controls="main-leaderboard-details"
-                    className="flex w-full items-start justify-between gap-4 text-left"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                        Main leaderboard
-                      </p>
-                    </div>
-                    <span className="text-gray-400">
-                      {mainLeaderboardDetailsOpen ? "▴" : "▾"}
-                    </span>
-                  </button>
-                  <p className="mt-1 text-xs text-gray-500">
-                    This board is always on. Restarting it archives the current main leaderboard and
-                    every active secondary leaderboard.
-                  </p>
-
-                  {mainLeaderboardDetailsOpen && (
-                    <div id="main-leaderboard-details" className="space-y-4 pt-4">
-                      {activeMainLeaderboard ? (
-                        <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-5 shadow-sm transition hover:border-white/20">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-white">
-                                  {activeMainLeaderboard.name}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    editingLeaderboardId === activeMainLeaderboard.id
-                                      ? cancelLeaderboardNameEdit()
-                                      : startLeaderboardNameEdit(
-                                        activeMainLeaderboard.id,
-                                        activeMainLeaderboard.name
-                                      )
-                                  }
-                                  className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
-                                  aria-label={`Edit ${activeMainLeaderboard.name} leaderboard name`}
-                                >
-                                  <EditIcon />
-                                </button>
-                              </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  // activeMainLeaderboard.isDefault
-                                  //   ? handleRestartDefault()
-                                  //   : handleArchiveSide(activeMainLeaderboard.id)
-                                  setPendingLeaderboardAction({
-                                    kind: "restart-main",
-                                    leaderboardId: activeMainLeaderboard.id,
-                                    leaderboardName: activeMainLeaderboard.name,
-                                  })
-                                }
-                                disabled={activeMainLeaderboard.hasAnyOpenSlips}
-                                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                Archive & restart
-                              </button>
-                            </div>
-                          </div>
-                          {editingLeaderboardId === activeMainLeaderboard.id && (
-                            <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
-                                  <span className="block pb-2">Leaderboard name</span>
-                                  <input
-                                    value={leaderboardNameDraft}
-                                    onChange={(event) => setLeaderboardNameDraft(event.target.value)}
-                                    maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                    className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
-                                  />
-                                </label>
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => saveLeaderboardName(activeMainLeaderboard.id)}
-                                    disabled={
-                                      !leaderboardNameDraft.trim() ||
-                                      leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
-                                    }
-                                    className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    Save
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={cancelLeaderboardNameEdit}
-                                    className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {activeMainLeaderboard.hasAnyOpenSlips && (
-                            <p className="mt-3 text-xs text-amber-200">
-                              Finalize or delete any open slips in order to archive and restart
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-                          No active main leaderboard found.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                <div
-                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${mainLeaderboardDetailsOpen ? "my-6" : "my-4"}`}
-                />
-
-                <section
-                  id="secondary-leaderboards-panel"
-                  className={
-                    secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
-                      ? "pb-6"
-                      : "pb-4"
-                  }
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                        Secondary leaderboards
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowSecondaryInfo(true)}
-                        aria-haspopup="dialog"
-                        aria-controls="secondary-leaderboards-info-modal"
-                        aria-label="Secondary leaderboards info"
-                        className="flex h-5 w-5 items-center justify-center rounded-full border border-white/20 text-[10px] font-semibold text-gray-300 transition hover:border-sky-300/60 hover:text-white"
-                      >
-                        i
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={secondaryLeaderboardsEnabled}
-                          onChange={handleSecondaryLeaderboardsToggle}
-                          className="h-4 w-4 rounded border border-white/20 bg-black text-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                        />
-                        Enable
-                      </label>
-                      {secondaryLeaderboardsEnabled && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSecondaryLeaderboardsDetailsOpen((prev) => !prev)
-                          }
-                          aria-expanded={secondaryLeaderboardsDetailsOpen}
-                          aria-controls="secondary-leaderboards-details"
-                          className="text-gray-400 transition hover:text-gray-200"
-                        >
-                          {secondaryLeaderboardsDetailsOpen ? "▴" : "▾"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {!secondaryLeaderboardsEnabled && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Turn this on to track separate side standings. Any archived leaderboards stay
-                      viewable below.
-                    </p>
-                  )}
-
-                  {secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen && (
-                    <div id="secondary-leaderboards-details" className="mt-4 space-y-4">
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setShowCreateSideModal(true)}
-                          disabled={sideLimitReached}
-                          className={`${primaryActionButtonClass} disabled:cursor-not-allowed disabled:opacity-60`}
-                        >
-                          <span className="text-sm font-semibold text-white">
-                            Create a secondary leaderboard
-                          </span>
-                          <span className={primaryActionIconClass} aria-hidden>
-                            <PlusIcon />
-                          </span>
-                        </button>
-                      </div>
-
-                      {sideLimitReached && (
-                        <p className="text-xs text-amber-200">
-                          You already have two active secondary leaderboards. Archive one to start
-                          another.
-                        </p>
-                      )}
-
-                      {activeSecondaryLeaderboards.length ? (
-                        <div className="grid grid-cols-1 gap-3">
-                          {activeSecondaryLeaderboards.map((board) => {
-                            const blockedReason = board.hasAnyOpenSlips
-                              ? "You have open slips still running in this leaderboard."
-                              : board.totalSlipCount === 0
-                                ? "This leaderboard can't be archived because it has no slips yet."
-                                : null;
-                            return (
-                              <div key={board.id} className={secondaryLeaderboardCardClass}>
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-sm font-semibold text-white">{board.name}</p>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          editingLeaderboardId === board.id
-                                            ? cancelLeaderboardNameEdit()
-                                            : startLeaderboardNameEdit(board.id, board.name)
-                                        }
-                                        className="rounded-full border border-white/10 bg-white/5 p-1.5 text-gray-200 transition hover:border-sky-300/60 hover:text-white"
-                                        aria-label={`Edit ${board.name} leaderboard name`}
-                                      >
-                                        <EditIcon />
-                                      </button>
-                                    </div>
-                                    {board.sport_scope && (
-                                      <p className="text-[11px] uppercase tracking-wide text-gray-400">
-                                        {board.sport_scope}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="flex flex-col items-end gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        // handleArchiveSide(board.id)
-                                        setPendingLeaderboardAction({
-                                          kind: "archive-secondary",
-                                          leaderboardId: board.id,
-                                          leaderboardName: board.name,
-                                        })
-                                      }
-                                      disabled={Boolean(blockedReason) || board.hasAnyOpenSlips}
-                                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-rose-300/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      Archive
-                                    </button>
-                                  </div>
-                                </div>
-                                {editingLeaderboardId === board.id && (
-                                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/50 p-3">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                      <label className="flex-1 text-xs uppercase tracking-wide text-gray-400">
-                                        <span className="block pb-2">Leaderboard name</span>
-                                        <input
-                                          value={leaderboardNameDraft}
-                                          onChange={(event) =>
-                                            setLeaderboardNameDraft(event.target.value)
-                                          }
-                                          maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                                          className="ui-input-accent w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-base text-white outline-none transition"
-                                        />
-                                      </label>
-                                      <div className="flex gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => saveLeaderboardName(board.id)}
-                                          disabled={
-                                            !leaderboardNameDraft.trim() ||
-                                            leaderboardNameDraft.trim().length > MAX_LEADERBOARD_NAME_LENGTH
-                                          }
-                                          className="ui-accent-button rounded-2xl px-4 py-2 text-[11px] font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                          Save
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={cancelLeaderboardNameEdit}
-                                          className="rounded-2xl border border-white/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                                {blockedReason && (
-                                  <p className="mt-3 text-xs text-amber-200">{blockedReason}</p>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="rounded-3xl border border-white/10 bg-black/60 p-4 text-sm text-gray-400">
-                          No active secondary leaderboards yet.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </section>
-
-                <div
-                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${secondaryLeaderboardsEnabled && secondaryLeaderboardsDetailsOpen
-                    ? "my-6"
-                    : "my-4"
-                    }`}
-                />
-
-                <section
-                  id="archived-leaderboards-panel"
-                  className={showSettingsArchivedLeaderboards ? "pb-6" : "pb-4"}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setShowSettingsArchivedLeaderboards((prev) => !prev)}
-                    aria-expanded={showSettingsArchivedLeaderboards}
-                    aria-controls="archived-leaderboards-details"
-                    className="flex w-full items-start justify-between gap-4 text-left"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-gray-300">
-                        Archived leaderboards
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Main leaderboard restarts and archived secondary boards are organized here.
-                      </p>
-                    </div>
-                    <span className="text-gray-400">
-                      {showSettingsArchivedLeaderboards ? "▴" : "▾"}
-                    </span>
-                  </button>
-                  {showSettingsArchivedLeaderboards && (
-                    <div id="archived-leaderboards-details" className="mt-4">
-                      {archivedLeaderboardsContent}
-                    </div>
-                  )}
-                </section>
-
-                <div
-                  className={`-mx-5 h-px bg-white/10 sm:mx-0 ${showSettingsArchivedLeaderboards ? "my-6" : "my-4"
-                    }`}
-                />
-
-                <section className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setDangerZoneOpen((prev) => !prev)}
-                    aria-expanded={dangerZoneOpen}
-                    aria-controls="danger-zone-content"
-                    className="flex w-full items-start justify-between gap-4 text-left"
-                  >
-                    <div className="space-y-1">
-                      <p className="text-sm uppercase tracking-wide text-red-300">Delete league</p>
-                    </div>
-                    <span className="text-red-200">{dangerZoneOpen ? "▴" : "▾"}</span>
-                  </button>
-                  {dangerZoneOpen && (
-                    <div id="danger-zone-content" className="mt-4 space-y-3">
-                      <p className="text-xs text-red-100">
-                        delete this league and all associated leaderboards and slips.
-                      </p>
-                      <label className="flex flex-col gap-2 text-sm text-gray-200">
-                        <span className="text-xs uppercase tracking-wide text-gray-400">
-                          Type{" "}
-                          <span className="font-semibold text-rose-200">{confirmationCode}</span> to
-                          confirm
-                        </span>
-                        <input
-                          value={deleteConfirmation}
-                          onChange={(event) => setDeleteConfirmation(event.target.value)}
-                          className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
-                        />
-                      </label>
-
-                      <label className="flex items-center gap-3 text-sm text-gray-200">
-                        <input
-                          type="checkbox"
-                          checked={acknowledged}
-                          onChange={(event) => setAcknowledged(event.target.checked)}
-                          className="h-4 w-4 rounded border border-white/20 bg-black text-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-                        />
-                        I understand this action is permanent.
-                      </label>
-
-                      <div className="flex justify-end">
-                        <button
-                          type="button"
-                          onClick={handleDeleteGroup}
-                          disabled={deleteConfirmation !== confirmationCode || !acknowledged}
-                          className="rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Delete league permanently
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </section>
-              </>
-            )}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </section>
 
-      <ScoringModal
-        open={showScoringModal}
-        onClose={() => setShowScoringModal(false)}
-        variant="league"
-      />
-
-      {pendingLeaderboardAction && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeLeaderboardActionModal}
-        >
-          <div
-            className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
+      {activeTab === "contests" && (
+        <div className="space-y-6">
+          <Link
+            href={`/league/${group?.id}/contests/create`}
+            className="flex w-full items-center justify-between gap-4 rounded-lg border border-sky-300/30 bg-sky-500/10 px-5 py-4 text-left transition hover:border-sky-200/70 hover:bg-sky-500/15"
           >
+            <span>
+              <span className="block text-sm font-semibold text-white">Start a contest</span>
+              <span className="mt-1 block text-xs text-gray-400">
+                Set sports, dates, and a standings container for this group.
+              </span>
+            </span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/40 text-xl text-sky-100">
+              +
+            </span>
+          </Link>
+
+          {activeContests?.length ? (
             <div className="space-y-4">
-              <div className="space-y-1 text-center">
-                <h3 className="text-base font-semibold text-white">
-                  {pendingLeaderboardAction.kind === "archive-secondary"
-                    ? "Archive leaderboard"
-                    : "Archive & restart"}
-                </h3>
-                <p className="text-xs text-gray-400">
-                  {pendingLeaderboardAction.kind === "archive-secondary"
-                    ? `Archive ${pendingLeaderboardAction.leaderboardName}? No new slips will count toward it.`
-                    : `Archive ${pendingLeaderboardAction.leaderboardName} and restart? This will also archive the secondary leaderboards.`}
-                </p>
-              </div>
-              <div className="flex justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={closeLeaderboardActionModal}
-                  className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmPendingLeaderboardAction}
-                  className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
-                >
-                  {loading
-                    ? "Archiving..."
-                    : pendingLeaderboardAction.kind === "archive-secondary"
-                      ? "Archive leaderboard"
-                      : "Archive & restart"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEditLeagueModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowEditLeagueModal(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold text-white">Edit league details</h2>
-                <p className="text-xs text-gray-400">
-                  Update the name or description for {group?.name}.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowEditLeagueModal(false)}
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                aria-label="Close edit league"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-6 py-5">
-              <label className="flex flex-col gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-400">league name</span>
-                <input
-                  value={editLeagueName}
-                  onChange={(event) => setEditLeagueName(event.target.value)}
-                  className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
-                  placeholder="League name"
-                />
-                {errors.name && (
-                  <span className="text-xs font-medium text-red-400">
-                    {errors.name}
-                  </span>
+              <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {activeContests.map(renderContestCard)}
+                {contestLoader && activePage > 1 && (
+                  <>
+                    <ContestCardSkeleton />
+                    <ContestCardSkeleton />
+                  </>
                 )}
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  description (optional)
-                </span>
-                <textarea
-                  value={editLeagueDescription}
-                  onChange={(event) => setEditLeagueDescription(event.target.value)}
-                  className="ui-input-accent min-h-[96px] rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
-                  placeholder="What's this league about?"
-                />
-                {errors.description && (
-                  <span className="text-xs font-medium text-red-400">
-                    {errors.description}
-                  </span>
-                )}
-              </label>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEditLeagueModal(false)}
-                  className="rounded-2xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white"
-                >
-                  cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveGroupDetails}
-                  disabled={!editLeagueName.trim()}
-                  className="ui-accent-button-solid rounded-2xl px-5 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  save changes
-                </button>
-              </div>
+              </section>
+              {hasMoreActive && !contestLoader && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={handleLoadMoreActive}
+                    className="rounded-lg border border-white/10 bg-white/[0.03] px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/[0.08] active:bg-white/[0.12]"
+                  >
+                    Show More
+                  </button>
+                </div>
+              )}
             </div>
+          ) : (
+            <section className="rounded-lg border border-dashed border-white/15 bg-black/30 p-6 text-sm text-gray-400">
+              <p className="font-semibold text-white">No contests yet.</p>
+              <p className="mt-2">Any group member can start the first one.</p>
+            </section>
+          )}
+
+          <section className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowArchived((prev) => !prev)}
+              className="flex w-full items-center justify-between text-left text-sm font-semibold uppercase tracking-wide text-gray-300"
+              aria-expanded={showArchived}
+            >
+              <span>Archived contests</span>
+              <span>{showArchived ? "▴" : "▾"}</span>
+            </button>
+            {showArchived && (
+              archivedContests?.length ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {archivedContests.map(renderContestCard)}
+                    {contestLoader && archivedPage > 1 && (
+                      <>
+                        <ContestCardSkeleton />
+                        <ContestCardSkeleton />
+                      </>
+                    )}
+                  </div>
+                  {hasMoreArchived && !contestLoader && (
+                    <div className="flex justify-center pt-2">
+                      <button
+                        type="button"
+                        onClick={handleLoadMoreArchived}
+                        className="rounded-lg border border-white/10 bg-white/[0.03] px-6 py-2.5 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-white/[0.08] active:bg-white/[0.12]"
+                      >
+                        Show More
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-gray-500">
+                  No archived contests.
+                </div>
+              )
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === "members" && (
+        <ModifyMembers
+          currentUser={currentUser}
+          onRemoveMember={handleRemoveMember}
+          onMakeCommissioner={handleTransferCommissioner}
+          onLeaveGroup={handleLeaveLeague}
+          leavingGroup={leavingLeague}
+          groupId={leagueId}
+        />
+      )}
+
+      {activeTab === "feed" && (
+        <div className="space-y-4 pt-2">
+          <div className="rounded-3xl border border-white/10 bg-black/60 p-5 text-sm text-gray-300 shadow-lg">
+            <FeedTab groupId={group?.id} />
           </div>
         </div>
       )}
 
-      {secondaryLeaderboardsEnabled && showCreateSideModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          onClick={closeSideContestModal}
-        >
-          <div
-            className="w-full max-w-lg rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold text-white">
-                  Create a secondary leaderboard
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={closeSideContestModal}
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                aria-label="Close secondary leaderboard modal"
-              >
-                X
-              </button>
-            </div>
-
-            <div className="space-y-4 px-6 py-5">
-              <label className="flex flex-col gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-400">
-                  leaderboard name
-                </span>
-                <input
-                  value={sideContestName}
-                  onChange={(event) => setSideContestName(event.target.value)}
-                  maxLength={MAX_LEADERBOARD_NAME_LENGTH}
-                  className="ui-input-accent rounded-2xl border border-white/10 bg-black px-4 py-3 text-base text-white outline-none transition"
-                  placeholder="NBA playoff slips"
-                />
-              </label>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeSideContestModal}
-                  className="rounded-lg border border-slate-800/80 px-4 py-2 text-xs tracking-wide text-gray-300 transition hover:border-slate-700/80"
-                >
-                  cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateSideContest}
-                  disabled={
-                    !sideContestName.trim() ||
-                    sideContestName.trim().length > MAX_LEADERBOARD_NAME_LENGTH ||
-                    sideLimitReached
-                  }
-                  className="rounded-lg bg-sky-500/25 px-5 py-2 text-xs font-semibold tracking-wide text-sky-100 transition hover:bg-sky-500/35 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {loading ? `creating...` : `create`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {activeTab === "chat" && (
+        <GroupChatTab groupId={group?.id} />
       )}
 
-      {archivedLeaderboardId && ArchivedLeaderboardObject && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setArchivedLeaderboardId(null)}
-        >
-          <div
-            className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/90 shadow-2xl backdrop-blur"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-4">
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-wide text-gray-400">
-                  Archived leaderboard
-                </p>
-                <h2 className="text-lg font-semibold text-white">
-                  {ArchivedLeaderboardObject.label}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setArchivedLeaderboardId(null)}
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                aria-label="Close archived leaderboard"
-              >
-                X
-              </button>
+      {activeTab === "settings" && isCommissioner && (
+        <div className="space-y-8">
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
+                Group details
+              </h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Contest settings live inside each contest.
+              </p>
             </div>
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              <LeaderboardGrid
-                group={group}
-                leaderboardId={ArchivedLeaderboardObject.leaderboard_id}
-                leaderboardName={ArchivedLeaderboardObject.label}
-                currentUserId={currentUser?.userId}
-                leaderboard={archiveLeaderboardData}
-                leaderboardSlips={leaderboardSlipsList}
-                archivedLeaderboardSlips={archivedLeaderboardSlipsList}
-                isArchived={true}
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Group name
+              <input
+                value={editLeagueName}
+                onChange={(event) => setEditLeagueName(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
               />
+              {errors.name && (
+                <p className="mt-1 text-xs text-red-400">
+                  {errors.name}
+                </p>
+              )}
+            </label>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Description
+              <textarea
+                value={editLeagueDescription}
+                onChange={(event) => setEditLeagueDescription(event.target.value)}
+                rows={3}
+                className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+              />
+              {errors.description && (
+                <p className="mt-1 text-xs text-red-400">
+                  {errors.description}
+                </p>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveLeague}
+              disabled={loading}
+              className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Save details
+            </button>
+          </section>
+
+          <section className="space-y-4 border-t border-white/10 pt-6">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-red-300">
+                Delete group
+              </h2>
+              <p className="mt-1 text-xs text-gray-500">
+                Type the group name to permanently delete the group, contests, slips, and picks.
+              </p>
             </div>
-          </div>
+            <input
+              value={deleteConfirmation}
+              onChange={(event) => setDeleteConfirmation(event.target.value)}
+              placeholder={group.name}
+              className="w-full rounded-lg border border-red-400/20 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-red-300/70"
+            />
+            <button
+              type="button"
+              onClick={handleDeleteLeague}
+              disabled={deleteLoading || (deleteConfirmation !== group.name)}
+              className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Delete group
+            </button>
+          </section>
         </div>
       )}
 
@@ -2021,77 +743,13 @@ const GroupPage = () => {
         />
       )}
 
-      <SecondaryLeaderboardsInfoModal
-        open={showSecondaryInfo}
-        onClose={() => setShowSecondaryInfo(false)}
+      <ScoringModal
+        open={showScoringModal}
+        variant="league"
+        onClose={() => setShowScoringModal(false)}
       />
     </div>
   );
 };
 
-const SecondaryLeaderboardsInfoModal = ({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) => {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      id="secondary-leaderboards-info-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="secondary-leaderboards-title"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md overflow-hidden rounded-xl border border-slate-800/80 bg-black/85 shadow-2xl backdrop-blur"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
-          <div className="space-y-1">
-            <h2 id="secondary-leaderboards-title" className="text-lg font-semibold text-white">
-              Secondary leaderboards
-            </h2>
-            <p className="text-xs text-gray-400">How it works</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-white/15 px-2 py-1 text-xs font-semibold tracking-wide text-gray-300 transition hover:border-white/35 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-            aria-label="Close secondary leaderboards info"
-          >
-            x
-          </button>
-        </div>
-        <div className="space-y-3 px-5 py-5 text-sm text-gray-200">
-          <p>
-            Every slip counts toward the Main Leaderboard by default, but Secondary Leaderboards
-            let your league keep separate rankings for specific types of slips. When enabled, the
-            commissioner can assign certain slips to a Secondary Leaderboard.
-          </p>
-          <p>
-            For example, your league might want separate rankings for NFL slips vs NBA slips, or a
-            dedicated board just for the Playoffs. This lets members easily see how they rank
-            within just that league or category. You can assign a slip to a secondary leaderboard
-            during slip creation (or update it later in slip actions if enabled).
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default GroupPage;
+export default LeagueDashboardPage;

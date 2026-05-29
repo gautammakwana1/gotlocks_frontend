@@ -19,7 +19,7 @@ const GROUP_MODAL_TABS = [
 
 const GLOBAL_MODAL_TABS = [
   { id: "scoring", label: "Scoring & XP" },
-  { id: "shop", label: "Shop Access" },
+  { id: "shop", label: "Reward Room" },
 ] as const;
 
 type GroupModalTab = (typeof GROUP_MODAL_TABS)[number]["id"];
@@ -59,7 +59,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       : "League Scoring Rules";
   const modalSubtitle =
     variant === "global"
-      ? "How post XP levels up your profile and unlocks shop access."
+      ? "How post XP levels up your profile and unlocks Reward Room access."
       : "How slips, scoring, and commissioner controls work inside your league.";
   const modalWidthClassName = "max-w-3xl";
   const modalHeaderClassName = "px-6 py-5 sm:px-7";
@@ -631,20 +631,20 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           isOpen: openGlobalSections.shop === "connection",
           onToggle: () => toggleGlobalSection("shop", "connection"),
           panelId: "global-rule-shop-connection",
-          eyebrow: "Shop",
-          title: "The Shop",
+          eyebrow: "Reward Room",
+          title: "Reward Room",
           children: (
             <div className="space-y-4">
               <p>
-                Shop tiers unlock automatically at levels 5, 15, 25, and 35.
-                Unlocked rewards can be free or purchasable by dollar price.
+                Reward Room tiers unlock automatically at levels 5, 15, 25, and 35.
+                Unlocked rewards are virtual profile, post, and league upgrades.
               </p>
               <Link
                 href="/global-points-shop"
                 onClick={onClose}
                 className="inline-flex items-center text-sm font-semibold text-sky-200 underline decoration-white/25 underline-offset-4 transition hover:text-white"
               >
-                Go to The Shop
+                Go to Reward Room
               </Link>
             </div>
           ),

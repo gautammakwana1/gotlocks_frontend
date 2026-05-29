@@ -1,5 +1,4 @@
 
-import { LeaderboardStatus } from "@/app/league/[leagueId]/leaderboard/page";
 import { CachedReviewData } from "@/components/pick-builder/core/reviewSheetState";
 
 export type Role = "member" | "commissioner";
@@ -55,6 +54,10 @@ export type TierName =
 export type LegacyDifficultyLabel = "Safe" | "Balanced" | "Risky";
 
 export type DifficultyLabel = TierName | LegacyDifficultyLabel;
+
+export type LeaderboardStatus = "ACTIVE" | "ARCHIVED";
+
+export type ContestStatus = "ACTIVE" | "ARCHIVED";
 
 // Canonical pick categories; profiles, feeds, Winners Hall, and badge queries rely on this instead of inferring from location.
 export enum PickType {
@@ -169,6 +172,77 @@ export type Group = {
     is_enable_secondary_leaderboard: boolean;
 }
 
+export type ContestBadgeCategory = "generic" | "football" | "nba";
+
+export type ContestBadgeSettings = {
+    enabled: boolean;
+    defaultPoints: number;
+    enabledBadgeIds: string[];
+    badgePointOverrides: Record<string, number>;
+};
+
+export type ContestBadgeSettingsState = {
+    applied: ContestBadgeSettings;
+    pending?: ContestBadgeSettings | null;
+    updatedAt?: string;
+    recalculatedAt?: string;
+    recalculatedBy?: string;
+};
+
+export type ContestBadgeDefinition = {
+    id: string;
+    name: string;
+    category: ContestBadgeCategory;
+    description: string;
+    minimum: number;
+    eligibleSports: string[];
+    suggestedPoints?: number;
+    display: {
+        icon: string;
+        subtitle: string;
+        theme: string;
+        toneClass: string;
+        borderClass: string;
+        glowClass: string;
+    };
+};
+
+export type ContestBadgeAward = {
+    definition: ContestBadgeDefinition;
+    userId: string;
+    value: number;
+    valueLabel: string;
+    markToBeatLabel: string;
+    points: number;
+    reachedAt: string;
+    extra?: Record<string, number | string>;
+};
+
+export type Contest = {
+    id: string;
+    group_id: string;
+    name: string;
+    description?: string;
+    sports: string[];
+    starts_at: string;
+    ends_at: string;
+    badges_enabled?: boolean;
+    badge_settings?: ContestBadgeSettingsState;
+    status: ContestStatus;
+    created_by: string;
+    created_at: string;
+    updated_at: string;
+    archived_at?: string | null;
+    excluded_member_ids: string[];
+    slips_count?: {
+        open_count: number;
+        review_count: number;
+        finalized_count: number;
+    };
+    included_members_count: number;
+    excluded_members_count: number;
+};
+
 export type Slip = {
     id?: string;
     group_id: string;
@@ -189,6 +263,7 @@ export type Slip = {
     window_days: number;
     created_by?: string;
     slip_type?: string;
+    contest_id: string;
     leaderboard_ids?: string[];
     total_picks?: number;
     external_pick_key?: string;
@@ -388,6 +463,7 @@ export type Member = {
 export type Members = Member[];
 export type Slips = Slip[];
 export type Picks = Pick[];
+export type Contests = Contest[];
 
 export type GroupResponse = {
     data?: {
@@ -416,6 +492,42 @@ export type FetchGroupsParams = {
     sort_by?: string;
     sort_order?: "asc" | "desc";
     search?: string;
+};
+
+export type FetchContestsParams = {
+    group_id: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FetchContestByIdPayload = {
+    contest_id: string;
+};
+
+export type FetchBadgeAwardsByContestIdPayload = {
+    contest_id: string;
+};
+
+export type ArchiveContestByIdPayload = {
+    contest_id: string;
+};
+
+export type UpdateBadgeSettingsPayload = {
+    contest_id: string;
+    settings: ContestBadgeSettings;
+};
+
+export type ResetBadgeSettingsPayload = {
+    contest_id: string;
+};
+
+export type RecalculateStadingsPayload = {
+    contest_id: string;
+};
+
+export type ExcludeContestMemberPayload = {
+    contest_id: string;
+    user_id: string;
 };
 
 export type FetchMyGroupsPayload = {
@@ -599,6 +711,14 @@ export type FetchSlipsPaginationPayload = {
     hasMore: boolean;
 };
 
+export type FetchContestsPaginationPayload = {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+};
+
 export type FetchGroupsPaginationPayload = {
     page: number;
     limit: number;
@@ -617,6 +737,10 @@ export type FetchSearchedUsersPaginationPayload = {
 
 export type FetchPicksPayload = {
     slip_id: string | undefined;
+};
+
+export type FetchContestPicksPayload = {
+    contest_id: string | undefined;
 };
 
 export type FetchPostPicksPayload = {
@@ -642,18 +766,21 @@ export type FetchSlipsPayload = {
 
 export type FetchOpenSlipsPayload = {
     group_id: string;
+    contest_id: string;
     page?: number;
     limit?: number;
 };
 
 export type FetchReviewSlipsPayload = {
     group_id: string;
+    contest_id: string;
     page?: number;
     limit?: number;
 };
 
 export type FetchFinalizeSlipsPayload = {
     group_id: string;
+    contest_id: string;
     page?: number;
     limit?: number;
 };
@@ -808,6 +935,26 @@ export type CreateFeedbackPayload = {
     description: string;
 }
 
+export type CreateContestPayload = {
+    group_id: string;
+    name: string;
+    sports: string[];
+    starts_at: string;
+    ends_at: string;
+    status: ContestStatus;
+    badges_enabled: boolean;
+    excluded_member_ids: string[];
+}
+
+export type UpdateContestPayload = {
+    contest_id: string;
+    name?: string;
+    description?: string;
+    starts_at: string;
+    ends_at: string;
+    badges_enabled?: boolean;
+}
+
 export type FetchProgressByUserIdPayload = {
     user_id: string;
 }
@@ -878,6 +1025,8 @@ export type Leaderboard = {
     user_id: string;
     slip_points: number;
     cumulative_points: number;
+    badge_points: number;
+    badge_awards: ContestBadgeAward[];
     win: number;
     loss: number;
     username?: string;
@@ -939,6 +1088,7 @@ export type ArchiveLeaderboardList = {
 
 export type LeaderboardPayload = {
     groupId: string | undefined;
+    contest_id?: string;
     leaderboard_id?: string;
     page?: number;
     limit?: number;
@@ -971,6 +1121,60 @@ export type FeedbackState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+};
+
+export type BadgeDefinition = {
+    id: string;
+    name: string;
+    category: string;
+    description: string;
+    metric: string;
+    minimum: number;
+    eligibleSports: string[];
+    suggestedPoints: number;
+    scope: string;
+    display: {
+        icon: string;
+        subtitle: string;
+        theme: string;
+        toneClass: string;
+        borderClass: string;
+        glowClass: string;
+    };
+}
+
+export type BadgeAward = {
+    definition: BadgeDefinition;
+    userId: string;
+    profile?: {
+        id?: string;
+        username?: string;
+        profile_image?: string;
+        is_public?: boolean;
+        full_name?: string;
+    };
+    value: number;
+    valueLabel: string;
+    markToBeatLabel: string;
+    points: number;
+    reachedAt: string;
+    extra?: Record<string, number | string>;
+}
+
+export type ContestState = {
+    contest: Contest | null;
+    contests: Contests | null;
+    activeContests: Contests | null;
+    archivedContests: Contests | null;
+    loading: boolean;
+    badgeLoading: boolean;
+    error: string | null;
+    message: string | null;
+    hasMoreActive: boolean;
+    hasMoreArchived: boolean;
+    badgeAwards: BadgeAward[] | null;
+    badgeDefinitions: BadgeDefinition[] | null;
+    manageableBadgeDefinitions: BadgeDefinition[] | null;
 };
 
 export type PickSliceState = {
@@ -1009,6 +1213,7 @@ export type RootState = {
     notifications: NotificationsState;
     social: SocialState;
     soccer: SoccerState;
+    contest: ContestState;
 };
 
 export type UpdateGroupPayload = {
@@ -2296,7 +2501,8 @@ export type NotificationType =
     | "follow"
     | "follow_request"
     | "follow_request_accepted"
-    | "commissioner_transfer";
+    | "commissioner_transfer"
+    | "contest_badges";
 
 export type FollowRequestStatus = "pending" | "accepted" | "declined";
 

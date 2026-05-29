@@ -212,7 +212,7 @@ const StubLeagueBuilder = ({
 };
 
 export const PickBuilderShell = (props: PickBuilderShellProps) => {
-    const { context, onDismiss, showDismissButton = true } = props;
+    const { context, onDismiss } = props;
     const dispatch = useDispatch();
 
     // const buildMode = "ODDS";
@@ -236,7 +236,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         Record<string, ConfidenceLevel | null>
     >({});
     const [hasManualLeagueSelection, setHasManualLeagueSelection] = useState(false);
-    const [hasAutoSelectedLeague, setHasAutoSelectedLeague] = useState(false);
+    // const [hasAutoSelectedLeague, setHasAutoSelectedLeague] = useState(false);
 
     const { leagueCounts, loading } = useSelector((state: RootState) => state.league);
     const { loading: pickLoading } = useSelector((state: RootState) => state.pick);
@@ -309,7 +309,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                 if (firstLeague !== activeLeague) {
                     setActiveLeague(firstLeague);
                 }
-                setHasAutoSelectedLeague(true);
+                // setHasAutoSelectedLeague(true);
             }
         }
     }, [allowedLeagues, leagueCounts, hasManualLeagueSelection, context.initialPick, activeLeague]);
@@ -415,6 +415,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                 status: "open",
                 created_by: context.currentUser.userId,
                 betLink: null,
+                contest_id: "",
             } satisfies Slip)
             : null;
 

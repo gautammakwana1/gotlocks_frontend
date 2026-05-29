@@ -82,7 +82,7 @@ function* handleUpdateSlips(action: PayloadAction<UpdateSlipPayload>): SagaItera
         );
         const payload = response.data as { data?: unknown };
         yield put(updateSlipsSuccess(payload));
-        if (action.payload.slip_id) {
+        if (action.payload.group_id) {
             yield put(fetchAllSlipsRequest({ group_id: action.payload.group_id }));
         }
     } catch (error: unknown) {
@@ -124,6 +124,9 @@ function* handleMarkFinalizeSlip(action: PayloadAction<MarkFinalizePayload>): Sa
             action.payload
         );
         yield put(markFinalizeSlipSuccess(response.data));
+        if (action.payload.group_id) {
+            yield put(fetchAllSlipsRequest({ group_id: action.payload.group_id as string }));
+        }
     } catch (error: unknown) {
         yield put(markFinalizeSlipFailure(getErrorMessage(error, "Slip Finalized Failed")))
     }
@@ -216,13 +219,13 @@ function* handleAssignToSecondaryLeaderboard(action: PayloadAction<AssignToSecon
 
 function* handleFetchAllOpenSlips(action: PayloadAction<FetchOpenSlipsPayload | undefined>): SagaIterator {
     try {
-        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+        const { group_id = '', contest_id = '', page = 1, limit = 10 } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/slip/open`,
             {
-                params: { group_id, page, limit }
+                params: { group_id, contest_id, page, limit }
             }
         );
         const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
@@ -236,13 +239,13 @@ function* handleFetchAllOpenSlips(action: PayloadAction<FetchOpenSlipsPayload | 
 
 function* handleFetchAllReviewSlips(action: PayloadAction<FetchReviewSlipsPayload | undefined>): SagaIterator {
     try {
-        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+        const { group_id = '', contest_id = '', page = 1, limit = 10 } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/slip/review`,
             {
-                params: { group_id, page, limit }
+                params: { group_id, contest_id, page, limit }
             }
         );
         const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };
@@ -256,13 +259,13 @@ function* handleFetchAllReviewSlips(action: PayloadAction<FetchReviewSlipsPayloa
 
 function* handleFetchAllFinalizedSlips(action: PayloadAction<FetchFinalizeSlipsPayload | undefined>): SagaIterator {
     try {
-        const { group_id = '', page = 1, limit = 10 } = action.payload || {};
+        const { group_id = '', contest_id = '', page = 1, limit = 10 } = action.payload || {};
 
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/slip/final`,
             {
-                params: { group_id, page, limit }
+                params: { group_id, contest_id, page, limit }
             }
         );
         const payload = response.data as { data?: { slips: Slips, pagination: FetchSlipsPaginationPayload } };

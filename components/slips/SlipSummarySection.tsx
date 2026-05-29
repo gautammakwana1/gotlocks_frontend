@@ -13,7 +13,7 @@ type Props = {
 
 export const SlipSummarySection = ({ slips, groupId, returnTo }: Props) => {
     const router = useRouter();
-    const fallbackPath = returnTo ?? `/league/${groupId}?tab=leaderboard`;
+    const fallbackPath = returnTo ?? `/league/${groupId}`;
     const encodedReturn = encodeURIComponent(fallbackPath);
 
     if (slips.length === 0) {

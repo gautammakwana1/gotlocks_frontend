@@ -13,7 +13,6 @@ import { clearValidateMyNFLPickMessage, fetchLiveNFLScheduleByTimezoneRequest, f
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { normalizeOddToLeg, validateAddLeg } from "@/lib/sgp/validateParlay";
-import FootballAnimation from "../../animations/FootballAnimation";
 import { formatTierPrimary, getGroupTierForAmericanOdds, getTierForAmericanOdds, getTierForLabel, getTierMetaForPick, parseAmericanOdds } from "@/lib/utils/scoring";
 import { canUserEditSlipPicks, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
@@ -2331,6 +2330,7 @@ export const NflPickBuilder = ({
                             description: string;
                             odds: string;
                             sourceTabLabel: string;
+                            metaLine: string | null;
                             tierLine: string;
                             tierCard: ReturnType<typeof resolveTierCardAppearance>;
                         } => item !== null

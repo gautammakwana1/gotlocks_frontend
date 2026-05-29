@@ -16,7 +16,7 @@ import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowe
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { getBasePointsForPick, getPickPoints } from "@/lib/utils/scoring";
+import { getBasePointsForPick } from "@/lib/utils/scoring";
 import ScoringModal from "../modals/ScoringModal";
 import Link from "next/link";
 import Image from "next/image";
@@ -356,10 +356,10 @@ const ProfileView = ({
         [profileVisible, sortedPicks]
     );
 
-    const statsPicks = useMemo(
-        () => (profileVisible ? sortedPicks : []),
-        [profileVisible, sortedPicks]
-    );
+    // const statsPicks = useMemo(
+    //     () => (profileVisible ? sortedPicks : []),
+    //     [profileVisible, sortedPicks]
+    // );
 
     // const headerSummaryPicks = showLockedPrivateHeaderSummary ? postPicks : statsPicks;
 
@@ -541,14 +541,13 @@ const ProfileView = ({
     };
 
     const now = new Date();
+    const totalXp = progress?.lifetime_xp ?? 0;
     const lastXP = new Date(progress?.last_xp_date ?? 0);
 
     const isTodayXp =
         now.toISOString().slice(0, 10) ===
         lastXP.toISOString().slice(0, 10);
-    const { level, xpIntoLevel, xpToNext, xpRemaining } = getLevelProgress(
-        progress?.lifetime_xp ?? 0
-    );
+    const { level, xpIntoLevel, xpToNext, xpRemaining } = getLevelProgress(totalXp);
     const xpToday = progress?.xp_today ?? 0;
     const levelProgressPercent = xpToNext > 0 ? Math.min(100, (xpIntoLevel / xpToNext) * 100) : 0;
     const displayName = targetUser?.username ?? targetUser?.full_name ?? "Member";
@@ -636,6 +635,7 @@ const ProfileView = ({
                     xpToNext: xpToNext,
                     xpRemaining: xpRemaining,
                     levelProgressPercent,
+                    lifetimeXp: totalXp
                 }}
                 onShowScoringRules={() => setShowScoringModal(true)}
                 onFollowToggle={handleFollowToggle}
