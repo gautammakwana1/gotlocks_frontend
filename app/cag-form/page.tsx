@@ -44,7 +44,7 @@ const CagFormPage = () => {
   );
 
   useEffect(() => {
-    if (group && group.id && group.invite_code) {
+    if (group && group.id && group.invite_code && message) {
       setCreatedId(group.id);
       setInviteCode(group.invite_code);
     }

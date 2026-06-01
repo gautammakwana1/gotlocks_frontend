@@ -31,6 +31,10 @@ import type {
 	MembersData,
 	FetchMyGroupsPayload,
 	GroupObject,
+	ChatMessage,
+	FetchGroupChatsPayload,
+	FetchGroupChatsResponse,
+	SendMessagePayload,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -59,6 +63,12 @@ type GroupState = {
 	membersPagination?: PaginationMetadata;
 	hasMore: boolean;
 	myGroups: GroupObject[] | null;
+	chatMessages: ChatMessage[] | null;
+	loadingChats: boolean;
+	chatsHasMore: boolean;
+	chatsNextCursor: string | null;
+	loadingOlderChats: boolean;
+	olderChats: ChatMessage[] | null;
 };
 
 const initialState: GroupState = {
@@ -85,6 +95,12 @@ const initialState: GroupState = {
 	loadingMembers: false,
 	hasMore: false,
 	myGroups: null,
+	chatMessages: null,
+	loadingChats: false,
+	chatsHasMore: true,
+	chatsNextCursor: null,
+	loadingOlderChats: false,
+	olderChats: null,
 };
 
 const groupSlice = createSlice({
@@ -523,6 +539,65 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		fetchGroupChatsByGroupIdRequest: (state, action: PayloadAction<FetchGroupChatsPayload>) => {
+			void action;
+			state.loadingChats = true;
+			state.error = null;
+			// Reset cursor pagination for the (new) group.
+			state.chatsHasMore = true;
+			state.chatsNextCursor = null;
+			state.olderChats = null;
+			state.loadingOlderChats = false;
+		},
+		fetchGroupChatsByGroupIdSuccess: (state, action: PayloadAction<FetchGroupChatsResponse>) => {
+			state.loadingChats = false;
+			state.chatMessages = action.payload.messages;
+			state.chatsHasMore = action.payload.hasMore;
+			state.chatsNextCursor = action.payload.nextCursor;
+		},
+		fetchGroupChatsByGroupIdFailure: (state, action) => {
+			state.loadingChats = false;
+			state.error = action.payload;
+		},
+		clearFetchGroupChatsByGroupIdMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		loadOlderGroupChatsRequest: (state, action: PayloadAction<FetchGroupChatsPayload>) => {
+			void action;
+			state.loadingOlderChats = true;
+			state.error = null;
+		},
+		loadOlderGroupChatsSuccess: (state, action: PayloadAction<FetchGroupChatsResponse>) => {
+			state.loadingOlderChats = false;
+			state.olderChats = action.payload.messages;
+			state.chatsHasMore = action.payload.hasMore;
+			state.chatsNextCursor = action.payload.nextCursor;
+		},
+		loadOlderGroupChatsFailure: (state, action) => {
+			state.loadingOlderChats = false;
+			state.error = action.payload;
+		},
+		clearOlderGroupChats: (state) => {
+			state.olderChats = null;
+		},
+
+		sendMessageRequest: (state, action: PayloadAction<SendMessagePayload>) => {
+			void action;
+			state.error = null;
+		},
+		sendMessageSuccess: (state, action) => {
+			// state.chatMessages = action.payload.messages;
+		},
+		sendMessageFailure: (state, action) => {
+			state.error = action.payload;
+		},
+		clearSendMessageMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -612,6 +687,18 @@ export const {
 	fetchMyGroupsSuccess,
 	fetchMyGroupFailure,
 	clearFetchMyGroupMessage,
+	fetchGroupChatsByGroupIdRequest,
+	fetchGroupChatsByGroupIdSuccess,
+	fetchGroupChatsByGroupIdFailure,
+	clearFetchGroupChatsByGroupIdMessage,
+	loadOlderGroupChatsRequest,
+	loadOlderGroupChatsSuccess,
+	loadOlderGroupChatsFailure,
+	clearOlderGroupChats,
+	sendMessageRequest,
+	sendMessageSuccess,
+	sendMessageFailure,
+	clearSendMessageMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

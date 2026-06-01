@@ -123,6 +123,103 @@ body {
   animation: homeFadeUp 220ms ease-out;
 }
 
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.ui-message-in {
+  animation: messageIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-message-in {
+    animation: none;
+  }
+}
+
+/* Emoji picker entrance animations */
+@keyframes emojiPop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.ui-emoji-pop {
+  animation: emojiPop 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.ui-sheet-up {
+  animation: sheetUp 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes backdropIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.ui-backdrop-in {
+  animation: backdropIn 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-emoji-pop,
+  .ui-sheet-up,
+  .ui-backdrop-in {
+    animation: none;
+  }
+}
+
+/* Theme the emoji-mart picker to match the dark glass / blue accent aesthetic.
+   The picker renders an `em-emoji-picker` custom element that reads these CSS
+   custom properties from its host. */
+.emoji-mart-glass em-emoji-picker {
+  --rgb-background: 17, 22, 33;
+  --rgb-accent: 96, 165, 250;
+  --border-radius: 16px;
+  --color-border: rgba(255, 255, 255, 0.08);
+  width: 100%;
+  max-width: 100%;
+  background: transparent;
+}
+
+/* Mobile sheet: cap the picker height so the search bar + category nav stay
+   visible and the emoji grid scrolls internally (the picker's `.scroll` area is
+   flex-grow, so shrinking the host height engages its own scroll). */
+.emoji-mart-mobile em-emoji-picker {
+  height: min(48vh, 360px);
+  min-height: 260px;
+}
+
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;

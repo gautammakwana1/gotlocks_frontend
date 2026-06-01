@@ -1,7 +1,7 @@
 import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
@@ -30,6 +30,9 @@ import type {
 	FetchMyGroupsPayload,
 	GroupObject,
 	FetchGroupsPaginationPayload,
+	FetchGroupChatsPayload,
+	FetchGroupChatsResponse,
+	SendMessagePayload,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -386,6 +389,56 @@ function* handleFetchGroupMembersByGroupId(action: PayloadAction<FetchGroupMembe
 	}
 }
 
+function* handleFetchGroupChatsByGroupId(action: PayloadAction<FetchGroupChatsPayload>): SagaIterator {
+	try {
+		const { group_id = "" } = action.payload || {};
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/chat/fetch-messages`,
+			{
+				params: { group_id }
+			}
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchGroupChatsByGroupIdSuccess(payload.data as FetchGroupChatsResponse));
+	} catch (error: unknown) {
+		yield put(fetchGroupChatsByGroupIdFailure(getErrorMessage(error, "Fetching Group Chats Failed")));
+	}
+}
+
+function* handleLoadOlderGroupChats(action: PayloadAction<FetchGroupChatsPayload>): SagaIterator {
+	try {
+		const { group_id = "", cursor } = action.payload || {};
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/chat/fetch-messages`,
+			{
+				params: { group_id, cursor }
+			}
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(loadOlderGroupChatsSuccess(payload.data as FetchGroupChatsResponse));
+	} catch (error: unknown) {
+		yield put(loadOlderGroupChatsFailure(getErrorMessage(error, "Loading older messages failed")));
+	}
+}
+
+function* handleSendMessage(action: PayloadAction<SendMessagePayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/group/chat/send-message`,
+			action.payload
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(sendMessageSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(sendMessageFailure(getErrorMessage(error, "Failed to send message")));
+	}
+}
+
 export default function* groupSaga() {
 	yield takeLatest(createGroupRequest.type, handleCreateGroup);
 	yield takeLatest(fetchAllGroupsRequest.type, handleFetchAllGroups);
@@ -408,4 +461,7 @@ export default function* groupSaga() {
 	yield takeLatest(enableSecondaryLeaderboardRequest.type, handleEnableSecondaryLeaderboard);
 	yield takeLatest(fetchGroupMembersByGroupIdRequest.type, handleFetchGroupMembersByGroupId);
 	yield takeLatest(fetchMyGroupsRequest.type, handleFetchMyGroups);
+	yield takeLatest(fetchGroupChatsByGroupIdRequest.type, handleFetchGroupChatsByGroupId);
+	yield takeLatest(loadOlderGroupChatsRequest.type, handleLoadOlderGroupChats);
+	yield takeLatest(sendMessageRequest.type, handleSendMessage);
 };

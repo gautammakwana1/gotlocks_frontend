@@ -42,10 +42,25 @@ const LandingPage = () => {
   }, [router]);
 
   useEffect(() => {
-    if (user?.data?.user) {
-      const userData = user?.data?.user;
-      const { access_token, refresh_token, userId, userData: profile, provider } = userData;
-      if (!loading && message) {
+    const setupSession = async () => {
+      if (user?.data?.user) {
+        const userData = user?.data?.user;
+
+        const {
+          access_token,
+          refresh_token,
+          userId,
+          userData: profile,
+          provider,
+        } = userData;
+
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+        }
+
         setLocalStorage("accessToken", access_token);
         setLocalStorage("refresh_token", refresh_token);
         setLocalStorage("currentUser", { ...profile, userId });
@@ -53,20 +68,21 @@ const LandingPage = () => {
         setLocalStorage("provider", provider);
         dispatch(clearLoginWithEmailMessage());
         router.push("/home");
+      } else if (error) {
+        setToast({
+          id: Date.now(),
+          type: "error",
+          message: error,
+          duration: 4000,
+        });
+        dispatch(clearLoginWithEmailMessage());
       }
-    } else if (error) {
-      setToast({
-        id: Date.now(),
-        type: "error",
-        message: error,
-        duration: 4000,
-      });
-      dispatch(clearLoginWithEmailMessage());
-    }
 
-    if (user?.url) {
-      window.location.href = user?.url;
-    }
+      if (user?.url) {
+        window.location.href = user?.url;
+      }
+    };
+    setupSession();
   }, [user, error, loading, message, dispatch, router, setToast]);
 
   const handleManualSubmit = async (event: React.FormEvent<HTMLFormElement>) => {

@@ -372,9 +372,13 @@ export type ChatMessage = {
     id: string;
     group_id: string;
     sender_id: string;
-    text: string;
-    type: "text" | "emoji";
+    message: string;
+    sender_username: string;
+    sender_full_name?: string;
+    sender_profile_image?: string;
+    message_type: "text" | "emoji";
     created_at: string;
+    is_deleted: boolean;
 };
 
 export type DeleteGroupPayload = {
@@ -425,6 +429,12 @@ export type GroupState = {
     leaderboardPagination?: PaginationMetadata;
     loadingMembers: boolean;
     membersPagination?: PaginationMetadata;
+    chatMessages: ChatMessage[] | null;
+    loadingChats: boolean;
+    chatsHasMore: boolean;
+    chatsNextCursor: string | null;
+    loadingOlderChats: boolean;
+    olderChats: ChatMessage[] | null;
 }
 
 export type GroupSelector = {
@@ -577,6 +587,22 @@ export type FetchGroupMembersPayload = {
     group_id: string;
     page?: number;
     limit?: number;
+};
+
+export type FetchGroupChatsPayload = {
+    group_id: string;
+    cursor?: string;
+};
+
+export type FetchGroupChatsResponse = {
+    messages: ChatMessage[];
+    hasMore: boolean;
+    nextCursor: string | null;
+};
+
+export type SendMessagePayload = {
+    group_id: string;
+    message: string;
 };
 
 export type MembersData = {
