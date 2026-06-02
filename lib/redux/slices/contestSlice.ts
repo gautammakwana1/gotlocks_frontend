@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { ArchiveContestByIdPayload, Contests, ContestState, CreateContestPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
+import type { ArchiveContestByIdPayload, Contests, ContestState, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: ContestState = {
     contest: null,
@@ -245,6 +245,24 @@ const contestsSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        deleteContestByIdRequest: (state, action: PayloadAction<DeleteContestByIdPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        deleteContestByIdSuccess: (state, action) => {
+            state.loading = false;
+            state.message = action.payload.message;
+        },
+        deleteContestByIdFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearDeleteContestByIdMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -293,6 +311,10 @@ export const {
     recalculateStadingsSuccess,
     recalculateStadingsFailure,
     clearRecalculateStadingsMessage,
+    deleteContestByIdRequest,
+    deleteContestByIdSuccess,
+    deleteContestByIdFailure,
+    clearDeleteContestByIdMessage,
 } = contestsSlice.actions;
 
 export default contestsSlice.reducer;

@@ -11,7 +11,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import { ContestBadgeSettings, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchLeaderboardRequest } from "@/lib/redux/slices/groupsSlice";
-import { archiveContestByIdRequest, clearArchiveContestByIdMessage, excludeContestMemberRequest, fetchBadgeAwardsByContestIdRequest, fetchContestByIdRequest, resetBadgeSettingsRequest, updateBadgeSettingsRequest, updateContestRequest } from "@/lib/redux/slices/contestSlice";
+import { archiveContestByIdRequest, clearArchiveContestByIdMessage, clearDeleteContestByIdMessage, deleteContestByIdRequest, excludeContestMemberRequest, fetchBadgeAwardsByContestIdRequest, fetchContestByIdRequest, resetBadgeSettingsRequest, updateBadgeSettingsRequest, updateContestRequest } from "@/lib/redux/slices/contestSlice";
 import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
 import LeaderboardSkeleton from "@/components/skeletons/leagues/LeaderboardSkeleton";
@@ -30,6 +30,15 @@ const CONTEST_TABS = [
 
 type ContestTabId = (typeof CONTEST_TABS)[number]["id"];
 const contestSportLabels = (sports: string[]) => (sports.length > 1 ? ["Multi"] : sports);
+
+const generateDeleteCode = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < 6; i += 1) {
+        out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+};
 
 const ContestDetailPage = () => {
     const params = useParams<{ leagueId: string; contestId: string }>();
@@ -53,6 +62,10 @@ const ContestDetailPage = () => {
     const [activeLeaderboardId, setActiveLeaderboardId] = useState<string | null>(null);
     const [badgeDraft, setBadgeDraft] = useState<ContestBadgeSettings | null>(null);
     const [showBadgeSaveConfirm, setShowBadgeSaveConfirm] = useState(false);
+    const [deleteConfirmCode, setDeleteConfirmCode] = useState("");
+    const [deleteCodeInput, setDeleteCodeInput] = useState("");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletingContest, setDeletingContest] = useState(false);
 
     const {
         group: league,
@@ -67,6 +80,10 @@ const ContestDetailPage = () => {
     } = useSelector((state: GroupSelector) => state.group);
     const { contest, loading: contestLoader, error: contestError, message: contestMessage, badgeAwards, badgeDefinitions, manageableBadgeDefinitions, badgeLoading } = useSelector((state: RootState) => state.contest);
     const { openSlips, reviewSlips, finalizeSlips, hasMoreFinalizes, hasMoreOpens, hasMoreReviews } = useSelector((state: RootState) => state.slip);
+
+    const isCommissioner = Boolean(currentUser && league && currentUser.userId === league.created_by);
+    const isCreator = Boolean(currentUser && contest && currentUser.userId === contest.created_by);
+    const canManage = isCommissioner || isCreator;
 
     useEffect(() => {
         if (!leagueId || !contestId || !currentUser) return;
@@ -131,6 +148,7 @@ const ContestDetailPage = () => {
     }, [leaderboardData?.leaderboard, leaderboardListData, leaderboardData?.slips]);
 
     useEffect(() => {
+        if (deletingContest) return;
         if (!contestLoader && contestMessage) {
             setToast({
                 id: Date.now(),
@@ -149,7 +167,27 @@ const ContestDetailPage = () => {
             });
             dispatch(clearArchiveContestByIdMessage());
         }
-    }, [dispatch, setToast, contestLoader, contestError, contestMessage]);
+    }, [dispatch, setToast, contestLoader, contestError, contestMessage, deletingContest]);
+
+    useEffect(() => {
+        if (activeContestTab === "settings" && canManage && !deleteConfirmCode) {
+            setDeleteConfirmCode(generateDeleteCode());
+        }
+    }, [activeContestTab, canManage, deleteConfirmCode]);
+
+    useEffect(() => {
+        if (!deletingContest || contestLoader) return;
+        if (contestMessage) {
+            setToast({ id: Date.now(), type: "success", message: contestMessage, duration: 3000 });
+            dispatch(clearDeleteContestByIdMessage());
+            setDeletingContest(false);
+            router.push(`/league/${leagueId}`);
+        } else if (contestError) {
+            setToast({ id: Date.now(), type: "error", message: contestError, duration: 3000 });
+            dispatch(clearDeleteContestByIdMessage());
+            setDeletingContest(false);
+        }
+    }, [deletingContest, contestLoader, contestMessage, contestError, dispatch, setToast, router, leagueId]);
 
     const groupLeaderboards = useMemo(
         () => leaderboardDataList.filter((board) => board.group_id === league?.id),
@@ -211,9 +249,6 @@ const ContestDetailPage = () => {
     const appliedBadgeSettings = contest ? getAppliedBadgeSettings(contest) : null;
     const hasFinalizedSlips = finalizeSlips && finalizeSlips?.length > 0;
 
-    const isCommissioner = Boolean(currentUser && league && currentUser.userId === league.created_by);
-    const isCreator = Boolean(currentUser && contest && currentUser.userId === contest.created_by);
-    const canManage = isCommissioner || isCreator;
     const visibleTabs = CONTEST_TABS.filter((tab) => {
         if (tab.id === "settings") return canManage;
         if (tab.id === "badges") return Boolean(appliedBadgeSettings?.enabled) || canManage;
@@ -293,6 +328,26 @@ const ContestDetailPage = () => {
         }
 
         dispatch(archiveContestByIdRequest({ contest_id: contestId }));
+    };
+
+    const handleDeleteContest = () => {
+        if (!contestId) return;
+
+        if (!canManage) {
+            setToast({
+                id: Date.now(),
+                type: "error",
+                message: "Only Commissioner OR contest creator can delete this contest.",
+                duration: 3000
+            });
+            return;
+        }
+
+        if (!deleteConfirmCode || deleteCodeInput !== deleteConfirmCode) return;
+
+        setShowDeleteConfirm(false);
+        setDeletingContest(true);
+        dispatch(deleteContestByIdRequest({ contest_id: contestId }));
     };
 
     const handleToggleExcluded = (memberId: string) => {
@@ -872,22 +927,22 @@ const ContestDetailPage = () => {
                             </p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            <label className="block min-w-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
                                 Starts
                                 <input
                                     type="datetime-local"
                                     value={toLocalInputValue(editStartsAt)}
                                     onChange={(event) => setEditStartsAt(fromLocalInputValue(event.target.value))}
-                                    className="mt-2 w-full rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+                                    className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
                                 />
                             </label>
-                            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            <label className="block min-w-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
                                 Ends
                                 <input
                                     type="datetime-local"
                                     value={toLocalInputValue(editEndsAt)}
                                     onChange={(event) => setEditEndsAt(fromLocalInputValue(event.target.value))}
-                                    className="mt-2 w-full rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+                                    className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
                                 />
                             </label>
                         </div>
@@ -923,6 +978,48 @@ const ContestDetailPage = () => {
                             </p>
                         )}
                     </div>
+
+                    <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/[0.04] p-4">
+                        <div>
+                            <h2 className="text-sm font-semibold uppercase tracking-wide text-red-300">
+                                Delete contest
+                            </h2>
+                            <p className="mt-1 text-xs text-gray-500">
+                                Permanently removes this contest and its slips. This cannot be undone. Type the code
+                                below exactly to enable the delete button.
+                            </p>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                            <div className="min-w-0">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                                    Confirmation code
+                                </span>
+                                <div className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
+                                    {deleteConfirmCode}
+                                </div>
+                            </div>
+                        </div>
+                        <label className="block min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Enter code to confirm
+                            <input
+                                type="text"
+                                value={deleteCodeInput}
+                                onChange={(event) => setDeleteCodeInput(event.target.value.toUpperCase())}
+                                placeholder={"confirmation code"}
+                                autoComplete="off"
+                                spellCheck={false}
+                                className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black px-4 py-2.5 font-mono text-sm tracking-[0.2em] normal-case text-white outline-none transition placeholder:tracking-normal placeholder:text-gray-600 focus:border-red-400/70"
+                            />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            disabled={!deleteConfirmCode || deleteCodeInput !== deleteConfirmCode || contestLoader || deletingContest}
+                            className="rounded-lg border border-red-400/50 bg-gradient-to-br from-red-500/30 via-red-600/25 to-red-700/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-50 shadow-[0_8px_28px_-16px_rgba(239,68,68,0.8)] transition hover:from-red-500/40 hover:via-red-600/35 hover:to-red-700/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                        >
+                            Delete contest
+                        </button>
+                    </div>
                 </section>
             )}
             {showBadgeSaveConfirm && (
@@ -946,6 +1043,44 @@ const ContestDetailPage = () => {
                                 className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200"
                             >
                                 Save settings
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showDeleteConfirm && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setShowDeleteConfirm(false);
+                    }}
+                >
+                    <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-black p-5 shadow-2xl">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300">
+                            Danger zone
+                        </p>
+                        <h2 className="mt-1 text-base font-semibold text-white">Delete this contest?</h2>
+                        <p className="mt-3 text-sm text-gray-300">
+                            <span className="font-semibold text-white">{contest.name}</span> and all of its slips will be
+                            permanently deleted. This action cannot be undone.
+                        </p>
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                className="rounded-lg border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/25"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteContest}
+                                disabled={contestLoader || deletingContest}
+                                className="rounded-lg border border-red-400/50 bg-gradient-to-br from-red-500/40 via-red-600/35 to-red-700/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-50 shadow-[0_8px_28px_-16px_rgba(239,68,68,0.9)] transition hover:from-red-500/50 hover:via-red-600/45 hover:to-red-700/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {deletingContest ? "Deleting…" : "Delete contest"}
                             </button>
                         </div>
                     </div>

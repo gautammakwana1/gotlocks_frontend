@@ -382,7 +382,10 @@ export const StartIcon = (props: IconProps) => (
     </svg>
 );
 
-export const ThreeDotIcon = (props: IconProps) => (
+export const ThreeDotIcon = ({
+    vertical = false,
+    ...props
+}: IconProps & { vertical?: boolean }) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
@@ -390,9 +393,19 @@ export const ThreeDotIcon = (props: IconProps) => (
         className="h-4 w-4"
         {...props}
     >
-        <circle cx="5" cy="12" r="1.8" />
-        <circle cx="12" cy="12" r="1.8" />
-        <circle cx="19" cy="12" r="1.8" />
+        {vertical ? (
+            <>
+                <circle cx="12" cy="5" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="12" cy="19" r="1.8" />
+            </>
+        ) : (
+            <>
+                <circle cx="5" cy="12" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="19" cy="12" r="1.8" />
+            </>
+        )}
     </svg>
 );
 

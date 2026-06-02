@@ -4,8 +4,8 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { ArchiveContestByIdPayload, BadgeAward, BadgeDefinition, Contest, Contests, CreateContestPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsPaginationPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
-import { archiveContestByIdFailure, archiveContestByIdRequest, archiveContestByIdSuccess, createContestFailure, createContestRequest, createContestSuccess, excludeContestMemberFailure, excludeContestMemberRequest, excludeContestMemberSuccess, fetchActiveContestsFailure, fetchActiveContestsRequest, fetchActiveContestsSuccess, fetchArchivedContestsFailure, fetchArchivedContestsRequest, fetchArchivedContestsSuccess, fetchBadgeAwardsByContestIdFailure, fetchBadgeAwardsByContestIdRequest, fetchBadgeAwardsByContestIdSuccess, fetchContestByIdFailure, fetchContestByIdRequest, fetchContestByIdSuccess, recalculateStadingsFailure, recalculateStadingsRequest, recalculateStadingsSuccess, resetBadgeSettingsFailure, resetBadgeSettingsRequest, resetBadgeSettingsSuccess, updateBadgeSettingsFailure, updateBadgeSettingsRequest, updateBadgeSettingsSuccess, updateContestFailure, updateContestRequest, updateContestSuccess } from "../slices/contestSlice";
+import type { ArchiveContestByIdPayload, BadgeAward, BadgeDefinition, Contest, Contests, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsPaginationPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
+import { archiveContestByIdFailure, archiveContestByIdRequest, archiveContestByIdSuccess, createContestFailure, createContestRequest, createContestSuccess, deleteContestByIdFailure, deleteContestByIdRequest, deleteContestByIdSuccess, excludeContestMemberFailure, excludeContestMemberRequest, excludeContestMemberSuccess, fetchActiveContestsFailure, fetchActiveContestsRequest, fetchActiveContestsSuccess, fetchArchivedContestsFailure, fetchArchivedContestsRequest, fetchArchivedContestsSuccess, fetchBadgeAwardsByContestIdFailure, fetchBadgeAwardsByContestIdRequest, fetchBadgeAwardsByContestIdSuccess, fetchContestByIdFailure, fetchContestByIdRequest, fetchContestByIdSuccess, recalculateStadingsFailure, recalculateStadingsRequest, recalculateStadingsSuccess, resetBadgeSettingsFailure, resetBadgeSettingsRequest, resetBadgeSettingsSuccess, updateBadgeSettingsFailure, updateBadgeSettingsRequest, updateBadgeSettingsSuccess, updateContestFailure, updateContestRequest, updateContestSuccess } from "../slices/contestSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -200,6 +200,23 @@ function* handleRecalculateStadings(action: PayloadAction<RecalculateStadingsPay
     }
 };
 
+function* handleDeleteContestById(action: PayloadAction<DeleteContestByIdPayload | undefined>): SagaIterator {
+    try {
+        const { contest_id = "" } = action.payload || {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.delete,
+            `${API_BASE_URL}/contest/delete`,
+            {
+                params: { contest_id }
+            }
+        );
+        const payload = response.data as { data?: { contest: Contest }, message: string };
+        yield put(deleteContestByIdSuccess(payload));
+    } catch (error: unknown) {
+        yield put(deleteContestByIdFailure(getErrorMessage(error, "Delete contest failed!")));
+    }
+};
+
 export default function* contestSaga() {
     yield takeLatest(createContestRequest.type, handleCreateContest);
     yield takeLatest(updateContestRequest.type, handleUpdateContest);
@@ -212,4 +229,5 @@ export default function* contestSaga() {
     yield takeLatest(updateBadgeSettingsRequest.type, handleUpdateBadgeSettingsByContestId);
     yield takeLatest(resetBadgeSettingsRequest.type, handleResetBadgeSettingsByContestId);
     yield takeLatest(recalculateStadingsRequest.type, handleRecalculateStadings);
+    yield takeLatest(deleteContestByIdRequest.type, handleDeleteContestById);
 };

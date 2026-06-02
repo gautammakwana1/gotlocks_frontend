@@ -432,6 +432,7 @@ const slipSlice = createSlice({
         updateSlipConflictModeSuccess: (state, action) => {
             state.loading = false;
             state.message = action.payload?.message;
+            state.slips = action.payload?.data?.slips;
         },
         updateSlipConflictModeFailure: (state, action) => {
             state.loading = false;

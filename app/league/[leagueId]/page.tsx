@@ -19,6 +19,7 @@ import FeedTab from "@/components/group/FeedTab";
 import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGroupModal";
 import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/leagues/LeaguePageSkeleton";
 import GroupChatTab from "@/components/group/GroupChatTab";
+import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 
 interface FormErrors {
   name?: string;
@@ -113,6 +114,17 @@ const LeagueDashboardPage = () => {
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
 
+
+  const {
+    group,
+    loading,
+    message: groupMessage,
+    error: errorMessage,
+    deleteLoading,
+    deleteMessage,
+  } = useSelector((state: GroupSelector) => state.group);
+  const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
+
   useEffect(() => {
     setActivePage(1);
     setArchivedPage(1);
@@ -129,16 +141,6 @@ const LeagueDashboardPage = () => {
     setArchivedPage(nextPage);
     dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: nextPage, limit: 10 }));
   };
-
-  const {
-    group,
-    loading,
-    message: groupMessage,
-    error: errorMessage,
-    deleteLoading,
-    deleteMessage,
-  } = useSelector((state: GroupSelector) => state.group);
-  const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
 
   useEffect(() => {
     if (!leagueId || !currentUser) return;
@@ -479,7 +481,10 @@ const LeagueDashboardPage = () => {
 
   return (
     <div className="flex flex-col gap-6 pb-10">
-      <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
+      <div className="flex items-center justify-between gap-3">
+        <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
+        <InviteCodeCopy code={group?.invite_code} />
+      </div>
       <header className="-mx-5 space-y-3 border-b border-white/10 px-5 pb-5 sm:mx-0 sm:px-0">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">

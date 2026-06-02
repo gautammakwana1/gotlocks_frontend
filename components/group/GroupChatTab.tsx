@@ -8,9 +8,11 @@ import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { supabase } from "@/lib/supabaseClient";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchGroupChatsByGroupIdRequest, sendMessageRequest, loadOlderGroupChatsRequest, clearOlderGroupChats } from "@/lib/redux/slices/groupsSlice";
+import { fetchGroupChatsByGroupIdRequest, sendMessageRequest, loadOlderGroupChatsRequest, clearOlderGroupChats, deleteMessageByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { ChatMessage, GroupSelector } from "@/lib/interfaces/interfaces";
 import { ChatSkeleton } from "../skeletons/leagues/ChatSkeleton";
+import { ThreeDotIcon, TrashIcon, CopyIcon } from "../ui/SvgIcons";
+import { useToast } from "@/lib/state/ToastContext";
 
 const ChatEmojiPicker = dynamic(() => import("./ChatEmojiPicker"), {
   ssr: false,
@@ -59,6 +61,13 @@ const dayLabel = (iso: string) => {
 };
 
 const MAX_COMPOSER_HEIGHT = 144;
+
+const tabBarReserve = (width: number) => {
+  if (width >= 768) return 128; // md: 70px tab scaled 1.45 + gap
+  if (width >= 640) return 96; // sm: 70px tab + gap
+  return 88; // mobile: 44/56px tab + gap
+};
+const MIN_CHAT_HEIGHT = 320;
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const inSameGroup = (a: ChatMessage, b: ChatMessage) =>
@@ -132,7 +141,7 @@ const Avatar = ({
   const src = image ? generateProfileImageUrl(image) : null;
   return (
     <span
-      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.05] text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-200 ring-1 ring-white/10 ring-inset shadow-[0_2px_8px_-4px_rgba(0,0,0,0.6)]"
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/[0.05] text-[8px] sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-200 ring-1 ring-white/10 ring-inset shadow-[0_2px_8px_-4px_rgba(0,0,0,0.6)]"
       style={{ width: size, height: size }}
       aria-hidden
     >
@@ -156,15 +165,19 @@ const Avatar = ({
 export const GroupChatTab = ({ groupId }: Props) => {
   const dispatch = useDispatch();
   const currentUser = useCurrentUser();
+  const chatRootRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobile();
+  const { setToast } = useToast();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [actionMenu, setActionMenu] = useState<{ message: ChatMessage; top: number; left: number } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ChatMessage | null>(null);
   const { chatMessages, loadingChats, chatsHasMore, chatsNextCursor, loadingOlderChats, olderChats } =
     useSelector((state: GroupSelector) => state.group);
 
@@ -200,45 +213,90 @@ export const GroupChatTab = ({ groupId }: Props) => {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "group_messages",
           filter: `group_id=eq.${groupId}`,
         },
         (payload) => {
-          const row = payload.new as {
-            id?: string;
-            group_id?: string;
-            sender_id?: string;
-            message?: string;
-            message_type: "text" | "emoji";
-            sender_username: string;
-            sender_full_name?: string;
-            sender_profile_image?: string;
-            created_at?: string;
-          };
-          if (!row?.id || !row.sender_id) return;
+          if (payload.eventType === "INSERT") {
+            const row = payload.new as {
+              id?: string;
+              group_id?: string;
+              sender_id?: string;
+              message?: string;
+              message_type: "text" | "emoji";
+              sender_username: string;
+              sender_full_name?: string;
+              sender_profile_image?: string;
+              created_at?: string;
+            };
+            if (!row?.id || !row.sender_id) return;
 
-          if (row.sender_id === currentUser.userId) return;
+            const realMessage: ChatMessage = {
+              id: row.id as string,
+              group_id: row.group_id as string,
+              message_type: row.message_type,
+              sender_id: row.sender_id as string,
+              sender_username: row?.sender_username ?? row?.sender_full_name ?? "Member",
+              sender_profile_image: row?.sender_profile_image ?? undefined,
+              message: row.message ?? "",
+              created_at: row.created_at ?? new Date().toISOString(),
+              is_deleted: false,
+              pending: false,
+            };
 
-          setMessages((prev) => {
-            if (prev.some((message) => message.id === row.id)) return prev;
+            setMessages((prev) => {
+              // Already reconciled (dedupe duplicate INSERT events).
+              if (prev.some((message) => message.id === realMessage.id)) return prev;
 
-            return [
-              ...prev,
-              {
-                id: row.id as string,
-                group_id: row.group_id as string,
-                message_type: row.message_type,
-                sender_id: row.sender_id as string,
-                sender_username: row?.sender_username ?? row?.sender_full_name ?? "Member",
-                sender_profile_image: row?.sender_profile_image ?? undefined,
-                message: row.message ?? "",
-                created_at: row.created_at ?? new Date().toISOString(),
-                is_deleted: false,
-              },
-            ];
-          });
+              // Reconcile the sender's own optimistic (temp-id) message with the
+              // real DB row so its id/created_at match the database UUID.
+              if (row.sender_id === currentUser.userId) {
+                const pendingIndex = prev.findIndex(
+                  (message) =>
+                    message.pending &&
+                    message.message === realMessage.message &&
+                    message.message_type === realMessage.message_type
+                );
+                if (pendingIndex !== -1) {
+                  const nextMessages = [...prev];
+                  nextMessages[pendingIndex] = {
+                    ...prev[pendingIndex],
+                    id: realMessage.id,
+                    created_at: realMessage.created_at,
+                    pending: false,
+                  };
+                  return nextMessages;
+                }
+              }
+
+              return [...prev, realMessage];
+            });
+          }
+
+          if (payload.eventType === "UPDATE") {
+            const row = payload.new as {
+              id?: string;
+              message?: string;
+              is_deleted?: boolean;
+              updated_at?: string;
+            };
+            if (!row?.id) return;
+
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === row.id
+                  ? {
+                    ...message,
+                    message: row.message ?? message.message,
+                    is_deleted: row.is_deleted ?? message.is_deleted,
+                    updated_at: row.updated_at ?? message.updated_at,
+                  }
+                  : message
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -316,14 +374,15 @@ export const GroupChatTab = ({ groupId }: Props) => {
     const text = draft.trim();
     if (!text || !currentUser || !groupId) return;
     const next: ChatMessage = {
-      id: `${Date.now()}`,
+      id: `temp-${Date.now()}`,
       group_id: groupId,
       sender_id: currentUser.userId,
       sender_username: currentUser.username || "Message",
       message: text,
       message_type: "text",
       created_at: new Date().toISOString(),
-      is_deleted: false
+      is_deleted: false,
+      pending: true,
     };
     setMessages((prev) => [...prev, next]);
     setDraft("");
@@ -332,6 +391,73 @@ export const GroupChatTab = ({ groupId }: Props) => {
     }
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+
+  const openActionMenu = useCallback((message: ChatMessage, rect: DOMRect) => {
+    const MENU_W = 176;
+    const MENU_H = 96;
+    let left = rect.right - MENU_W;
+    left = Math.max(8, Math.min(left, window.innerWidth - MENU_W - 8));
+    let top = rect.bottom + 6;
+    if (top + MENU_H > window.innerHeight) top = Math.max(8, rect.top - MENU_H - 6);
+    setActionMenu({ message, top, left });
+  }, []);
+
+  const handleCopy = useCallback(
+    async (message: ChatMessage) => {
+      setActionMenu(null);
+      const text = message.message ?? "";
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "absolute";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        setToast({ id: Date.now(), type: "success", message: "Message copied.", duration: 2500 });
+      } catch {
+        setToast({ id: Date.now(), type: "error", message: "Unable to copy message.", duration: 2500 });
+      }
+    },
+    [setToast]
+  );
+
+  const confirmDelete = useCallback(() => {
+    const message = pendingDelete;
+    if (!message || !groupId) return;
+    setMessages((prev) =>
+      prev.map((item) =>
+        item.id === message.id
+          ? { ...item, is_deleted: true, updated_at: new Date().toISOString() }
+          : item
+      )
+    );
+    dispatch(deleteMessageByIdRequest({ chat_id: message.id, group_id: groupId }));
+    setPendingDelete(null);
+  }, [pendingDelete, groupId, dispatch]);
+
+  useEffect(() => {
+    if (!actionMenu) return;
+    const close = () => setActionMenu(null);
+    const node = scrollRef.current;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActionMenu(null);
+    };
+    node?.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("resize", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      node?.removeEventListener("scroll", close);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [actionMenu]);
 
   const insertEmoji = useCallback(
     (native: string) => {
@@ -375,14 +501,34 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => window.removeEventListener("resize", resize);
   }, [draft]);
 
+  useEffect(() => {
+    const el = chatRootRef.current;
+    if (!el) return;
+    const fit = () => {
+      const top = el.getBoundingClientRect().top;
+      const available = window.innerHeight - top - tabBarReserve(window.innerWidth);
+      el.style.height = `${Math.max(available, MIN_CHAT_HEIGHT)}px`;
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.addEventListener("orientationchange", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("orientationchange", fit);
+    };
+  }, [messages.length]);
+
   const canSend = draft.trim().length > 0 && Boolean(currentUser);
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg border border-white/10 bg-black/40 shadow-inner">
+    <section
+      ref={chatRootRef}
+      className="flex min-h-0 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner"
+    >
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="leaderboard-scroll flex max-h-[60vh] min-h-[420px] flex-col gap-5 overflow-y-auto px-4 py-5 sm:px-5"
+        className="leaderboard-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-5 sm:px-1"
       >
         {loadingChats && <ChatSkeleton />}
         {grouped.map((bucket) => (
@@ -400,13 +546,14 @@ export const GroupChatTab = ({ groupId }: Props) => {
                 isFirstInGroup={isFirstInGroup}
                 isLastInGroup={isLastInGroup}
                 marginClass={index === 0 ? "" : isFirstInGroup ? "mt-3" : "mt-0.5"}
+                onOpenMenu={openActionMenu}
               />
             ))}
           </div>
         ))}
       </div>
 
-      <div ref={composerRef} className="relative border-t border-white/10 bg-black/40 px-3 py-3 backdrop-blur sm:px-4">
+      <div ref={composerRef} className="relative border-y border-white/10 bg-black/40 px-3 py-3 backdrop-blur sm:px-4">
         {isEmojiPickerOpen && (
           <ChatEmojiPicker
             isMobile={isMobile}
@@ -454,9 +601,109 @@ export const GroupChatTab = ({ groupId }: Props) => {
           </div>
         </div>
       </div>
+
+      {actionMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onMouseDown={() => setActionMenu(null)}
+            onTouchStart={() => setActionMenu(null)}
+            aria-hidden
+          />
+          <div
+            role="menu"
+            className="fixed z-50 w-44 overflow-hidden rounded-2xl border border-white/10 bg-black/90 p-1.5 text-sm text-white shadow-xl backdrop-blur"
+            style={{ top: actionMenu.top, left: actionMenu.left }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => handleCopy(actionMenu.message)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-gray-100 transition hover:bg-white/10"
+            >
+              <CopyIcon />
+              Copy
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                const message = actionMenu.message;
+                setActionMenu(null);
+                setPendingDelete(message);
+              }}
+              className="mt-0.5 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-red-300 transition hover:bg-red-500/15"
+            >
+              <TrashIcon className="h-4 w-4" />
+              Delete message
+            </button>
+          </div>
+        </>
+      )}
+
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPendingDelete(null);
+          }}
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-black p-5 shadow-2xl">
+            <div className="space-y-4">
+              <div className="space-y-1 text-center">
+                <h3 className="text-base font-semibold text-white">Delete message?</h3>
+                <p className="text-xs text-gray-400">
+                  This message will be removed for everyone. This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="rounded-xl border border-red-400/60 bg-red-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-300/80 hover:text-white"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
+
+const ProhibitIcon = ({ className }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.7}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden
+  >
+    <circle cx="12" cy="12" r="9" />
+    <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" />
+  </svg>
+);
+
+const DeletedMessageNote = () => (
+  <span className="inline-flex items-center gap-1.5 italic text-gray-400">
+    <ProhibitIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+    This message was deleted
+  </span>
+);
 
 const MessageRow = ({
   message,
@@ -464,28 +711,75 @@ const MessageRow = ({
   isFirstInGroup,
   isLastInGroup,
   marginClass,
+  onOpenMenu,
 }: {
   message: ChatMessage;
   currentUserId?: string;
   isFirstInGroup: boolean;
   isLastInGroup: boolean;
   marginClass: string;
+  onOpenMenu?: (message: ChatMessage, rect: DOMRect) => void;
 }) => {
   const isOwnMessage = Boolean(currentUserId && message.sender_id === currentUserId);
+  const isDeleted = message.is_deleted;
+  const canAct = Boolean(onOpenMenu) && !isDeleted && !message.pending;
+  const timeIso = isDeleted ? message.updated_at ?? message.created_at : message.created_at;
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+  const pressTimer = useRef<number | null>(null);
+
+  const clearPress = () => {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  // Long-press (touch) opens the actions menu on mobile / tablet.
+  const handleTouchStart = () => {
+    if (!canAct) return;
+    clearPress();
+    pressTimer.current = window.setTimeout(() => {
+      const rect = bubbleRef.current?.getBoundingClientRect();
+      if (rect) onOpenMenu?.(message, rect);
+    }, 450);
+  };
 
   if (isOwnMessage) {
     return (
-      <div className={`ui-message-in flex justify-end pl-10 ${marginClass}`}>
+      <div className={`ui-message-in group flex justify-end pl-10 ${marginClass}`}>
         <div
-          className={`flex min-w-0 max-w-[75%] flex-col gap-1 border border-sky-400/30 bg-gradient-to-br from-sky-500/30 via-blue-500/20 to-blue-600/15 px-3.5 py-2 text-sm text-sky-50 shadow-[0_8px_28px_-16px_rgba(59,130,246,0.7)] ${bubbleRadius(
+          ref={bubbleRef}
+          onTouchStart={canAct ? handleTouchStart : undefined}
+          onTouchEnd={canAct ? clearPress : undefined}
+          onTouchMove={canAct ? clearPress : undefined}
+          onContextMenu={canAct ? (event) => event.preventDefault() : undefined}
+          style={{ overflowWrap: "anywhere", wordBreak: "break-word", WebkitTouchCallout: "none" }}
+          className={`relative flex min-w-0 max-w-[75%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${
+            isDeleted
+              ? "border-white/10 bg-white/[0.05] text-gray-400"
+              : "border-sky-400/30 bg-gradient-to-br from-sky-500/30 via-blue-500/20 to-blue-600/15 text-sky-50 shadow-[0_8px_28px_-16px_rgba(59,130,246,0.7)]"
+          } [@media(pointer:coarse)]:select-none ${bubbleRadius(
             true,
             isFirstInGroup,
             isLastInGroup
           )}`}
         >
-          <p className="whitespace-pre-wrap" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{message.message}</p>
-          <span className="self-end text-[10px] font-medium leading-none text-sky-100/60">
-            {formatClockTime(message.created_at)}
+          {canAct && (
+            <button
+              type="button"
+              onClick={(event) => onOpenMenu?.(message, event.currentTarget.getBoundingClientRect())}
+              className="absolute right-full top-1/2 mr-1 hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 opacity-0 transition hover:bg-white/10 hover:text-white focus-visible:opacity-100 group-hover:opacity-100 sm:flex"
+              aria-label="Message actions"
+              aria-haspopup="menu"
+            >
+              <ThreeDotIcon vertical={true} />
+            </button>
+          )}
+          <p className="whitespace-pre-wrap">
+            {isDeleted ? <DeletedMessageNote /> : message.message}
+          </p>
+          <span className={`self-end text-[8px] sm:text-[10px] font-medium leading-none ${isDeleted ? "text-gray-500" : "text-sky-100/60"}`}>
+            {formatClockTime(timeIso)}
           </span>
         </div>
       </div>
@@ -500,7 +794,11 @@ const MessageRow = ({
         <span className="w-9 shrink-0" aria-hidden />
       )}
       <div
-        className={`flex min-w-0 max-w-[78%] flex-col gap-1 border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.035] px-3.5 py-2 text-sm text-gray-100 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.6)] ${bubbleRadius(
+        className={`flex min-w-0 max-w-[78%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${
+          isDeleted
+            ? "border-white/10 bg-white/[0.03] text-gray-400"
+            : "border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.035] text-gray-100 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.6)]"
+        } ${bubbleRadius(
           false,
           isFirstInGroup,
           isLastInGroup
@@ -511,9 +809,11 @@ const MessageRow = ({
             {message.sender_username}
           </span>
         )}
-        <p className="whitespace-pre-wrap" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>{message.message}</p>
-        <span className="self-end text-[10px] font-medium leading-none text-gray-400/70">
-          {formatClockTime(message.created_at)}
+        <p className="whitespace-pre-wrap" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
+          {isDeleted ? <DeletedMessageNote /> : message.message}
+        </p>
+        <span className="self-end text-[8px] sm:text-[10px] font-medium leading-none text-gray-400/70">
+          {formatClockTime(timeIso)}
         </span>
       </div>
     </div>

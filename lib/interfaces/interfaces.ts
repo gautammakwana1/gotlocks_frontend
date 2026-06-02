@@ -378,7 +378,9 @@ export type ChatMessage = {
     sender_profile_image?: string;
     message_type: "text" | "emoji";
     created_at: string;
+    updated_at?: string;
     is_deleted: boolean;
+    pending?: boolean;
 };
 
 export type DeleteGroupPayload = {
@@ -535,6 +537,10 @@ export type RecalculateStadingsPayload = {
     contest_id: string;
 };
 
+export type DeleteContestByIdPayload = {
+    contest_id: string;
+};
+
 export type ExcludeContestMemberPayload = {
     contest_id: string;
     user_id: string;
@@ -603,6 +609,11 @@ export type FetchGroupChatsResponse = {
 export type SendMessagePayload = {
     group_id: string;
     message: string;
+};
+
+export type DeleteMessagePayload = {
+    group_id: string;
+    chat_id: string;
 };
 
 export type MembersData = {

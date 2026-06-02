@@ -35,6 +35,7 @@ import type {
 	FetchGroupChatsPayload,
 	FetchGroupChatsResponse,
 	SendMessagePayload,
+	DeleteMessagePayload,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -584,6 +585,7 @@ const groupSlice = createSlice({
 			state.olderChats = null;
 		},
 
+		// Chat
 		sendMessageRequest: (state, action: PayloadAction<SendMessagePayload>) => {
 			void action;
 			state.error = null;
@@ -595,6 +597,21 @@ const groupSlice = createSlice({
 			state.error = action.payload;
 		},
 		clearSendMessageMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		deleteMessageByIdRequest: (state, action: PayloadAction<DeleteMessagePayload>) => {
+			void action;
+			state.error = null;
+		},
+		deleteMessageByIdSuccess: (state, action) => {
+			state.message = action.payload.message;
+		},
+		deleteMessageByIdFailure: (state, action) => {
+			state.error = action.payload;
+		},
+		clearDeleteMessageByIdMessage(state) {
 			state.error = null;
 			state.message = null;
 		},
@@ -699,6 +716,10 @@ export const {
 	sendMessageSuccess,
 	sendMessageFailure,
 	clearSendMessageMessage,
+	deleteMessageByIdRequest,
+	deleteMessageByIdSuccess,
+	deleteMessageByIdFailure,
+	clearDeleteMessageByIdMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;
