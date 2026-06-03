@@ -501,6 +501,23 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => window.removeEventListener("resize", resize);
   }, [draft]);
 
+  // Lock page scroll while the Chat tab is open so only the message list scrolls
+  // and the composer stays pinned above the MainTabBar. Locking <html> (not just
+  // <body>) keeps the page frozen even when ChatEmojiPicker toggles body overflow.
+  // useEffect(() => {
+  //   window.scrollTo(0, 0);
+  //   const docEl = document.documentElement;
+  //   const body = document.body;
+  //   const prevDocOverflow = docEl.style.overflow;
+  //   const prevBodyOverflow = body.style.overflow;
+  //   docEl.style.overflow = "hidden";
+  //   body.style.overflow = "hidden";
+  //   return () => {
+  //     docEl.style.overflow = prevDocOverflow;
+  //     body.style.overflow = prevBodyOverflow;
+  //   };
+  // }, []);
+
   useEffect(() => {
     const el = chatRootRef.current;
     if (!el) return;
@@ -573,7 +590,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
               placeholder="Type a message..."
               rows={1}
               style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
-              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-sm leading-6 text-white placeholder:text-gray-500 outline-none"
+              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
             />
             <button
               ref={emojiButtonRef}

@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SlipCategorySection } from "@/components/slips/SlipCategorySection";
 import BackButton from "@/components/ui/BackButton";
-import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
+import { formatDateTime } from "@/lib/utils/date";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
@@ -347,6 +348,7 @@ const ContestDetailPage = () => {
 
         setShowDeleteConfirm(false);
         setDeletingContest(true);
+        setDeleteCodeInput("");
         dispatch(deleteContestByIdRequest({ contest_id: contestId }));
     };
 
@@ -927,24 +929,18 @@ const ContestDetailPage = () => {
                             </p>
                         </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <label className="block min-w-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                Starts
-                                <input
-                                    type="datetime-local"
-                                    value={toLocalInputValue(editStartsAt)}
-                                    onChange={(event) => setEditStartsAt(fromLocalInputValue(event.target.value))}
-                                    className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
-                                />
-                            </label>
-                            <label className="block min-w-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                Ends
-                                <input
-                                    type="datetime-local"
-                                    value={toLocalInputValue(editEndsAt)}
-                                    onChange={(event) => setEditEndsAt(fromLocalInputValue(event.target.value))}
-                                    className="mt-2 block w-full min-w-0 max-w-full appearance-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
-                                />
-                            </label>
+                            <DateTimeWheelPicker
+                                label="Starts"
+                                value={editStartsAt}
+                                onChange={setEditStartsAt}
+                                className="min-w-0"
+                            />
+                            <DateTimeWheelPicker
+                                label="Ends"
+                                value={editEndsAt}
+                                onChange={setEditEndsAt}
+                                className="min-w-0"
+                            />
                         </div>
                         <button
                             type="button"
@@ -979,7 +975,7 @@ const ContestDetailPage = () => {
                         )}
                     </div>
 
-                    <div className="space-y-3 rounded-xl border border-red-500/30 bg-red-500/[0.04] p-4">
+                    <div className="space-y-3 border-t border-white/10 pt-5">
                         <div>
                             <h2 className="text-sm font-semibold uppercase tracking-wide text-red-300">
                                 Delete contest
@@ -994,7 +990,7 @@ const ContestDetailPage = () => {
                                 <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
                                     Confirmation code
                                 </span>
-                                <div className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
+                                <div className="ml-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
                                     {deleteConfirmCode}
                                 </div>
                             </div>
@@ -1015,7 +1011,7 @@ const ContestDetailPage = () => {
                             type="button"
                             onClick={() => setShowDeleteConfirm(true)}
                             disabled={!deleteConfirmCode || deleteCodeInput !== deleteConfirmCode || contestLoader || deletingContest}
-                            className="rounded-lg border border-red-400/50 bg-gradient-to-br from-red-500/30 via-red-600/25 to-red-700/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-50 shadow-[0_8px_28px_-16px_rgba(239,68,68,0.8)] transition hover:from-red-500/40 hover:via-red-600/35 hover:to-red-700/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                            className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Delete contest
                         </button>

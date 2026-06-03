@@ -100,6 +100,15 @@ const tabIcon = (tabId: TabId) => {
 const contestSportLabels = (contest: Contest) =>
   contest.sports.length > 1 ? ["Multi"] : contest.sports;
 
+const generateDeleteCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 6; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+};
+
 const LeagueDashboardPage = () => {
   const dispatch = useDispatch();
   const params = useParams<{ leagueId: string }>();
@@ -174,6 +183,8 @@ const LeagueDashboardPage = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [editLeagueName, setEditLeagueName] = useState("");
   const [editLeagueDescription, setEditLeagueDescription] = useState("");
+  const [deleteConfirmCode, setDeleteConfirmCode] = useState("");
+  const [deleteCodeInput, setDeleteCodeInput] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
@@ -216,6 +227,12 @@ const LeagueDashboardPage = () => {
       router.replace("/fantasy");
     }
   }, [loading, groupMessage, setToast, dispatch, deleteLoading, deleteMessage, router, errorMessage]);
+
+  useEffect(() => {
+    if (activeTab === "settings" && isCommissioner && !deleteConfirmCode) {
+      setDeleteConfirmCode(generateDeleteCode());
+    }
+  }, [activeTab, isCommissioner, deleteConfirmCode]);
 
   const validate = useCallback((): boolean => {
     const nextErrors: FormErrors = {};
@@ -368,17 +385,19 @@ const LeagueDashboardPage = () => {
       return;
     }
 
-    if (deleteConfirmation !== group.name) {
+    if (deleteCodeInput !== deleteConfirmCode) {
       setToast({
         id: Date.now(),
         type: "error",
-        message: "Please type exact same phrase word as group name for confirm delete.",
+        message: "Please type exact same code as shown for confirmation code delete.",
         duration: 3000
       })
       return;
     }
 
     try {
+      if (!deleteConfirmCode) return;
+
       setIsDeletingGroup(true);
       setIsConfirmDeleteModalOpen(true);
       setDeleteError(null);
@@ -409,7 +428,7 @@ const LeagueDashboardPage = () => {
       setIsDeletingGroup(false);
       setIsConfirmDeleteModalOpen(false);
       setDeleteConfirmationCode("");
-      setDeleteConfirmation("");
+      setDeleteCodeInput("");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to delete league.";
@@ -711,25 +730,38 @@ const LeagueDashboardPage = () => {
           <section className="space-y-4 border-t border-white/10 pt-6">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-red-300">
-                Delete group
+                Delete League
               </h2>
               <p className="mt-1 text-xs text-gray-500">
-                Type the group name to permanently delete the group, contests, slips, and picks.
+                Type the delete phrase to permanently delete the league, contests, slips, and picks.
               </p>
             </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Delete phrase
+                </span>
+                <div className="ml-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
+                  {deleteConfirmCode}
+                </div>
+              </div>
+            </div>
             <input
-              value={deleteConfirmation}
-              onChange={(event) => setDeleteConfirmation(event.target.value)}
-              placeholder={group.name}
-              className="w-full rounded-lg border border-red-400/20 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-red-300/70"
+              type="text"
+              value={deleteCodeInput}
+              onChange={(event) => setDeleteCodeInput(event.target.value.toUpperCase())}
+              placeholder={deleteConfirmCode}
+              autoComplete="off"
+              spellCheck={false}
+              className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black px-4 py-2.5 font-mono text-sm tracking-[0.2em] normal-case text-white outline-none transition placeholder:tracking-normal placeholder:text-gray-600 focus:border-red-400/70"
             />
             <button
               type="button"
               onClick={handleDeleteLeague}
-              disabled={deleteLoading || (deleteConfirmation !== group.name)}
+              disabled={deleteLoading || !deleteConfirmCode || deleteCodeInput !== deleteConfirmCode}
               className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Delete group
+              Delete league
             </button>
           </section>
         </div>
