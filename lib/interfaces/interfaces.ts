@@ -437,6 +437,7 @@ export type GroupState = {
     chatsNextCursor: string | null;
     loadingOlderChats: boolean;
     olderChats: ChatMessage[] | null;
+    unreadCounts: number;
 }
 
 export type GroupSelector = {
@@ -559,6 +560,10 @@ export type FetchLeaderBoardsPayload = {
     group_id: string;
 };
 
+export type FetchUnreadCountsByLeagueIdPayload = {
+    group_id: string;
+};
+
 export type FetchArchivedLeaderBoardListPayload = {
     groupId: string;
 };
@@ -609,6 +614,11 @@ export type FetchGroupChatsResponse = {
 export type SendMessagePayload = {
     group_id: string;
     message: string;
+};
+
+export type MarkGroupChatsReadPayload = {
+    group_id: string;
+    message_id: string;
 };
 
 export type DeleteMessagePayload = {

@@ -10,7 +10,7 @@ import { Contest, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
 import ModifyMembers from "@/components/group/ModifyMembers";
 import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
@@ -131,6 +131,7 @@ const LeagueDashboardPage = () => {
     error: errorMessage,
     deleteLoading,
     deleteMessage,
+    unreadCounts,
   } = useSelector((state: GroupSelector) => state.group);
   const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
 
@@ -158,6 +159,7 @@ const LeagueDashboardPage = () => {
     dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
     dispatch(fetchActiveContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
+    dispatch(fetchUnreadCountsByLeagueIdRequest({ group_id: leagueId }));
     fetchedGroupId.current = leagueId;
   }, [leagueId, currentUser, dispatch]);
 
@@ -565,6 +567,11 @@ const LeagueDashboardPage = () => {
                   <span className="shrink-0 sm:hidden">{tabIcon(tab.id)}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
                 </span>
+                {tab.id === "chat" && unreadCounts > 0 && activeTab !== "chat" && (
+                  <span className="absolute right-1 top-1 rounded-full border border-blue-300/40 bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-semibold leading-none tracking-normal text-blue-100 sm:right-2">
+                    {unreadCounts > 99 ? "99+" : unreadCounts}
+                  </span>
+                )}
               </button>
             );
           })}

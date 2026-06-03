@@ -36,6 +36,8 @@ import type {
 	FetchGroupChatsResponse,
 	SendMessagePayload,
 	DeleteMessagePayload,
+	FetchUnreadCountsByLeagueIdPayload,
+	MarkGroupChatsReadPayload,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -70,6 +72,7 @@ type GroupState = {
 	chatsNextCursor: string | null;
 	loadingOlderChats: boolean;
 	olderChats: ChatMessage[] | null;
+	unreadCounts: number;
 };
 
 const initialState: GroupState = {
@@ -102,6 +105,7 @@ const initialState: GroupState = {
 	chatsNextCursor: null,
 	loadingOlderChats: false,
 	olderChats: null,
+	unreadCounts: 0,
 };
 
 const groupSlice = createSlice({
@@ -615,6 +619,41 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		markGroupChatsReadRequest: (state, action: PayloadAction<MarkGroupChatsReadPayload>) => {
+			void action;
+			state.error = null;
+			state.unreadCounts = 0;
+		},
+		markGroupChatsReadSuccess: (state, action) => {
+			void action;
+			state.unreadCounts = 0;
+		},
+		markGroupChatsReadFailure: (state, action) => {
+			state.error = action.payload;
+		},
+		clearMarkGroupChatsReadMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
+
+		fetchUnreadCountsByLeagueIdRequest: (state, action: PayloadAction<FetchUnreadCountsByLeagueIdPayload | undefined>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchUnreadCountsByLeagueIdSuccess: (state, action) => {
+			state.loading = false;
+			state.unreadCounts = action.payload?.counts;
+		},
+		fetchUnreadCountsByLeagueIdFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchUnreadCountsByLeagueIdMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -720,6 +759,14 @@ export const {
 	deleteMessageByIdSuccess,
 	deleteMessageByIdFailure,
 	clearDeleteMessageByIdMessage,
+	fetchUnreadCountsByLeagueIdRequest,
+	fetchUnreadCountsByLeagueIdSuccess,
+	fetchUnreadCountsByLeagueIdFailure,
+	clearFetchUnreadCountsByLeagueIdMessage,
+	markGroupChatsReadRequest,
+	markGroupChatsReadSuccess,
+	markGroupChatsReadFailure,
+	clearMarkGroupChatsReadMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

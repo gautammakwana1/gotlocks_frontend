@@ -8,7 +8,7 @@ import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { supabase } from "@/lib/supabaseClient";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchGroupChatsByGroupIdRequest, sendMessageRequest, loadOlderGroupChatsRequest, clearOlderGroupChats, deleteMessageByIdRequest } from "@/lib/redux/slices/groupsSlice";
+import { fetchGroupChatsByGroupIdRequest, sendMessageRequest, loadOlderGroupChatsRequest, clearOlderGroupChats, deleteMessageByIdRequest, markGroupChatsReadRequest } from "@/lib/redux/slices/groupsSlice";
 import { ChatMessage, GroupSelector } from "@/lib/interfaces/interfaces";
 import { ChatSkeleton } from "../skeletons/leagues/ChatSkeleton";
 import { ThreeDotIcon, TrashIcon, CopyIcon } from "../ui/SvgIcons";
@@ -176,6 +176,9 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const messagesRef = useRef<ChatMessage[]>([]);
   const olderRequestRef = useRef(false);
   const prependRestoreRef = useRef<{ prevHeight: number; prevTop: number } | null>(null);
+  // Latest real (DB) message id in view; flushed to the read API once on leave.
+  const latestIdRef = useRef<string | null>(null);
+  const sentIdRef = useRef<string | null>(null);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -190,12 +193,38 @@ export const GroupChatTab = ({ groupId }: Props) => {
     setMessages([]);
     olderRequestRef.current = false;
     prependRestoreRef.current = null;
+    latestIdRef.current = null;
+    sentIdRef.current = null;
   }, [groupId]);
 
   useEffect(() => {
     if (!chatMessages) return;
     setMessages(chatMessages.map((message) => message));
+    latestIdRef.current = chatMessages[chatMessages.length - 1]?.id ?? latestIdRef.current;
   }, [chatMessages, currentUser?.userId]);
+
+  const flushMarkRead = useCallback(() => {
+    const id = latestIdRef.current;
+    if (!groupId || !id || id === sentIdRef.current) return;
+    sentIdRef.current = id;
+    dispatch(markGroupChatsReadRequest({ group_id: groupId, message_id: id }));
+  }, [groupId, dispatch]);
+
+  // Flush exactly once when the user is done viewing: leaving the tab (unmount),
+  // backgrounding the app, or closing/reloading the page.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushMarkRead();
+    };
+    const onPageHide = () => flushMarkRead();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      flushMarkRead();
+    };
+  }, [flushMarkRead]);
 
   useEffect(() => {
     if (!groupId || !currentUser) return;
@@ -242,8 +271,6 @@ export const GroupChatTab = ({ groupId }: Props) => {
               // Already reconciled (dedupe duplicate INSERT events).
               if (prev.some((message) => message.id === realMessage.id)) return prev;
 
-              // Reconcile the sender's own optimistic (temp-id) message with the
-              // real DB row so its id/created_at match the database UUID.
               if (row.sender_id === currentUser.userId) {
                 const pendingIndex = prev.findIndex(
                   (message) =>
@@ -265,6 +292,9 @@ export const GroupChatTab = ({ groupId }: Props) => {
 
               return [...prev, realMessage];
             });
+
+            // Track the newest message id only
+            latestIdRef.current = realMessage.id;
           }
 
           if (payload.eventType === "UPDATE") {
@@ -296,7 +326,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupId, currentUser]);
+  }, [groupId, currentUser, dispatch]);
 
   useLayoutEffect(() => {
     const node = scrollRef.current;
@@ -728,15 +758,14 @@ const MessageRow = ({
           onTouchMove={canAct ? clearPress : undefined}
           onContextMenu={canAct ? (event) => event.preventDefault() : undefined}
           style={{ overflowWrap: "anywhere", wordBreak: "break-word", WebkitTouchCallout: "none" }}
-          className={`relative flex min-w-0 max-w-[75%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${
-            isDeleted
-              ? "border-white/10 bg-white/[0.05] text-gray-400"
-              : "border-sky-400/30 bg-gradient-to-br from-sky-500/30 via-blue-500/20 to-blue-600/15 text-sky-50 shadow-[0_8px_28px_-16px_rgba(59,130,246,0.7)]"
-          } [@media(pointer:coarse)]:select-none ${bubbleRadius(
-            true,
-            isFirstInGroup,
-            isLastInGroup
-          )}`}
+          className={`relative flex min-w-0 max-w-[75%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${isDeleted
+            ? "border-white/10 bg-white/[0.05] text-gray-400"
+            : "border-sky-400/30 bg-gradient-to-br from-sky-500/30 via-blue-500/20 to-blue-600/15 text-sky-50 shadow-[0_8px_28px_-16px_rgba(59,130,246,0.7)]"
+            } [@media(pointer:coarse)]:select-none ${bubbleRadius(
+              true,
+              isFirstInGroup,
+              isLastInGroup
+            )}`}
         >
           {canAct && (
             <button
@@ -768,15 +797,14 @@ const MessageRow = ({
         <span className="w-9 shrink-0" aria-hidden />
       )}
       <div
-        className={`flex min-w-0 max-w-[78%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${
-          isDeleted
-            ? "border-white/10 bg-white/[0.03] text-gray-400"
-            : "border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.035] text-gray-100 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.6)]"
-        } ${bubbleRadius(
-          false,
-          isFirstInGroup,
-          isLastInGroup
-        )}`}
+        className={`flex min-w-0 max-w-[78%] flex-col gap-1 border px-3.5 py-2 text-[12px] sm:text-sm ${isDeleted
+          ? "border-white/10 bg-white/[0.03] text-gray-400"
+          : "border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.035] text-gray-100 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.6)]"
+          } ${bubbleRadius(
+            false,
+            isFirstInGroup,
+            isLastInGroup
+          )}`}
       >
         {isFirstInGroup && (
           <span className={`text-[13px] font-semibold leading-tight ${authorAccent(message.sender_id)}`}>
