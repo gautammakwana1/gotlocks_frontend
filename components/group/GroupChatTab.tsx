@@ -62,13 +62,6 @@ const dayLabel = (iso: string) => {
 
 const MAX_COMPOSER_HEIGHT = 144;
 
-const tabBarReserve = (width: number) => {
-  if (width >= 768) return 128; // md: 70px tab scaled 1.45 + gap
-  if (width >= 640) return 96; // sm: 70px tab + gap
-  return 88; // mobile: 44/56px tab + gap
-};
-const MIN_CHAT_HEIGHT = 320;
-
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const inSameGroup = (a: ChatMessage, b: ChatMessage) =>
   a.sender_id === b.sender_id &&
@@ -165,7 +158,6 @@ const Avatar = ({
 export const GroupChatTab = ({ groupId }: Props) => {
   const dispatch = useDispatch();
   const currentUser = useCurrentUser();
-  const chatRootRef = useRef<HTMLElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -501,51 +493,16 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => window.removeEventListener("resize", resize);
   }, [draft]);
 
-  // Lock page scroll while the Chat tab is open so only the message list scrolls
-  // and the composer stays pinned above the MainTabBar. Locking <html> (not just
-  // <body>) keeps the page frozen even when ChatEmojiPicker toggles body overflow.
-  // useEffect(() => {
-  //   window.scrollTo(0, 0);
-  //   const docEl = document.documentElement;
-  //   const body = document.body;
-  //   const prevDocOverflow = docEl.style.overflow;
-  //   const prevBodyOverflow = body.style.overflow;
-  //   docEl.style.overflow = "hidden";
-  //   body.style.overflow = "hidden";
-  //   return () => {
-  //     docEl.style.overflow = prevDocOverflow;
-  //     body.style.overflow = prevBodyOverflow;
-  //   };
-  // }, []);
-
-  useEffect(() => {
-    const el = chatRootRef.current;
-    if (!el) return;
-    const fit = () => {
-      const top = el.getBoundingClientRect().top;
-      const available = window.innerHeight - top - tabBarReserve(window.innerWidth);
-      el.style.height = `${Math.max(available, MIN_CHAT_HEIGHT)}px`;
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    window.addEventListener("orientationchange", fit);
-    return () => {
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("orientationchange", fit);
-    };
-  }, [messages.length]);
-
   const canSend = draft.trim().length > 0 && Boolean(currentUser);
 
   return (
     <section
-      ref={chatRootRef}
-      className="flex min-h-0 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner mb-[calc(var(--mtb-reserve)+env(safe-area-inset-bottom))]"
     >
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="leaderboard-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-5 sm:px-1"
+        className="leaderboard-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-1 py-5 sm:px-1"
       >
         {loadingChats && <ChatSkeleton />}
         {grouped.map((bucket) => (

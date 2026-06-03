@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
@@ -65,6 +65,23 @@ export const TopNav = () => {
     return HIDDEN_ROUTES.has(pathname);
   }, [pathname]);
 
+  const headerRef = useRef<HTMLElement | null>(null);
+
+  // Publish the sticky TopNav height as a CSS variable so other views (e.g. the
+  // full-height chat tab) can size themselves with `calc(100dvh - var(--topnav-height))`.
+  // ResizeObserver only fires when the nav actually changes size — no scroll/resize churn.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const setVar = () => {
+      document.documentElement.style.setProperty("--topnav-height", `${el.offsetHeight}px`);
+    };
+    setVar();
+    const ro = new ResizeObserver(setVar);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hideNav, currentUser]);
+
   const handleLogOut = useCallback(async () => {
     try {
       // 1. Terminate Supabase session
@@ -106,6 +123,7 @@ export const TopNav = () => {
   return (
     <>
       <header
+        ref={headerRef}
         className="sticky top-0 z-30 border-b backdrop-blur"
         style={{ backgroundColor: "var(--nav-bg)", borderColor: "var(--nav-border)" }}
       >

@@ -26,6 +26,22 @@
   --text-muted: #94a3b8;
   --jagged-valley: 12px;
   --jagged-tip: 2px;
+  /* Sticky TopNav height (kept in sync at runtime by TopNav's ResizeObserver). */
+  --topnav-height: 76px;
+  /* Vertical space the fixed MainTabBar occupies; mirrors tabBarReserve() in JS. */
+  --mtb-reserve: 88px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --mtb-reserve: 96px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --mtb-reserve: 128px;
+  }
 }
 
 html,

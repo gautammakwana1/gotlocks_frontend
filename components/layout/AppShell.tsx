@@ -28,7 +28,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
       : "pt-8";
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text)]">
+    <div className="relative flex min-h-[100dvh] flex-col overflow-x-hidden bg-[var(--app-bg)] text-[var(--app-text)]">
       <TopNav />
       <main
         className={`mx-auto w-full flex-1 ${compact ? "max-w-xl" : "max-w-4xl"

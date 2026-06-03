@@ -499,7 +499,13 @@ const LeagueDashboardPage = () => {
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-10">
+    <div
+      className={
+        activeTab === "chat"
+          ? "flex flex-col gap-6 -mt-2 -mb-36 h-[calc(100dvh-var(--topnav-height))] min-h-0 overflow-hidden sm:-mt-3"
+          : "flex flex-col gap-6 pb-10"
+      }
+    >
       <div className="flex items-center justify-between gap-3">
         <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
         <InviteCodeCopy code={group?.invite_code} />
