@@ -35,7 +35,7 @@ import {
 } from "@/lib/utils/reviewSheetTierDisplay";
 import { formatPickMetaLine } from "@/lib/utils/pickDescription";
 import { resolveTierCardAppearance } from "@/lib/utils/tierCard";
-import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, MLBSchedulesWithOdds, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, RootState, Slip, TierIndex } from "@/lib/interfaces/interfaces";
+import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, League, MLBSchedules, MLBSchedulesWithOdds, OddsEvent, OddsObject, ParlayLeg, Pick, PickLeg, PickSelectionMeta, PostDestinationGroups, RootState, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { clearMlbPickValidateMessage, fetchMLBOddsRequest, fetchMLBScheduleByTimezoneRequest, fetchMLBScheduleRequest, mlbPickValidateRequest } from "@/lib/redux/slices/mlbSlice";
@@ -218,6 +218,10 @@ type Props = {
     onSave: (payload: BuiltPickPayload) => void;
     onCreatePostPick?: (payload: BuiltPickPayload) => void;
     onPostToSlip?: (payload: BuiltPickPayload) => void;
+    onSelectPostDestination?: (
+        groups: PostDestinationGroups,
+        reset: () => void
+    ) => void;
     draftPick?: DraftPick | null;
     onDraftPickChange?: (draftPick: DraftPick | null) => void;
     parlayLegs?: ParlayLeg[];
@@ -1450,6 +1454,7 @@ export const MlbPickBuilder = ({
     hideDateControls = false,
     onDateOptionsChange,
     reviewSheetState,
+    onSelectPostDestination,
 }: Props) => {
     const dispatch = useDispatch();
     const isMobile = useIsMobile();
@@ -2668,24 +2673,24 @@ export const MlbPickBuilder = ({
         sameGameGroupIds,
         straightIds,
     }: ReviewSheetPostSelection) => {
-        const payloads: BuiltPickPayload[] = [];
+        const profilePayloads: BuiltPickPayload[] = [];
 
         if (includeMainCombo) {
             const comboPayload = buildComboSubmissionPayload("post");
             if (!comboPayload) return;
-            payloads.push(comboPayload);
+            profilePayloads.push(comboPayload);
         }
 
         for (const groupId of sameGameGroupIds) {
             const sameGamePayload = buildSameGameComboSubmissionPayload(groupId, "post");
             if (!sameGamePayload) return;
-            payloads.push(sameGamePayload);
+            profilePayloads.push(sameGamePayload);
         }
 
         for (const legId of straightIds) {
             const straightPayload = buildStraightSubmissionPayload(legId, "post");
             if (!straightPayload) return;
-            payloads.push(straightPayload);
+            profilePayloads.push(straightPayload);
         }
 
         if (includeSinglePick) {
@@ -2693,18 +2698,38 @@ export const MlbPickBuilder = ({
                 setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
                 return;
             }
-            payloads.push({
+            profilePayloads.push({
                 ...activeDraft,
                 confidence: selectedConfidence,
             });
         }
 
-        if (payloads.length === 0) {
-            setToast({ id: Date.now(), type: "error", message: "Select a confidence level to post.", duration: 3000 });
+        // League candidates are every straight pick (or the single pick), independent of
+        // confidence selection. Confidence is stripped so league slips never carry it.
+        const leagueCandidates: PostDestinationGroups["leagueCandidates"] = hasMultipick
+            ? straightReviewItems.map((item) => ({
+                id: item.id,
+                description: item.description,
+                odds: item.payload.odds_bracket ?? null,
+                payload: { ...item.payload, confidence: null },
+            }))
+            : activeDraft
+                ? [
+                    {
+                        id: "single",
+                        description: activeDraft.description,
+                        odds: activeDraft.odds_bracket ?? null,
+                        payload: { ...activeDraft, confidence: null },
+                    },
+                ]
+                : [];
+
+        if (profilePayloads.length === 0 && leagueCandidates.length === 0) {
+            setToast({ id: Date.now(), type: "error", message: "Build a pick to continue.", duration: 3000 });
             return;
         }
 
-        dispatchPayloads(payloads, "post");
+        onSelectPostDestination?.({ profilePayloads, leagueCandidates }, resetAfterPost);
     };
 
     const submitPick = (action: "post" | "slip") => {

@@ -159,18 +159,6 @@ const SlipAddPickPage = () => {
             matchup: payload.matchup,
             match_date: payload.match_date ? new Date(payload.match_date) : undefined,
         }))
-        // const slipWarningMessages = slipShowsConflictWarnings(slip)
-        //     ? getSlipConflictWarningMessages(slipConflictAnalysis)
-        //     : [];
-        // setToast({
-        //     id: Date.now(),
-        //     type: slipWarningMessages.length > 0 ? "info" : "success",
-        //     message:
-        //         slipWarningMessages.length > 0
-        //             ? `Pick added to slip. ${slipWarningMessages[0]}`
-        //             : "Pick added to slip.",
-        //     duration: 3000
-        // });
         returnToSlip();
     };
 
@@ -208,6 +196,7 @@ const SlipAddPickPage = () => {
                         isCommissioner,
                         onSave: handleSavePick,
                         showCurrentPick: slip.pick_limit === 1,
+                        onSelectActiveLeague: () => { },
                     }}
                     initialLeague={(availableSports[0] as League | undefined) ?? DEFAULT_SPORT}
                     leagues={availableSports as League[]}

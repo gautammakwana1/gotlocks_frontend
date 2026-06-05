@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, SlipState, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchPostableSlipsPayload, FetchPostableSlipsResponse, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, SlipState, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: SlipState = {
     slip: null,
@@ -18,6 +18,10 @@ const initialState: SlipState = {
     deleteLoading: false,
     deleteMessage: null,
     deleteError: null,
+    postableSlips: null,
+    postableSlipsHasMore: false,
+    postableSlipsNextCursor: null,
+    postableSlipsLoadingMore: false,
 };
 
 const slipSlice = createSlice({
@@ -316,7 +320,7 @@ const slipSlice = createSlice({
         },
         reOpenSlipSuccess: (state, action) => {
             state.loading = false;
-            state.slip = action.payload;
+            state.slips = action.payload?.data?.slips;
             state.message = action.payload?.message;
         },
         reOpenSlipFailure: (state, action) => {
@@ -442,6 +446,48 @@ const slipSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        fetchPostablePickSlipsRequest: (state, action: PayloadAction<FetchPostableSlipsPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+            // Fresh load — reset cursor pagination.
+            state.postableSlipsNextCursor = null;
+        },
+        fetchPostablePickSlipsSuccess: (state, action: PayloadAction<FetchPostableSlipsResponse>) => {
+            state.loading = false;
+            state.postableSlips = action.payload.slips;
+            state.postableSlipsHasMore = action.payload.hasMore;
+            state.postableSlipsNextCursor = action.payload.nextCursor;
+        },
+        fetchPostablePickSlipsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        loadMorePostablePickSlipsRequest: (state, action: PayloadAction<FetchPostableSlipsPayload>) => {
+            void action;
+            state.postableSlipsLoadingMore = true;
+            state.error = null;
+        },
+        loadMorePostablePickSlipsSuccess: (state, action: PayloadAction<FetchPostableSlipsResponse>) => {
+            state.postableSlipsLoadingMore = false;
+            const { slips, hasMore, nextCursor } = action.payload;
+            // Append only slips we don't already have (cursor ties are safe, but
+            // guard against any overlap so the dropdown never shows duplicates).
+            const existingIds = new Set(state.postableSlips?.map((slip) => slip.id) ?? []);
+            const fresh = slips.filter((slip) => !existingIds.has(slip.id));
+            state.postableSlips = [...(state.postableSlips ?? []), ...fresh];
+            state.postableSlipsHasMore = hasMore;
+            state.postableSlipsNextCursor = nextCursor;
+        },
+        loadMorePostablePickSlipsFailure: (state, action) => {
+            state.postableSlipsLoadingMore = false;
+            state.error = action.payload;
+        },
+        clearFetchPostablePickSlipsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -526,6 +572,13 @@ export const {
     updateSlipConflictModeSuccess,
     updateSlipConflictModeFailure,
     clearUpdateSlipConflictModeMessage,
+    fetchPostablePickSlipsRequest,
+    fetchPostablePickSlipsSuccess,
+    fetchPostablePickSlipsFailure,
+    loadMorePostablePickSlipsRequest,
+    loadMorePostablePickSlipsSuccess,
+    loadMorePostablePickSlipsFailure,
+    clearFetchPostablePickSlipsMessage,
 } = slipSlice.actions;
 
 export default slipSlice.reducer;

@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllFinalizedSlipsFailure, fetchAllFinalizedSlipsRequest, fetchAllFinalizedSlipsSuccess, fetchAllOpenSlipsFailure, fetchAllOpenSlipsRequest, fetchAllOpenSlipsSuccess, fetchAllReviewSlipsFailure, fetchAllReviewSlipsRequest, fetchAllReviewSlipsSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchAllVibeFinalizedSlipsFailure, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeFinalizedSlipsSuccess, fetchAllVibeOpenSlipsFailure, fetchAllVibeOpenSlipsRequest, fetchAllVibeOpenSlipsSuccess, fetchAllVibeReviewSlipsFailure, fetchAllVibeReviewSlipsRequest, fetchAllVibeReviewSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipConflictModeFailure, updateSlipConflictModeRequest, updateSlipConflictModeSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
+import { assignToSecondaryLeaderboardFailure, assignToSecondaryLeaderboardRequest, assignToSecondaryLeaderboardSuccess, createSlipFailure, createSlipRequest, createSlipSuccess, deleteSlipFailure, deleteSlipRequest, deleteSlipSuccess, fetchAllFinalizedSlipsFailure, fetchAllFinalizedSlipsRequest, fetchAllFinalizedSlipsSuccess, fetchAllOpenSlipsFailure, fetchAllOpenSlipsRequest, fetchAllOpenSlipsSuccess, fetchAllReviewSlipsFailure, fetchAllReviewSlipsRequest, fetchAllReviewSlipsSuccess, fetchAllSlipsFailure, fetchAllSlipsRequest, fetchAllSlipsSuccess, fetchAllVibeFinalizedSlipsFailure, fetchAllVibeFinalizedSlipsRequest, fetchAllVibeFinalizedSlipsSuccess, fetchAllVibeOpenSlipsFailure, fetchAllVibeOpenSlipsRequest, fetchAllVibeOpenSlipsSuccess, fetchAllVibeReviewSlipsFailure, fetchAllVibeReviewSlipsRequest, fetchAllVibeReviewSlipsSuccess, fetchPostablePickSlipsFailure, fetchPostablePickSlipsRequest, fetchPostablePickSlipsSuccess, loadMorePostablePickSlipsFailure, loadMorePostablePickSlipsRequest, loadMorePostablePickSlipsSuccess, fetchSlipByIdFailure, fetchSlipByIdRequest, fetchSlipByIdSuccess, markedUnlockSlipFailure, markedUnlockSlipRequest, markedUnlockSlipSuccess, markFinalizeSlipFailure, markFinalizeSlipRequest, markFinalizeSlipSuccess, markGradedSlipFailure, markGradedSlipRequest, markGradedSlipSuccess, markLockSlipFailure, markLockSlipRequest, markLockSlipSuccess, markVoidedSlipFailure, markVoidedSlipRequest, markVoidedSlipSuccess, reOpenSlipFailure, reOpenSlipRequest, reOpenSlipSuccess, startNewContestFailure, startNewContestRequest, startNewContestSuccess, updateSlipConflictModeFailure, updateSlipConflictModeRequest, updateSlipConflictModeSuccess, updateSlipsFailure, updateSlipsRequest, updateSlipsSuccess } from "../slices/slipSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPaginationPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
+import type { AssignToSecondaryLeaderboardPayload, CreateSlipPayload, DeleteSlipPayload, FetchFinalizeSlipsPayload, FetchOpenSlipsPayload, FetchPostableSlipsPayload, FetchPostableSlipsResponse, FetchReviewSlipsPayload, FetchSlipByIdPayload, FetchSlipsPaginationPayload, FetchSlipsPayload, MarkFinalizePayload, MarkGradedPayload, MarkLockPayload, MarkUnlockPayload, MarkVoidedPayload, ReOpenSlipPayload, Slips, StartNewContestPayload, UpdateSlipConflictModePayload, UpdateSlipPayload } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchArchivedLeaderboardListRequest } from "../slices/groupsSlice";
 
 type ApiErrorResponse = {
@@ -351,6 +351,44 @@ function* handleUpdateSlipConflictMode(action: PayloadAction<UpdateSlipConflictM
     }
 }
 
+function* handleFetchPostablePickSlips(action: PayloadAction<FetchPostableSlipsPayload | undefined>): SagaIterator {
+    try {
+        const { cursor } = action.payload ?? {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/postable-slips`,
+            { params: { cursor } }
+        );
+        const data = (response.data as { data?: FetchPostableSlipsResponse }).data;
+        yield put(fetchPostablePickSlipsSuccess({
+            slips: data?.slips ?? [],
+            hasMore: data?.hasMore ?? false,
+            nextCursor: data?.nextCursor ?? null,
+        }));
+    } catch (error: unknown) {
+        yield put(fetchPostablePickSlipsFailure(getErrorMessage(error, "Postable pick slips Fetch Failed")));
+    }
+}
+
+function* handleLoadMorePostablePickSlips(action: PayloadAction<FetchPostableSlipsPayload>): SagaIterator {
+    try {
+        const { cursor } = action.payload ?? {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/slip/postable-slips`,
+            { params: { cursor } }
+        );
+        const data = (response.data as { data?: FetchPostableSlipsResponse }).data;
+        yield put(loadMorePostablePickSlipsSuccess({
+            slips: data?.slips ?? [],
+            hasMore: data?.hasMore ?? false,
+            nextCursor: data?.nextCursor ?? null,
+        }));
+    } catch (error: unknown) {
+        yield put(loadMorePostablePickSlipsFailure(getErrorMessage(error, "Postable pick slips Fetch Failed")));
+    }
+}
+
 export default function* slipSaga() {
     yield takeLatest(createSlipRequest.type, handleCreateSlip);
     yield takeLatest(fetchAllSlipsRequest.type, handleFetchAllSlips);
@@ -372,4 +410,6 @@ export default function* slipSaga() {
     yield takeLatest(fetchAllVibeReviewSlipsRequest.type, handleFetchAllVibeReviewSlips);
     yield takeLatest(fetchAllVibeFinalizedSlipsRequest.type, handleFetchAllVibeFinalizedSlips);
     yield takeLatest(updateSlipConflictModeRequest.type, handleUpdateSlipConflictMode);
+    yield takeLatest(fetchPostablePickSlipsRequest.type, handleFetchPostablePickSlips);
+    yield takeLatest(loadMorePostablePickSlipsRequest.type, handleLoadMorePostablePickSlips);
 };

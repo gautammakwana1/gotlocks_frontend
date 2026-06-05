@@ -721,6 +721,37 @@ export type CreatePostPickPayload = {
     match_date?: Date;
 };
 
+export type ReplaceOrCreatePostablePickPayload = {
+    pick_id?: string;
+    slip_id?: string;
+    description: string;
+    odds_bracket?: string | null;
+    points?: number;
+    scope?: PickScope;
+    sport?: League | string;
+    market?: string;
+    side?: PickSide;
+    threshold?: number;
+    gameId?: string;
+    week?: string;
+    teamId?: string;
+    playerId?: string;
+    difficultyTier?: number;
+    bestOffer?: BookOdds & { deeplinkUrl?: string };
+    bookOdds?: BookOdds[];
+    validationStatus?: ValidatePickResponse["status"];
+    buildMode?: BuildMode;
+    difficulty_label?: DifficultyLabel | null;
+    external_pick_key?: string;
+    confidence?: ConfidenceLevel | null;
+    isCombo?: boolean;
+    legs?: PickLeg[];
+    selection?: PickSelectionMeta;
+    sourceTab?: string;
+    matchup?: string;
+    match_date?: Date;
+};
+
 export type CreatePickOfDayPayload = {
     description: string;
     odds_bracket?: string | null;
@@ -869,6 +900,44 @@ export type FetchNotificationsPayload = {
     limit?: number;
 };
 
+export type PostableSlips = {
+    id: string;
+    group_id: string;
+    name: string;
+    pick_deadline_at: string;
+    status: SlipStatus;
+    isGraded: boolean;
+    pick_limit: 1 | "unlimited";
+    sports: string[];
+    window_days: number;
+    slip_type: string;
+    contest_id: string;
+    group: {
+        id: string;
+        name: string;
+    };
+    pick?: {
+        id: string;
+        slip_id: string;
+        odds_bracket: string;
+        result: string;
+        points: number;
+    }
+}
+
+// Cursor-based (keyset) pagination for the postable-slips dropdown. The cursor
+// is opaque on the client — we just send back whatever `nextCursor` the API
+// returned. Mirrors the group-chat cursor pattern.
+export type FetchPostableSlipsPayload = {
+    cursor?: string;
+};
+
+export type FetchPostableSlipsResponse = {
+    slips: PostableSlips[];
+    hasMore: boolean;
+    nextCursor: string | null;
+};
+
 export type SlipState = {
     slip: Slip | null;
     slips: Slips | null;
@@ -886,6 +955,10 @@ export type SlipState = {
     deleteLoading: boolean;
     deleteMessage: string | null;
     deleteError: string | null;
+    postableSlips: PostableSlips[] | null;
+    postableSlipsHasMore: boolean;
+    postableSlipsNextCursor: string | null;
+    postableSlipsLoadingMore: boolean;
 };
 
 export type PickState = {
@@ -2654,4 +2727,16 @@ export type AppNotification = {
     request_status?: FollowRequestStatus | null;
     // reaction?: PickReaction | null;
     // pointsDelta?: number | null;
+};
+
+export type LeaguePickCandidate = {
+    id: string;
+    description: string;
+    odds: string | null;
+    payload: BuiltPickPayload;
+};
+
+export type PostDestinationGroups = {
+    profilePayloads: BuiltPickPayload[];
+    leagueCandidates: LeaguePickCandidate[];
 };

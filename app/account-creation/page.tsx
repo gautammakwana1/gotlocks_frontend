@@ -10,7 +10,7 @@ import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
 import { AuthSelector, RegisterPayload } from "@/lib/interfaces/interfaces";
 import { EyeClosedIcon, EyeIcon } from "lucide-react";
-import CustomDatePicker from "@/components/ui/CustomDatePicker";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import AuthLegalNotice from "@/components/ui/AuthLegalNotic";
 
@@ -325,13 +325,14 @@ const AccountCreationPage = () => {
           )}
         </label>
 
-        <CustomDatePicker
+        <DateTimeWheelPicker
           label="date of birth"
-          value={formData?.dob}
-          onChange={(date) => setFormData({ ...formData, dob: date })}
-          required
-          startYear={1900}
+          value={formData?.dob ? formData.dob.toISOString() : ""}
+          onChange={(iso) => setFormData({ ...formData, dob: iso ? new Date(iso) : undefined })}
+          showTime={false}
           disableFuture
+          minYear={1900}
+          required
           placeholder="select your date of birth"
         />
 

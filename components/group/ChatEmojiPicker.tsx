@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import Picker from "@emoji-mart/react";
 import data from "@emoji-mart/data";
 
@@ -55,17 +56,23 @@ export default function ChatEmojiPicker({ onSelect, onClose, anchorRef, composer
   );
 
   if (isMobile) {
-    return (
+    if (typeof document === "undefined") return null;
+    // Portal to <body> so the sheet escapes the composer's backdrop-filter
+    // (which would otherwise become the fixed containing block) and the chat
+    // section's overflow-hidden (which clipped the picker's top on short
+    // screens). z-[60] keeps it above the fixed MainTabBar (z-50).
+    return createPortal(
       <div
         ref={pickerRef}
         role="dialog"
         aria-modal="true"
         aria-label="Emoji picker"
         style={{ bottom: 73 }}
-        className="ui-sheet-up emoji-mart-glass emoji-mart-mobile fixed inset-x-2 z-40 overflow-hidden rounded-2xl border border-sky-400/30 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_22px_-6px_rgba(59,130,246,0.45)] backdrop-blur"
+        className="ui-sheet-up emoji-mart-glass emoji-mart-mobile fixed inset-x-2 z-[60] overflow-hidden rounded-2xl border border-sky-400/30 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_22px_-6px_rgba(59,130,246,0.45)] backdrop-blur"
       >
         {picker}
-      </div>
+      </div>,
+      document.body
     );
   }
 

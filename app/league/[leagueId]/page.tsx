@@ -504,7 +504,7 @@ const LeagueDashboardPage = () => {
     <div
       className={
         activeTab === "chat"
-          ? "flex flex-col gap-6 -mt-2 -mb-36 h-[calc(100dvh-var(--topnav-height))] min-h-0 overflow-hidden sm:-mt-3"
+          ? "flex flex-col gap-6 -mt-2 -mb-36 h-[calc(100dvh-var(--topnav-height)-var(--keyboard-inset,0px))] min-h-0 overflow-hidden sm:-mt-3"
           : "flex flex-col gap-6 pb-10"
       }
     >

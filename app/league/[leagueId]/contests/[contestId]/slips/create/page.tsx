@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
-import { fromLocalInputValue, formatDateTime, toLocalInputValue } from "@/lib/utils/date";
+import { formatDateTime } from "@/lib/utils/date";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -282,28 +283,18 @@ const ContestSlipCreatePage = () => {
                     <div className="h-px bg-white/10" />
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <label className={fieldLabelClasses}>
-                            Pick deadline
-                            <input
-                                type="datetime-local"
-                                value={toLocalInputValue(pickDeadline)}
-                                onChange={(event) => {
-                                    setPickDeadline(fromLocalInputValue(event.target.value))
-                                    if (errors.pickDeadline) {
-                                        setErrors((prev) => ({
-                                            ...prev,
-                                            pickDeadline: undefined
-                                        }));
-                                    }
-                                }}
-                                className={fieldClasses}
-                            />
-                            {errors.pickDeadline && (
-                                <p className="mt-1 text-xs text-red-400">
-                                    {errors.pickDeadline}
-                                </p>
-                            )}
-                        </label>
+                        <DateTimeWheelPicker
+                            label="Pick deadline"
+                            value={pickDeadline}
+                            onChange={(iso) => {
+                                setPickDeadline(iso);
+                                if (errors.pickDeadline) {
+                                    setErrors((prev) => ({ ...prev, pickDeadline: undefined }));
+                                }
+                            }}
+                            error={errors.pickDeadline}
+                            className="min-w-0"
+                        />
                         <label className={fieldLabelClasses}>
                             Slate window
                             <select

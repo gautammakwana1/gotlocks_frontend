@@ -1,14 +1,7 @@
 "use client";
 
-/**
- * PickBuilderShell is the shared frame for every pick-building surface.
- * - The shell owns the sticky league bar and pipes context (standalone vs slip) into league adapters.
- * - League adapters live in this folder.
- * - Keep new leagues lightweight by plugging in an adapter component that calls `onSave` with a BuiltPickPayload.
- */
-
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, GroupObject, League, ParlayLeg, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { BuildMode, BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, GroupObject, League, ParlayLeg, Pick, PostDestinationGroups, RootState, Slip } from "@/lib/interfaces/interfaces";
 import NbaPickBuilder from "../nba/NbaPickBuilder";
 import NflPickBuilder from "../nfl/NflPickBuilder";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
@@ -32,6 +25,7 @@ type SlipBuilderContext = {
     initialPick?: Pick;
     isCommissioner: boolean;
     onSave: (payload: BuiltPickPayload, pickId?: string) => void;
+    onSelectActiveLeague: (league: League) => void;
     showCurrentPick?: boolean;
 };
 
@@ -44,8 +38,13 @@ type StandaloneBuilderContext = {
     onComplete: (payload: BuiltPickPayload) => void;
     onSaveVibePick?: (payload: BuiltPickPayload) => void;
     onPostToSlip?: (payload: BuiltPickPayload) => void;
+    onSelectPostDestination?: (
+        groups: PostDestinationGroups,
+        reset: () => void
+    ) => void;
     onPickOfDay?: (payload: BuiltPickPayload) => void;
     onCreatePostPick?: (payload: BuiltPickPayload) => void;
+    onSelectActiveLeague: (league: League) => void;
     pickDeadline?: string;
     windowDays?: number;
     initialPick?: Pick;
@@ -314,6 +313,11 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         }
     }, [allowedLeagues, leagueCounts, hasManualLeagueSelection, context.initialPick, activeLeague]);
 
+    useEffect(() => {
+        if (!activeLeague) return;
+        context.onSelectActiveLeague(activeLeague);
+    }, [activeLeague]);
+
     const handleDateChange = useCallback(
         (key: string, source: "user" | "auto" = "user") => {
             setActiveDateKey(key);
@@ -519,6 +523,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         picks={[]}
                         initialPick={context.initialPick}
                         onSave={handleComplete}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         onCreatePostPick={context.onCreatePostPick}
@@ -577,6 +582,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onPostToSlip={context.onPostToSlip}
                         onCreatePostPick={context.onCreatePostPick}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         showCurrentPick
@@ -634,6 +640,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onCreatePostPick={context.onCreatePostPick}
                         onPostToSlip={context.onPostToSlip}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         showCurrentPick
@@ -691,6 +698,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onCreatePostPick={context.onCreatePostPick}
                         onPostToSlip={context.onPostToSlip}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         showCurrentPick
@@ -748,6 +756,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onCreatePostPick={context.onCreatePostPick}
                         onPostToSlip={context.onPostToSlip}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         showCurrentPick
@@ -805,6 +814,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         onSave={handleComplete}
                         onCreatePostPick={context.onCreatePostPick}
                         onPostToSlip={context.onPostToSlip}
+                        onSelectPostDestination={context.onSelectPostDestination}
                         onCancel={onDismiss}
                         isCommissioner
                         showCurrentPick
@@ -851,17 +861,6 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
     return (
         <div className="space-y-4">
             <div className="sticky top-0 z-20 -mx-5 bg-gradient-to-b from-black to-black/60 px-5 py-3">
-                {/* {onDismiss && showDismissButton && (
-                    <div className="flex items-center justify-end">
-                        <button
-                            type="button"
-                            onClick={onDismiss}
-                            className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30"
-                        >
-                            Close
-                        </button>
-                    </div>
-                )} */}
                 {hasDateOptions && (
                     <div
                         id="active-date-key--container"

@@ -598,4 +598,4 @@ export const USERNAME_RESERVED_WORD = [
 export const MINIMUM_PICK_POINTS = -100;
 export const MAXIMUM_PICK_POINTS = 100;
 
-export const FALLBACK_LEAGUE: League = "Soccer";
+export const FALLBACK_LEAGUE: League = "NFL";

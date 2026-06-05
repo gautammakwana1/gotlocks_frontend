@@ -207,6 +207,18 @@ body {
   animation: backdropIn 180ms ease-out;
 }
 
+/* iOS / Safari style activity indicator: each spoke fades from full to faint
+   over one revolution; staggered delays produce the rotating comet tail. */
+@keyframes ios-spinner-fade {
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.15;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-emoji-pop,
   .ui-sheet-up,
@@ -400,7 +412,7 @@ body {
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(110, 231, 183, 0.4) transparent;
+  scrollbar-color: rgba(110, 177, 231, 0.4) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -412,12 +424,12 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(110, 231, 183, 0.5);
+  background-color: rgba(110, 197, 231, 0.5);
   border-radius: 9999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(110, 231, 183, 0.6);
+  background-color: rgba(110, 197, 231, 0.6);
 }
 
 .shimmer-divider {

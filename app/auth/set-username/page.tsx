@@ -9,7 +9,7 @@ import { COLORS } from "@/lib/constants";
 import { useToast } from "@/lib/state/ToastContext";
 import { CurrentUser, RootState } from "@/lib/interfaces/interfaces";
 import { getLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
-import CustomDatePicker from "@/components/ui/CustomDatePicker";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 
@@ -174,13 +174,14 @@ const SetUsernamePage = () => {
                         autoComplete="username"
                     />
                 </label>
-                <CustomDatePicker
+                <DateTimeWheelPicker
                     label="Date of Birth"
-                    value={dob}
-                    onChange={setDob}
-                    required
-                    startYear={1900}
+                    value={dob ? dob.toISOString() : ""}
+                    onChange={(iso) => setDob(iso ? new Date(iso) : undefined)}
+                    showTime={false}
                     disableFuture
+                    minYear={1900}
+                    required
                     placeholder="Select your date of birth"
                     note="User must be 13 years old"
                 />

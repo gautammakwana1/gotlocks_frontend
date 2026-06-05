@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
@@ -415,6 +415,24 @@ const pickSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        replaceOrCreatePostablePickRequest: (state, action: PayloadAction<ReplaceOrCreatePostablePickPayload>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        replaceOrCreatePostablePickSuccess: (state, action) => {
+            state.loading = false;
+            state.message = action.payload?.message;
+        },
+        replaceOrCreatePostablePickFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearReplaceOrCreatePostablePickMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -495,6 +513,10 @@ export const {
     fetchAllContestsPicksSuccess,
     fetchAllContestsPicksFailure,
     clearFetchAllContestsPicksMessage,
+    replaceOrCreatePostablePickRequest,
+    replaceOrCreatePostablePickSuccess,
+    replaceOrCreatePostablePickFailure,
+    clearReplaceOrCreatePostablePickMessage,
 } = pickSlice.actions;
 
 export default pickSlice.reducer;

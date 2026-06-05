@@ -14,7 +14,8 @@ import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
 import BackButton from "@/components/ui/BackButton";
 import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
-import { formatDateTime, fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
+import { formatDateTime } from "@/lib/utils/date";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
 import { GradingPayload, GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
@@ -1300,19 +1301,13 @@ const SlipDetailsPage = () => {
                                                             </div>
                                                         </div>
                                                         <div className="grid gap-3">
-                                                            <label className="flex flex-col gap-1 text-xs text-gray-400">
-                                                                pick deadline
-                                                                <input
-                                                                    type="datetime-local"
-                                                                    value={toLocalInputValue(pickDeadlineDraft)}
-                                                                    min={toLocalInputValue(`${new Date()}`)}
-                                                                    onChange={(event) =>
-                                                                        setPickDeadlineDraft(fromLocalInputValue(event.target.value))
-                                                                    }
-                                                                    disabled={!canEditDeadlines}
-                                                                    className="ui-input-accent rounded-2xl border border-white/10 bg-black px-3 py-2 text-base text-white outline-none transition disabled:cursor-not-allowed disabled:opacity-60"
-                                                                />
-                                                            </label>
+                                                            <DateTimeWheelPicker
+                                                                label="pick deadline"
+                                                                value={pickDeadlineDraft}
+                                                                onChange={setPickDeadlineDraft}
+                                                                disabled={!canEditDeadlines}
+                                                                disablePast
+                                                            />
                                                             <label className="flex flex-col gap-1 text-xs text-gray-400">
                                                                 slate window
                                                                 <div className="relative sm:hidden">
@@ -1924,17 +1919,11 @@ const SlipDetailsPage = () => {
                                 Reopening resets all picks. Set a new pick deadline in the future.
                             </p>
                         </div>
-                        <label className="flex flex-col gap-2 text-xs text-gray-300">
-                            New pick deadline
-                            <input
-                                type="datetime-local"
-                                value={toLocalInputValue(reopenDeadlineDraft)}
-                                onChange={(event) =>
-                                    setReopenDeadlineDraft(fromLocalInputValue(event.target.value))
-                                }
-                                className="ui-input-accent rounded-2xl border border-white/10 bg-black px-3 py-2 text-base text-white outline-none transition"
-                            />
-                        </label>
+                        <DateTimeWheelPicker
+                            label="New pick deadline"
+                            value={reopenDeadlineDraft}
+                            onChange={setReopenDeadlineDraft}
+                        />
                         <div className="flex justify-center gap-3">
                             <button
                                 type="button"

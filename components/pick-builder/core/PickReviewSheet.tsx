@@ -190,6 +190,9 @@ export function PickReviewSheet({
     selectedSameGameGroupIds.length > 0 ||
     selectedStraightIds.length > 0;
   const singleReviewItem = !hasMultiSelection ? reviewListItems[0] ?? null : null;
+  const hasLeagueCandidates = hasMultiSelection
+    ? straightReviewItems.length > 0
+    : Boolean(singleReviewItem);
   const singleSelectionSummary = "1 pick selected";
   const resolvedSheetHeaderLabel = isPostMode
     ? sheetHeaderLabel
@@ -803,7 +806,7 @@ export function PickReviewSheet({
                     straightIds: selectedStraightIds,
                   })
                 }
-                disabled={locked || !hasSelectedPosts}
+                disabled={locked || (!hasSelectedPosts && !hasLeagueCandidates)}
                 className="ui-accent-button w-full rounded-xl px-4 py-3 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {bottomPostLabel}

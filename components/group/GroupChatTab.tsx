@@ -11,6 +11,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { fetchGroupChatsByGroupIdRequest, sendMessageRequest, loadOlderGroupChatsRequest, clearOlderGroupChats, deleteMessageByIdRequest, markGroupChatsReadRequest } from "@/lib/redux/slices/groupsSlice";
 import { ChatMessage, GroupSelector } from "@/lib/interfaces/interfaces";
 import { ChatSkeleton } from "../skeletons/leagues/ChatSkeleton";
+import IosSpinner from "../ui/IosSpinner";
 import { ThreeDotIcon, TrashIcon, CopyIcon } from "../ui/SvgIcons";
 import { useToast } from "@/lib/state/ToastContext";
 
@@ -170,6 +171,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const [isEmojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [actionMenu, setActionMenu] = useState<{ message: ChatMessage; top: number; left: number } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ChatMessage | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const { chatMessages, loadingChats, chatsHasMore, chatsNextCursor, loadingOlderChats, olderChats } =
     useSelector((state: GroupSelector) => state.group);
 
@@ -523,12 +525,67 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => window.removeEventListener("resize", resize);
   }, [draft]);
 
+  // Keep the chat container glued to the top of the on-screen keyboard on
+  // mobile/tablet. --keyboard-inset is read by the container height calc in
+  // app/league/[leagueId]/page.tsx; keyboardOpen drops the MainTabBar reserve.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    if (!vv) return;
+
+    const KEYBOARD_OPEN_THRESHOLD = 80;
+    const apply = () => {
+      // Ignore pinch-zoom: visual viewport shrinks but no keyboard is shown.
+      const inset =
+        vv.scale > 1.01
+          ? 0
+          : Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty("--keyboard-inset", `${inset}px`);
+      setKeyboardOpen(inset > KEYBOARD_OPEN_THRESHOLD);
+    };
+
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      root.style.setProperty("--keyboard-inset", "0px");
+      setKeyboardOpen(false);
+    };
+  }, []);
+
+  // The messages list shrinks when the keyboard opens — pin it to the newest message.
+  useEffect(() => {
+    if (!keyboardOpen) return;
+    const node = scrollRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [keyboardOpen]);
+
   const canSend = draft.trim().length > 0 && Boolean(currentUser);
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner mb-[calc(var(--mtb-reserve)+env(safe-area-inset-bottom))]"
+      className={`relative flex min-h-0 flex-1 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner ${
+        keyboardOpen
+          ? "mb-[env(safe-area-inset-bottom)]"
+          : "mb-[calc(var(--mtb-reserve)+env(safe-area-inset-bottom))]"
+      }`}
     >
+      {/* iOS-style activity indicator while older messages are loading. Overlaid
+          (not in the scroll flow) so it never disturbs the prepend scroll-restore. */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center transition-opacity duration-200 ${
+          loadingOlderChats ? "opacity-100" : "opacity-0"
+        }`}
+        aria-hidden={!loadingOlderChats}
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/80 shadow-lg backdrop-blur">
+          <IosSpinner size={20} />
+        </span>
+      </div>
+
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -568,7 +625,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
           />
         )}
         <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] px-3.5 py-2 backdrop-blur transition-all duration-200 hover:border-white/20 focus-within:border-sky-400/60 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] px-3.5 py-2 backdrop-blur transition-all duration-200 hover:border-white/20 focus-within:border-sky-400/60 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]">
             <textarea
               ref={inputRef}
               value={draft}
@@ -577,7 +634,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
               placeholder="Type a message..."
               rows={1}
               style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
-              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
+              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] w-full min-w-0 flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
             />
             <button
               ref={emojiButtonRef}

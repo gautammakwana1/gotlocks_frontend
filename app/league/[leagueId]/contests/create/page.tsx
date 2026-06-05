@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
-import { fromLocalInputValue, toLocalInputValue } from "@/lib/utils/date";
+import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
@@ -256,50 +256,30 @@ const CreateContestPage = () => {
                     <div className="h-px bg-white/10" />
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <label className={fieldLabelClasses}>
-                            Starts
-                            <input
-                                type="datetime-local"
-                                value={toLocalInputValue(startsAt)}
-                                onChange={(event) => {
-                                    setStartsAt(fromLocalInputValue(event.target.value))
-                                    if (errors.startsAt) {
-                                        setErrors((prev) => ({
-                                            ...prev,
-                                            startsAt: undefined
-                                        }));
-                                    }
-                                }}
-                                className={fieldClasses}
-                            />
-                            {errors.startsAt && (
-                                <p className="mt-1 text-xs text-red-400">
-                                    {errors.startsAt}
-                                </p>
-                            )}
-                        </label>
-                        <label className={fieldLabelClasses}>
-                            Ends
-                            <input
-                                type="datetime-local"
-                                value={toLocalInputValue(endsAt)}
-                                onChange={(event) => {
-                                    setEndsAt(fromLocalInputValue(event.target.value))
-                                    if (errors.endsAt) {
-                                        setErrors((prev) => ({
-                                            ...prev,
-                                            endsAt: undefined
-                                        }));
-                                    }
-                                }}
-                                className={fieldClasses}
-                            />
-                            {errors.endsAt && (
-                                <p className="mt-1 text-xs text-red-400">
-                                    {errors.endsAt}
-                                </p>
-                            )}
-                        </label>
+                        <DateTimeWheelPicker
+                            label="Starts"
+                            value={startsAt}
+                            onChange={(iso) => {
+                                setStartsAt(iso);
+                                if (errors.startsAt) {
+                                    setErrors((prev) => ({ ...prev, startsAt: undefined }));
+                                }
+                            }}
+                            error={errors.startsAt}
+                            className="min-w-0"
+                        />
+                        <DateTimeWheelPicker
+                            label="Ends"
+                            value={endsAt}
+                            onChange={(iso) => {
+                                setEndsAt(iso);
+                                if (errors.endsAt) {
+                                    setErrors((prev) => ({ ...prev, endsAt: undefined }));
+                                }
+                            }}
+                            error={errors.endsAt}
+                            className="min-w-0"
+                        />
                     </div>
 
                     <button
