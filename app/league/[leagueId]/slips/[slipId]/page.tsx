@@ -1705,7 +1705,13 @@ const SlipDetailsPage = () => {
                                                                                     value={headerPointsValue}
                                                                                     placeholder={headerIsPending ? "—" : undefined}
                                                                                     onChange={(event) => {
-                                                                                        const nextValue = Number(event.target.value);
+                                                                                        const raw = event.target.value;
+                                                                                        if (raw === "" || raw === "-") {
+                                                                                            handlePointsDraftChange(headerPick.id, raw);
+                                                                                            return;
+                                                                                        }
+                                                                                        const nextValue = Number(raw);
+                                                                                        if (Number.isNaN(nextValue)) return;
                                                                                         const validValue = Math.max(
                                                                                             MINIMUM_PICK_POINTS,
                                                                                             Math.min(MAXIMUM_PICK_POINTS, nextValue)

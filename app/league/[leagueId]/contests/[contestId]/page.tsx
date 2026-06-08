@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SlipCategorySection } from "@/components/slips/SlipCategorySection";
 import BackButton from "@/components/ui/BackButton";
+import NumberInput from "@/components/ui/NumberInput";
 import { formatDateTime } from "@/lib/utils/date";
 import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { useDispatch, useSelector } from "react-redux";
@@ -655,16 +656,16 @@ const ContestDetailPage = () => {
                                             </div>
                                             <label className="block rounded-lg border border-white/10 bg-black/25 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
                                                 Default points
-                                                <input
-                                                    type="number"
+                                                <NumberInput
                                                     min={0}
+                                                    max={1000}
                                                     value={badgeDraft.defaultPoints}
-                                                    onChange={(event) =>
+                                                    onValueChange={(nextPoints) =>
                                                         setBadgeDraft((current) =>
                                                             current
                                                                 ? {
                                                                     ...current,
-                                                                    defaultPoints: Math.max(0, Number(event.target.value) || 0),
+                                                                    defaultPoints: nextPoints,
                                                                 }
                                                                 : current
                                                         )
@@ -800,18 +801,18 @@ const ContestDetailPage = () => {
                                                     <div className="mt-4 grid grid-cols-[1fr_auto] items-end gap-2 border-t border-white/10 pt-3">
                                                         <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                                                             Points
-                                                            <input
-                                                                type="number"
+                                                            <NumberInput
                                                                 min={0}
+                                                                max={1000}
                                                                 value={displayedPoints}
-                                                                onChange={(event) =>
+                                                                onValueChange={(nextPoints) =>
                                                                     setBadgeDraft((current) =>
                                                                         current
                                                                             ? {
                                                                                 ...current,
                                                                                 badgePointOverrides: {
                                                                                     ...current.badgePointOverrides,
-                                                                                    [definition.id]: Math.max(0, Number(event.target.value) || 0),
+                                                                                    [definition.id]: nextPoints,
                                                                                 },
                                                                             }
                                                                             : current
