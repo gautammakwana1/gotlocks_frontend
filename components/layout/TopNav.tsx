@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/lib/redux/hooks";
 import { logout } from "@/lib/redux/slices/authSlice";
-import { getLocalStorage } from "@/lib/utils/jwtUtils";
+import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type { CurrentUser, TutorialKeys } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
@@ -57,7 +57,10 @@ export const TopNav = () => {
 
   const authUser = useAppSelector((state) => state.user.user) as AuthUserPayload | null;
   const reduxUser = authUser?.data?.user?.userData ?? null;
-  const storedUser = getLocalStorage<CurrentUser>("currentUser");
+  // Read the current user from AuthContext (AuthProvider derives it from the
+  // "currentUser" localStorage key and sets it before children render) instead
+  // of reading localStorage during render, which would differ from SSR output.
+  const storedUser = useCurrentUser();
   const currentUser = reduxUser ?? storedUser ?? null;
 
   const hideNav = useMemo(() => {

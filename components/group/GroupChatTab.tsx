@@ -62,6 +62,9 @@ const dayLabel = (iso: string) => {
 };
 
 const MAX_COMPOSER_HEIGHT = 144;
+const MAX_MESSAGE_LENGTH = 2000;
+// Show the character counter once the draft gets close to the limit.
+const COUNTER_THRESHOLD = MAX_MESSAGE_LENGTH - 200;
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const inSameGroup = (a: ChatMessage, b: ChatMessage) =>
@@ -397,6 +400,15 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const handleSend = () => {
     const text = draft.trim();
     if (!text || !currentUser || !groupId) return;
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      setToast({
+        id: Date.now(),
+        type: "error",
+        message: `Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters.`,
+        duration: 2500,
+      });
+      return;
+    }
     const next: ChatMessage = {
       id: `temp-${Date.now()}`,
       group_id: groupId,
@@ -488,7 +500,10 @@ export const GroupChatTab = ({ groupId }: Props) => {
       const el = inputRef.current;
       const start = el?.selectionStart ?? draft.length;
       const end = el?.selectionEnd ?? draft.length;
-      setDraft(draft.slice(0, start) + native + draft.slice(end));
+      const next = draft.slice(0, start) + native + draft.slice(end);
+      // Respect the limit; inserting via the picker bypasses the textarea maxLength.
+      if (next.length > MAX_MESSAGE_LENGTH) return;
+      setDraft(next);
       requestAnimationFrame(() => {
         el?.focus();
         const pos = start + native.length;
@@ -563,7 +578,10 @@ export const GroupChatTab = ({ groupId }: Props) => {
     if (node) node.scrollTop = node.scrollHeight;
   }, [keyboardOpen]);
 
-  const canSend = draft.trim().length > 0 && Boolean(currentUser);
+  const canSend =
+    draft.trim().length > 0 &&
+    draft.length <= MAX_MESSAGE_LENGTH &&
+    Boolean(currentUser);
 
   return (
     <section
@@ -595,7 +613,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
         {grouped.map((bucket) => (
           <div key={bucket.label} className="flex flex-col">
             <div className="mb-3 flex justify-center">
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+              <span suppressHydrationWarning className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
                 {bucket.label}
               </span>
             </div>
@@ -633,6 +651,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               rows={1}
+              maxLength={MAX_MESSAGE_LENGTH}
               style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
               className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] w-full min-w-0 flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
             />
@@ -661,6 +680,16 @@ export const GroupChatTab = ({ groupId }: Props) => {
             </button>
           </div>
         </div>
+        {draft.length >= COUNTER_THRESHOLD && (
+          <div
+            className={`mt-1.5 pr-14 text-right text-[10px] font-medium tabular-nums ${
+              draft.length >= MAX_MESSAGE_LENGTH ? "text-red-400" : "text-gray-400"
+            }`}
+            aria-live="polite"
+          >
+            {draft.length}/{MAX_MESSAGE_LENGTH}
+          </div>
+        )}
       </div>
 
       {actionMenu && (
@@ -838,7 +867,7 @@ const MessageRow = ({
           <p className="whitespace-pre-wrap">
             {isDeleted ? <DeletedMessageNote /> : message.message}
           </p>
-          <span className={`self-end text-[8px] sm:text-[10px] font-medium leading-none ${isDeleted ? "text-gray-500" : "text-sky-100/60"}`}>
+          <span suppressHydrationWarning className={`self-end text-[8px] sm:text-[10px] font-medium leading-none ${isDeleted ? "text-gray-500" : "text-sky-100/60"}`}>
             {formatClockTime(timeIso)}
           </span>
         </div>
@@ -871,7 +900,7 @@ const MessageRow = ({
         <p className="whitespace-pre-wrap" style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}>
           {isDeleted ? <DeletedMessageNote /> : message.message}
         </p>
-        <span className="self-end text-[8px] sm:text-[10px] font-medium leading-none text-gray-400/70">
+        <span suppressHydrationWarning className="self-end text-[8px] sm:text-[10px] font-medium leading-none text-gray-400/70">
           {formatClockTime(timeIso)}
         </span>
       </div>

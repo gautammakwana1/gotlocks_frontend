@@ -469,7 +469,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
                                 </span>
                             )}
                         </div>
-                        <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                        <div suppressHydrationWarning className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
                             {sportLabel + " · " + postedLine}
                         </div>
                     </div>
@@ -477,7 +477,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
             )}
             {collapsed && (
                 <div className="px-5 sm:px-6">
-                    <div className="flex justify-end text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                    <div suppressHydrationWarning className="flex justify-end text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
                         {sportLabel + " · " + postedLine}
                     </div>
                 </div>

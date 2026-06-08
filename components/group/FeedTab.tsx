@@ -92,7 +92,7 @@ export const FeedTab = ({ groupId }: Props) => {
           >
             <div className="flex items-center justify-between text-xs uppercase tracking-wide text-gray-500">
               <span>{event.profiles?.username ?? "Unknown"}</span>
-              <time dateTime={event.created_at}>
+              <time suppressHydrationWarning dateTime={event.created_at}>
                 {formatTime(event.created_at)}
               </time>
             </div>
