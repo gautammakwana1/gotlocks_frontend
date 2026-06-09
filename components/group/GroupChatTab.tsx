@@ -184,6 +184,9 @@ export const GroupChatTab = ({ groupId }: Props) => {
   // Latest real (DB) message id in view; flushed to the read API once on leave.
   const latestIdRef = useRef<string | null>(null);
   const sentIdRef = useRef<string | null>(null);
+  // Viewport/keyboard bookkeeping for the document clamp (see effect below).
+  const keyboardWasOpenRef = useRef(false);
+  const settleRef = useRef<number | null>(null);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -540,33 +543,92 @@ export const GroupChatTab = ({ groupId }: Props) => {
     return () => window.removeEventListener("resize", resize);
   }, [draft]);
 
-  // Keep the chat container glued to the top of the on-screen keyboard on
-  // mobile/tablet. --keyboard-inset is read by the container height calc in
-  // app/league/[leagueId]/page.tsx; keyboardOpen drops the MainTabBar reserve.
+  // Pin the chat view to the *visible* viewport. iOS Safari's dynamic toolbar
+  // makes 100dvh / min-h-[100dvh] overshoot the visible area, which lets the
+  // whole page (composer included) scroll up/down. We size everything off
+  // window.visualViewport (the truly visible area) via --app-vvh, and clamp the
+  // document so only the inner message list scrolls.
+  //
+  // Important: the clamp is applied ONLY while the keyboard is closed. With the
+  // keyboard up we release it and hand the viewport back to iOS — forcing a
+  // fixed body height there black-screens the chat and leaves it stuck after the
+  // keyboard closes. keyboardOpen also drops the MainTabBar reserve.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
     const root = document.documentElement;
-    if (!vv) return;
+    const body = document.body;
+
+    // Remember the page's own scroll styles so we can restore them on leave.
+    const prev = {
+      htmlOverflow: root.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlHeight: root.style.height,
+      bodyHeight: body.style.height,
+      overscroll: root.style.overscrollBehavior,
+    };
+
+    const clamp = (height: number) => {
+      root.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      root.style.height = `${height}px`;
+      body.style.height = `${height}px`;
+      root.style.overscrollBehavior = "none";
+    };
+    const release = () => {
+      root.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      root.style.height = prev.htmlHeight;
+      body.style.height = prev.bodyHeight;
+      root.style.overscrollBehavior = prev.overscroll;
+    };
 
     const KEYBOARD_OPEN_THRESHOLD = 80;
     const apply = () => {
+      const height = vv?.height ?? window.innerHeight;
       // Ignore pinch-zoom: visual viewport shrinks but no keyboard is shown.
       const inset =
-        vv.scale > 1.01
+        vv && vv.scale > 1.01
           ? 0
-          : Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+          : vv
+            ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+            : 0;
+      const kbOpen = inset > KEYBOARD_OPEN_THRESHOLD;
+      root.style.setProperty("--app-vvh", `${height}px`);
       root.style.setProperty("--keyboard-inset", `${inset}px`);
-      setKeyboardOpen(inset > KEYBOARD_OPEN_THRESHOLD);
+      setKeyboardOpen(kbOpen);
+
+      if (kbOpen) {
+        // Keyboard up: let iOS lift the focused input into view.
+        release();
+      } else {
+        // No keyboard: clamp to the visible viewport so the toolbar can't scroll
+        // the page. The min-h-[100dvh] overshoot is simply clipped (it sits below
+        // the composer's tab-bar reserve, so nothing visible is lost).
+        clamp(height);
+        // The keyboard fires interim resizes as it closes; re-apply once it has
+        // settled so the layout snaps back to full height with no leftover gap.
+        if (keyboardWasOpenRef.current) {
+          if (settleRef.current) window.clearTimeout(settleRef.current);
+          settleRef.current = window.setTimeout(apply, 250);
+        }
+      }
+      keyboardWasOpenRef.current = kbOpen;
     };
 
     apply();
-    vv.addEventListener("resize", apply);
-    vv.addEventListener("scroll", apply);
+    vv?.addEventListener("resize", apply);
+    vv?.addEventListener("scroll", apply);
+    window.addEventListener("orientationchange", apply);
     return () => {
-      vv.removeEventListener("resize", apply);
-      vv.removeEventListener("scroll", apply);
+      if (settleRef.current) window.clearTimeout(settleRef.current);
+      vv?.removeEventListener("resize", apply);
+      vv?.removeEventListener("scroll", apply);
+      window.removeEventListener("orientationchange", apply);
       root.style.setProperty("--keyboard-inset", "0px");
+      root.style.removeProperty("--app-vvh");
+      release();
+      keyboardWasOpenRef.current = false;
       setKeyboardOpen(false);
     };
   }, []);

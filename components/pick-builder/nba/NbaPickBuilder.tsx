@@ -2107,7 +2107,9 @@ export const NbaPickBuilder = ({
 
     useEffect(() => {
         if (!hasMultipick) {
-            setStraightConfidences({});
+            setStraightConfidences((prev) =>
+                Object.keys(prev).length === 0 ? prev : {}
+            );
             return;
         }
 
@@ -2116,7 +2118,11 @@ export const NbaPickBuilder = ({
             straightReviewItems.forEach((item) => {
                 next[item.id] = prev[item.id] ?? item.payload.confidence ?? null;
             });
-            return next;
+            const prevKeys = Object.keys(prev);
+            const unchanged =
+                prevKeys.length === Object.keys(next).length &&
+                prevKeys.every((key) => prev[key] === next[key]);
+            return unchanged ? prev : next;
         });
     }, [hasMultipick, setStraightConfidences, straightReviewItems]);
 
@@ -2276,7 +2282,9 @@ export const NbaPickBuilder = ({
 
     useEffect(() => {
         if (!hasMultipick) {
-            setSameGameComboConfidences({});
+            setSameGameComboConfidences((prev) =>
+                Object.keys(prev).length === 0 ? prev : {}
+            );
             return;
         }
 
@@ -2285,7 +2293,11 @@ export const NbaPickBuilder = ({
             sameGameComboGroups.forEach((group) => {
                 next[group.id] = prev[group.id] ?? group.payload.confidence ?? null;
             });
-            return next;
+            const prevKeys = Object.keys(prev);
+            const unchanged =
+                prevKeys.length === Object.keys(next).length &&
+                prevKeys.every((key) => prev[key] === next[key]);
+            return unchanged ? prev : next;
         });
     }, [hasMultipick, setSameGameComboConfidences]);
 

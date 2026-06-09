@@ -121,6 +121,13 @@ const PickBuilderClientPage = () => {
         dispatch(loadMorePostablePickSlipsRequest({ cursor: paging.nextCursor }));
     }, [dispatch]);
 
+    const closeDestination = useCallback(() => {
+        resetBuilderRef.current = null;
+        setPendingGroups(null);
+        setDestinationStep("choose");
+        setAssignments({});
+    }, []);
+
     useEffect(() => {
         if (pickMessage && !pickLoader) {
             setToast({
@@ -130,6 +137,13 @@ const PickBuilderClientPage = () => {
                 duration: 3000
             })
             dispatch(clearCreatePostPickMessage());
+            // A non-null ref means this success belongs to a Post to Profile /
+            // Post to Leagues flow started from this page. Clear the builder draft
+            // (hides PickReviewSheet) and close the destination modal.
+            if (resetBuilderRef.current) {
+                resetBuilderRef.current();   // -> builder resetAfterPost -> onDraftPickChange(null)
+                closeDestination();          // nulls the ref + clears modal state
+            }
         }
         if (pickError && !pickLoader) {
             setToast({
@@ -139,8 +153,9 @@ const PickBuilderClientPage = () => {
                 duration: 3000
             })
             dispatch(clearCreatePostPickMessage());
+            // Leave resetBuilderRef / pendingGroups intact on failure so the user can retry.
         }
-    }, [dispatch, pickMessage, pickError, pickLoader, setToast]);
+    }, [dispatch, pickMessage, pickError, pickLoader, setToast, closeDestination]);
 
     const eligibleSlips = useMemo(() => {
         if (!postableSlips || postableSlips.length === 0) return [];
@@ -179,22 +194,6 @@ const PickBuilderClientPage = () => {
         },
         []
     );
-
-    const closeDestination = () => {
-        resetBuilderRef.current = null;
-        setPendingGroups(null);
-        setDestinationStep("choose");
-        setAssignments({});
-    };
-
-    const finishDestination = (message: string, tone: "success" | "info" = "success") => {
-        resetBuilderRef.current?.();
-        resetBuilderRef.current = null;
-        setPendingGroups(null);
-        setDestinationStep("choose");
-        setAssignments({});
-        setToast({ id: Date.now(), type: tone, message, duration: 3000 });
-    };
 
     const handlePostToProfile = () => {
         if (!pendingGroups || profilePayloads.length === 0) return;

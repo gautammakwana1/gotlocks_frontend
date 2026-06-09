@@ -21,7 +21,7 @@ import { GradingPayload, GroupSelector, LeaderboardList, Pick, RootState } from 
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
+import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, resetPicksScoringPointsRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
 import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import Image from "next/image";
 import { getPickPoints, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
@@ -574,7 +574,7 @@ const SlipDetailsPage = () => {
     const canAddPick = canManagePicks && userPicks.length < limitValue;
     const canReview = canCommissionerReview(slip);
     const canAdjustPoints = (isCommissioner || isContestManager) && canReview;
-    const canAutoGrade = hasReviewControl && canReview;
+    const canResetScoring = canAdjustPoints;
     const canReopen = hasReviewControl && isTimeLocked && !isFinalized;
     const canFinalizeSlip = canFinalize(slip, {
         isCommissioner: hasReviewControl,
@@ -659,10 +659,10 @@ const SlipDetailsPage = () => {
             : "Deadline is locked for this vibe slip. Use Reopen to reset picks and set a new deadline."
         : null;
 
-    const handleAutoGrade = () => {
-        if (!canAutoGrade) return;
+    const handleResetScoring = () => {
+        if (!canResetScoring) return;
         if (slip.id) {
-            dispatch(autoGradingPicksRequest({ slip_id: slip.id }));
+            dispatch(resetPicksScoringPointsRequest({ slip_id: slip.id }));
         }
     };
 
@@ -1577,16 +1577,16 @@ const SlipDetailsPage = () => {
                                                     </div>
                                                     <p className="text-xs text-gray-500">
                                                         {isTimeLocked
-                                                            ? "Slip is locked by the pick deadline. Auto-grade results, then adjust awarded points."
+                                                            ? "Slip is locked by the pick deadline. Adjust awarded points, or reset them back to the default scoring."
                                                             : "Review unlocks once the pick deadline passes."}
                                                     </p>
                                                 </div>
                                             </div>
                                             <div className="flex w-full flex-nowrap items-center gap-2">
                                                 <ActionButton
-                                                    label="Auto grade"
-                                                    onClick={handleAutoGrade}
-                                                    disabled={!canAutoGrade || pickLoader}
+                                                    label="Reset"
+                                                    onClick={handleResetScoring}
+                                                    disabled={!canResetScoring || pickLoader}
                                                     className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
                                                 />
                                                 <ActionButton

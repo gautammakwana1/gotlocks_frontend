@@ -513,6 +513,7 @@ const SlipCellCard = ({
     const isFinal = isSlipFinal(slip);
     const isOpen = !isFinal && !isSlipTimeLocked(slip);
     const emptyCopy = isOpen ? "no pick yet" : "pick not submitted before slip deadline";
+    const [showTier, setShowTier] = useState(false);
     const emptyCardTone = "border-slate-900/80 bg-slate-950/70";
     if (!isCurrectSlip) {
         return (
@@ -529,30 +530,63 @@ const SlipCellCard = ({
     if (!hasPick) {
         if (isOwnerCell && isOpen) {
             return (
-                <div className="flex h-full w-full items-center justify-between gap-2 rounded-md border border-dashed border-sky-400/30 bg-white/[0.03] px-2 py-2">
-                    <p className="min-w-0 text-[10px] leading-snug text-white md:text-xs">
-                        {emptyCopy}
-                    </p>
-                    <Link
-                        href={`/league/${groupId}/slips/${slip.id}`}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300/40 bg-sky-500/10 px-2 py-1.5 text-[10px] font-semibold text-sky-100 shadow-sm transition hover:border-sky-300/70 md:text-xs"
-                    >
-                        <span>Add your pick</span>
+                <Link
+                    href={`/league/${groupId}/slips/${slip.id}`}
+                    className="group flex h-full w-full flex-col items-start justify-between gap-1 rounded-md border border-dashed border-sky-400/40 bg-gradient-to-br from-sky-500/[0.1] via-sky-500/[0.03] to-transparent px-2.5 py-2 text-sky-100 transition hover:border-sky-300/80 hover:from-sky-500/[0.18]"
+                >
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold leading-tight text-sky-50 md:text-sm">
+                        Add your pick
                         <span
-                            className="flex h-4 w-4 items-center justify-center rounded-full border border-sky-300/40 text-xs text-sky-100"
+                            className="transition-transform group-hover:translate-x-0.5"
                             aria-hidden
                         >
-                            +
+                            →
                         </span>
-                    </Link>
-                </div>
+                    </span>
+                    <span className="mt-auto inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-sky-200/80 md:text-[8px]">
+                        <span className="h-1 w-1 animate-pulse rounded-full bg-sky-300" aria-hidden />
+                        open
+                    </span>
+                </Link>
             );
         }
 
+        const emptyState = isOpen
+            ? {
+                chip: "open",
+                body: "no pick yet",
+                dot: "bg-slate-400",
+                chipTone: "bg-white/10 text-slate-300",
+                bodyTone: "text-slate-300",
+                border: "border-white/10",
+                surface: "bg-white/[0.03]",
+            }
+            : {
+                chip: "missed",
+                body: "no pick submitted",
+                dot: "bg-rose-400/70",
+                chipTone: "bg-rose-500/15 text-rose-200/80",
+                bodyTone: "text-slate-400",
+                border: "border-rose-400/15",
+                surface: "bg-rose-500/[0.04]",
+            };
+
         return (
-            <p className="flex h-full w-full items-center rounded-md border border-white/10 bg-white/[0.03] px-2 text-[10px] leading-snug text-white md:text-xs">
-                {emptyCopy}
-            </p>
+            <div
+                className={`flex h-full w-full flex-col items-start justify-between gap-1 rounded-md border px-2.5 py-2 ${emptyState.border} ${emptyState.surface}`}
+            >
+                <span
+                    className={`text-[11px] font-medium leading-tight md:text-sm ${emptyState.bodyTone}`}
+                >
+                    {emptyState.body}
+                </span>
+                <span
+                    className={`mt-auto inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] md:text-[8px] ${emptyState.chipTone}`}
+                >
+                    <span className={`h-1 w-1 rounded-full ${emptyState.dot}`} aria-hidden />
+                    {emptyState.chip}
+                </span>
+            </div>
         );
     }
 
@@ -614,33 +648,29 @@ const SlipCellCard = ({
             className="relative flex h-full w-full"
         >
             <div className="grid h-full w-full min-w-0 grid-cols-[minmax(0,1fr)_66px] gap-1 md:grid-cols-[minmax(0,1fr)_116px] md:gap-2">
-                <div className={`flex min-h-0 min-w-0 flex-col justify-between rounded-md border border-white/10 bg-white/[0.035] px-2 py-1.5 shadow-[inset_0_0_12px_rgba(15,23,42,0.45)] md:px-3 md:py-2 ${resultCardTone}`}>
-                    <div className="flex min-w-0 items-start justify-between gap-2">
-                        <span className="shrink-0 text-[8px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
-                            {sourceTabLabel}
-                        </span>
-                        <span
-                            className={`shrink-0 text-[10px] font-semibold text-slate-100 md:text-xs ${accent}`}
-                        >
-                            {oddsCopy}
-                        </span>
-                    </div>
+                <div className={`flex min-h-0 min-w-0 flex-col gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 shadow-[inset_0_0_12px_rgba(15,23,42,0.45)] md:px-3 md:py-2 ${resultCardTone}`}>
                     <p
-                        className={`line-clamp-2 min-w-0 break-words text-[10px] font-semibold leading-tight text-slate-100 md:text-sm ${accent}`}
+                        className={`line-clamp-2 min-w-0 break-words text-[12px] font-semibold leading-tight text-slate-100 md:text-[15px] ${accent}`}
                         title={displayPick}
                     >
                         {pickLine}
                     </p>
-                    <div className="flex min-w-0 items-center gap-1 text-[8px] md:text-[10px]">
-                        {metaLabel ? (
-                            <span className="min-w-0 truncate text-slate-200">
-                                {metaLabel}
-                            </span>
-                        ) : (
-                            <span className="text-slate-500">{EM_DASH}</span>
-                        )}
+                    {metaLabel ? (
+                        <p
+                            className="min-w-0 truncate text-[9px] leading-tight text-slate-400 md:text-[11px]"
+                            title={metaLabel}
+                        >
+                            {metaLabel}
+                        </p>
+                    ) : (
+                        <p className="text-[9px] leading-tight text-slate-500 md:text-[11px]">{EM_DASH}</p>
+                    )}
+                    <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1 pt-0.5">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-white/10 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-slate-300 md:text-[8px]">
+                            {sourceTabLabel}
+                        </span>
                         {legsCopy && (
-                            <span className="shrink-0 font-semibold uppercase tracking-wide text-slate-500">
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-white/10 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-slate-400 md:text-[8px]">
                                 {legsCopy}
                             </span>
                         )}
@@ -648,17 +678,52 @@ const SlipCellCard = ({
                 </div>
 
                 <div className="grid min-h-0 min-w-0 grid-rows-2 gap-1 text-left">
-                    <div
-                        className={`flex min-h-0 min-w-0 flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] md:px-2 ${tierCardTone}`}
-                        style={tierCardStyle}
+                    <button
+                        type="button"
+                        onClick={() => setShowTier((prev) => !prev)}
+                        aria-label={showTier ? "Show odds" : "Show tier"}
+                        className="group block h-full min-h-0 w-full min-w-0 cursor-pointer bg-transparent text-left [perspective:600px]"
                     >
-                        <span className="block truncate text-[10px] font-semibold leading-tight text-white md:text-[13px]">
-                            {tierName}
-                        </span>
-                        <span className="block truncate text-[8px] leading-tight text-slate-100/70 md:text-[10px]">
-                            {tierRange}
-                        </span>
-                    </div>
+                        <div
+                            className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${showTier ? "[transform:rotateY(180deg)]" : ""
+                                }`}
+                        >
+                            <div
+                                className={`absolute inset-0 flex flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] md:px-2 ${tierCardTone}`}
+                                style={tierCardStyle}
+                            >
+                                <span className="block text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
+                                    odds
+                                </span>
+                                <span className="block truncate text-[12px] font-semibold tabular-nums leading-tight text-white md:text-[15px]">
+                                    {oddsCopy}
+                                </span>
+                                <span
+                                    className="pointer-events-none absolute right-1 top-1 text-[7px] leading-none text-white/40 md:text-[8px]"
+                                    aria-hidden
+                                >
+                                    ⇄
+                                </span>
+                            </div>
+                            <div
+                                className={`absolute inset-0 flex flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] [transform:rotateY(180deg)] md:px-2 ${tierCardTone}`}
+                                style={tierCardStyle}
+                            >
+                                <span className="block truncate text-[10px] font-semibold leading-tight text-white md:text-[13px]">
+                                    {tierName}
+                                </span>
+                                <span className="block truncate text-[8px] leading-tight text-slate-100/70 md:text-[10px]">
+                                    {tierRange}
+                                </span>
+                                <span
+                                    className="pointer-events-none absolute right-1 top-1 text-[7px] leading-none text-white/40 md:text-[8px]"
+                                    aria-hidden
+                                >
+                                    ⇄
+                                </span>
+                            </div>
+                        </div>
+                    </button>
                     <div
                         className={`flex min-h-0 min-w-0 flex-col justify-center overflow-hidden rounded-md border px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:px-2 ${resultCardTone}`}
                     >

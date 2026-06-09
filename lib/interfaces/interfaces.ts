@@ -867,6 +867,10 @@ export type FetchSlipByIdPayload = {
     slip_id: string;
 };
 
+export type ResetPicksScoringPointsPayload = {
+    slip_id: string;
+};
+
 export type FetchPickOfDayByUserIdPayload = {
     userId: string;
 };

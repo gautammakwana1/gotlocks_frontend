@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
@@ -433,6 +433,24 @@ const pickSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        resetPicksScoringPointsRequest: (state, action: PayloadAction<ResetPicksScoringPointsPayload>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        resetPicksScoringPointsSuccess: (state, action) => {
+            state.loading = false;
+            state.message = action.payload?.message;
+        },
+        resetPicksScoringPointsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearResetPicksScoringPointsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -517,6 +535,10 @@ export const {
     replaceOrCreatePostablePickSuccess,
     replaceOrCreatePostablePickFailure,
     clearReplaceOrCreatePostablePickMessage,
+    resetPicksScoringPointsRequest,
+    resetPicksScoringPointsSuccess,
+    resetPicksScoringPointsFailure,
+    clearResetPicksScoringPointsMessage,
 } = pickSlice.actions;
 
 export default pickSlice.reducer;
