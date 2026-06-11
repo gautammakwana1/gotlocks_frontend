@@ -20,6 +20,8 @@ import { generateProfileImageUrl, getMemberInitials, useIsMobile } from "@/lib/u
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useRouter } from "next/navigation";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
+import { BadgeAwardModal } from "../group/BadgeAwardModal";
+import { BadgeIcon } from "../badges/BadgeIcon";
 
 type Props = {
     group: Group | null;
@@ -210,6 +212,7 @@ const PlayerCell = ({
     username,
     profile_image,
     isMobile,
+    onSelectBadge,
 }: {
     username: string;
     rank: number;
@@ -221,6 +224,7 @@ const PlayerCell = ({
     currentUserId: string | undefined;
     profile_image: string | undefined;
     isMobile: boolean;
+    onSelectBadge: (award: ContestBadgeAward) => void;
 }) => {
     const router = useRouter();
     const [imgError, setImgError] = useState(false);
@@ -297,16 +301,18 @@ const PlayerCell = ({
                             {usernameCopy}
                         </span>
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
-                        <span className={pointsTone}>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
+                        <span className={`${pointsTone} whitespace-nowrap`}>
                             {cumulative}
-                            <span className="text-[6px] md:text-[10px] ml-0.5 text-slate-400">pts</span>
+                            <span className="ml-0.5 text-slate-400 text-[6px] md:text-[10px]">pts</span>
                         </span>
-                        <span className="text-[6px] md:text-[10px]">
+                        <span className="whitespace-nowrap text-[6px] md:text-[10px]">
                             {winLoss.wins}-{winLoss.losses}
                         </span>
                         {badgeBonus > 0 && (
-                            <span className="text-[6px] md:text-[10px] text-sky-200">+{badgeBonus} badge pts</span>
+                            <span className="whitespace-nowrap text-[6px] text-sky-200 md:text-[10px]">
+                                +{badgeBonus} badge pts
+                            </span>
                         )}
                     </div>
                 </div>
@@ -322,17 +328,25 @@ const PlayerCell = ({
                         </span>
                     )}
                 </div>
-                <div className="scrollbar-hide mt-1 flex min-w-0 gap-1 overflow-x-auto whitespace-nowrap">
+                <div className="scrollbar-hide mt-0.5 flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap px-0.5 py-0.5">
                     {badgeAwards.length > 0 ? (
                         badgeAwards.map((award) => (
-                            <span
+                            <button
                                 key={award.definition.id}
+                                type="button"
+                                onClick={() => onSelectBadge(award)}
                                 aria-label={`${award.definition.name}: ${award.valueLabel}, +${award.points} points`}
-                                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border bg-black/40 text-[7px] font-semibold uppercase leading-none md:h-6 md:w-6 md:text-[8px] ${award.definition.display.borderClass} ${award.definition.display.toneClass}`}
+                                className="shrink-0 rounded-full transition hover:scale-110"
                                 title={`${award.definition.name}: ${award.valueLabel}, +${award.points} pts`}
                             >
-                                {award.definition.display.icon.slice(0, 2)}
-                            </span>
+                                <BadgeIcon
+                                    category={award.definition.category}
+                                    sport={award.sport}
+                                    glow={false}
+                                    alt={award.definition.name}
+                                    className="h-4 w-4 md:h-5 md:w-5"
+                                />
+                            </button>
                         ))
                     ) : (
                         <span className="text-[9px] font-medium text-slate-500 md:text-[10px]">
@@ -763,6 +777,7 @@ export const LeaderboardGrid = ({
     contestName,
 }: Props) => {
     const isMobile = useIsMobile();
+    const [selectedBadge, setSelectedBadge] = useState<ContestBadgeAward | null>(null);
     const scrollerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState<number>(isMobile ? 385 : 848);
@@ -971,6 +986,7 @@ export const LeaderboardGrid = ({
                                                 currentUserId={currentUserId}
                                                 isMobile={isMobile}
                                                 profile_image={profile_image}
+                                                onSelectBadge={setSelectedBadge}
                                             />
                                         </div>
                                     );
@@ -1098,6 +1114,7 @@ export const LeaderboardGrid = ({
                     Standings count finalized slips only.
                 </div>
             )}
+            <BadgeAwardModal award={selectedBadge} onClose={() => setSelectedBadge(null)} />
         </div>
     )
 }

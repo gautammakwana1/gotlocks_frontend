@@ -22,7 +22,22 @@ type BadgeMetric =
     | "nba-assists-win-count"
     | "nba-threes-win-count"
     | "nba-combo-stat-win-count"
-    | "nba-defensive-win-count";
+    | "nba-defensive-win-count"
+    | "mlb-strikeout-win-count"
+    | "mlb-hits-win-count"
+    | "mlb-rbi-win-count"
+    | "mlb-total-bases-win-count"
+    | "mlb-homerun-win-count"
+    | "nhl-goals-win-count"
+    | "nhl-assists-win-count"
+    | "nhl-shots-win-count"
+    | "nhl-points-win-count"
+    | "nhl-saves-win-count"
+    | "soccer-goals-win-count"
+    | "soccer-assists-win-count"
+    | "soccer-shots-win-count"
+    | "soccer-clean-sheet-win-count"
+    | "soccer-cards-win-count";
 
 type BadgeDisplay = {
     icon: string;
@@ -249,6 +264,171 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         suggestedPoints: 10,
         display: display("shield", "Defensive props", "red-blue", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]"),
     },
+    {
+        id: "ace",
+        name: "Ace",
+        category: "mlb",
+        description: "Most winning MLB pitcher strikeout props.",
+        metric: "mlb-strikeout-win-count",
+        minimum: 2,
+        eligibleSports: ["MLB"],
+        suggestedPoints: 10,
+        display: display("flame-k", "Strikeout props", "red", "text-red-100", "border-red-300/30", "shadow-[0_0_28px_rgba(239,68,68,0.12)]"),
+    },
+    {
+        id: "contact-hitter",
+        name: "Contact Hitter",
+        category: "mlb",
+        description: "Most winning MLB batter hits props.",
+        metric: "mlb-hits-win-count",
+        minimum: 2,
+        eligibleSports: ["MLB"],
+        suggestedPoints: 10,
+        display: display("bat", "Hits props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+    },
+    {
+        id: "rbi-machine",
+        name: "RBI Machine",
+        category: "mlb",
+        description: "Most winning MLB runs-batted-in props.",
+        metric: "mlb-rbi-win-count",
+        minimum: 2,
+        eligibleSports: ["MLB"],
+        suggestedPoints: 10,
+        display: display("plate", "RBI props", "navy", "text-indigo-100", "border-indigo-300/30", "shadow-[0_0_28px_rgba(99,102,241,0.12)]"),
+    },
+    {
+        id: "total-bases-boss",
+        name: "Total Bases Boss",
+        category: "mlb",
+        description: "Most winning MLB total-bases props.",
+        metric: "mlb-total-bases-win-count",
+        minimum: 2,
+        eligibleSports: ["MLB"],
+        suggestedPoints: 10,
+        display: display("diamond", "Total-bases props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]"),
+    },
+    {
+        id: "long-ball",
+        name: "Long Ball",
+        category: "mlb",
+        description: "Most winning MLB home run props.",
+        metric: "mlb-homerun-win-count",
+        minimum: 1,
+        eligibleSports: ["MLB"],
+        suggestedPoints: 10,
+        display: display("homer", "Home run props", "gold", "text-amber-100", "border-amber-300/30", "shadow-[0_0_28px_rgba(251,191,36,0.14)]"),
+    },
+    {
+        id: "sniper-nhl",
+        name: "Sniper",
+        category: "nhl",
+        description: "Most winning NHL goal-scorer props.",
+        metric: "nhl-goals-win-count",
+        minimum: 1,
+        eligibleSports: ["NHL"],
+        suggestedPoints: 10,
+        display: display("puck", "Goal props", "red", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]"),
+    },
+    {
+        id: "playmaker-nhl",
+        name: "Playmaker",
+        category: "nhl",
+        description: "Most winning NHL assist props.",
+        metric: "nhl-assists-win-count",
+        minimum: 2,
+        eligibleSports: ["NHL"],
+        suggestedPoints: 10,
+        display: display("stick", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+    },
+    {
+        id: "sharpshooter-nhl",
+        name: "Sharpshooter",
+        category: "nhl",
+        description: "Most winning NHL shots-on-goal props.",
+        metric: "nhl-shots-win-count",
+        minimum: 2,
+        eligibleSports: ["NHL"],
+        suggestedPoints: 10,
+        display: display("target-puck", "Shots-on-goal props", "teal", "text-cyan-100", "border-cyan-300/25", "shadow-[0_0_28px_rgba(34,211,238,0.1)]"),
+    },
+    {
+        id: "point-machine-nhl",
+        name: "Point Machine",
+        category: "nhl",
+        description: "Most winning NHL player-points props.",
+        metric: "nhl-points-win-count",
+        minimum: 2,
+        eligibleSports: ["NHL"],
+        suggestedPoints: 10,
+        display: display("scoresheet", "Points props", "purple", "text-violet-100", "border-violet-300/30", "shadow-[0_0_28px_rgba(139,92,246,0.12)]"),
+    },
+    {
+        id: "brick-wall-nhl",
+        name: "Brick Wall",
+        category: "nhl",
+        description: "Most winning NHL goalie saves props.",
+        metric: "nhl-saves-win-count",
+        minimum: 2,
+        eligibleSports: ["NHL"],
+        suggestedPoints: 10,
+        display: display("mask", "Goalie saves props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]"),
+    },
+    {
+        id: "striker",
+        name: "Striker",
+        category: "soccer",
+        description: "Most winning soccer goal-scorer props.",
+        metric: "soccer-goals-win-count",
+        minimum: 1,
+        eligibleSports: ["Soccer"],
+        suggestedPoints: 10,
+        display: display("soccer-goal", "Goal props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]"),
+    },
+    {
+        id: "assist-artist",
+        name: "Assist Artist",
+        category: "soccer",
+        description: "Most winning soccer assist props.",
+        metric: "soccer-assists-win-count",
+        minimum: 2,
+        eligibleSports: ["Soccer"],
+        suggestedPoints: 10,
+        display: display("boot", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+    },
+    {
+        id: "shot-caller",
+        name: "Shot Caller",
+        category: "soccer",
+        description: "Most winning soccer shots and shots-on-target props.",
+        metric: "soccer-shots-win-count",
+        minimum: 2,
+        eligibleSports: ["Soccer"],
+        suggestedPoints: 10,
+        display: display("crosshair-ball", "Shots props", "orange", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.12)]"),
+    },
+    {
+        id: "clean-sheet",
+        name: "Clean Sheet",
+        category: "soccer",
+        description: "Most winning soccer clean sheet and both-teams-to-score props.",
+        metric: "soccer-clean-sheet-win-count",
+        minimum: 2,
+        eligibleSports: ["Soccer"],
+        suggestedPoints: 10,
+        display: display("net", "Clean sheet / BTTS props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]"),
+    },
+    {
+        id: "card-shark",
+        name: "Card Shark",
+        category: "soccer",
+        description: "Most winning soccer cards and bookings props.",
+        metric: "soccer-cards-win-count",
+        minimum: 2,
+        eligibleSports: ["Soccer"],
+        suggestedPoints: 10,
+        display: display("card", "Cards / bookings props", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]"),
+    },
 ];
 
 const ALL_BADGE_IDS = BADGE_CATALOG.map((badge) => badge.id);
@@ -352,6 +532,13 @@ const isFootballSport = (sport?: string | null) => {
 
 const isNbaSport = (sport?: string | null) => normalizeKey(sport) === "NBA";
 
+const isMlbSport = (sport?: string | null) => normalizeKey(sport) === "MLB";
+
+const isNhlSport = (sport?: string | null) => normalizeKey(sport) === "NHL";
+
+const isSoccerSport = (sport?: string | null) => normalizeKey(sport) === "SOCCER";
+
+
 export const isMoneylinePick = (pick: UserPick) => {
     const text = joinedPickText(pick);
     return textIncludesAny(text, ["moneyline", "money line", " ml", "h2h", "winner"]);
@@ -406,6 +593,96 @@ export const isNbaDefensiveProp = (pick: UserPick) =>
         textIncludesAny(text, ["steals", "blocks", "steals + blocks", "stocks"])
     );
 
+export const isMlbStrikeoutProp = (pick: UserPick) =>
+    isMlbSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["strikeouts", "strikeout", "pitcher ks", " ks", "punchouts"])
+    );
+
+export const isMlbHitsProp = (pick: UserPick) =>
+    isMlbSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["batter hits", "total hits", "hits recorded", " hits", "1+ hits", "2+ hits", "hits + runs + rbis"])
+    );
+
+export const isMlbRbiProp = (pick: UserPick) =>
+    isMlbSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["rbi", "rbis", "runs batted in", "hits + runs + rbis"])
+    );
+
+export const isMlbTotalBasesProp = (pick: UserPick) =>
+    isMlbSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["total bases", "total base"])
+    );
+
+export const isMlbHomeRunProp = (pick: UserPick) =>
+    isMlbSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["home run", "home runs", "to hit a hr", " hr", "homer"])
+    );
+
+export const isNhlGoalsProp = (pick: UserPick) =>
+    isNhlSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["goal scorer", "anytime goal", "to score a goal", "first goal", "goals"])
+    );
+
+export const isNhlAssistsProp = (pick: UserPick) =>
+    isNhlSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["assists", " assist"])
+    );
+
+export const isNhlShotsProp = (pick: UserPick) =>
+    isNhlSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["shots on goal", "shots on net", "sog", "shots"])
+    );
+
+export const isNhlPointsProp = (pick: UserPick) =>
+    isNhlSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["player points", " points", "pts"])
+    );
+
+export const isNhlSavesProp = (pick: UserPick) =>
+    isNhlSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["goalie saves", "saves", " save"])
+    );
+
+export const isSoccerGoalsProp = (pick: UserPick) =>
+    isSoccerSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["goal scorer", "anytime goal", "to score", "first goal", "goals"])
+    );
+
+export const isSoccerAssistsProp = (pick: UserPick) =>
+    isSoccerSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["assists", " assist"])
+    );
+
+export const isSoccerShotsProp = (pick: UserPick) =>
+    isSoccerSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["shots on target", "shots on goal", "sot", "shots"])
+    );
+
+export const isSoccerCleanSheetProp = (pick: UserPick) =>
+    isSoccerSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["clean sheet", "both teams to score", "btts"])
+    );
+
+export const isSoccerCardsProp = (pick: UserPick) =>
+    isSoccerSport(pick.sport) &&
+    pickOrLegMatches(pick, (text) =>
+        textIncludesAny(text, ["bookings", "booking", "to be booked", "to be carded", "cards", " card"])
+    );
+
 export const isFootballPassingProp = (pick: UserPick) =>
     isFootballSport(pick.sport) &&
     pickOrLegMatches(pick, (text) =>
@@ -445,6 +722,21 @@ export const detectBadgeMarketCategory = (pick: UserPick) => ({
     footballRushing: isFootballRushingProp(pick),
     footballReceiving: isFootballReceivingProp(pick),
     touchdownScorer: isTouchdownScorerProp(pick),
+    mlbStrikeout: isMlbStrikeoutProp(pick),
+    mlbHits: isMlbHitsProp(pick),
+    mlbRbi: isMlbRbiProp(pick),
+    mlbTotalBases: isMlbTotalBasesProp(pick),
+    mlbHomeRun: isMlbHomeRunProp(pick),
+    nhlGoals: isNhlGoalsProp(pick),
+    nhlAssists: isNhlAssistsProp(pick),
+    nhlShots: isNhlShotsProp(pick),
+    nhlPoints: isNhlPointsProp(pick),
+    nhlSaves: isNhlSavesProp(pick),
+    soccerGoals: isSoccerGoalsProp(pick),
+    soccerAssists: isSoccerAssistsProp(pick),
+    soccerShots: isSoccerShotsProp(pick),
+    soccerCleanSheet: isSoccerCleanSheetProp(pick),
+    soccerCards: isSoccerCardsProp(pick),
 });
 
 export const getResolvedContestPicks = ({
@@ -498,6 +790,9 @@ const hasSportActivity = (category: ContestBadgeDefinition["category"], picks: R
     if (category === "generic") return true;
     if (category === "football") return picks.some(({ pick }) => isFootballSport(pick.sport));
     if (category === "nba") return picks.some(({ pick }) => isNbaSport(pick.sport));
+    if (category === "mlb") return picks.some(({ pick }) => isMlbSport(pick.sport));
+    if (category === "nhl") return picks.some(({ pick }) => isNhlSport(pick.sport));
+    if (category === "soccer") return picks.some(({ pick }) => isSoccerSport(pick.sport));
     return false;
 };
 
@@ -537,13 +832,14 @@ const countWinsByUser = (
     entries: ResolvedContestPick[],
     predicate: (pick: UserPick) => boolean
 ) => {
-    const counts = new Map<string, { count: number; reachedAt: string }>();
+    const counts = new Map<string, { count: number; reachedAt: string; sport?: string; }>();
     entries.forEach((entry) => {
         if (entry.pick.result !== "win" || !predicate(entry.pick)) return;
         const current = counts.get(entry.pick.user_id) ?? { count: 0, reachedAt: entry.reachedAt };
         counts.set(entry.pick.user_id, {
             count: current.count + 1,
             reachedAt: entry.reachedAt,
+            sport: entry.pick.sport ?? current.sport,
         });
     });
     return counts;
@@ -554,7 +850,7 @@ const winnerByCount = (
     predicate: (pick: UserPick) => boolean,
     minimum: number
 ) => {
-    let holder: { userId: string; count: number; reachedAt: string } | null = null;
+    let holder: { userId: string; count: number; reachedAt: string; sport?: string; } | null = null;
     for (const [userId, record] of countWinsByUser(entries, predicate)) {
         if (record.count < minimum) continue;
         if (
@@ -562,7 +858,7 @@ const winnerByCount = (
             record.count > holder.count ||
             (record.count === holder.count && record.reachedAt < holder.reachedAt)
         ) {
-            holder = { userId, count: record.count, reachedAt: record.reachedAt };
+            holder = { userId, count: record.count, reachedAt: record.reachedAt, sport: record.sport };
         }
     }
     return holder;
@@ -617,6 +913,7 @@ const award = ({
     value,
     valueLabel,
     reachedAt,
+    sport,
     extra,
 }: {
     definition: ContestBadgeDefinition;
@@ -625,6 +922,7 @@ const award = ({
     value: number;
     valueLabel: string;
     reachedAt: string;
+    sport?: string | null;
     extra?: Record<string, number | string>;
 }): ContestBadgeAward => ({
     definition,
@@ -634,6 +932,7 @@ const award = ({
     markToBeatLabel: getBadgeMarkToBeat(definition, value),
     points: getBadgePointValue(settings, definition.id),
     reachedAt,
+    sport: sport ?? undefined,
     extra,
 });
 
@@ -670,6 +969,7 @@ const calculateAwardForDefinition = (
             value: holder.odds,
             valueLabel: formatBadgeValueLabel(definition, holder.odds),
             reachedAt: holder.reachedAt,
+            sport: holder.pick.sport,
         });
     }
 
@@ -765,6 +1065,21 @@ const calculateAwardForDefinition = (
         "nba-threes-win-count": isNbaThreesProp,
         "nba-combo-stat-win-count": isNbaComboStatProp,
         "nba-defensive-win-count": isNbaDefensiveProp,
+        "mlb-strikeout-win-count": isMlbStrikeoutProp,
+        "mlb-hits-win-count": isMlbHitsProp,
+        "mlb-rbi-win-count": isMlbRbiProp,
+        "mlb-total-bases-win-count": isMlbTotalBasesProp,
+        "mlb-homerun-win-count": isMlbHomeRunProp,
+        "nhl-goals-win-count": isNhlGoalsProp,
+        "nhl-assists-win-count": isNhlAssistsProp,
+        "nhl-shots-win-count": isNhlShotsProp,
+        "nhl-points-win-count": isNhlPointsProp,
+        "nhl-saves-win-count": isNhlSavesProp,
+        "soccer-goals-win-count": isSoccerGoalsProp,
+        "soccer-assists-win-count": isSoccerAssistsProp,
+        "soccer-shots-win-count": isSoccerShotsProp,
+        "soccer-clean-sheet-win-count": isSoccerCleanSheetProp,
+        "soccer-cards-win-count": isSoccerCardsProp,
         "highest-positive-odds-win": () => false,
         "longest-win-streak": () => false,
         "best-win-percentage": () => false,
@@ -779,6 +1094,7 @@ const calculateAwardForDefinition = (
         value: holder.count,
         valueLabel: formatBadgeValueLabel(definition, holder.count),
         reachedAt: holder.reachedAt,
+        sport: holder.sport,
     });
 };
 

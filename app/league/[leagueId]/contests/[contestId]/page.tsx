@@ -11,7 +11,7 @@ import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
-import { ContestBadgeSettings, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
+import { ContestBadgeCategory, ContestBadgeSettings, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchLeaderboardRequest } from "@/lib/redux/slices/groupsSlice";
 import { archiveContestByIdRequest, clearArchiveContestByIdMessage, clearDeleteContestByIdMessage, deleteContestByIdRequest, excludeContestMemberRequest, fetchBadgeAwardsByContestIdRequest, fetchContestByIdRequest, resetBadgeSettingsRequest, updateBadgeSettingsRequest, updateContestRequest } from "@/lib/redux/slices/contestSlice";
 import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest } from "@/lib/redux/slices/slipSlice";
@@ -21,6 +21,7 @@ import PlayersSkeleton from "@/components/skeletons/leagues/contest/PlayersSkele
 import BadgesSkeleton from "@/components/skeletons/leagues/contest/BadgeAwardSkeleton";
 import { getAppliedBadgeSettings, getBadgePointValue, getDefaultEnabledBadgeIds } from "@/lib/contests/badges";
 import ContestPageSkeleton from "@/components/skeletons/leagues/ContestPageSkeleton";
+import { BadgeIcon } from "@/components/badges/BadgeIcon";
 
 const CONTEST_TABS = [
     { id: "standings", label: "Standings" },
@@ -725,16 +726,18 @@ const ContestDetailPage = () => {
                                         return (
                                             <div
                                                 key={definition.id}
-                                                className={`rounded-xl border bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] p-4 transition ${definition.display.borderClass} ${definition.display.glowClass} ${cardDisabled ? "opacity-55" : ""
-                                                    }`}
+                                                className={`rounded-xl border bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] p-4 transition ${definition.display.borderClass} ${definition.display.glowClass} ${cardDisabled ? "opacity-55" : ""}`}
                                             >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="flex min-w-0 gap-3">
-                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-xs font-semibold uppercase ${definition.display.toneClass}`}>
-                                                            {definition.display.icon.slice(0, 2)}
-                                                        </div>
+                                                        <BadgeIcon
+                                                            category={definition.category as ContestBadgeCategory}
+                                                            tinted={false}
+                                                            alt={definition.name}
+                                                            className="h-10 w-10"
+                                                        />
                                                         <div className="min-w-0">
-                                                            <p className="text-sm font-semibold text-white">
+                                                            <p className={`text-sm font-semibold ${definition.display.toneClass}`}>
                                                                 {definition.name}
                                                             </p>
                                                             <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">

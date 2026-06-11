@@ -172,7 +172,7 @@ export type Group = {
     is_enable_secondary_leaderboard: boolean;
 }
 
-export type ContestBadgeCategory = "generic" | "football" | "nba";
+export type ContestBadgeCategory = "generic" | "football" | "nba" | "mlb" | "nhl" | "soccer";
 
 export type ContestBadgeSettings = {
     enabled: boolean;
@@ -215,6 +215,7 @@ export type ContestBadgeAward = {
     markToBeatLabel: string;
     points: number;
     reachedAt: string;
+    sport?: string;
     extra?: Record<string, number | string>;
 };
 
