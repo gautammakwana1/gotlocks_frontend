@@ -36,6 +36,16 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const useIsIOS = () => {
+  const [isIOS, setIsIOS] = useState(false);
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    // iPhone/iPod/iPad, incl. iPadOS 13+ which reports as "Macintosh" + touch.
+    setIsIOS(/iP(hone|od|ad)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1));
+  }, []);
+  return isIOS;
+};
+
 const formatClockTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -167,6 +177,7 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobile();
+  const isIOS = useIsIOS();
   const { setToast } = useToast();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -175,18 +186,32 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const [actionMenu, setActionMenu] = useState<{ message: ChatMessage; top: number; left: number } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ChatMessage | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  // Hide the MainTabBar while the keyboard is up on mobile. The focus latch is
+  // iOS-ONLY: iOS's visualViewport inset briefly reads below threshold while
+  // Safari scrolls the focused input into view, which would re-reveal the fixed
+  // bar over the keyboard. Android's keyboardOpen is reliable, so there it stays
+  // exactly `isMobile && keyboardOpen` (no behavior change).
+  const keyboardActive = isMobile && (keyboardOpen || (isIOS && inputFocused));
   const { chatMessages, loadingChats, chatsHasMore, chatsNextCursor, loadingOlderChats, olderChats } =
     useSelector((state: GroupSelector) => state.group);
 
   const messagesRef = useRef<ChatMessage[]>([]);
   const olderRequestRef = useRef(false);
   const prependRestoreRef = useRef<{ prevHeight: number; prevTop: number } | null>(null);
-  // Latest real (DB) message id in view; flushed to the read API once on leave.
   const latestIdRef = useRef<string | null>(null);
   const sentIdRef = useRef<string | null>(null);
-  // Viewport/keyboard bookkeeping for the document clamp (see effect below).
   const keyboardWasOpenRef = useRef(false);
   const settleRef = useRef<number | null>(null);
+  // Mirror isIOS into a ref so the once-bound viewport effect (deps: []) can
+  // branch by platform — isIOS starts false and flips true only after mount.
+  const isIOSRef = useRef(isIOS);
+  isIOSRef.current = isIOS;
+  const isTouchDevice =
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window ||
+      navigator.maxTouchPoints > 0);
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -594,23 +619,36 @@ export const GroupChatTab = ({ groupId }: Props) => {
             ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
             : 0;
       const kbOpen = inset > KEYBOARD_OPEN_THRESHOLD;
+      // iOS pans the *visual viewport* up to reveal the focused input (raising
+      // offsetTop) and stops honoring position:fixed while the keyboard is up — so
+      // the body-lock alone can't hold the layout and the composer drifts upward.
+      // Publish the pan so the app shell can counter it with translateY (see the
+      // `html[data-chat-keyboard] [data-app-shell]` rule in globals.css). Android
+      // resizes instead of panning, so offsetTop ≈ 0 there → harmless no-op.
+      const panOffset = vv && vv.scale <= 1.01 ? vv.offsetTop : 0;
       root.style.setProperty("--app-vvh", `${height}px`);
       root.style.setProperty("--keyboard-inset", `${inset}px`);
+      root.style.setProperty("--kb-offset", `${panOffset}px`);
       setKeyboardOpen(kbOpen);
 
-      if (kbOpen) {
-        // Keyboard up: let iOS lift the focused input into view.
-        release();
-      } else {
-        // No keyboard: clamp to the visible viewport so the toolbar can't scroll
-        // the page. The min-h-[100dvh] overshoot is simply clipped (it sits below
-        // the composer's tab-bar reserve, so nothing visible is lost).
-        clamp(height);
-        // The keyboard fires interim resizes as it closes; re-apply once it has
-        // settled so the layout snaps back to full height with no leftover gap.
-        if (keyboardWasOpenRef.current) {
-          if (settleRef.current) window.clearTimeout(settleRef.current);
-          settleRef.current = window.setTimeout(apply, 250);
+      // On iOS the dedicated lock effect below owns the document (position:fixed
+      // for the chat's whole lifetime), so this effect must NOT clamp/release the
+      // body there — it only publishes the CSS vars + keyboardOpen above.
+      if (!isIOSRef.current) {
+        if (kbOpen) {
+          // Keyboard up: let the browser lift the focused input into view.
+          release();
+        } else {
+          // No keyboard: clamp to the visible viewport so the toolbar can't scroll
+          // the page. The min-h-[100dvh] overshoot is simply clipped (it sits below
+          // the composer's tab-bar reserve, so nothing visible is lost).
+          clamp(height);
+          // The keyboard fires interim resizes as it closes; re-apply once it has
+          // settled so the layout snaps back to full height with no leftover gap.
+          if (keyboardWasOpenRef.current) {
+            if (settleRef.current) window.clearTimeout(settleRef.current);
+            settleRef.current = window.setTimeout(apply, 250);
+          }
         }
       }
       keyboardWasOpenRef.current = kbOpen;
@@ -627,18 +665,80 @@ export const GroupChatTab = ({ groupId }: Props) => {
       window.removeEventListener("orientationchange", apply);
       root.style.setProperty("--keyboard-inset", "0px");
       root.style.removeProperty("--app-vvh");
-      release();
+      root.style.setProperty("--kb-offset", "0px");
+      // On iOS the lock effect restores the body; don't double-touch it here.
+      if (!isIOSRef.current) release();
       keyboardWasOpenRef.current = false;
       setKeyboardOpen(false);
     };
   }, []);
 
-  // The messages list shrinks when the keyboard opens — pin it to the newest message.
+  // iOS WebKit auto-scrolls a focused input into view by scrolling the *document*.
+  // Our page is taller than the visible area (AppShell is min-h-[100dvh]), so that
+  // scroll over-shoots and the composer flies up; the user then has to scroll back
+  // down. Lock the document (position:fixed) for the whole time the chat is mounted
+  // on iOS — WebKit then has nothing to scroll, and the chat, already sized to
+  // --app-vvh, keeps the composer pinned just above the keyboard. Android/desktop
+  // don't need this and are excluded. (Same lock pattern as DateTimeWheelPicker.)
+  useEffect(() => {
+    if (!isIOS) return;
+    const body = document.body;
+    const root = document.documentElement;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+      overscroll: root.style.overscrollBehavior,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      root.style.overscrollBehavior = prev.overscroll;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isIOS]);
+
   useEffect(() => {
     if (!keyboardOpen) return;
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [keyboardOpen]);
+
+  // Single writer for the keyboard signal. A global CSS rule keyed off
+  // html[data-chat-keyboard] applies the iOS pan counter-transform to the app
+  // shell. Keeping this the ONLY place that touches the attribute means a stray
+  // visualViewport scroll/resize event can't clear it mid-session.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (keyboardActive) root.setAttribute("data-chat-keyboard", "true");
+    else root.removeAttribute("data-chat-keyboard");
+    return () => root.removeAttribute("data-chat-keyboard");
+  }, [keyboardActive]);
+
+  // Hide the global MainTabBar for the ENTIRE time the Chat tab is open (this
+  // component only mounts on the Chat tab), not just while the keyboard is up, so
+  // the conversation gets the full height. A global CSS rule keys off this
+  // attribute; removed on unmount (leaving the tab) so other screens are unaffected.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-chat-open", "true");
+    return () => root.removeAttribute("data-chat-open");
+  }, []);
 
   const canSend =
     draft.trim().length > 0 &&
@@ -647,18 +747,14 @@ export const GroupChatTab = ({ groupId }: Props) => {
 
   return (
     <section
-      className={`relative flex min-h-0 flex-1 flex-col overflow-hidden sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner ${
-        keyboardOpen
-          ? "mb-[env(safe-area-inset-bottom)]"
-          : "mb-[calc(var(--mtb-reserve)+env(safe-area-inset-bottom))]"
-      }`}
+      // The MainTabBar is hidden the whole time the Chat tab is open, so the
+      // composer never needs to reserve --mtb-reserve space for it — only the
+      // safe-area inset (home indicator). This frees the full height for chat.
+      className="relative mb-[env(safe-area-inset-bottom)] flex min-h-0 flex-1 flex-col overflow-hidden sm:mb-10 sm:rounded-lg sm:border sm:border-white/10 bg-black/40 shadow-inner"
     >
-      {/* iOS-style activity indicator while older messages are loading. Overlaid
-          (not in the scroll flow) so it never disturbs the prepend scroll-restore. */}
       <div
-        className={`pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center transition-opacity duration-200 ${
-          loadingOlderChats ? "opacity-100" : "opacity-0"
-        }`}
+        className={`pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center transition-opacity duration-200 ${loadingOlderChats ? "opacity-100" : "opacity-0"
+          }`}
         aria-hidden={!loadingOlderChats}
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/80 shadow-lg backdrop-blur">
@@ -705,30 +801,34 @@ export const GroupChatTab = ({ groupId }: Props) => {
           />
         )}
         <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] px-3.5 py-2 backdrop-blur transition-all duration-200 hover:border-white/20 focus-within:border-sky-400/60 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]">
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] px-3 py-1 backdrop-blur transition-all duration-200 hover:border-white/20 focus-within:border-sky-400/60 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.12)]">
             <textarea
               ref={inputRef}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleKeyDown}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               placeholder="Type a message..."
               rows={1}
               maxLength={MAX_MESSAGE_LENGTH}
               style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
-              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[24px] max-h-[144px] w-full min-w-0 flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
+              className="ui-input-accent no-focus-ring leaderboard-scroll block min-h-[35px] max-h-[144px] w-full min-w-0 flex-1 resize-none whitespace-pre-wrap break-words bg-transparent py-0 text-base leading-6 text-white placeholder:text-gray-500 outline-none"
             />
-            <button
-              ref={emojiButtonRef}
-              type="button"
-              onClick={() => setEmojiPickerOpen((open) => !open)}
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:bg-white/5 hover:text-sky-200 ${isEmojiPickerOpen ? "bg-white/5 text-sky-300" : "text-gray-400"
-                }`}
-              aria-label="Add emoji"
-              aria-haspopup="dialog"
-              aria-expanded={isEmojiPickerOpen}
-            >
-              <SmileIcon className="h-5 w-5" />
-            </button>
+            {!isTouchDevice && (
+              <button
+                ref={emojiButtonRef}
+                type="button"
+                onClick={() => setEmojiPickerOpen((open) => !open)}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition hover:bg-white/5 hover:text-sky-200 ${isEmojiPickerOpen ? "bg-white/5 text-sky-300" : "text-gray-400"
+                  }`}
+                aria-label="Add emoji"
+                aria-haspopup="dialog"
+                aria-expanded={isEmojiPickerOpen}
+              >
+                <SmileIcon className="h-5 w-5" />
+              </button>
+            )}
           </div>
           <div className="flex items-end gap-2">
             <button
@@ -744,9 +844,8 @@ export const GroupChatTab = ({ groupId }: Props) => {
         </div>
         {draft.length >= COUNTER_THRESHOLD && (
           <div
-            className={`mt-1.5 pr-14 text-right text-[10px] font-medium tabular-nums ${
-              draft.length >= MAX_MESSAGE_LENGTH ? "text-red-400" : "text-gray-400"
-            }`}
+            className={`mt-1.5 pr-14 text-right text-[10px] font-medium tabular-nums ${draft.length >= MAX_MESSAGE_LENGTH ? "text-red-400" : "text-gray-400"
+              }`}
             aria-live="polite"
           >
             {draft.length}/{MAX_MESSAGE_LENGTH}

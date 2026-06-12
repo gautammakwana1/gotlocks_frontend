@@ -44,6 +44,24 @@
   }
 }
 
+/* Hide the fixed bottom MainTabBar for the whole time the Chat tab is open
+   (GroupChatTab sets data-chat-open while mounted) so the conversation gets the
+   full height. Removed when leaving the tab, so other screens keep the bar. */
+html[data-chat-open="true"] [data-main-tabbar] {
+  display: none;
+}
+
+/* iOS pans the visual viewport up on input focus (raising visualViewport.offsetTop)
+   and ignores position:fixed while the keyboard is open, so the chat composer drifts
+   upward and the page shows blank space above the keyboard until the user scrolls.
+   GroupChatTab publishes the pan as --kb-offset; counter it by translating the whole
+   app shell back down so it stays glued to the visible viewport (composer pinned just
+   above the keyboard). Android resizes instead of panning → --kb-offset ≈ 0 → no-op. */
+html[data-chat-keyboard="true"] [data-app-shell] {
+  transform: translateY(var(--kb-offset, 0px));
+  will-change: transform;
+}
+
 html,
 body {
   background: var(--app-bg);

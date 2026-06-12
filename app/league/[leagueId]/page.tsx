@@ -508,38 +508,48 @@ const LeagueDashboardPage = () => {
           : "flex flex-col gap-6 pb-10"
       }
     >
-      <div className="flex items-center justify-between gap-3">
-        <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
-        <InviteCodeCopy code={group?.invite_code} />
-      </div>
-      <header className="-mx-5 space-y-3 border-b border-white/10 px-5 pb-5 sm:mx-0 sm:px-0">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1
-              className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
-              style={displayNameGradientStyle}
-            >
-              {group?.name}
-            </h1>
-            {group?.description && (
-              <p className="mt-2 max-w-2xl text-sm text-gray-400">
-                {group.description}
-              </p>
-            )}
+      {activeTab !== "chat" && (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
+            <InviteCodeCopy code={group?.invite_code} />
           </div>
-          <button
-            type="button"
-            onClick={() => setShowScoringModal(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-xs font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
-            aria-label="Contest scoring"
-            aria-haspopup="dialog"
-          >
-            i
-          </button>
-        </div>
-      </header>
+          <header className="-mx-5 space-y-3 px-5 pb-5 sm:mx-0 sm:px-0">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h1
+                  className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
+                  style={displayNameGradientStyle}
+                >
+                  {group?.name}
+                </h1>
+                {group?.description && (
+                  <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                    {group.description}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScoringModal(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-xs font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
+                aria-label="Contest scoring"
+                aria-haspopup="dialog"
+              >
+                i
+              </button>
+            </div>
+          </header>
+        </>
+      )}
 
-      <section className="-mx-5 -mt-6 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
+      <section
+        className={`-mx-5 border-y border-white/10 px-5 sm:mx-0 sm:px-0 ${
+          activeTab === "chat"
+            ? "sticky top-0 z-20 bg-[var(--app-bg)]"
+            : "-mt-6"
+        }`}
+      >
         <div
           className="relative grid w-full gap-1 py-1"
           style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}

@@ -5,29 +5,20 @@ import { createPortal } from "react-dom";
 
 type Props = {
     label?: string;
-    /** ISO string (e.g. contest.starts_at). */
     value: string;
-    /** Emits an ISO string. */
     onChange: (iso: string) => void;
     disabled?: boolean;
     className?: string;
     minYear?: number;
     maxYear?: number;
     error?: string;
-    /** When true (default) show date + time wheels; when false show only the date wheels. */
     showTime?: boolean;
-    /** Disallow selecting any datetime after "now". */
     disableFuture?: boolean;
-    /** Disallow selecting any datetime before "now". */
     disablePast?: boolean;
-    /** Hard lower / upper bounds (ISO strings). Take precedence over disablePast/Future. */
     minDate?: string;
     maxDate?: string;
-    /** Show a required asterisk after the label. */
     required?: boolean;
-    /** Helper text shown under the field. */
     note?: string;
-    /** Text shown on the trigger when no value is selected. */
     placeholder?: string;
 };
 
@@ -47,7 +38,6 @@ const ITEM_H = 36;
 const VISIBLE_ROWS = 5;
 const PAD = ((VISIBLE_ROWS - 1) / 2) * ITEM_H;
 
-// Enter/exit animation duration (kept in sync with the `duration-300` classes).
 const ANIM_MS = 300;
 
 const range = (start: number, end: number) => {
@@ -74,7 +64,6 @@ const toParts = (iso: string): Parts => {
 
 const partsToDate = (p: Parts, showTime: boolean): Date => {
     const maxDay = daysInMonth(p.year, p.monthIdx);
-    // Date-only fields resolve to local midnight so the stored day is unambiguous.
     const h24 = showTime ? (p.h12 % 12) + (p.isPM ? 12 : 0) : 0;
     const minute = showTime ? p.minute : 0;
     return new Date(p.year, p.monthIdx, Math.min(p.day, maxDay), h24, minute, 0, 0);
@@ -127,12 +116,38 @@ const WheelColumn = ({
     const ref = useRef<HTMLDivElement | null>(null);
     const settleTimer = useRef<number | null>(null);
 
+    const indexRef = useRef(index);
+    const lenRef = useRef(items.length);
+    const onIndexChangeRef = useRef(onIndexChange);
+    indexRef.current = index;
+    lenRef.current = items.length;
+    onIndexChangeRef.current = onIndexChange;
+
     useLayoutEffect(() => {
         const el = ref.current;
         if (!el) return;
         const target = index * ITEM_H;
         if (Math.abs(el.scrollTop - target) > 1) el.scrollTop = target;
     }, [index]);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const WHEEL_STEP_COOLDOWN = 90;
+        let lockUntil = 0;
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            if (e.deltaY === 0) return;
+            const now = performance.now();
+            if (now < lockUntil) return;
+            lockUntil = now + WHEEL_STEP_COOLDOWN;
+            const dir = e.deltaY > 0 ? 1 : -1;
+            const next = Math.max(0, Math.min(lenRef.current - 1, indexRef.current + dir));
+            if (next !== indexRef.current) onIndexChangeRef.current(next);
+        };
+        el.addEventListener("wheel", onWheel, { passive: false });
+        return () => el.removeEventListener("wheel", onWheel);
+    }, []);
 
     const handleScroll = () => {
         const el = ref.current;
@@ -194,8 +209,6 @@ export default function DateTimeWheelPicker({
     note,
     placeholder,
 }: Props) {
-    // `mounted` keeps the overlay in the DOM; `visible` drives the enter/exit
-    // transition. On close we flip `visible` off, play the fade-down, then unmount.
     const [mounted, setMounted] = useState(false);
     const [visible, setVisible] = useState(false);
     const closeTimer = useRef<number | null>(null);
@@ -212,8 +225,6 @@ export default function DateTimeWheelPicker({
 
     const days = useMemo(() => range(1, daysInMonth(parts.year, parts.monthIdx)), [parts.year, parts.monthIdx]);
 
-    // Clamp a candidate selection into [min, max] (from minDate/maxDate or disablePast/Future).
-    // Returns the same parts if already in range, otherwise the parts of the boundary instant.
     const applyConstraints = useCallback((p: Parts): Parts => {
         const ms = partsToDate(p, showTime).getTime();
         const now = Date.now();
@@ -240,21 +251,16 @@ export default function DateTimeWheelPicker({
         }, ANIM_MS);
     }, []);
 
-    // Play the enter transition on the frame after mount.
     useEffect(() => {
         if (!mounted) return;
         const id = requestAnimationFrame(() => setVisible(true));
         return () => cancelAnimationFrame(id);
     }, [mounted]);
 
-    // Clear any pending unmount timer on teardown.
     useEffect(() => () => {
         if (closeTimer.current) window.clearTimeout(closeTimer.current);
     }, []);
 
-    // Lock background scroll + Escape-to-close while the overlay is mounted.
-    // Pinning the body with position:fixed reliably stops page/touch scrolling on
-    // iOS Safari, where `overflow:hidden` alone is ignored.
     useEffect(() => {
         if (!mounted) return;
         const onKey = (event: KeyboardEvent) => {

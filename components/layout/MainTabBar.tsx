@@ -298,7 +298,7 @@ export const MainTabBar = () => {
     return (
         <>
             {lockHintLabel && lockHintOpen && (
-                <div className="pointer-events-none fixed bottom-[-3px] sm:bottom-[-20px] left-0 right-0 z-50">
+                <div data-main-tabbar className="pointer-events-none fixed bottom-[-3px] sm:bottom-[-20px] left-0 right-0 z-50">
                     <div className="mx-auto flex justify-center px-5 sm:px-6">
                         <div
                             className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 p-1 sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
@@ -328,7 +328,7 @@ export const MainTabBar = () => {
                     </div>
                 </div>
             )}
-            <nav className="pointer-events-none fixed bottom-3 left-0 right-0 z-40">
+            <nav data-main-tabbar className="pointer-events-none fixed bottom-3 left-0 right-0 z-40">
                 <div className="pointer-events-auto mx-auto flex justify-center px-5 sm:px-6">
                     <div
                         className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 overflow-hidden border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-1 shadow-lg shadow-blue-500/10 backdrop-blur sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
