@@ -14,7 +14,6 @@ type Props = {
 export const BadgeAwardModal = ({ award, onClose }: Props) => {
     const [flipped, setFlipped] = useState(false);
 
-    // Reset to the front face whenever a different badge is opened.
     useEffect(() => {
         setFlipped(false);
     }, [award?.definition.id]);
@@ -61,10 +60,8 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                     className="block w-full cursor-pointer bg-transparent [perspective:1200px]"
                 >
                     <div
-                        className={`relative aspect-square w-full transition-transform duration-500 [transform-style:preserve-3d] ${flipped ? "[transform:rotateY(180deg)]" : ""
-                            }`}
+                        className={`relative aspect-square w-full transition-transform duration-500 [transform-style:preserve-3d] ${flipped ? "[transform:rotateY(-180deg)]" : ""}`}
                     >
-                        {/* Front: name + icon */}
                         <div
                             className={`absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/90 to-black/90 p-6 [backface-visibility:hidden] ${tint.glowClass}`}
                         >
@@ -83,16 +80,13 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                             </span>
                         </div>
 
-                        {/* Back: label + description */}
                         <div
-                            className={`absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-black/95 p-6 text-center [backface-visibility:hidden] [transform:rotateY(180deg)] ${tint.glowClass}`}
+                            className={`absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-black/95 p-6 text-center [backface-visibility:hidden] [transform:rotateY(-180deg)] ${tint.glowClass}`}
                         >
-                            {tint.label && (
-                                <span
-                                    className={`rounded-full border border-white/10 bg-black/40 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${tint.textClass}`}
-                                >
-                                    {tint.label}
-                                </span>
+                            {definition.display.subtitle && (
+                                <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${tint.textClass}`}>
+                                    {definition.display.subtitle}
+                                </p>
                             )}
                             <p className="text-sm leading-relaxed text-slate-200">{definition.description}</p>
                             <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-wide text-white/35">

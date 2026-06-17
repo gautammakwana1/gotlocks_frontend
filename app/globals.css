@@ -127,18 +127,14 @@ body {
 }
 
 .leaderboard-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .leaderboard-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.leaderboard-scroll::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.3);
-  border-radius: 9999px;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 @keyframes homeFadeUp {
@@ -238,6 +234,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .ui-emoji-pop,
   .ui-sheet-up,
   .ui-backdrop-in {
@@ -480,18 +477,17 @@ body {
   0% {
     background-position: -400px 0;
   }
+
   100% {
     background-position: 400px 0;
   }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05) 0%,
-    rgba(255, 255, 255, 0.12) 40%,
-    rgba(255, 255, 255, 0.05) 80%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.12) 40%,
+      rgba(255, 255, 255, 0.05) 80%);
   background-size: 800px 100%;
   animation: skeletonShimmer 1.5s ease-in-out infinite;
 }
@@ -523,6 +519,6 @@ body {
 }
 
 .slip-share-user-select-none {
-    -webkit-user-select: none;
-    user-select: none;
+  -webkit-user-select: none;
+  user-select: none;
 }

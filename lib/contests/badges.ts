@@ -46,6 +46,7 @@ type BadgeDisplay = {
     toneClass: string;
     borderClass: string;
     glowClass: string;
+    glowColor: string;
 };
 
 type BadgeCatalogDefinition = ContestBadgeDefinition & {
@@ -73,8 +74,9 @@ const display = (
     theme: string,
     toneClass: string,
     borderClass: string,
-    glowClass: string
-): BadgeDisplay => ({ icon, subtitle, theme, toneClass, borderClass, glowClass });
+    glowClass: string,
+    glowColor: string,
+): BadgeDisplay => ({ icon, subtitle, theme, toneClass, borderClass, glowClass, glowColor });
 
 export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
     {
@@ -86,7 +88,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 100,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("meteor", "Highest underdog hit", "purple-gold", "text-amber-100", "border-amber-300/30", "shadow-[0_0_28px_rgba(251,191,36,0.14)]"),
+        display: display("meteor", "Highest underdog hit", "purple-gold", "text-amber-100", "border-amber-300/30", "shadow-[0_0_28px_rgba(251,191,36,0.14)]", "#fbbf24"),
     },
     {
         id: "hot-hand",
@@ -97,7 +99,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 3,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("flame", "Longest streak", "orange-red", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.14)]"),
+        display: display("flame", "Longest streak", "orange-red", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.14)]", "#fb923c"),
     },
     {
         id: "accuracy-crown",
@@ -108,7 +110,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 4,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("crown", "Best hit rate", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]"),
+        display: display("crown", "Best hit rate", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]", "#facc15"),
     },
     {
         id: "underdog-hunter",
@@ -119,7 +121,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("wolf", "Most plus-money wins", "green-silver", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]"),
+        display: display("wolf", "Most plus-money wins", "green-silver", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]", "#10b981"),
     },
     {
         id: "spread-surgeon",
@@ -130,7 +132,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("scalpel", "Spread specialist", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+        display: display("scalpel", "Spread specialist", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]", "#38bdf8"),
     },
     {
         id: "dog-caller",
@@ -141,7 +143,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 1,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("dog", "Plus-money moneylines", "dark-green", "text-lime-100", "border-lime-300/25", "shadow-[0_0_28px_rgba(132,204,22,0.12)]"),
+        display: display("dog", "Plus-money moneylines", "dark-green", "text-lime-100", "border-lime-300/25", "shadow-[0_0_28px_rgba(132,204,22,0.12)]", "#84cc16"),
     },
     {
         id: "total-tactician",
@@ -152,7 +154,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: [],
         suggestedPoints: 10,
-        display: display("total", "Over/under control", "teal", "text-cyan-100", "border-cyan-300/25", "shadow-[0_0_28px_rgba(34,211,238,0.1)]"),
+        display: display("total", "Over/under control", "teal", "text-cyan-100", "border-cyan-300/25", "shadow-[0_0_28px_rgba(34,211,238,0.1)]", "#22d3ee"),
     },
     {
         id: "air-raid",
@@ -163,7 +165,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
         suggestedPoints: 10,
-        display: display("football-air", "Passing props", "sky-blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+        display: display("football-air", "Passing props", "sky-blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]", "#38bdf8"),
     },
     {
         id: "ground-game",
@@ -174,7 +176,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
         suggestedPoints: 10,
-        display: display("cleats", "Rushing props", "turf-green", "text-green-100", "border-green-300/30", "shadow-[0_0_28px_rgba(34,197,94,0.12)]"),
+        display: display("cleats", "Rushing props", "turf-green", "text-green-100", "border-green-300/30", "shadow-[0_0_28px_rgba(34,197,94,0.12)]", "#22c55e"),
     },
     {
         id: "hands-team",
@@ -185,7 +187,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
         suggestedPoints: 10,
-        display: display("gloves", "Receiving props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]"),
+        display: display("gloves", "Receiving props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]", "#f5f5f4"),
     },
     {
         id: "td-sniper",
@@ -196,7 +198,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 1,
         eligibleSports: ["NFL", "NCAAF"],
         suggestedPoints: 10,
-        display: display("crosshair", "Touchdown hits", "neon-green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.14)]"),
+        display: display("crosshair", "Touchdown hits", "neon-green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.14)]", "#10b981"),
     },
     {
         id: "bucket-getter",
@@ -207,7 +209,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("hoop", "Points props", "orange", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.12)]"),
+        display: display("hoop", "Points props", "orange", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.12)]", "#fb923c"),
     },
     {
         id: "board-man",
@@ -218,7 +220,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("rim", "Rebound props", "bronze", "text-amber-100", "border-amber-700/35", "shadow-[0_0_28px_rgba(180,83,9,0.12)]"),
+        display: display("rim", "Rebound props", "bronze", "text-amber-100", "border-amber-700/35", "shadow-[0_0_28px_rgba(180,83,9,0.12)]", "#b45309"),
     },
     {
         id: "dime-dropper",
@@ -229,7 +231,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("pass", "Assist props", "blue", "text-blue-100", "border-blue-300/30", "shadow-[0_0_28px_rgba(59,130,246,0.12)]"),
+        display: display("pass", "Assist props", "blue", "text-blue-100", "border-blue-300/30", "shadow-[0_0_28px_rgba(59,130,246,0.12)]", "#3b82f6"),
     },
     {
         id: "from-deep",
@@ -240,7 +242,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("arc", "Three-point props", "purple", "text-violet-100", "border-violet-300/30", "shadow-[0_0_28px_rgba(139,92,246,0.12)]"),
+        display: display("arc", "Three-point props", "purple", "text-violet-100", "border-violet-300/30", "shadow-[0_0_28px_rgba(139,92,246,0.12)]", "#8b5cf6"),
     },
     {
         id: "triple-threat",
@@ -251,7 +253,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("triangle", "Combo-stat props", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]"),
+        display: display("triangle", "Combo-stat props", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]", "#facc15"),
     },
     {
         id: "two-way-menace",
@@ -262,7 +264,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NBA"],
         suggestedPoints: 10,
-        display: display("shield", "Defensive props", "red-blue", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]"),
+        display: display("shield", "Defensive props", "red-blue", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]", "#f43f5e"),
     },
     {
         id: "ace",
@@ -273,7 +275,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["MLB"],
         suggestedPoints: 10,
-        display: display("flame-k", "Strikeout props", "red", "text-red-100", "border-red-300/30", "shadow-[0_0_28px_rgba(239,68,68,0.12)]"),
+        display: display("flame-k", "Strikeout props", "red", "text-red-100", "border-red-300/30", "shadow-[0_0_28px_rgba(239,68,68,0.12)]", "#ef4444"),
     },
     {
         id: "contact-hitter",
@@ -284,7 +286,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["MLB"],
         suggestedPoints: 10,
-        display: display("bat", "Hits props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+        display: display("bat", "Hits props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]", "#38bdf8"),
     },
     {
         id: "rbi-machine",
@@ -295,7 +297,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["MLB"],
         suggestedPoints: 10,
-        display: display("plate", "RBI props", "navy", "text-indigo-100", "border-indigo-300/30", "shadow-[0_0_28px_rgba(99,102,241,0.12)]"),
+        display: display("plate", "RBI props", "navy", "text-indigo-100", "border-indigo-300/30", "shadow-[0_0_28px_rgba(99,102,241,0.12)]", "#6366f1"),
     },
     {
         id: "total-bases-boss",
@@ -306,7 +308,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["MLB"],
         suggestedPoints: 10,
-        display: display("diamond", "Total-bases props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]"),
+        display: display("diamond", "Total-bases props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]", "#10b981"),
     },
     {
         id: "long-ball",
@@ -317,7 +319,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 1,
         eligibleSports: ["MLB"],
         suggestedPoints: 10,
-        display: display("homer", "Home run props", "gold", "text-amber-100", "border-amber-300/30", "shadow-[0_0_28px_rgba(251,191,36,0.14)]"),
+        display: display("homer", "Home run props", "gold", "text-amber-100", "border-amber-300/30", "shadow-[0_0_28px_rgba(251,191,36,0.14)]", "#fbbf24"),
     },
     {
         id: "sniper-nhl",
@@ -328,7 +330,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 1,
         eligibleSports: ["NHL"],
         suggestedPoints: 10,
-        display: display("puck", "Goal props", "red", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]"),
+        display: display("puck", "Goal props", "red", "text-rose-100", "border-rose-300/30", "shadow-[0_0_28px_rgba(244,63,94,0.12)]", "#f43f5e"),
     },
     {
         id: "playmaker-nhl",
@@ -339,7 +341,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NHL"],
         suggestedPoints: 10,
-        display: display("stick", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+        display: display("stick", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]", "#38bdf8"),
     },
     {
         id: "sharpshooter-nhl",
@@ -350,7 +352,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NHL"],
         suggestedPoints: 10,
-        display: display("target-puck", "Shots-on-goal props", "teal", "text-cyan-100", "border-cyan-300/25", "shadow-[0_0_28px_rgba(34,211,238,0.1)]"),
+        display: display("target-puck", "Shots-on-goal props", "teal", "text-cyan-100", "border-cyan-300/25", "shadow-[0_0_28px_rgba(34,211,238,0.1)]", "#22d3ee"),
     },
     {
         id: "point-machine-nhl",
@@ -361,7 +363,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NHL"],
         suggestedPoints: 10,
-        display: display("scoresheet", "Points props", "purple", "text-violet-100", "border-violet-300/30", "shadow-[0_0_28px_rgba(139,92,246,0.12)]"),
+        display: display("scoresheet", "Points props", "purple", "text-violet-100", "border-violet-300/30", "shadow-[0_0_28px_rgba(139,92,246,0.12)]", "#8b5cf6"),
     },
     {
         id: "brick-wall-nhl",
@@ -372,7 +374,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["NHL"],
         suggestedPoints: 10,
-        display: display("mask", "Goalie saves props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]"),
+        display: display("mask", "Goalie saves props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]", "#f5f5f4"),
     },
     {
         id: "striker",
@@ -383,7 +385,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 1,
         eligibleSports: ["Soccer"],
         suggestedPoints: 10,
-        display: display("soccer-goal", "Goal props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]"),
+        display: display("soccer-goal", "Goal props", "green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.12)]", "#10b981"),
     },
     {
         id: "assist-artist",
@@ -394,7 +396,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["Soccer"],
         suggestedPoints: 10,
-        display: display("boot", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]"),
+        display: display("boot", "Assist props", "blue", "text-sky-100", "border-sky-300/30", "shadow-[0_0_28px_rgba(56,189,248,0.12)]", "#38bdf8"),
     },
     {
         id: "shot-caller",
@@ -405,7 +407,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["Soccer"],
         suggestedPoints: 10,
-        display: display("crosshair-ball", "Shots props", "orange", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.12)]"),
+        display: display("crosshair-ball", "Shots props", "orange", "text-orange-100", "border-orange-300/30", "shadow-[0_0_28px_rgba(251,146,60,0.12)]", "#fb923c"),
     },
     {
         id: "clean-sheet",
@@ -416,7 +418,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["Soccer"],
         suggestedPoints: 10,
-        display: display("net", "Clean sheet / BTTS props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]"),
+        display: display("net", "Clean sheet / BTTS props", "white-gold", "text-stone-100", "border-stone-200/30", "shadow-[0_0_28px_rgba(245,245,244,0.08)]", "#f5f5f4"),
     },
     {
         id: "card-shark",
@@ -427,7 +429,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         minimum: 2,
         eligibleSports: ["Soccer"],
         suggestedPoints: 10,
-        display: display("card", "Cards / bookings props", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]"),
+        display: display("card", "Cards / bookings props", "gold", "text-yellow-100", "border-yellow-300/30", "shadow-[0_0_28px_rgba(250,204,21,0.12)]", "#facc15"),
     },
 ];
 

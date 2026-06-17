@@ -8,7 +8,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { ArchiveLeaderboardSlip, ContestBadgeAward, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, PickResult, Slip, TierIndex } from "@/lib/interfaces/interfaces";
+import { ArchiveLeaderboardSlip, ContestBadgeAward, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { getGroupTierColor, getGroupTierName, getTierMetaForPick, LEAGUE_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
 import Link from "next/link";
@@ -22,6 +22,8 @@ import { useRouter } from "next/navigation";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import { BadgeAwardModal } from "../group/BadgeAwardModal";
 import { BadgeIcon } from "../badges/BadgeIcon";
+import { TierInfoModal } from "./TierInfoModal";
+import LeaderboardSlipShareModal from "../slips/LeaderboardSlipShareModal";
 
 type Props = {
     group: Group | null;
@@ -36,31 +38,6 @@ type Props = {
     loadingMore?: boolean;
     isArchived: boolean;
     contestName?: string;
-};
-
-const resultMeta = (pick_result?: PickResult) => {
-    const result = pick_result ?? "pending";
-    const tone =
-        result === "win"
-            ? "text-emerald-100 border-emerald-300/60 bg-emerald-500/10 shadow-[0_10px_30px_rgba(16,185,129,0.18)]"
-            : result === "loss"
-                ? "text-red-100 border-red-300/60 bg-red-500/12 shadow-[0_10px_30px_rgba(248,113,113,0.18)]"
-                : result === "void" || result === "not_found"
-                    ? "text-amber-50 border-amber-200/60 bg-amber-500/12 shadow-[0_10px_30px_rgba(251,191,36,0.18)]"
-                    : "text-gray-200 border-gray-700/60 bg-white/[0.06] shadow-[0_10px_28px_rgba(0,0,0,0.35)]";
-
-    const label =
-        result === "pending" || result === null
-            ? "Pending"
-            : result === "void"
-                ? "Void"
-                : result === "not_found"
-                    ? "n/a"
-                    : result === "win"
-                        ? "Win"
-                        : "Loss";
-
-    return { label, tone };
 };
 
 const formatPointsValue = (value: number | null) => {
@@ -158,28 +135,6 @@ const computeResultPoints = (pick_difficulty_label?: DifficultyLabel | null, res
     return 0;
 };
 
-// const buildMatchupByGameId = (picks: Pick[]) => {
-//     const map = new Map<string, string>();
-
-//     picks.forEach((pick) => {
-//         const gameId = pick.selection?.gameId;
-//         const matchup = extractMatchup(pick.description, pick.selection?.matchup);
-//         if (gameId && matchup && !map.has(gameId)) {
-//             map.set(gameId, matchup);
-//         }
-
-//         pick.legs?.forEach((leg) => {
-//             const legGameId = leg.selection?.gameId;
-//             const legMatchup = extractMatchup(leg.description, leg.selection?.matchup);
-//             if (legGameId && legMatchup && !map.has(legGameId)) {
-//                 map.set(legGameId, legMatchup);
-//             }
-//         });
-//     });
-
-//     return map;
-// };
-
 function mapSlipToPick(user: Leaderboard, slip: leaderboardSlip): Pick {
     return {
         id: slip.pick_id ?? "",
@@ -228,6 +183,8 @@ const PlayerCell = ({
 }) => {
     const router = useRouter();
     const [imgError, setImgError] = useState(false);
+    const [showRecord, setShowRecord] = useState(false);
+
     const displayName = username ?? "Member";
     const usernameCopy =
         displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
@@ -262,71 +219,74 @@ const PlayerCell = ({
     return (
         <div className="flex h-full w-full min-w-0 flex-col justify-center gap-2.5 md:gap-3">
             <div className="flex min-w-0 items-center gap-2">
-                <div
-                    className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase ring-1 ring-offset-1 ring-offset-black md:h-9 md:w-9 md:text-[11px] ${avatarTone}`}
+                <button
+                    type="button"
+                    onClick={() => setShowRecord((prev) => !prev)}
+                    aria-label={showRecord ? "Show avatar" : "Show record"}
+                    className="relative h-8 w-8 shrink-0 [perspective:400px] md:h-9 md:w-9"
                 >
-                    <button
-                        className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
-                        onClick={() => handleViewProfile(user_id)}
-                        disabled={currentUserId === user_id}
+                    <div
+                        className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${showRecord ? "[transform:rotateY(180deg)]" : ""
+                            }`}
                     >
-                        {profileImg && hasValidImage ? (
-                            <Image
-                                src={profileImg}
-                                alt="Profile image"
-                                width={52}
-                                height={52}
-                                className={`tracking-wide rounded-full object-cover ${imageSize}`}
-                                draggable={false}
-                                onDragStart={(e) => e.preventDefault()}
-                                unoptimized
-                                onError={() => setImgError(true)}
-                            />
-                        ) : (
-                            <div className="flex items-center justify-center text-white/80 text-[10px] sm:text-[12px]" >
-                                <span>{userInitial}</span>
-                            </div>
-                        )}
-                    </button>
-                    <span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/20 bg-black px-1 text-[8px] font-semibold text-slate-100 shadow-sm md:h-[18px] md:min-w-[18px] md:text-[9px]">
+                        <div
+                            className={`absolute inset-0 flex items-center justify-center rounded-full text-[10px] font-semibold uppercase ring-1 ring-offset-1 ring-offset-black [backface-visibility:hidden] md:text-[11px] ${avatarTone}`}
+                        >
+                            {profileImg && hasValidImage ? (
+                                <Image
+                                    src={profileImg}
+                                    alt="Profile image"
+                                    width={52}
+                                    height={52}
+                                    className={`tracking-wide rounded-full object-cover ${imageSize}`}
+                                    draggable={false}
+                                    onDragStart={(e) => e.preventDefault()}
+                                    unoptimized
+                                    onError={() => setImgError(true)}
+                                />
+                            ) : (
+                                <div className="flex items-center justify-center text-white/80 text-[10px] sm:text-[12px]" >
+                                    <span>{userInitial}</span>
+                                </div>
+                            )}
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center rounded-full border border-white/25 bg-black/80 text-[10px] font-semibold tabular-nums leading-none text-slate-100 [backface-visibility:hidden] [transform:rotateY(180deg)] md:text-[11px]">
+                            {winLoss.wins}-{winLoss.losses}
+                        </div>
+                    </div>
+                    <span className="absolute -bottom-1 -right-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full border border-white/20 bg-black px-1 text-[8px] font-semibold text-slate-100 shadow-sm md:h-[18px] md:min-w-[18px] md:text-[9px]">
                         {rank}
                     </span>
-                </div>
+                </button>
                 <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5">
-                        <span
-                            className="truncate text-[11px] font-semibold text-white md:text-sm"
+                        <button
+                            className="truncate text-[11px] font-semibold text-white md:text-[13px] cursor-pointer"
                             title={displayName}
+                            onClick={() => handleViewProfile(user_id)}
+                            disabled={currentUserId === user_id}
                         >
                             {usernameCopy}
-                        </span>
+                        </button>
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400 md:text-[10px]">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:text-[13px]">
                         <span className={`${pointsTone} whitespace-nowrap`}>
                             {cumulative}
                             <span className="ml-0.5 text-slate-400 text-[6px] md:text-[10px]">pts</span>
                         </span>
-                        <span className="whitespace-nowrap text-[6px] md:text-[10px]">
-                            {winLoss.wins}-{winLoss.losses}
-                        </span>
-                        {badgeBonus > 0 && (
-                            <span className="whitespace-nowrap text-[6px] text-sky-200 md:text-[10px]">
-                                +{badgeBonus} badge pts
-                            </span>
-                        )}
                     </div>
                 </div>
             </div>
             <div className="min-w-0 rounded-md border border-white/10 bg-black/25 px-1.5 py-1">
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500 md:text-[9px]">
-                        badges
-                    </span>
-                    {badgeAwards.length > 0 && (
-                        <span className="text-[8px] font-semibold uppercase tracking-wide text-sky-200 md:text-[9px]">
-                            {badgeAwards.length}
+                <div className="flex items-center justify-between gap-2 text-[8px] font-semibold uppercase tracking-wide md:text-[9px]">
+                    {badgeAwards.length > 0 ? (
+                        <span className="text-slate-400">
+                            {badgeAwards.length} badge{badgeAwards.length === 1 ? "" : "s"}
                         </span>
+                    ) : (
+                        <span className="text-slate-500">badges</span>
                     )}
+                    {badgeBonus > 0 && <span className="text-sky-200">+{badgeBonus} pts</span>}
                 </div>
                 <div className="scrollbar-hide mt-0.5 flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap px-0.5 py-0.5">
                     {badgeAwards.length > 0 ? (
@@ -359,153 +319,6 @@ const PlayerCell = ({
     );
 };
 
-// const RankCell = ({
-//     rank,
-//     isMobile,
-//     profile_image,
-//     username,
-//     user_id,
-//     currentUserId,
-// }: {
-//     rank: number;
-//     isMobile: boolean;
-//     profile_image: string | undefined;
-//     username: string | undefined;
-//     user_id: string;
-//     currentUserId: string | undefined;
-// }) => {
-//     const router = useRouter();
-//     const [imgError, setImgError] = useState(false);
-//     const isCurrentUser = user_id === currentUserId;
-//     const displayName = username ?? "Member";
-//     const usernameCopy =
-//         displayName.length > 10 ? `${displayName.slice(0, 10)}...` : displayName;
-//     const profileImg = generateProfileImageUrl(profile_image);
-//     const imageSize = isMobile ? "h-8 w-8" : "h-14 w-14";
-
-//     const avatarSize = isMobile
-//         ? `h-8 w-8 text-[9px] ${isCurrentUser ? "ring-[1.5px]" : "ring-1"} ring-offset-1`
-//         : `h-14 w-14 text-[13px] ${isCurrentUser ? "ring-[3.5px]" : "ring-[2.5px]"} ring-offset-[3px]`;
-//     const badgeSize = isMobile
-//         ? "h-[18px] w-[18px] text-[9px]"
-//         : "h-[28px] w-[28px] text-[12px]";
-//     const avatarTone = isCurrentUser
-//         ? "bg-sky-500/[0.14] text-sky-50 ring-sky-200/80 shadow-[0_0_20px_rgba(125,211,252,0.22)]"
-//         : "bg-white/[0.08] text-slate-100 ring-white/20";
-
-//     const hasValidImage =
-//         profile_image && !imgError;
-
-//     const userInitial = getMemberInitials(displayName);
-
-//     const handleViewProfile = useCallback(
-//         (userId: string) => {
-//             if (currentUserId && userId) {
-//                 router.push(getProfilePath(userId, currentUserId));
-//             }
-//         },
-//         [currentUserId, router]
-//     );
-
-//     return (
-//         < div className="flex w-full min-w-0 flex-col items-start gap-1 pt-[8px] md:gap-1.5 md:pt-[10px]" >
-//             <div className="relative inline-flex">
-//                 <button
-//                     className={`relative flex items-center justify-center rounded-full font-semibold uppercase ring-offset-black shadow-sm ${avatarSize} hover:cursor-pointer disabled:cursor-default ${avatarTone}`}
-//                     onClick={() => handleViewProfile(user_id)}
-//                     disabled={currentUserId === user_id}
-//                 >
-//                     {profileImg && hasValidImage ? (
-//                         <Image
-//                             src={profileImg}
-//                             alt="Profile image"
-//                             width={56}
-//                             height={56}
-//                             className={`tracking-wide rounded-full object-cover ${imageSize}`}
-//                             draggable={false}
-//                             onDragStart={(e) => e.preventDefault()}
-//                             unoptimized
-//                             onError={() => setImgError(true)}
-//                         />
-//                     ) : (
-//                         <div className="flex items-center justify-center text-white/80 text-[12px] sm:text-[18px]" >
-//                             <span>{userInitial}</span>
-//                         </div>
-//                     )}
-//                 </button>
-//                 <div
-//                     className={`absolute -bottom-1 -right-1 flex items-center justify-center rounded-full border border-white/20 bg-black font-semibold text-slate-100 shadow-sm ${badgeSize}`}
-//                 >
-//                     {rank}
-//                 </div>
-//             </div>
-//             <div className="flex max-w-full items-center gap-1">
-//                 <span
-//                     className="max-w-full truncate text-left text-[9px] font-medium text-slate-400 md:text-[11px]"
-//                     title={username}
-//                 >
-//                     {usernameCopy}
-//                 </span>
-//             </div>
-//         </div >
-//     );
-// };
-
-// const PlayerCard = ({
-//     cumulative,
-//     badgeBonus,
-//     winLoss = { losses: 0, wins: 0 },
-//     isMobile,
-// }: {
-//     cumulative: number;
-//     badgeBonus: number;
-//     winLoss: { wins: number; losses: number };
-//     isMobile: boolean;
-// }) => {
-//     const pointsTone =
-//         cumulative < 0 ? "text-rose-300" : cumulative > 0 ? "text-emerald-300" : "text-slate-200";
-
-//     return (
-//         <div className="flex h-full w-full min-w-0 items-start">
-//             {isMobile ? (
-//                 <div className="flex w-full min-w-0 flex-col items-start gap-1 pt-0.5">
-//                     <span className={`text-xs font-semibold ${pointsTone}`}>
-//                         {cumulative}
-//                         <span className="ml-1 text-[9px] font-semibold uppercase tracking-wide text-gray-300">
-//                             pts
-//                         </span>
-//                     </span>
-//                     <span className="text-[10px] font-semibold tracking-wide text-gray-300">
-//                         {winLoss.wins} - {winLoss.losses}
-//                     </span>
-//                     {badgeBonus > 0 && (
-//                         <span className="text-[9px] font-semibold uppercase tracking-wide text-sky-200">
-//                             +{badgeBonus} badge
-//                         </span>
-//                     )}
-//                 </div>
-//             ) : (
-//                 <div className="relative flex w-full min-w-0 flex-col items-start gap-1.5 md:gap-2">
-//                     <span className={`text-lg font-semibold ${pointsTone} md:text-2xl`}>
-//                         {cumulative}
-//                         <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-gray-300 md:text-sm">
-//                             pts
-//                         </span>
-//                     </span>
-//                     <span className="text-[11px] font-semibold tracking-wide text-gray-300 md:text-xs">
-//                         {winLoss.wins} - {winLoss.losses}
-//                     </span>
-//                     {badgeBonus > 0 && (
-//                         <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-200 md:text-[11px]">
-//                             +{badgeBonus} badge pts
-//                         </span>
-//                     )}
-//                 </div>
-//             )}
-//         </div>
-//     );
-// };
-
 const SlipCellCard = ({
     pick,
     slip,
@@ -528,6 +341,7 @@ const SlipCellCard = ({
     const isOpen = !isFinal && !isSlipTimeLocked(slip);
     const emptyCopy = isOpen ? "no pick yet" : "pick not submitted before slip deadline";
     const [showTier, setShowTier] = useState(false);
+    const [showTierInfo, setShowTierInfo] = useState(false);
     const emptyCardTone = "border-slate-900/80 bg-slate-950/70";
     if (!isCurrectSlip) {
         return (
@@ -622,7 +436,6 @@ const SlipCellCard = ({
     const metaLabel = [matchupCopy !== EM_DASH ? matchupCopy : null, showGameTime ? gameTimeCopy : null]
         .filter(Boolean)
         .join(" · ");
-    const result = resultMeta(pick?.pick_result);
     const resultPoints =
         pick?.pick_result === "pending" || pick?.pick_result === null || !isFinal
             ? null
@@ -638,8 +451,16 @@ const SlipCellCard = ({
     const isPending = pick?.pick_result === "pending" || pick?.pick_result === null || !isFinal;
     const pointsValue = resultPoints !== null ? resultPoints : potentialPoints;
     const pointsDisplay = formatPointsValue(pointsValue);
-    const pointsLabel = resultPoints !== null ? "Points" : isPending ? "Potential" : "Points";
-    const pointsLabelText = pointsLabel.toLowerCase();
+    const pointsLabelText =
+        pick?.pick_result === "void"
+            ? "void"
+            : pick?.pick_result === "not_found"
+                ? "n/a"
+                : isPending
+                    ? "pending"
+                    : pick?.pick_result === "win"
+                        ? "win"
+                        : "loss";
     const showPointsSuffix = pointsDisplay !== EM_DASH;
     const tierCardStyle = tierMeta
         ? { backgroundImage: getGroupTierGradient(tierMeta.tier) }
@@ -703,7 +524,7 @@ const SlipCellCard = ({
                                 }`}
                         >
                             <div
-                                className={`absolute inset-0 flex flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] md:px-2 ${tierCardTone}`}
+                                className={`absolute inset-0 flex flex-col justify-center gap-1 overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] md:px-2 ${tierCardTone}`}
                                 style={tierCardStyle}
                             >
                                 <span className="block text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
@@ -713,20 +534,39 @@ const SlipCellCard = ({
                                     {oddsCopy}
                                 </span>
                                 <span
-                                    className="pointer-events-none absolute right-1 top-1 text-[7px] leading-none text-white/40 md:text-[8px]"
+                                    className="pointer-events-none absolute bottom-1 right-1.5 text-[7px] leading-none text-white/40 md:bottom-1.5 md:right-2 md:text-[8px]"
                                     aria-hidden
                                 >
                                     ⇄
                                 </span>
+                                <span
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label="View scoring tiers"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setShowTierInfo(true);
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            setShowTierInfo(true);
+                                        }
+                                    }}
+                                    className="absolute right-1 top-1 flex h-2.5 w-2.5 cursor-pointer items-center justify-center rounded-full border border-white/40 font-serif text-[6px] font-bold leading-none text-white/70 transition hover:bg-white/20 hover:text-white md:h-3 md:w-3 md:text-[7px]"
+                                >
+                                    i
+                                </span>
                             </div>
                             <div
-                                className={`absolute inset-0 flex flex-col justify-center overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] [transform:rotateY(180deg)] md:px-2 ${tierCardTone}`}
+                                className={`absolute inset-0 flex flex-col justify-center gap-1 overflow-hidden rounded-md border border-white/10 px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.3)] [backface-visibility:hidden] [transform:rotateY(180deg)] md:px-2 ${tierCardTone}`}
                                 style={tierCardStyle}
                             >
-                                <span className="block truncate text-[10px] font-semibold leading-tight text-white md:text-[13px]">
+                                <span className="block truncate text-[10px] font-semibold leading-tight text-white md:text-[12px]">
                                     {tierName}
                                 </span>
-                                <span className="block truncate text-[8px] leading-tight text-slate-100/70 md:text-[10px]">
+                                <span className="block truncate text-[8px] leading-tight text-slate-100/70 md:text-[9px]">
                                     {tierRange}
                                 </span>
                                 <span
@@ -739,12 +579,12 @@ const SlipCellCard = ({
                         </div>
                     </button>
                     <div
-                        className={`flex min-h-0 min-w-0 flex-col justify-center overflow-hidden rounded-md border px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:px-2 ${resultCardTone}`}
+                        className={`flex min-h-0 min-w-0 flex-col justify-center gap-1 overflow-hidden rounded-md border px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:px-2 ${resultCardTone}`}
                     >
                         <span className="block truncate text-[8px] font-semibold uppercase tracking-wide text-slate-100/75 md:text-[9px]">
                             {pointsLabelText}
                         </span>
-                        <div className="text-[10px] font-semibold leading-tight md:text-[13px]">
+                        <div className="truncate text-[12px] font-semibold tabular-nums leading-tight md:text-[15px]">
                             {pointsDisplay}
                             {showPointsSuffix && (
                                 <span className="ml-0.5 text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
@@ -752,12 +592,10 @@ const SlipCellCard = ({
                                 </span>
                             )}
                         </div>
-                        <span className="block truncate text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
-                            {!isFinal ? "Pending" : result.label}
-                        </span>
                     </div>
                 </div>
             </div>
+            <TierInfoModal open={showTierInfo} onClose={() => setShowTierInfo(false)} />
         </div>
     )
 }
@@ -778,6 +616,7 @@ export const LeaderboardGrid = ({
 }: Props) => {
     const isMobile = useIsMobile();
     const [selectedBadge, setSelectedBadge] = useState<ContestBadgeAward | null>(null);
+    const [shareSlipId, setShareSlipId] = useState<string | null>(null);
     const scrollerRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState<number>(isMobile ? 385 : 848);
@@ -810,6 +649,8 @@ export const LeaderboardGrid = ({
     const HEADER_H = isMobile ? 44 : 48;
     const SLIP_GAP = 0;
     const effectiveWidth = containerWidth ?? 0;
+    // Box height matches the odds/points boxes: (ROW_H - 20) / 2 = 46 / 56, plus py-1.5 (12px).
+    const TALLY_H = isMobile ? 58 : 68;
 
     const PLAYER_CARD_W = useMemo(() => {
         if (!effectiveWidth) return isMobile ? 108 : 158; // safe desktop fallback
@@ -937,7 +778,7 @@ export const LeaderboardGrid = ({
                         <div className="flex">
                             {/* Sticky Rank + Player */}
                             <div
-                                className="sticky left-0 z-10 flex flex-col border-r border-white/10 bg-[#151515] box-border"
+                                className="sticky left-0 z-10 flex flex-col self-start border-r border-white/10 bg-[#151515] box-border"
                                 style={{
                                     width: STICKY_WIDTH
                                 }}
@@ -958,22 +799,6 @@ export const LeaderboardGrid = ({
                                                 }`}
                                             style={{ height: ROW_H }}
                                         >
-                                            {/* <div className="flex h-full w-full min-w-0 flex-col justify-center gap-[20px] pl-2 md:gap-2 md:pl-3">
-                                                <RankCell
-                                                    rank={rowIndex + 1}
-                                                    isMobile={isMobile}
-                                                    profile_image={profile_image}
-                                                    username={username}
-                                                    user_id={user_id}
-                                                    currentUserId={currentUserId}
-                                                />
-                                                <PlayerCard
-                                                    cumulative={cumulative_points}
-                                                    badgeBonus={badge_points}
-                                                    winLoss={{ losses: loss, wins: win }}
-                                                    isMobile={isMobile}
-                                                />
-                                            </div> */}
                                             <PlayerCell
                                                 key={user_id}
                                                 username={username ?? "Member"}
@@ -991,6 +816,11 @@ export const LeaderboardGrid = ({
                                         </div>
                                     );
                                 })}
+                                <div
+                                    className="box-border border-t border-white/10 bg-[#151515]"
+                                    style={{ height: TALLY_H }}
+                                    aria-hidden
+                                />
                             </div>
 
                             {/* Slip Columns */}
@@ -1008,6 +838,20 @@ export const LeaderboardGrid = ({
                                         const slipTone = isFinal ? "text-gray-300" : "text-gray-400";
                                         const isLastSlip = slipIndex === leaderboardAllSlips.length - 1;
                                         const groupComboOddsSummary = groupComboOddsBySlipId.get(slip.id);
+                                        const slipTally = leaderboard.reduce(
+                                            (acc, row) => {
+                                                const res = row?.slips?.[slipIndex]?.pick_result;
+
+                                                if (res === "win") {
+                                                    acc.wins += 1;
+                                                } else if (res === "loss") {
+                                                    acc.losses += 1;
+                                                }
+
+                                                return acc;
+                                            },
+                                            { wins: 0, losses: 0 }
+                                        );
 
                                         return (
                                             <div
@@ -1033,21 +877,6 @@ export const LeaderboardGrid = ({
                                                             {statusMeta.label}
                                                         </span>
                                                     </div>
-                                                    <span
-                                                        className={`truncate text-left text-[7px] font-semibold uppercase leading-tight tracking-wide md:text-[9px] ${groupComboOddsSummary ? "text-cyan-200" : "invisible"
-                                                            }`}
-                                                    >
-                                                        {groupComboOddsSummary ? (
-                                                            <>
-                                                                League Combo+ odds:
-                                                                <span className="ml-1 text-cyan-100">
-                                                                    {groupComboOddsSummary.label}
-                                                                </span>
-                                                            </>
-                                                        ) : (
-                                                            "League Combo+ odds: pending"
-                                                        )}
-                                                    </span>
                                                 </div>
 
                                                 {leaderboard.map(({ user_id, slips }, rowIndex) => {
@@ -1083,6 +912,53 @@ export const LeaderboardGrid = ({
                                                         </div>
                                                     );
                                                 })}
+                                                <div
+                                                    className="box-border flex items-stretch justify-end gap-1 border-t border-white/10 px-2 py-1.5 md:gap-2 md:px-3"
+                                                    style={{ height: TALLY_H }}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShareSlipId(slip.id ?? null)}
+                                                        aria-label={`Share ${slip.name}`}
+                                                        className="flex shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.05] px-2 text-white/70 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] transition hover:border-white/30 hover:text-white"
+                                                    >
+                                                        <svg
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="2"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            className="h-3.5 w-3.5 md:h-4 md:w-4"
+                                                            aria-hidden
+                                                        >
+                                                            <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+                                                            <path d="M16 6l-4-4-4 4" />
+                                                            <path d="M12 2v13" />
+                                                        </svg>
+                                                    </button>
+                                                    <div className="flex w-[66px] shrink-0 flex-col justify-center gap-0.5 overflow-hidden rounded-md border border-white/10 bg-white/[0.05] px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:w-[116px] md:px-2">
+                                                        <span className="block text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
+                                                            record
+                                                        </span>
+                                                        <span className="block text-[12px] font-semibold tabular-nums leading-tight md:text-[15px]">
+                                                            <span className="text-emerald-200">{slipTally.wins}</span>
+                                                            <span className="text-white/40">-</span>
+                                                            <span className="text-rose-200">{slipTally.losses}</span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex w-[66px] shrink-0 flex-col justify-center gap-0.5 overflow-hidden rounded-md border border-white/10 bg-white/[0.05] px-1 py-1 leading-tight shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] md:w-[116px] md:px-2">
+                                                        <span className="block text-[8px] font-semibold uppercase tracking-wide text-slate-100/70 md:text-[9px]">
+                                                            combo+ odds
+                                                        </span>
+                                                        <span
+                                                            className={`block truncate text-[12px] font-semibold tabular-nums leading-tight md:text-[15px] ${groupComboOddsSummary ? "text-cyan-100" : "text-slate-500"
+                                                                }`}
+                                                        >
+                                                            {groupComboOddsSummary ? groupComboOddsSummary.label : "pending"}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1115,6 +991,14 @@ export const LeaderboardGrid = ({
                 </div>
             )}
             <BadgeAwardModal award={selectedBadge} onClose={() => setSelectedBadge(null)} />
+            {shareSlipId && (
+                <LeaderboardSlipShareModal
+                    open
+                    onClose={() => setShareSlipId(null)}
+                    slipId={shareSlipId}
+                    members={groupMembers ?? []}
+                />
+            )}
         </div>
     )
 }

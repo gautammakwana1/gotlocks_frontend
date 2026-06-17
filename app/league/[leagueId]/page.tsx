@@ -20,6 +20,7 @@ import { DeleteGroupConfirmationModal } from "@/components/group/ConfirmDeleteGr
 import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/leagues/LeaguePageSkeleton";
 import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
+import { SettingIcon } from "@/components/ui/SvgIcons";
 
 interface FormErrors {
   name?: string;
@@ -90,10 +91,7 @@ const tabIcon = (tabId: TabId) => {
     );
   }
   return (
-    <svg viewBox="0 0 24 24" {...common}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.6 19a1.7 1.7 0 0 0-1.88-.34l-.04.02a2 2 0 1 1-2-3.46l.04-.02A1.7 1.7 0 0 0 5.4 14a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3.6a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5.4 7a1.7 1.7 0 0 0-.34-1.88l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 9 2.6a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 10.4.9V.8a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 15.4 3a1.7 1.7 0 0 0 1.88.34l.04-.02a2 2 0 1 1 2 3.46l-.04.02A1.7 1.7 0 0 0 18.6 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.1a2 2 0 1 1 0 4h-.1A1.7 1.7 0 0 0 19.4 15Z" />
-    </svg>
+    <SettingIcon {...common} />
   );
 };
 
@@ -544,11 +542,10 @@ const LeagueDashboardPage = () => {
       )}
 
       <section
-        className={`-mx-5 border-y border-white/10 px-5 sm:mx-0 sm:px-0 ${
-          activeTab === "chat"
-            ? "sticky top-0 z-20 bg-[var(--app-bg)]"
-            : "-mt-6"
-        }`}
+        className={`-mx-5 border-y border-white/10 px-5 sm:mx-0 sm:px-0 ${activeTab === "chat"
+          ? "sticky top-0 z-20 bg-[var(--app-bg)]"
+          : "-mt-6"
+          }`}
       >
         <div
           className="relative grid w-full gap-1 py-1"
