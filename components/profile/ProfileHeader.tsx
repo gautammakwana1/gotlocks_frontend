@@ -12,16 +12,11 @@ import {
     type MouseEvent as ReactMouseEvent,
 } from "react";
 import Image from "next/image";
-import { Profile, RootState } from "@/lib/interfaces/interfaces";
-import { useDispatch, useSelector } from "react-redux";
-import { updateProfileRequest } from "@/lib/redux/slices/authSlice";
-import { checkAnyRestrictedWords, checkForReservedWords, generateProfileImageUrl } from "@/lib/utils/helpers";
+import { Profile } from "@/lib/interfaces/interfaces";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "../layout/MainTabBar";
-import { StartIcon } from "../ui/SvgIcons";
-
-interface FormErrors {
-    username?: string;
-}
+import { ProfileBadgeProgress } from "@/lib/profile/badges";
+import ProfileBadgeIcon from "./ProfileBadgeIcon";
 
 type ProfileHeaderStats = {
     posts: number;
@@ -70,6 +65,10 @@ type ProfileHeaderProps = {
     onPrivacyToggle: () => void;
     onFollowersClick?: () => void;
     onFollowingClick?: () => void;
+    /** Sorted badge progress for the header preview; omitted when badges are hidden. */
+    badges?: ProfileBadgeProgress[];
+    /** Opens the full badge tracker. When omitted, the badges block is non-interactive. */
+    onOpenBadges?: () => void;
 };
 
 const BADGE_PLACEHOLDERS = Array.from({ length: 3 }, (_, index) => `Locked badge ${index + 1}`);
@@ -94,11 +93,11 @@ type ProfileAvatarProps = {
 };
 
 const ProfileAvatar = ({ avatarUrl, displayName, setIsAvatarOpen }: ProfileAvatarProps) => (
-    <div className="relative -ml-1 flex h-18 w-18 items-center justify-center sm:h-22 sm:w-22">
+    <div className="relative -ml-1 flex h-16 w-16 items-center justify-center">
         <div className="absolute inset-0 rounded-full bg-gradient-to-br from-sky-200/60 via-sky-500/20 to-white/10" />
         <div className="absolute inset-[6px] rounded-full border border-sky-200/40 bg-black/40" />
         <div
-            className="relative z-10 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-sky-300/40 bg-sky-500/20 text-white sm:h-18 sm:w-18"
+            className="relative z-10 flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-sky-300/40 bg-sky-500/20 text-white"
             onClick={setIsAvatarOpen ? () => setIsAvatarOpen(true) : undefined}
         >
             {avatarUrl ? (
@@ -186,12 +185,10 @@ const ProfileHeader = ({
     onRemoveAvatar,
     onFollowersClick,
     onFollowingClick,
+    badges,
+    onOpenBadges
 }: ProfileHeaderProps) => {
-    const dispatch = useDispatch();
     const avatarInputId = useId();
-    const [isEditing, setIsEditing] = useState(false);
-    const [username, setUsername] = useState(user?.username || "");
-    const [errors, setErrors] = useState<FormErrors>({});
     const [isAvatarOpen, setIsAvatarOpen] = useState(false);
     const avatarMenuRef = useRef<HTMLDetailsElement | null>(null);
     const optionsMenuRef = useRef<HTMLDetailsElement | null>(null);
@@ -203,15 +200,14 @@ const ProfileHeader = ({
     const showNumericProgress = mode === "self";
     const showFollowSection = mode === "public" && showFollowControls && !isSelf && !viewerBlockedTarget;
     const showFollowerStats = showStats || showFollowSection;
-    const privacyStatusLabel = user.is_public ? "public profile" : "private profile";
+    const privacyStatusLabel = user.is_public ? "public" : "private";
     const formattedLifetimeXp = numberFormatter.format(progress.lifetimeXp);
     const recordItems = [
-        { label: "W", value: record?.wins ?? 0, tone: "text-emerald-100" },
-        { label: "L", value: record?.losses ?? 0, tone: "text-red-100" },
-        { label: "P", value: record?.pending ?? 0, tone: "text-blue-100" },
+        { label: "W", value: record?.wins ?? 0, tone: "text-emerald-300/50" },
+        { label: "L", value: record?.losses ?? 0, tone: "text-red-300/50" },
+        { label: "P", value: record?.pending ?? 0, tone: "text-amber-300/50" },
     ];
-
-    const { loading } = useSelector((state: RootState) => state.user);
+    const earnedBadgeCount = badges?.filter((badge) => badge.earnedTier).length ?? 0;
 
     const closeDetailsMenu = (event: ReactMouseEvent<HTMLElement>) => {
         const details = event.currentTarget.closest("details");
@@ -219,53 +215,6 @@ const ProfileHeader = ({
             details.open = false;
         }
     };
-
-    // const renderOptionsMenu = () => {
-    //     return (
-    //         <details ref={optionsMenuRef} className="relative z-20">
-    //             <summary
-    //                 aria-label="Profile options"
-    //                 className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:border-sky-300/60 hover:text-sky-100 sm:h-8 sm:w-8 [&::-webkit-details-marker]:hidden"
-    //             >
-    //                 <EditIcon />
-    //             </summary>
-    //             <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
-    //                 <button
-    //                     type="button"
-    //                     onClick={(event) => {
-    //                         handleEdit();
-    //                         closeDetailsMenu(event);
-    //                     }}
-    //                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition hover:bg-white/10"
-    //                 >
-    //                     edit name
-    //                 </button>
-    //                 <button
-    //                     type="button"
-    //                     onClick={(event) => {
-    //                         onPrivacyToggle();
-    //                         closeDetailsMenu(event);
-    //                     }}
-    //                     className={`mt-1 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-[11px] uppercase tracking-wide transition ${user.is_public
-    //                         ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
-    //                         : "border-white/20 bg-white/10 text-white"
-    //                         }`}
-    //                 >
-    //                     {user.is_public ? "Public profile" : "Private profile"}
-    //                     <span className="text-[10px] text-white/60">
-    //                         {user.is_public ? "visible" : "hidden"}
-    //                     </span>
-    //                 </button>
-    //             </div>
-    //         </details>
-    //     );
-    // };
-
-    useEffect(() => {
-        if (!user?.username) return;
-
-        setUsername(user?.username);
-    }, [user?.username]);
 
     useEffect(() => {
         const handleClick = (event: globalThis.MouseEvent) => {
@@ -312,51 +261,6 @@ const ProfileHeader = ({
             document.removeEventListener("keydown", handleEscape);
         };
     }, []);
-
-    const validate = useCallback((): boolean => {
-        const nextErrors: FormErrors = {};
-
-        if (!username?.trim()) {
-            nextErrors.username = "Username is required.";
-        }
-
-        const containsNameRestricted = checkAnyRestrictedWords(username);
-        if (containsNameRestricted) {
-            nextErrors.username = "Username contains inappropriate language.";
-        }
-
-        const containsReserveWords = checkForReservedWords(username);
-        if (containsReserveWords) {
-            nextErrors.username = "Username contains reserved words.";
-        }
-
-        setErrors(nextErrors);
-        return Object.keys(nextErrors).length === 0;
-    }, [username]);
-
-    const handleSave = (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!validate()) return;
-        const cleanUsername = username.trim();
-
-        const formData = new FormData();
-        formData.append("username", cleanUsername);
-
-        if (cleanUsername === user?.username) {
-            setIsEditing(false);
-            return;
-        }
-
-        dispatch(updateProfileRequest(formData));
-
-        setIsEditing(false);
-    };
-
-    const handleCancel = () => {
-        setIsEditing(false);
-        setUsername(user?.username || "");
-        setErrors({});
-    };
 
     const renderFollowControls = (className = "") => {
         if (!showFollowSection) return null;
@@ -412,196 +316,240 @@ const ProfileHeader = ({
                         <div className="absolute inset-[1px] rounded-[17px] bg-gradient-to-b from-white/10 via-white/5 to-black/70" />
                         <div className="absolute inset-0 rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_55%)]" />
                     </div>
-                    <div className="relative origin-top-left scale-[0.95] pl-1 sm:scale-100 sm:pl-2">
-                        <div className="relative grid gap-5 sm:gap-6 grid-cols-[minmax(0,3fr)_minmax(0,2fr)] sm:grid-cols-[minmax(0,1fr)_minmax(0,250px)] lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
-                            <div className="relative h-full w-full p-3 sm:p-4">
-                                <div className="grid grid-cols-[auto_1fr] grid-rows-[auto_auto_auto] gap-3 sm:gap-4 sm:grid-rows-[auto_1fr] sm:items-start">
-                                    {mode === "self" ? (
-                                        <details
-                                            ref={avatarMenuRef}
-                                            className="relative z-20 col-start-1 row-start-2 sm:col-start-1 sm:row-span-2 sm:row-start-1"
+                    <div className="relative px-4 py-2 sm:px-5">
+                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,240px)]">
+                            <div className="flex flex-col">
+                                {/* Identity */}
+                                <div className="relative -mx-4 flex items-center gap-3 border-b border-white/10 px-4 pb-2 sm:-mx-5 sm:px-5 lg:mr-0">
+                                    {showFollowerStats && (
+                                        <span
+                                            className={`absolute right-4 top-0 rounded-full px-2 py-0.5 text-[9px] font-semibold lowercase tracking-[0.12em] sm:right-5 ${user.is_public
+                                                ? "bg-sky-500/80 text-white"
+                                                : "bg-white/15 text-white/80"
+                                                }`}
                                         >
-                                            <summary
-                                                aria-label="Profile photo actions"
-                                                className="relative list-none cursor-pointer [&::-webkit-details-marker]:hidden"
+                                            {privacyStatusLabel}
+                                        </span>
+                                    )}
+                                    <div className="flex shrink-0 flex-col items-center gap-1">
+                                        {mode === "self" ? (
+                                            <details
+                                                ref={avatarMenuRef}
+                                                className="relative z-20"
                                             >
-                                                <ProfileAvatar
-                                                    avatarUrl={avatarUrl}
-                                                    displayName={displayName}
-                                                    initials={initials}
-                                                />
-                                                {showStats && (
-                                                    <span className="sr-only">Level {progress.level}</span>
-                                                )}
-                                            </summary>
-                                            <div className="absolute left-0 top-full mt-2 w-40 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
-                                                <label
-                                                    htmlFor={avatarInputId}
-                                                    onClick={closeDetailsMenu}
-                                                    className="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 transition hover:bg-white/10"
+                                                <summary
+                                                    aria-label="Profile photo actions"
+                                                    className="relative list-none cursor-pointer [&::-webkit-details-marker]:hidden"
                                                 >
-                                                    {avatarUrl ? "edit photo" : "upload photo"}
-                                                </label>
-                                                {avatarUrl && (
+                                                    <ProfileAvatar
+                                                        avatarUrl={avatarUrl}
+                                                        displayName={displayName}
+                                                        initials={initials}
+                                                    />
+                                                    {showStats && (
+                                                        <span className="sr-only">Level {progress.level}</span>
+                                                    )}
+                                                </summary>
+                                                <div className="absolute left-0 top-full mt-2 w-40 rounded-2xl border border-white/10 bg-black/80 p-2 text-xs uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
+                                                    <label
+                                                        htmlFor={avatarInputId}
+                                                        onClick={closeDetailsMenu}
+                                                        className="flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 transition hover:bg-white/10"
+                                                    >
+                                                        {avatarUrl ? "edit photo" : "upload photo"}
+                                                    </label>
+                                                    {avatarUrl && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => {
+                                                                onRemoveAvatar();
+                                                                closeDetailsMenu(event);
+                                                            }}
+                                                            className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-red-200 transition hover:bg-white/10"
+                                                        >
+                                                            remove photo
+                                                        </button>
+                                                    )}
                                                     <button
                                                         type="button"
                                                         onClick={(event) => {
-                                                            onRemoveAvatar();
+                                                            setIsAvatarOpen(true);
                                                             closeDetailsMenu(event);
                                                         }}
                                                         className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-red-200 transition hover:bg-white/10"
                                                     >
-                                                        remove photo
+                                                        view photo
                                                     </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={(event) => {
-                                                        setIsAvatarOpen(true);
-                                                        closeDetailsMenu(event);
-                                                    }}
-                                                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-red-200 transition hover:bg-white/10"
-                                                >
-                                                    view photo
-                                                </button>
-                                            </div>
-                                        </details>
-                                    ) : (
-                                        <div className="relative col-start-1 row-start-2 sm:col-start-1 sm:row-span-2 sm:row-start-1">
-                                            <ProfileAvatar
-                                                avatarUrl={avatarUrl}
-                                                displayName={displayName}
-                                                initials={initials}
-                                                setIsAvatarOpen={setIsAvatarOpen}
-                                            />
-                                            {showStats && (
-                                                <span className="sr-only">Level {progress.level}</span>
-                                            )}
-                                        </div>
-                                    )}
-                                    <div className="min-w-0 col-span-2 row-start-1 sm:col-span-1 sm:col-start-2 sm:row-start-1">
-                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <div className="truncate text-xl font-semibold leading-tight text-white sm:text-2xl">
-                                                        {displayName}
-                                                    </div>
-                                                    {/* {mode === "self" ? renderOptionsMenu() : null} */}
                                                 </div>
+                                            </details>
+                                        ) : (
+                                            <div className="relative">
+                                                <ProfileAvatar
+                                                    avatarUrl={avatarUrl}
+                                                    displayName={displayName}
+                                                    initials={initials}
+                                                    setIsAvatarOpen={setIsAvatarOpen}
+                                                />
+                                                {showStats && (
+                                                    <span className="sr-only">Level {progress.level}</span>
+                                                )}
                                             </div>
+                                        )}
+                                    </div>
+                                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                                        <div className="flex items-center gap-2 pr-14">
+                                            <div className="truncate text-3xl font-bold leading-none text-white">
+                                                {displayName}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                                            {showFollowerStats && (
+                                                <FollowerStats
+                                                    followers={stats.followers}
+                                                    following={stats.following}
+                                                    className="sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
+                                                    onFollowersClick={onFollowersClick}
+                                                    onFollowingClick={onFollowingClick}
+                                                    showStats={showStats}
+                                                />
+                                            )}
+                                            {renderFollowControls("lg:absolute lg:bottom-2 lg:right-5")}
                                         </div>
                                     </div>
-                                    {showFollowerStats && (
-                                        <div className="min-w-0 col-start-2 row-start-2 flex flex-col gap-3 self-center sm:col-start-2 sm:row-start-2 sm:h-full sm:self-auto">
+                                </div>
+
+                                {/* Stats */}
+                                {showRightSummary && (
+                                    <div className="-mx-4 space-y-2.5 border-b border-white/10 px-4 py-3 sm:-mx-5 sm:px-5 lg:mr-0 lg:border-b-0">
+                                        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                                             {showStats && (
-                                                <div className="w-full text-[11px] uppercase tracking-wide text-sky-100/75">
-                                                    <div className="flex flex-wrap items-center gap-3">
-                                                        <span className="shrink-0">Lvl {progress.level}</span>
-                                                        <div className="h-1.5 min-w-[100px] flex-1 rounded-full bg-white/10 sm:min-w-[140px]">
-                                                            <div
-                                                                className="h-1.5 rounded-full bg-sky-400/80 transition-all"
-                                                                style={{ width: `${progress.levelProgressPercent}%` }}
-                                                            />
-                                                        </div>
-                                                        {showNumericProgress && (
-                                                            <span className="ml-auto shrink-0 text-right text-sky-100/70">
-                                                                {progress.xpRemaining} XP to next
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="mt-1 text-right text-sky-100/70">
-                                                        <span className="text-white/55">Total XP </span>
-                                                        <span className="font-semibold text-white">
-                                                            {formattedLifetimeXp}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                                <span className="text-xl font-bold uppercase leading-none tracking-wide text-white sm:text-2xl">
+                                                    LVL {progress.level}
+                                                </span>
                                             )}
-                                            <div className={`flex flex-col gap-2 ${showStats ? "mt-auto" : ""}`}>
-                                                <div className="hidden sm:block">
-                                                    <FollowerStats
-                                                        followers={stats.followers}
-                                                        following={stats.following}
-                                                        className="sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
-                                                        onFollowersClick={onFollowersClick}
-                                                        onFollowingClick={onFollowingClick}
-                                                        showStats={showStats}
-                                                    />
-                                                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
-                                                        {privacyStatusLabel}
-                                                    </p>
-                                                </div>
-                                                {renderFollowControls("hidden sm:flex sm:mt-2")}
+                                            <div className="flex items-baseline gap-6 text-xl font-bold uppercase tracking-wide sm:gap-8 sm:text-2xl">
+                                                {recordItems.map((item) => (
+                                                    <span
+                                                        key={item.label}
+                                                        className={`flex items-baseline gap-1.5 ${item.tone}`}
+                                                    >
+                                                        <span>{item.label}:</span>
+                                                        <span>{item.value}</span>
+                                                    </span>
+                                                ))}
                                             </div>
                                         </div>
-                                    )}
-                                    {showFollowerStats && (
-                                        <div className="col-start-1 row-start-3 col-span-2 sm:hidden">
-                                            <FollowerStats
-                                                followers={stats.followers}
-                                                following={stats.following}
-                                                className="mt-2"
-                                                onFollowersClick={onFollowersClick}
-                                                onFollowingClick={onFollowingClick}
-                                                showStats={showStats}
-                                            />
-                                            <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/55">
-                                                {privacyStatusLabel}
-                                            </p>
-                                            {renderFollowControls("mt-3")}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className={`flex h-full flex-col gap-4 ${!viewerBlockedTarget ? "border-l border-white/10" : ""} pl-4 sm:gap-5 sm:pl-5 lg:pl-6`}>
-                                {showRightSummary && (
-                                    <div className="space-y-3 pt-2">
-                                        <div className="flex flex-nowrap items-center gap-3 text-xs uppercase tracking-[0.16em] text-white/80 sm:gap-4 sm:text-sm sm:tracking-[0.18em]">
-                                            {recordItems.map((item) => (
-                                                <div
-                                                    key={item.label}
-                                                    className="flex items-baseline gap-1.5 whitespace-nowrap sm:gap-2"
-                                                >
-                                                    <span className="text-[10px] font-semibold text-white/70 sm:text-[11px]">
-                                                        {item.label}
-                                                    </span>
-                                                    <span className={`text-[11px] font-bold sm:text-base ${item.tone}`}>
-                                                        {item.value}
-                                                    </span>
+                                        {showStats && (
+                                            <>
+                                                <div className="h-2 w-full rounded-full bg-white/10">
+                                                    <div
+                                                        className="h-2 rounded-full bg-sky-400/80 transition-all"
+                                                        style={{ width: `${progress.levelProgressPercent}%` }}
+                                                    />
                                                 </div>
-                                            ))}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={onShowScoringRules}
-                                            className="whitespace-nowrap px-1 py-1 text-[10px] font-semibold lowercase tracking-wide text-sky-200 underline decoration-white/30 transition hover:text-sky-100 sm:text-[11px]"
-                                        >
-                                            profile scoring rules
-                                        </button>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    {isSelf ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={onShowScoringRules}
+                                                            className="text-[11px] font-semibold lowercase tracking-wide text-sky-300 underline decoration-sky-300/40 transition hover:text-sky-200"
+                                                        >
+                                                            scoring rules
+                                                        </button>
+                                                    ) : (
+                                                        <span />
+                                                    )}
+                                                    <div className="text-right text-[10px] uppercase leading-tight tracking-wide text-sky-100/75">
+                                                        {showNumericProgress && (
+                                                            <p>{progress.xpRemaining} XP to next</p>
+                                                        )}
+                                                        <p>
+                                                            <span className="text-white/55">Total XP </span>
+                                                            <span className="font-semibold text-white">
+                                                                {formattedLifetimeXp}
+                                                            </span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 )}
-                                {!viewerBlockedTarget && (
-                                    <div
-                                        className={`space-y-3 ${showRightSummary
-                                            ? "border-t border-white/10 pt-4 pb-1 mt-auto sm:mt-0"
-                                            : ""
-                                            }`}
+                            </div>
+
+                            <div className="pt-3 lg:relative lg:pt-0 lg:pl-6">
+                                <div
+                                    aria-hidden
+                                    className="hidden lg:absolute lg:-top-4 lg:-bottom-4 lg:left-0 lg:block lg:w-px lg:bg-white/10"
+                                />
+                                {onOpenBadges ? (
+                                    <button
+                                        type="button"
+                                        onClick={onOpenBadges}
+                                        className="group flex w-full flex-col gap-2.5 text-left lg:h-full lg:justify-between lg:gap-4"
                                     >
-                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                                            <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-[11px] sm:tracking-[0.18em]">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
                                                 badges
                                             </p>
-                                            <span className="text-[7px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[9px] sm:pr-3">
+                                            <span className="text-[10px] uppercase tracking-wide text-sky-200 transition group-hover:text-sky-100">
+                                                {earnedBadgeCount} earned
+                                            </span>
+                                        </div>
+                                        <div className={`flex flex-wrap items-center gap-2 lg:gap-3`}>
+                                            {(badges ?? []).slice(0, 8).map((badge) => (
+                                                <ProfileBadgeIcon
+                                                    key={badge.definition.id}
+                                                    badgeId={badge.definition.id}
+                                                    tierLevel={badge.earnedTier?.level ?? "locked"}
+                                                    className="h-8 w-8 lg:h-10 lg:w-10"
+                                                    glow={false}
+                                                />
+                                            ))}
+                                        </div>
+                                        <span className="flex justify-end text-sky-200 transition group-hover:text-sky-100">
+                                            <svg
+                                                aria-hidden
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                className="h-4 w-4"
+                                            >
+                                                <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                                            </svg>
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <div className="space-y-2.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                                badges
+                                            </p>
+                                            <span className="text-[9px] uppercase tracking-wide text-[var(--text-secondary)]">
                                                 coming soon
                                             </span>
                                         </div>
-                                        <div className="mt-2 flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap gap-2">
                                             {BADGE_PLACEHOLDERS.map((label, index) => (
                                                 <div
                                                     key={`${label}-${index}`}
-                                                    className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]"
+                                                    className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[var(--text-secondary)]"
                                                 >
-                                                    <StartIcon />
+                                                    <svg
+                                                        aria-hidden
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="1.6"
+                                                        className="h-[18px] w-[18px]"
+                                                    >
+                                                        <path
+                                                            d="M12 4.5 14.2 9l4.8.7-3.5 3.4.9 4.8L12 15.9 7.6 17.9l.9-4.8L5 9.7 9.8 9 12 4.5Z"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                        />
+                                                    </svg>
                                                     <span className="sr-only">{label}</span>
                                                 </div>
                                             ))}
@@ -620,48 +568,6 @@ const ProfileHeader = ({
                     className="sr-only"
                 />
             </div>
-
-            {isEditing && (
-                <ModalShell onClose={handleCancel} maxWidthClass="max-w-sm">
-                    <form onSubmit={handleSave} className="space-y-4 text-center">
-                        <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">choose unique username</p>
-                            <p className="text-lg font-semibold text-white">Enter Username</p>
-                        </div>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(event) => {
-                                setUsername(event.target.value);
-                                setErrors((prev) => ({ ...prev, username: undefined }));
-                            }}
-                            placeholder="username"
-                            autoFocus
-                            className="w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition focus:border-sky-400/70"
-                        />
-                        {errors.username && (
-                            <span className="text-xs font-medium text-red-400">
-                                {errors.username}
-                            </span>
-                        )}
-                        <div className="flex justify-center gap-3">
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="rounded-xl border border-sky-400/60 bg-sky-500/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-sky-100 transition hover:border-sky-300/80 hover:text-white"
-                            >
-                                {loading ? "Updating.." : "Update"}
-                            </button>
-                        </div>
-                    </form>
-                </ModalShell>
-            )}
 
             {isAvatarOpen && profileVisible && (
                 <ModalShell onClose={() => setIsAvatarOpen(false)} maxWidthClass="max-w-sm">

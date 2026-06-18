@@ -223,10 +223,10 @@ const PlayerCell = ({
                     type="button"
                     onClick={() => setShowRecord((prev) => !prev)}
                     aria-label={showRecord ? "Show avatar" : "Show record"}
-                    className="relative h-8 w-8 shrink-0 [perspective:400px] md:h-9 md:w-9"
+                    className="group relative h-8 w-8 shrink-0 [perspective:400px] md:h-9 md:w-9"
                 >
                     <div
-                        className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] ${showRecord ? "[transform:rotateY(180deg)]" : ""
+                        className={`relative h-full w-full transition-transform duration-500 [transform-style:preserve-3d] group-hover:[transform:rotateY(-180deg)] ${showRecord ? "[transform:rotateY(-180deg)]" : ""
                             }`}
                     >
                         <div
@@ -250,7 +250,7 @@ const PlayerCell = ({
                                 </div>
                             )}
                         </div>
-                        <div className="absolute inset-0 flex items-center justify-center rounded-full border border-white/25 bg-black/80 text-[10px] font-semibold tabular-nums leading-none text-slate-100 [backface-visibility:hidden] [transform:rotateY(180deg)] md:text-[11px]">
+                        <div className="absolute inset-0 flex items-center justify-center rounded-full border border-white/25 bg-black/80 text-[10px] font-semibold tabular-nums leading-none text-slate-100 [backface-visibility:hidden] [transform:rotateY(-180deg)] md:text-[11px]">
                             {winLoss.wins}-{winLoss.losses}
                         </div>
                     </div>

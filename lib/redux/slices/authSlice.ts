@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts, FetchBlockedUsersPayload, CurrentUser } from "@/lib/interfaces/interfaces";
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
+import { ProfileBadgeProgress } from "@/lib/profile/badges";
 
 type AuthState = {
 	user: User | null;
@@ -12,10 +13,12 @@ type AuthState = {
 	sentFollowReuests: FollowRequest[] | null;
 	blockedUsers: BlockedUsers[] | null;
 	postAlerts: PostAlerts[] | null;
+	profileBadges: ProfileBadgeProgress[] | null;
 	session: SessionState | null;
 	hasSeenIntro: boolean;
 	loading: boolean;
 	isProfileLoading: boolean;
+	badgeLoading: boolean;
 	error: string | null;
 	message: string | null;
 	profileUpdateMessage: string | null;
@@ -39,11 +42,13 @@ const initialState: AuthState = {
 	followReuests: null,
 	blockedUsers: null,
 	postAlerts: null,
+	profileBadges: null,
 	sentFollowReuests: null,
 	session: null,
 	hasSeenIntro: false,
 	loading: false,
 	isProfileLoading: false,
+	badgeLoading: false,
 	error: null,
 	message: null,
 	profileUpdateMessage: null,
@@ -631,6 +636,24 @@ const authSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		fetchProfileBadgesRequest: (state, action) => {
+			void action;
+			state.badgeLoading = true;
+			state.error = null;
+		},
+		fetchProfileBadgesSuccess: (state, action) => {
+			state.badgeLoading = false;
+			state.profileBadges = action.payload.badges;
+		},
+		fetchProfileBadgesFailure: (state, action) => {
+			state.badgeLoading = false;
+			state.error = action.payload;
+		},
+		clearFetchProfileBadgesMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -751,6 +774,10 @@ export const {
 	completeIntroSuccess,
 	completeIntroFailure,
 	clearCompleteIntroMessage,
+	fetchProfileBadgesRequest,
+	fetchProfileBadgesSuccess,
+	fetchProfileBadgesFailure,
+	clearFetchProfileBadgesMessage,
 	logout,
 	completeIntro,
 	resetProfile,

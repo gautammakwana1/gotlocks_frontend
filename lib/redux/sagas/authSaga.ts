@@ -1,11 +1,11 @@
 import { call, put, takeLatest } from "redux-saga/effects";
-import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure, changePasswordSuccess, changePasswordFailure, changePasswordRequest, fetchFollowRequestListRequest, fetchFollowRequestListSuccess, fetchFollowRequestListFailure, accpetFollowSuccess, accpetFollowFailure, accpetFollowRequest, declineFollowSuccess, declineFollowFailure, declineFollowRequest, fetchSentFollowRequestListSuccess, fetchSentFollowRequestListFailure, fetchSentFollowRequestListRequest, blockUserSuccess, blockUserFailure, unblockUserSuccess, unblockUserFailure, blockUserRequest, unblockUserRequest, fetchBlockedUsersSuccess, fetchBlockedUsersFailure, fetchBlockedUsersRequest, enablePostAlertSuccess, enablePostAlertFailure, disablePostAlertSuccess, disablePostAlertFailure, enablePostAlertRequest, disablePostAlertRequest, fetchPostAlertsSuccess, fetchPostAlertsFailure, fetchPostAlertsRequest, deleteAccountSuccess, deleteAccountFailure, deleteAccountRequest, completeIntroSuccess, completeIntroFailure, completeIntroRequest } from "../slices/authSlice";
+import { loginWithEmailSuccess, loginWithGoogleSuccess, loginWithEmailRequest, loginWithGoogleRequest, loginWithEmailFailure, registerUserFailure, registerUserSuccess, registerUserRequest, fetchProfileFailure, fetchProfileSuccess, fetchProfileRequest, loginWithGoogleFailure, updateProfileSuccess, updateProfileFailure, updateProfileRequest, fetchMemberProfileSuccess, fetchMemberProfileFailure, fetchMemberProfileRequest, followUnfollowUserSuccess, followUnfollowUserFailure, followUnfollowUserRequest, fetchFollowersListSuccess, fetchFollowersListFailure, fetchFollowersListRequest, fetchFollowingListSuccess, fetchFollowingListFailure, fetchFollowingListRequest, updateProfilePictureSuccess, updateProfilePictureFailure, updateProfilePictureRequest, updateProfilePublicOrPrivateSuccess, updateProfilePublicOrPrivateFailure, updateProfilePublicOrPrivateRequest, initialForgotPasswordOTPSuccess, initialForgotPasswordOTPFailure, initialForgotPasswordOTPRequest, verifyForgotPasswordOTPSuccess, verifyForgotPasswordOTPFailure, verifyForgotPasswordOTPRequest, resetPasswordSuccess, resetPasswordFailure, resetPasswordRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowersListByIdSuccess, fetchFollowersListByIdFailure, fetchFollowingListByIdSuccess, fetchFollowingListByIdFailure, changePasswordSuccess, changePasswordFailure, changePasswordRequest, fetchFollowRequestListRequest, fetchFollowRequestListSuccess, fetchFollowRequestListFailure, accpetFollowSuccess, accpetFollowFailure, accpetFollowRequest, declineFollowSuccess, declineFollowFailure, declineFollowRequest, fetchSentFollowRequestListSuccess, fetchSentFollowRequestListFailure, fetchSentFollowRequestListRequest, blockUserSuccess, blockUserFailure, unblockUserSuccess, unblockUserFailure, blockUserRequest, unblockUserRequest, fetchBlockedUsersSuccess, fetchBlockedUsersFailure, fetchBlockedUsersRequest, enablePostAlertSuccess, enablePostAlertFailure, disablePostAlertSuccess, disablePostAlertFailure, enablePostAlertRequest, disablePostAlertRequest, fetchPostAlertsSuccess, fetchPostAlertsFailure, fetchPostAlertsRequest, deleteAccountSuccess, deleteAccountFailure, deleteAccountRequest, completeIntroSuccess, completeIntroFailure, completeIntroRequest, fetchProfileBadgesSuccess, fetchProfileBadgesFailure, fetchProfileBadgesRequest } from "../slices/authSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import axios, { AxiosResponse } from "axios";
 import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload, FetchBlockedUsersPayload, BlockedUsers } from "@/lib/interfaces/interfaces";
+import { AcceptDeclineFollowRequestPayload, BlockUserPayload, ChangePasswordPayload, DisablePostAlertPayload, EnablePostAlertPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, FetchMemberProfilePayload, FollowUnfollowUserPayload, InitialPasswordOTPPayload, ResetPasswordPayload, UnblockUserPayload, VerifyPasswordOTPPayload, FetchBlockedUsersPayload, BlockedUsers, FetchProfileBadgesPayload } from "@/lib/interfaces/interfaces";
 import { fetchNotificationListRequest } from "../slices/notificationSlice";
 import { fetchMyProgressRequest, fetchProgressByUserIdRequest } from "../slices/progressSlice";
 
@@ -448,6 +448,23 @@ function* handleCompleteIntro(action: PayloadAction): SagaIterator {
 	}
 };
 
+function* handleFetchProfileBadges(action: PayloadAction<FetchProfileBadgesPayload | undefined>): SagaIterator {
+	try {
+		const { user_id = "" } = action.payload || {};
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/auth/profile-badges`,
+			{
+				params: { user_id }
+			}
+		);
+		const payload = response.data as { data?: unknown };
+		yield put(fetchProfileBadgesSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchProfileBadgesFailure(getErrorMessage(error, "Fetch profile badges failed")));
+	}
+};
+
 export default function* authSaga() {
 	yield takeLatest(loginWithEmailRequest.type, handleLoginWithEmail);
 	yield takeLatest(registerUserRequest.type, handleRegister);
@@ -478,4 +495,5 @@ export default function* authSaga() {
 	yield takeLatest(fetchPostAlertsRequest.type, handleFetchPostAlertsList);
 	yield takeLatest(deleteAccountRequest.type, handleDeleteAccount);
 	yield takeLatest(completeIntroRequest.type, handleCompleteIntro);
+	yield takeLatest(fetchProfileBadgesRequest.type, handleFetchProfileBadges);
 }

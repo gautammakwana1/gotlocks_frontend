@@ -1,5 +1,6 @@
 
 import { CachedReviewData } from "@/components/pick-builder/core/reviewSheetState";
+import { ProfileBadgeProgress } from "../profile/badges";
 
 export type Role = "member" | "commissioner";
 
@@ -1372,6 +1373,10 @@ export type DisablePostAlertPayload = {
     targetUserId: string;
 };
 
+export type FetchProfileBadgesPayload = {
+    user_id: string;
+};
+
 export type FetchFollowingUsersListByIdPayload = {
     user_id: string;
 };
@@ -1504,11 +1509,22 @@ export type AuthSliceState = {
     user: AuthUserPayload | null;
     followers: FollowersList[] | null;
     followings: FollowingsList[] | null;
+    followersById: [] | null;
+    followingsById: [] | null;
+    followReuests: FollowRequest[] | null;
+    sentFollowReuests: FollowRequest[] | null;
     blockedUsers: BlockedUsers[] | null;
+    postAlerts: PostAlerts[] | null;
+    profileBadges: ProfileBadgeProgress[] | null;
+    session: SessionState | null;
+    hasSeenIntro: boolean;
     loading: boolean;
+    isProfileLoading: boolean;
+    badgeLoading: boolean;
     error: string | null;
     message: string | null;
     profileUpdateMessage: string | null;
+    resendMessage: string | null;
     initialForgotPasswordMessage: string | null;
     initialForgotPasswordError: string | null;
     verifyForgotPasswordMessage: string | null;

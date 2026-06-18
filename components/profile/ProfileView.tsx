@@ -12,7 +12,7 @@ import ProfileControls, {
 import ProfileHeader from "./ProfileHeader";
 import { BlockedUsers, CurrentUser, FollowersList, FollowingsList, FollowRequest, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchFollowRequestListRequest, fetchMemberProfileRequest, fetchSentFollowRequestListRequest, followUnfollowUserRequest, resetProfile, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
+import { clearFollowUnfollowUserMessage, clearUpdateProfileMessage, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchFollowRequestListRequest, fetchMemberProfileRequest, fetchProfileBadgesRequest, fetchSentFollowRequestListRequest, followUnfollowUserRequest, resetProfile, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
 import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
 import { clearCreatePickReactionMessage, clearDeletePostPickMessage, createPickReactionRequest, deletePostPickRequest, fetchPostPicksByUserIdRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
@@ -27,6 +27,8 @@ import ScrollUpButton from "../ui/ScrollUpButton";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { LeftChevronIcon } from "../ui/SvgIcons";
 import ProfileSkeleton from "../skeletons/profile/ProfileSkeleton";
+import { ProfileBadgeProgress } from "@/lib/profile/badges";
+import BadgesStrip from "./BadgesStrip";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -47,8 +49,10 @@ type AuthSliceState = {
     followingsById: FollowingsList[] | null;
     followReuests: FollowRequest[] | null;
     sentFollowReuests: FollowRequest[] | null;
+    profileBadges: ProfileBadgeProgress[] | null;
     loading: boolean;
     isProfileLoading?: boolean;
+    badgeLoading: boolean;
     error: string | null;
     message: string | null;
     profileUpdateMessage?: string;
@@ -115,6 +119,7 @@ const ProfileView = ({
     const [page, setPage] = useState(1);
     const [showScrollTop, setShowScrollTop] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
+    const [badgesOpen, setBadgesOpen] = useState(false);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -133,10 +138,11 @@ const ProfileView = ({
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
     const followPanelRef = useRef<HTMLDivElement | null>(null);
+    const badgesPanelRef = useRef<HTMLDivElement | null>(null);
     const limit = 10;
 
     const { postPicks, deleteMessage, loading: postLoader, message, hasMore } = useSelector((state: RootState) => state.pick);
-    const { followings, followers, followersById, followingsById, blockedUsers, loading: authLoader, isProfileLoading, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests } = useSelector((state: RootState) => state.user);
+    const { followings, followers, followersById, followingsById, blockedUsers, loading: authLoader, isProfileLoading, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests, profileBadges: profileBadgesList, badgeLoading } = useSelector((state: RootState) => state.user);
     const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
@@ -153,6 +159,7 @@ const ProfileView = ({
         dispatch(fetchFollowRequestListRequest({}));
         dispatch(fetchSentFollowRequestListRequest({}));
         dispatch(fetchProgressByUserIdRequest({ user_id: targetUserId }));
+        dispatch(fetchProfileBadgesRequest({ user_id: targetUserId }));
 
         // Reset pagination and fetch page 1
         setPage(1);
@@ -303,7 +310,7 @@ const ProfileView = ({
         typeof profileVisibleOverride === "boolean"
             ? profileVisibleOverride
             : computedProfileVisible;
-    // const postsVisible = profileVisible && !viewerBlockedTarget && !targetBlockedViewer;
+    const postsVisible = profileVisible && !viewerBlockedTarget && !targetBlockedViewer;
     const showLockedPrivateHeaderSummary =
         mode === "public" &&
         Boolean(targetUser) &&
@@ -455,6 +462,29 @@ const ProfileView = ({
             document.removeEventListener("mousedown", handleClickOutside);
         };
     }, [followPanelOpen, closeFollowPanel]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!badgesOpen) return;
+
+            const target = event.target;
+
+            if (!(target instanceof Node)) return;
+
+            if (
+                badgesPanelRef.current &&
+                !badgesPanelRef.current.contains(target)
+            ) {
+                setBadgesOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [badgesOpen]);
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -644,10 +674,12 @@ const ProfileView = ({
                 onPrivacyToggle={handlePrivacyToggle}
                 onFollowersClick={openFollowersPanel}
                 onFollowingClick={openFollowingPanel}
+                badges={postsVisible ? profileBadgesList ?? [] : undefined}
+                onOpenBadges={postsVisible ? () => setBadgesOpen(true) : undefined}
             />
             <div
                 ref={followPanelRef}
-                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[420px] border-l border-white/10 bg-black/95 shadow-2xl transition-all duration-300 ease-out sm:bg-[var(--surface-1)] sm:backdrop-blur ${followPanelOpen
+                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[420px] border-l border-white/10 bg-neutral-950 shadow-2xl transition-all duration-300 ease-out ${followPanelOpen
                     ? "translate-x-0 opacity-100"
                     : "translate-x-full opacity-0 pointer-events-none"
                     }`}
@@ -753,6 +785,45 @@ const ProfileView = ({
                                 {followPanelEmptyCopy}
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+
+            <div
+                ref={badgesPanelRef}
+                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[460px] border-l border-white/10 bg-neutral-950 shadow-2xl transition-all duration-300 ease-out ${badgesOpen
+                    ? "translate-x-0 opacity-100"
+                    : "translate-x-full opacity-0 pointer-events-none"
+                    }`}
+            >
+                <div className="flex h-full flex-col">
+                    <div className="px-5 pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setBadgesOpen(false)}
+                            className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)] transition hover:text-white"
+                        >
+                            <svg
+                                aria-hidden
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                className="h-4 w-4"
+                            >
+                                <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            back
+                        </button>
+                    </div>
+                    <div className="px-5 pt-4">
+                        <h2 className="text-lg font-semibold text-white">Badges</h2>
+                        <p className="text-sm text-[var(--text-secondary)]">
+                            Track milestones across {isSelf ? "your" : `${displayName}'s`} picks.
+                        </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-5 py-4">
+                        <BadgesStrip postPicks={postPicksList} variant="plain" profileBadges={profileBadgesList ?? []} />
                     </div>
                 </div>
             </div>
