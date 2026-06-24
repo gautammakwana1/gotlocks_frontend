@@ -240,28 +240,30 @@ const buildGameOptions = (snapshot: NFLOdds | undefined): GameOption[] => {
             return {
                 id: event.id,
                 game_id: event.id,
-                home_team: event.teams.home.name,
-                away_team: event.teams.away.name,
-                home_team_id: event.teams.home.id,
-                away_team_id: event.teams.away.id,
+                home_team: event.teams?.home?.name ?? "",
+                away_team: event.teams?.away?.name ?? "",
+                home_team_id: event.teams?.home?.id ?? "",
+                away_team_id: event.teams?.away?.id ?? "",
                 date: event.date,
                 live: event.live,
                 odds: event.odds!,
                 marketCount,
                 propCount,
                 home_abbr:
-                    event.teams.home.abbreviation ??
-                    event.teams.home.name.slice(0, 3).toUpperCase(),
+                    event.teams?.home?.abbreviation ??
+                    (event.teams?.home?.name ?? "").slice(0, 3).toUpperCase(),
                 away_abbr:
-                    event.teams.away.abbreviation ??
-                    event.teams.away.name.slice(0, 3).toUpperCase(),
-                hasOdds: event.odds.length > 0,
+                    event.teams?.away?.abbreviation ??
+                    (event.teams?.away?.name ?? "").slice(0, 3).toUpperCase(),
+                hasOdds: (event.odds ?? []).length > 0,
             };
         });
 };
 
-const normalizeAbbr = (team: OddsBlazeTeam) =>
-    team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
+const normalizeAbbr = (team?: OddsBlazeTeam | null) => {
+    if (!team) return "";
+    return team.abbreviation ?? (team.name ?? "").split(" ").map((part) => part[0]).join("").slice(0, 3);
+};
 
 const buildNflGameOptions = (
     snapshot: NFLSchedulesWithOdds[],
@@ -270,7 +272,7 @@ const buildNflGameOptions = (
 ): GameOption[] =>
     snapshot.map((event) => {
         const isCurrentlyActive = activeGameId && event.id === activeGameId;
-        const currentOdds = isCurrentlyActive ? odds : event.odds;
+        const currentOdds = (isCurrentlyActive ? odds : event.odds) ?? [];
 
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
@@ -282,15 +284,15 @@ const buildNflGameOptions = (
         return {
             id: event.id,
             game_id: event.id,
-            home_team: event.teams.home.name,
-            away_team: event.teams.away.name,
-            home_team_id: event.teams.home.id,
-            away_team_id: event.teams.away.id,
+            home_team: event.teams?.home?.name ?? "",
+            away_team: event.teams?.away?.name ?? "",
+            home_team_id: event.teams?.home?.id ?? "",
+            away_team_id: event.teams?.away?.id ?? "",
             date: event.date,
             live: event.live,
             odds: currentOdds,
-            home_abbr: normalizeAbbr(event.teams.home),
-            away_abbr: normalizeAbbr(event.teams.away),
+            home_abbr: normalizeAbbr(event.teams?.home),
+            away_abbr: normalizeAbbr(event.teams?.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
             hasOdds: currentOdds.length > 0,
@@ -305,12 +307,12 @@ const buildScheduleOptions = (
     const options: GameOption[] = [];
     snapshot.forEach((event) => {
         if (existingIds.has(event.id)) return;
-        const key = `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
+        const key = `${event.date}|${event.teams?.away?.id ?? ""}|${event.teams?.home?.id ?? ""}`;
         if (existingKeys.has(key)) return;
 
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
-        event.odds.forEach((odd) => {
+        (event.odds ?? []).forEach((odd) => {
             marketSet.add(odd.market);
             if (odd.player?.id) playerSet.add(odd.player.id);
         });
@@ -318,18 +320,18 @@ const buildScheduleOptions = (
         options.push({
             id: event.id,
             game_id: event.id,
-            home_team: event.teams.home.name,
-            away_team: event.teams.away.name,
-            home_team_id: event.teams.home.id,
-            away_team_id: event.teams.away.id,
+            home_team: event.teams?.home?.name ?? "",
+            away_team: event.teams?.away?.name ?? "",
+            home_team_id: event.teams?.home?.id ?? "",
+            away_team_id: event.teams?.away?.id ?? "",
             date: event.date,
             live: event.live,
-            odds: event.odds,
-            home_abbr: normalizeAbbr(event.teams.home),
-            away_abbr: normalizeAbbr(event.teams.away),
+            odds: event.odds ?? [],
+            home_abbr: normalizeAbbr(event.teams?.home),
+            away_abbr: normalizeAbbr(event.teams?.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
-            hasOdds: event.odds.length > 0,
+            hasOdds: (event.odds ?? []).length > 0,
         });
     });
     return options;
@@ -353,7 +355,7 @@ const buildMergedGameOptions = (
         existingIds
     );
     return [...oddsOptions, ...scheduleOptions].sort((a, b) =>
-        a.date.localeCompare(b.date)
+        (a.date ?? "").localeCompare(b.date ?? "")
     );
 };
 
@@ -380,7 +382,7 @@ const mergeNFLSchedules = (
 
     // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
     return Array.from(mergedMap.values()).sort((a, b) =>
-        a.date.localeCompare(b.date)
+        (a.date ?? "").localeCompare(b.date ?? "")
     );
 };
 
@@ -697,7 +699,7 @@ const compareNumbersDesc = (
 };
 
 const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
-    left.name.localeCompare(right.name);
+    (left.name ?? "").localeCompare(right.name ?? "");
 
 const LineScroller = ({
     lines,
@@ -1012,7 +1014,7 @@ const buildTdScorerTable = (odds: OddsBlazeOdd[], game: GameOption) => {
         const aValue = aPrice ?? Number.POSITIVE_INFINITY;
         const bValue = bPrice ?? Number.POSITIVE_INFINITY;
         if (aValue === bValue) {
-            return a.player.name.localeCompare(b.player.name);
+            return (a.player.name ?? "").localeCompare(b.player.name ?? "");
         }
         return aValue - bValue;
     });
@@ -1882,6 +1884,7 @@ export const NflPickBuilder = ({
                         matchup: matchup ?? undefined,
                         match_time: startTime,
                         sport: leg.sport,
+                        league: "NFL"
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
@@ -1960,6 +1963,7 @@ export const NflPickBuilder = ({
             matchup: selectedMatchup ?? undefined,
             match_time: activeGame?.date,
             sport: "NFL",
+            league: "NFL",
         };
     }, [
         selection.scope,
@@ -3835,7 +3839,7 @@ export const NflPickBuilder = ({
         odds.forEach((odd) => {
             if (!odd.player) return;
             const opponent =
-                odd.player.team.id === game.home_team_id ? game.away_team : game.home_team;
+                odd.player.team?.id === game.home_team_id ? game.away_team : game.home_team;
             const row = rows.get(odd.player.id) ?? {
                 player: odd.player,
                 team: odd.player.team,
@@ -3871,7 +3875,7 @@ export const NflPickBuilder = ({
                     (a, b) => lineRank(a.line) - lineRank(b.line)
                 ),
             }))
-            .sort((a, b) => a.player.name.localeCompare(b.player.name));
+            .sort((a, b) => (a.player.name ?? "").localeCompare(b.player.name ?? ""));
     };
 
     const renderPlayerOddsBoard = (rows: PlayerOddsRow[], _label: string) => {

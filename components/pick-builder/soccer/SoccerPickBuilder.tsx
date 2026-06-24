@@ -42,7 +42,7 @@ import { BuiltPickPayload, ConfidenceLevel, CurrentUser, DraftPick, Group, Leagu
 import { useIsMobile } from "@/lib/utils/helpers";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
-import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleRequest, soccerEnglandPremierLeaguePickValidateRequest, soccerGermanyBundesligaPickValidateRequest } from "@/lib/redux/slices/soccerSlice";
+import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerFIFAWorldCupOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerFIFAWorldCupOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerFIFAWorldCupScheduleByTimezoneRequest, fetchSoccerFIFAWorldCupScheduleRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleRequest, soccerEnglandPremierLeaguePickValidateRequest, soccerFIFAWorldCupPickValidateRequest, soccerGermanyBundesligaPickValidateRequest } from "@/lib/redux/slices/soccerSlice";
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
@@ -98,13 +98,13 @@ type OddsBlazeSnapshot = {
 type SoccerSnapshotWithOdds = {
     updated: string;
     league: LeagueObject;
-    events: SoccerSchedulesWithOdds[];
+    events?: SoccerSchedulesWithOdds[];
 };
 
 type SoccerSnapshot = {
     updated: string;
     league: LeagueObject;
-    events: SoccerSchedules[];
+    events?: SoccerSchedules[];
 };
 
 
@@ -172,8 +172,30 @@ type SpreadMarketSection = {
     emptyMessage?: string;
 };
 
+type PlayerPropRow = {
+    player: NonNullable<OddsObject["player"]>;
+    teamLabel: string;
+    overLines: Map<number, OddsObject>;
+    underLines: Map<number, OddsObject>;
+    overAvailableLines: number[];
+    underAvailableLines: number[];
+    overLineCount: number;
+    underLineCount: number;
+    highestLine: number | null;
+};
+
+type PlayerPropsMarketSection = {
+    key: string;
+    title: string;
+    kind: "playerProps";
+    rows: PlayerPropRow[];
+    hasOver: boolean;
+    hasUnder: boolean;
+};
+
 type MarketSection =
     | StandardMarketSection
+    | PlayerPropsMarketSection
     | TotalMarketSection
     | SpreadMarketSection;
 
@@ -213,11 +235,13 @@ type Props = {
 const LEAGUE_LABELS: Record<string, string> = {
     "England Premier League": "Premier League",
     "Germany Bundesliga": "Bundesliga",
+    "FIFA World Cup": "FIFA World Cup",
 };
 
 const SOCCER_LEAGUE_ORDER = [
     "England Premier League",
     "Germany Bundesliga",
+    "FIFA World Cup",
 ] as const;
 
 const MARKET_PREVIEW_LIMIT = 8;
@@ -238,6 +262,7 @@ const TAB_ORDER = [
     "TEAM_TOTALS",
     "PLAYER_PROPS",
     "FIRST_HALF",
+    "SECOND_HALF",
     "CORRECT_SCORE",
 ] as const;
 
@@ -248,6 +273,7 @@ const TAB_LABELS: Record<TabId, string> = {
     TEAM_TOTALS: "Team totals",
     PLAYER_PROPS: "Player props",
     FIRST_HALF: "1st half",
+    SECOND_HALF: "2nd half",
     CORRECT_SCORE: "Correct score",
 };
 
@@ -263,17 +289,44 @@ const TAB_MARKETS: Record<TabId, string[]> = {
         "Last Team To Score 3-Way",
         "Total Corners",
         "Total Corners Odd/Even",
+        "First Goalscorer",
+        "Total Cards",
     ],
-    TEAM_TOTALS: ["Team Total Goals"],
-    PLAYER_PROPS: ["Player Goals", "Player Shots", "Player Shots On Target"],
+    TEAM_TOTALS: ["Team Total Goals", "Team First Goalscorer"],
+    PLAYER_PROPS: [
+        "Player Shots",
+        "Player Goals",
+        "Player Assists",
+        "Player Goals + Assists",
+        "Player Cards",
+        "Player Shots On Target",
+        "Player Fouls Committed",
+        "Player Fouls Won",
+        "Player Offsides",
+        "Player Saves",
+        "Player Tackles",
+    ],
     FIRST_HALF: [
         "1st Half Moneyline 3-Way",
         "1st Half Both Teams To Score",
         "1st Half Total Goals",
         "1st Half Correct Score",
+        "1st Half Total Corners",
+        "1st Half Handicap Corners",
+        "1st Half Total Goals Odd/Even",
+        "1st Half Team Total Goals",
+    ],
+    SECOND_HALF: [
+        "2nd Half Moneyline 3-Way",
+        "2nd Half Handicap Corners",
+        "2nd Half Total Goals Odd/Even",
+        "2nd Half Total Corners",
+        "2nd Half Moneyline Corners 3-Way",
     ],
     CORRECT_SCORE: ["Correct Score"],
 };
+
+const PLAYER_PROPS_GRID_MARKETS = new Set(TAB_MARKETS.PLAYER_PROPS);
 
 const tabForOdd = (odd: OddsObject): TabId => {
     const entries = Object.entries(TAB_MARKETS) as [TabId, string[]][];
@@ -349,7 +402,7 @@ const mergeOddsSnapshots = (
     const mergedEvents = new Map<string, OddsData>();
 
     snapshots.forEach((snapshot) => {
-        snapshot.events.forEach((event) => {
+        (snapshot.events ?? []).forEach((event) => {
             // const key = eventKey(event);
             const key = event.id;
             const existing = mergedEvents.get(key);
@@ -357,7 +410,7 @@ const mergeOddsSnapshots = (
                 mergedEvents.set(key, {
                     ...event,
                     id: key,
-                    odds: dedupeOdds([...event.odds]),
+                    odds: dedupeOdds([...(event.odds ?? [])]),
                 });
                 return;
             }
@@ -365,7 +418,7 @@ const mergeOddsSnapshots = (
             mergedEvents.set(key, {
                 ...existing,
                 live: existing.live || event.live,
-                odds: dedupeOdds([...existing.odds, ...event.odds]),
+                odds: dedupeOdds([...(existing.odds ?? []), ...(event.odds ?? [])]),
             });
         });
     });
@@ -396,7 +449,7 @@ const mergeSoccerSchedules = (
             updated: allSchedules.updated,
             league: allSchedules.league,
             sportsbook: { id: "multi", name: "Multiple" },
-            events: allSchedules.events.map((event) => ({
+            events: (allSchedules.events ?? []).map((event) => ({
                 id: event.id,
                 teams: event.teams,
                 date: event.date,
@@ -411,7 +464,7 @@ const mergeSoccerSchedules = (
             updated: scheduledWithOdds.updated,
             league: scheduledWithOdds.league,
             sportsbook: { id: "multi", name: "Multiple" },
-            events: scheduledWithOdds.events.map((event) => ({
+            events: (scheduledWithOdds.events ?? []).map((event) => ({
                 id: event.id,
                 teams: event.teams,
                 date: event.date,
@@ -425,7 +478,7 @@ const mergeSoccerSchedules = (
     const mergedMap = new Map<string, OddsData>();
 
     // Rule 1: Use Matches with Odds First
-    scheduledWithOdds!.events.forEach((match) => {
+    scheduledWithOdds!.events?.forEach((match) => {
         mergedMap.set(match.id, {
             id: match.id,
             teams: match.teams,
@@ -436,7 +489,7 @@ const mergeSoccerSchedules = (
     });
 
     // Rule 2: Add Missing Matches
-    allSchedules!.events.forEach((match) => {
+    allSchedules!.events?.forEach((match) => {
         if (!mergedMap.has(match.id)) {
             mergedMap.set(match.id, {
                 id: match.id,
@@ -464,13 +517,17 @@ const tierNameFromIndex = (tier?: TierIndex) =>
 
 const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
 
-const normalizeAbbr = (team: OddsBlazeTeam) =>
-    team.abbreviation ??
-    team.name
-        .split(" ")
-        .map((part) => part[0])
-        .join("")
-        .slice(0, 3);
+const normalizeAbbr = (team?: OddsBlazeTeam | null) => {
+    if (!team) return "";
+    return (
+        team.abbreviation ??
+        (team.name ?? "")
+            .split(" ")
+            .map((part) => part[0])
+            .join("")
+            .slice(0, 3)
+    );
+};
 
 const buildGameOptions = (
     snapshot: SoccerOdds,
@@ -479,7 +536,7 @@ const buildGameOptions = (
 ): GameOption[] =>
     snapshot.events.map((event) => {
         const isCurrentlyActive = activeGameId && event.id === activeGameId;
-        let currentOdds = event.odds;
+        let currentOdds = event.odds ?? [];
 
         if (isCurrentlyActive && detailedOddsSnapshot) {
             const activeEvent = detailedOddsSnapshot.events.find((e) => e.id === event.id);
@@ -497,17 +554,17 @@ const buildGameOptions = (
 
         return {
             id: event.id,
-            leagueId: snapshot.league.id,
-            leagueName: snapshot.league.name,
-            homeTeam: event.teams.home.name,
-            awayTeam: event.teams.away.name,
-            homeTeamId: event.teams.home.id,
-            awayTeamId: event.teams.away.id,
+            leagueId: snapshot.league?.id ?? "",
+            leagueName: snapshot.league?.name ?? "",
+            homeTeam: event.teams?.home?.name ?? "",
+            awayTeam: event.teams?.away?.name ?? "",
+            homeTeamId: event.teams?.home?.id ?? "",
+            awayTeamId: event.teams?.away?.id ?? "",
             date: event.date,
             live: event.live,
             odds: currentOdds,
-            homeAbbr: normalizeAbbr(event.teams.home),
-            awayAbbr: normalizeAbbr(event.teams.away),
+            homeAbbr: normalizeAbbr(event.teams?.home),
+            awayAbbr: normalizeAbbr(event.teams?.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
             hasOdds: currentOdds.length > 0,
@@ -672,7 +729,7 @@ const buildPickDescription = (odd: OddsObject, game: GameOption) => {
 };
 
 const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMeta => {
-    const teamId = odd.player ? odd.player.team.id : teamIdFromOdd(odd, game);
+    const teamId = odd.player ? odd.player.team?.id : teamIdFromOdd(odd, game);
     const inferredTeamSide =
         !odd.player && !odd.selection?.side && teamId
             ? teamId === game.homeTeamId
@@ -698,7 +755,8 @@ const buildSelectionMeta = (odd: OddsObject, game: GameOption): PickSelectionMet
         external_pick_key: odd.id,
         matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
         match_date: game.date,
-        sport: "Soccer"
+        sport: "Soccer",
+        league: game.leagueName,
     };
 };
 
@@ -725,15 +783,96 @@ const findMatchingOdd = (games: GameOption[], pick?: Pick) => {
 
 const compareOddsByLine = (a: OddsObject, b: OddsObject) => {
     if (a.main !== b.main) return a.main ? -1 : 1;
-    const nameA = a.player?.name ?? a.selection?.name ?? a.name;
-    const nameB = b.player?.name ?? b.selection?.name ?? b.name;
+    const nameA = a.player?.name ?? a.selection?.name ?? a.name ?? "";
+    const nameB = b.player?.name ?? b.selection?.name ?? b.name ?? "";
     if (nameA !== nameB) return nameA.localeCompare(nameB);
     const lineA = a.selection?.line;
     const lineB = b.selection?.line;
     if (lineA !== undefined && lineB !== undefined && lineA !== lineB) {
         return lineA - lineB;
     }
-    return a.name.localeCompare(b.name);
+    return (a.name ?? "").localeCompare(b.name ?? "");
+};
+
+const buildPlayerPropRows = (
+    odds: OddsObject[],
+    game: GameOption
+): { rows: PlayerPropRow[]; hasOver: boolean; hasUnder: boolean } => {
+    const rowMap = new Map<string, PlayerPropRow>();
+    let hasOver = false;
+    let hasUnder = false;
+
+    // `odds` arrives pre-sorted by compareOddsByLine (main first), so the
+    // first odd kept for a given line is the preferred/main one.
+    odds.forEach((odd) => {
+        const player = odd.player;
+        const line = odd.selection?.line;
+        if (!player || line === undefined) return;
+
+        const side =
+            odd.selection?.side?.toLowerCase() === "under" ? "under" : "over";
+
+        if (!rowMap.has(player.id)) {
+            rowMap.set(player.id, {
+                player,
+                teamLabel: playerTeamLabel(player, game),
+                overLines: new Map<number, OddsObject>(),
+                underLines: new Map<number, OddsObject>(),
+                overAvailableLines: [],
+                underAvailableLines: [],
+                overLineCount: 0,
+                underLineCount: 0,
+                highestLine: null,
+            });
+        }
+
+        const row = rowMap.get(player.id);
+        if (!row) return;
+
+        if (side === "under") {
+            if (!row.underLines.has(line)) row.underLines.set(line, odd);
+            hasUnder = true;
+        } else {
+            if (!row.overLines.has(line)) row.overLines.set(line, odd);
+            hasOver = true;
+        }
+    });
+
+    const rows = [...rowMap.values()]
+        .map((row) => {
+            const overAvailableLines = [...row.overLines.keys()].sort(
+                (a, b) => a - b
+            );
+            const underAvailableLines = [...row.underLines.keys()].sort(
+                (a, b) => a - b
+            );
+            const highestLine = [
+                ...overAvailableLines,
+                ...underAvailableLines,
+            ].reduce<number | null>(
+                (max, value) => (max === null || value > max ? value : max),
+                null
+            );
+            return {
+                ...row,
+                overAvailableLines,
+                underAvailableLines,
+                overLineCount: overAvailableLines.length,
+                underLineCount: underAvailableLines.length,
+                highestLine,
+            };
+        })
+        .sort((left, right) => {
+            const leftHighest = left.highestLine ?? Number.NEGATIVE_INFINITY;
+            const rightHighest = right.highestLine ?? Number.NEGATIVE_INFINITY;
+            if (leftHighest !== rightHighest) return rightHighest - leftHighest;
+            const leftCount = left.overLineCount + left.underLineCount;
+            const rightCount = right.overLineCount + right.underLineCount;
+            if (leftCount !== rightCount) return rightCount - leftCount;
+            return (left.player.name ?? "").localeCompare(right.player.name ?? "");
+        });
+
+    return { rows, hasOver, hasUnder };
 };
 
 const formatNumberLine = (line?: number) => {
@@ -963,10 +1102,14 @@ export const SoccerPickBuilder = ({
     const { setToast } = useToast();
     const [activeTab, setActiveTab] = useState<TabId>("GAME_LINES");
     const [activeGameId, setActiveGameId] = useState<string | null>(null);
+    const tabStripRef = useRef<HTMLDivElement | null>(null);
     const [expandedCategoryRows, setExpandedCategoryRows] = useState<
         Record<string, boolean>
     >({});
     const [selected, setSelected] = useState<SelectedOddState | null>(null);
+    const [playerPropSides, setPlayerPropSides] = useState<
+        Record<string, "over" | "under">
+    >({});
     const [localCollapsedSections, setLocalCollapsedSections] = useState<
         Record<string, boolean>
     >({});
@@ -1018,17 +1161,20 @@ export const SoccerPickBuilder = ({
         reviewTierScoringMode === "leagueLeaderboard" ? "league" : "default";
     const showReviewTierCards = confirmationVariant !== "slip" || slip.isGraded;
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
-    const [soccerMatchSchedules, setSoccerMatchSchedules] = useState<SoccerSchedulesWithOdds[]>([]);
 
     const {
         englandPremierLeagueSchedulesWithOdds,
         englandPremierLeagueSchedules,
         germanyBundesligaSchedulesWithOdds,
         germanyBundesligaSchedules,
+        fifaWorldCupSchedulesWithOdds,
+        fifaWorldCupSchedules,
         fanduelEnglandPremierLeagueOdds,
         draftkingEnglandPremierLeagueOdds,
         fanduelGermanyBundesligaOdds,
         draftkingGermanyBundesligaOdds,
+        fanduelFifaWorldCupOdds,
+        draftkingFifaWorldCupOdds,
         oddsLoading,
         loading
     } = useSelector((state: RootState) => state.soccer);
@@ -1036,16 +1182,16 @@ export const SoccerPickBuilder = ({
     useEffect(() => {
         dispatch(fetchSoccerEnglandPremierLeagueScheduleRequest({ is_pick_of_day: true, is_range: false }));
         dispatch(fetchSoccerGermanyBundesligaScheduleRequest({ is_pick_of_day: true, is_range: false }));
+        dispatch(fetchSoccerFIFAWorldCupScheduleRequest({ is_pick_of_day: true, is_range: false }));
     }, [dispatch]);
 
     useEffect(() => {
         if (activeDateKey) {
             dispatch(fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
             dispatch(fetchSoccerGermanyBundesligaScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
+            dispatch(fetchSoccerFIFAWorldCupScheduleByTimezoneRequest({ date: activeDateKey, is_pick_of_day: true, is_range: false }));
         }
     }, [dispatch, activeDateKey]);
-
-
 
     const mergedEPLOdds = useMemo(
         () => mergeOddsSnapshots(fanduelEnglandPremierLeagueOdds, draftkingEnglandPremierLeagueOdds),
@@ -1055,6 +1201,11 @@ export const SoccerPickBuilder = ({
     const mergedBundesligaOdds = useMemo(
         () => mergeOddsSnapshots(fanduelGermanyBundesligaOdds, draftkingGermanyBundesligaOdds),
         [fanduelGermanyBundesligaOdds, draftkingGermanyBundesligaOdds]
+    );
+
+    const mergedFIFAOdds = useMemo(
+        () => mergeOddsSnapshots(fanduelFifaWorldCupOdds, draftkingFifaWorldCupOdds),
+        [fanduelFifaWorldCupOdds, draftkingFifaWorldCupOdds]
     );
 
     const resolveTierMetaForOdds = useCallback(
@@ -1082,6 +1233,10 @@ export const SoccerPickBuilder = ({
             germanyBundesligaSchedulesWithOdds,
             germanyBundesligaSchedules
         );
+        const fifaSnapshot = mergeSoccerSchedules(
+            fifaWorldCupSchedulesWithOdds,
+            fifaWorldCupSchedules
+        );
 
         const eplOptions = buildGameOptions(eplSnapshot, mergedEPLOdds, activeGameId);
         const bundesligaOptions = buildGameOptions(
@@ -1089,8 +1244,13 @@ export const SoccerPickBuilder = ({
             mergedBundesligaOdds,
             activeGameId
         );
+        const fifaOptions = buildGameOptions(
+            fifaSnapshot,
+            mergedFIFAOdds,
+            activeGameId
+        );
 
-        return [...eplOptions, ...bundesligaOptions].sort((a, b) => {
+        return [...fifaOptions, ...eplOptions, ...bundesligaOptions].sort((a, b) => {
             const timeDiff = a.date.localeCompare(b.date);
             if (timeDiff !== 0) return timeDiff;
             const leagueDiff =
@@ -1104,8 +1264,11 @@ export const SoccerPickBuilder = ({
         englandPremierLeagueSchedules,
         germanyBundesligaSchedulesWithOdds,
         germanyBundesligaSchedules,
+        fifaWorldCupSchedulesWithOdds,
+        fifaWorldCupSchedules,
         mergedEPLOdds,
         mergedBundesligaOdds,
+        mergedFIFAOdds,
         activeGameId,
     ]);
 
@@ -1228,6 +1391,26 @@ export const SoccerPickBuilder = ({
         [activeGameId, visibleGames]
     );
 
+    // Auto-scroll the active market tab to the center of its horizontal strip.
+    useEffect(() => {
+        const scroller = tabStripRef.current;
+        if (!scroller || !activeGame) return;
+        const frame = requestAnimationFrame(() => {
+            const target = scroller.querySelector<HTMLButtonElement>(
+                `[data-tab="${activeTab}"]`
+            );
+            if (!target) return;
+            const targetRect = target.getBoundingClientRect();
+            const scrollerRect = scroller.getBoundingClientRect();
+            const nextLeft =
+                scroller.scrollLeft +
+                (targetRect.left - scrollerRect.left) -
+                (scroller.clientWidth - targetRect.width) / 2;
+            scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+        });
+        return () => cancelAnimationFrame(frame);
+    }, [activeTab, activeGame]);
+
     const groupedGames = useMemo(
         () =>
             SOCCER_LEAGUE_ORDER.map((leagueName) => ({
@@ -1333,6 +1516,7 @@ export const SoccerPickBuilder = ({
                         home_team: game?.homeTeam,
                         home_abbr: game?.homeAbbr,
                         sport: leg.sport,
+                        league: game?.leagueName,
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,
@@ -1878,6 +2062,8 @@ export const SoccerPickBuilder = ({
                     dispatch(soccerEnglandPremierLeaguePickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
                 } else if (game.id && odd.id && game.leagueName === "Germany Bundesliga") {
                     dispatch(soccerGermanyBundesligaPickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
+                } else if (game.id && odd.id && game.leagueName === "FIFA World Cup") {
+                    dispatch(soccerFIFAWorldCupPickValidateRequest({ match_id: game.id, external_pick_key: odd.id, is_live: game.live }));
                 }
             }
             if (existingLeg) {
@@ -2298,6 +2484,139 @@ export const SoccerPickBuilder = ({
         );
     };
 
+    const getPlayerPropSide = (key: string, hasOver: boolean): "over" | "under" =>
+        playerPropSides[key] ?? (hasOver ? "over" : "under");
+
+    const setPlayerPropSide = (key: string, side: "over" | "under") =>
+        setPlayerPropSides((prev) => ({ ...prev, [key]: side }));
+
+    const renderPlayerPropsTable = (section: PlayerPropsMarketSection) => {
+        if (!activeGame) return null;
+        if (section.rows.length === 0) return null;
+
+        const activeSide = getPlayerPropSide(section.key, section.hasOver);
+        const showSideToggle = section.hasOver && section.hasUnder;
+        const { rows: visibleRows } = getVisibleCategoryRows(
+            section.rows,
+            section.key
+        );
+        const columnTemplate = "minmax(112px,150px) minmax(0,1fr)";
+
+        return (
+            <div className="mt-4 -mx-5 sm:-mx-6">
+                <div className="text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                    <div
+                        className="grid items-center gap-3 border-b border-white/10 px-5 text-xs uppercase tracking-wide text-gray-400 sm:px-6"
+                        style={{ gridTemplateColumns: columnTemplate }}
+                    >
+                        <div className="pl-0 pr-3 py-2">Player</div>
+                        <div className="flex items-center justify-between gap-3 py-2">
+                            <span>Available lines</span>
+                            {showSideToggle ? (
+                                <div className="inline-flex rounded-full border border-white/10 bg-black/50 p-1">
+                                    {(["over", "under"] as const).map((side) => {
+                                        const isActive = side === activeSide;
+                                        return (
+                                            <button
+                                                key={`${section.key}-${side}`}
+                                                type="button"
+                                                onClick={() =>
+                                                    setPlayerPropSide(section.key, side)
+                                                }
+                                                className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${isActive
+                                                    ? "bg-sky-500/20 text-sky-100"
+                                                    : "text-slate-300 hover:text-white"
+                                                    }`}
+                                            >
+                                                {side}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    {visibleRows.map((row, rowIndex) => {
+                        const rowBand =
+                            rowIndex % 2 === 1 ? "bg-white/[0.02]" : "bg-transparent";
+                        const availableLines =
+                            activeSide === "under"
+                                ? row.underAvailableLines
+                                : row.overAvailableLines;
+                        const lineMap =
+                            activeSide === "under" ? row.underLines : row.overLines;
+                        const lineCount = availableLines.length;
+                        const lineCountLabel = `${lineCount} line${lineCount === 1 ? "" : "s"}`;
+
+                        return (
+                            <div
+                                key={`${section.key}-${row.player.id}`}
+                                className={`grid items-center gap-3 border-b border-white/5 px-5 py-3 sm:px-6 ${rowBand}`}
+                                style={{ gridTemplateColumns: columnTemplate }}
+                            >
+                                <div className="flex min-h-[56px] min-w-0 flex-col justify-center pr-1">
+                                    <p className="text-[13px] font-semibold leading-tight text-white sm:text-sm">
+                                        {row.player.name}
+                                    </p>
+                                    <p className="mt-1 text-[11px] leading-tight text-gray-400 sm:text-xs">
+                                        {row.teamLabel}
+                                        {row.teamLabel ? " · " : ""}
+                                        {lineCountLabel}
+                                    </p>
+                                </div>
+
+                                <div className="relative min-w-0 overflow-hidden rounded-2xl">
+                                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-4 bg-gradient-to-r from-black/90 to-transparent" />
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-4 bg-gradient-to-l from-black/90 to-transparent" />
+                                    <div className="scrollbar-hide flex gap-2 overflow-x-auto px-1 py-1">
+                                        {availableLines.map((line) => {
+                                            const odd = lineMap.get(line);
+                                            const selectedState = isOddSelected(odd);
+                                            const oddsLabel = odd
+                                                ? formatOdds(odd.price)
+                                                : "-";
+                                            return (
+                                                <button
+                                                    key={`${row.player.id}-${activeSide}-${line}`}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        odd && handleSelectOdd(odd, activeGame)
+                                                    }
+                                                    disabled={!odd || locked}
+                                                    className={`${tableOddsBoxClasses(
+                                                        selectedState,
+                                                        !odd
+                                                    )} ${!odd ? "cursor-not-allowed" : ""}`}
+                                                >
+                                                    <div className="flex flex-col items-center leading-tight">
+                                                        <span
+                                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-white" : "text-gray-500"
+                                                                }`}
+                                                        >
+                                                            {formatNumberLine(line)}
+                                                        </span>
+                                                        <span
+                                                            className={`whitespace-nowrap text-[10px] sm:text-xs ${odd ? "text-sky-100" : "text-gray-500"
+                                                                }`}
+                                                        >
+                                                            {oddsLabel}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                {renderCategoryRowsToggle(section.key, section.rows.length)}
+            </div>
+        );
+    };
+
     const renderTotalLineSection = (
         sectionKey: string,
         lineData: { lines: number[]; map: Map<number, TotalLineEntry> },
@@ -2500,6 +2819,32 @@ export const SoccerPickBuilder = ({
                     return teamSections;
                 }
 
+                if (PLAYER_PROPS_GRID_MARKETS.has(market)) {
+                    const { rows, hasOver, hasUnder } = buildPlayerPropRows(
+                        marketOdds,
+                        activeGame
+                    );
+                    // Only use the scrollable grid when at least one player has
+                    // more than one line to scroll through. Single-line markets
+                    // (e.g. Player Assists, Player Cards, outright-style props)
+                    // fall through to the simple one-row-per-selection table.
+                    const hasMultiLinePlayer = rows.some(
+                        (row) => row.overLineCount > 1 || row.underLineCount > 1
+                    );
+                    if (rows.length > 0 && hasMultiLinePlayer) {
+                        return [
+                            {
+                                key: `${activeGame.id}:${market}`,
+                                title: market,
+                                kind: "playerProps",
+                                rows,
+                                hasOver,
+                                hasUnder,
+                            } satisfies PlayerPropsMarketSection,
+                        ];
+                    }
+                }
+
                 const rows = marketOdds.map((odd) => {
                     const copy = buildRowCopy(odd, activeGame);
                     return {
@@ -2521,7 +2866,9 @@ export const SoccerPickBuilder = ({
                 ];
             })
             .filter((section) =>
-                section.kind === "standard" ? section.rows.length > 0 : true
+                section.kind === "standard" || section.kind === "playerProps"
+                    ? section.rows.length > 0
+                    : true
             );
     }, [activeGame, activeTab]);
 
@@ -2535,6 +2882,9 @@ export const SoccerPickBuilder = ({
             } else if (game.leagueName === "Germany Bundesliga") {
                 dispatch(fetchFanduelSoccerGermanyBundesligaOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
                 dispatch(fetchDraftkingsSoccerGermanyBundesligaOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+            } else if (game.leagueName === "FIFA World Cup") {
+                dispatch(fetchFanduelSoccerFIFAWorldCupOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
+                dispatch(fetchDraftkingsSoccerFIFAWorldCupOddsRequest({ match_id: game.id, is_live: game.live, silent: false }));
             }
         }
         setActiveTab("GAME_LINES");
@@ -2825,7 +3175,14 @@ export const SoccerPickBuilder = ({
                                 &larr; back to all matchups
                             </button>
                             <p className="text-xs text-gray-500">
-                                Updated {activeGame.leagueName === "england-premier-league" ? formatDateTime(englandPremierLeagueSchedulesWithOdds?.updated) : formatDateTime(germanyBundesligaSchedulesWithOdds?.updated)}
+                                Updated : {" "}
+                                {
+                                    activeGame.leagueName === "England Premier League"
+                                        ? formatDateTime(englandPremierLeagueSchedulesWithOdds?.updated)
+                                        : activeGame.leagueName === "FIFA World Cup"
+                                            ? formatDateTime(fifaWorldCupSchedulesWithOdds?.updated)
+                                            : formatDateTime(germanyBundesligaSchedulesWithOdds?.updated)
+                                }
                             </p>
                         </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -2841,13 +3198,17 @@ export const SoccerPickBuilder = ({
                                 </p>
                             </div>
                         </div>
-                        <div className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0">
+                        <div
+                            ref={tabStripRef}
+                            className="scrollbar-hide -mx-5 mt-4 flex gap-3 overflow-x-auto border-b border-white/10 px-5 pb-2 sm:mx-0 sm:px-0"
+                        >
                             {TAB_ORDER.map((tab) => {
                                 const active = tab === activeTab;
                                 return (
                                     <button
                                         key={tab}
                                         type="button"
+                                        data-tab={tab}
                                         onClick={() => setActiveTab(tab)}
                                         className={`whitespace-nowrap border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition ${active
                                             ? "border-sky-300 text-sky-100"
@@ -2913,6 +3274,8 @@ export const SoccerPickBuilder = ({
                                                             );
                                                         })()}
                                                     </>
+                                                ) : section.kind === "playerProps" ? (
+                                                    renderPlayerPropsTable(section)
                                                 ) : section.kind === "spread" ? (
                                                     renderSpreadLineSection(section.key, section.lineData, {
                                                         emptyMessage: section.emptyMessage,

@@ -1574,6 +1574,12 @@ export type FetchSoccerGermanyBundesligaSchedulePayload = {
     is_range: boolean;
 };
 
+export type FetchSoccerFIFAWorldCupSchedulePayload = {
+    is_pick_of_day: boolean;
+    date?: string;
+    is_range: boolean;
+};
+
 export type FetchMLBSchedulePayload = {
     is_pick_of_day: boolean;
     date?: string;
@@ -1610,6 +1616,11 @@ export type FetchSoccerEnglandPremierLeagueOddsPayload = {
 };
 
 export type FetchSoccerGermanyBundesligaOddsPayload = {
+    match_id: string;
+    is_live: boolean;
+};
+
+export type FetchSoccerFIFAWorldCupOddsPayload = {
     match_id: string;
     is_live: boolean;
 };
@@ -1664,6 +1675,12 @@ export type ValidateMySoccerEnglandPremierLeaguePickPayload = {
 };
 
 export type ValidateMySoccerGermanyBundesligaPickPayload = {
+    external_pick_key: string;
+    match_id: string;
+    is_live: boolean;
+};
+
+export type ValidateMySoccerFIFAWorldCupPickPayload = {
     external_pick_key: string;
     match_id: string;
     is_live: boolean;
@@ -2200,10 +2217,22 @@ export type SoccerState = {
         league: LeagueObject;
         events: SoccerSchedules[];
     } | null,
+    fifaWorldCupSchedulesWithOdds: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedulesWithOdds[];
+    } | null,
+    fifaWorldCupSchedules: {
+        updated: string;
+        league: LeagueObject;
+        events: SoccerSchedules[];
+    } | null,
     fanduelEnglandPremierLeagueOdds: SoccerOdds | null;
     draftkingEnglandPremierLeagueOdds: SoccerOdds | null;
     fanduelGermanyBundesligaOdds: SoccerOdds | null;
     draftkingGermanyBundesligaOdds: SoccerOdds | null;
+    fanduelFifaWorldCupOdds: SoccerOdds | null;
+    draftkingFifaWorldCupOdds: SoccerOdds | null;
     loading: boolean;
     error: string | null;
     message: string | null;
@@ -2257,6 +2286,7 @@ export type PickSelectionMeta = {
     matchup?: string;
     match_date?: string;
     external_pick_key?: string;
+    league?: string;
 };
 
 export type PickLeg = {

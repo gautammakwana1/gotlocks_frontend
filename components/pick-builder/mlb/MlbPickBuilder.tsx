@@ -476,8 +476,10 @@ const tierLabelFromTier = (tier?: TierIndex) => tierNameFromIndex(tier);
 
 const CATEGORY_ROW_PREVIEW_LIMIT = 5;
 
-const normalizeAbbr = (team: OddsBlazeTeam) =>
-    team.abbreviation ?? team.name.split(" ").map((part) => part[0]).join("").slice(0, 3);
+const normalizeAbbr = (team?: OddsBlazeTeam | null) => {
+    if (!team) return "";
+    return team.abbreviation ?? (team.name ?? "").split(" ").map((part) => part[0]).join("").slice(0, 3);
+};
 
 const buildGameOptions = (
     snapshot: MLBSchedulesWithOdds[],
@@ -486,7 +488,7 @@ const buildGameOptions = (
 ): GameOption[] =>
     snapshot.map((event) => {
         const isCurrentlyActive = activeGameId && event.id === activeGameId;
-        const currentOdds = isCurrentlyActive ? odds : event.odds;
+        const currentOdds = (isCurrentlyActive ? odds : event.odds) ?? [];
 
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
@@ -498,15 +500,15 @@ const buildGameOptions = (
         return {
             id: event.id,
             startTime: event.date,
-            homeTeam: event.teams.home.name,
-            awayTeam: event.teams.away.name,
-            homeTeamId: event.teams.home.id,
-            awayTeamId: event.teams.away.id,
+            homeTeam: event.teams?.home?.name ?? "",
+            awayTeam: event.teams?.away?.name ?? "",
+            homeTeamId: event.teams?.home?.id ?? "",
+            awayTeamId: event.teams?.away?.id ?? "",
             date: event.date,
             live: event.live,
             odds: currentOdds,
-            homeAbbr: normalizeAbbr(event.teams.home),
-            awayAbbr: normalizeAbbr(event.teams.away),
+            homeAbbr: normalizeAbbr(event.teams?.home),
+            awayAbbr: normalizeAbbr(event.teams?.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
             hasOdds: currentOdds.length > 0,
@@ -521,30 +523,30 @@ const buildScheduleOptions = (
     const options: GameOption[] = [];
     snapshot.forEach((event) => {
         if (existingIds.has(event.id)) return;
-        const key = `${event.date}|${event.teams.away.id}|${event.teams.home.id}`;
+        const key = `${event.date}|${event.teams?.away?.id ?? ""}|${event.teams?.home?.id ?? ""}`;
         if (existingKeys.has(key)) return;
 
         const marketSet = new Set<string>();
         const playerSet = new Set<string>();
-        event.odds.forEach((odd) => {
+        (event.odds ?? []).forEach((odd) => {
             marketSet.add(odd.market);
             if (odd.player?.id) playerSet.add(odd.player.id);
         });
 
         options.push({
             id: event.id,
-            homeTeam: event.teams.home.name,
-            awayTeam: event.teams.away.name,
-            homeTeamId: event.teams.home.id,
-            awayTeamId: event.teams.away.id,
+            homeTeam: event.teams?.home?.name ?? "",
+            awayTeam: event.teams?.away?.name ?? "",
+            homeTeamId: event.teams?.home?.id ?? "",
+            awayTeamId: event.teams?.away?.id ?? "",
             date: event.date,
             live: event.live,
-            odds: event.odds,
-            homeAbbr: normalizeAbbr(event.teams.home),
-            awayAbbr: normalizeAbbr(event.teams.away),
+            odds: event.odds ?? [],
+            homeAbbr: normalizeAbbr(event.teams?.home),
+            awayAbbr: normalizeAbbr(event.teams?.away),
             marketCount: marketSet.size,
             propCount: playerSet.size,
-            hasOdds: event.odds.length > 0,
+            hasOdds: (event.odds ?? []).length > 0,
         });
     });
     return options;
@@ -568,7 +570,7 @@ const buildMergedGameOptions = (
         existingIds
     );
     return [...oddsOptions, ...scheduleOptions].sort((a, b) =>
-        a.date.localeCompare(b.date)
+        (a.date ?? "").localeCompare(b.date ?? "")
     );
 };
 
@@ -595,7 +597,7 @@ const mergeMLBSchedules = (
 
     // Rule 3: Avoid Duplicate Matches - Map based approach ensures this
     return Array.from(mergedMap.values()).sort((a, b) =>
-        a.date.localeCompare(b.date)
+        (a.date ?? "").localeCompare(b.date ?? "")
     );
 };
 
@@ -736,7 +738,7 @@ const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
     if (odd.market.includes("Run Line")) {
         const team = odd.selection?.name ?? odd.name;
         const spread =
-            line !== undefined ? `${line > 0 ? "+" : ""}${line}` : odd.name.replace(team, "");
+            line !== undefined ? `${line > 0 ? "+" : ""}${line}` : (odd.name ?? "").replace(team, "");
         return `${team} ${spread} ${odd.market}`.trim();
     }
     if (odd.market.includes("Team Total Runs")) {
@@ -767,7 +769,7 @@ const buildPickDescription = (odd: OddsBlazeOdd, game: GameOption) => {
 };
 
 const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionMeta => {
-    const teamId = odd.player ? odd.player.team.id : teamIdFromOdd(odd, game);
+    const teamId = odd.player ? odd.player.team?.id : teamIdFromOdd(odd, game);
     const inferredTeamSide =
         !odd.player && !odd.selection?.side && teamId
             ? teamId === game.homeTeamId
@@ -793,7 +795,8 @@ const buildSelectionMeta = (odd: OddsBlazeOdd, game: GameOption): PickSelectionM
         external_pick_key: odd.id,
         matchup: game.awayTeam && game.homeTeam ? `${game.awayTeam} @ ${game.homeTeam}` : matchupLabel(game),
         match_date: game.date,
-        sport: "MLB"
+        sport: "MLB",
+        league: "MLB",
     }
 };
 
@@ -831,15 +834,15 @@ const compareOddsByLine = (a: SelectedOdd, b: SelectedOdd) => {
     const timeDiff =
         new Date(a.game.date).getTime() - new Date(b.game.date).getTime();
     if (timeDiff !== 0) return timeDiff;
-    const nameA = a.odd.player?.name ?? a.odd.selection?.name ?? a.odd.name;
-    const nameB = b.odd.player?.name ?? b.odd.selection?.name ?? b.odd.name;
+    const nameA = a.odd.player?.name ?? a.odd.selection?.name ?? a.odd.name ?? "";
+    const nameB = b.odd.player?.name ?? b.odd.selection?.name ?? b.odd.name ?? "";
     if (nameA !== nameB) return nameA.localeCompare(nameB);
     const lineA = a.odd.selection?.line;
     const lineB = b.odd.selection?.line;
     if (lineA !== undefined && lineB !== undefined && lineA !== lineB) {
         return lineA - lineB;
     }
-    return a.odd.name.localeCompare(b.odd.name);
+    return (a.odd.name ?? "").localeCompare(b.odd.name ?? "");
 };
 
 const matchesTeamName = (odd: OddsBlazeOdd, teamName: string) => {
@@ -896,7 +899,7 @@ const compareNumbersDesc = (
 };
 
 const comparePlayerNames = (left: OddsBlazePlayer, right: OddsBlazePlayer) =>
-    left.name.localeCompare(right.name);
+    (left.name ?? "").localeCompare(right.name ?? "");
 
 const STICKY_COLUMN_BASE_CLASSES =
     "relative sticky left-0 before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-5 before:bg-[#030303] before:content-[''] after:pointer-events-none after:absolute after:inset-y-0 after:left-full after:w-8 after:bg-gradient-to-r after:to-transparent after:content-[''] sm:before:w-6 sm:after:w-10";
@@ -1842,6 +1845,7 @@ export const MlbPickBuilder = ({
                         home_team: game?.homeTeam,
                         home_abbr: game?.homeAbbr,
                         sport: leg.sport,
+                        league: "MLB",
                     },
                     difficulty_label: difficultyLabel,
                     difficulty_tier: tierMeta?.tier,

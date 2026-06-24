@@ -4,8 +4,8 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { FetchSoccerEnglandPremierLeagueOddsPayload, FetchSoccerEnglandPremierLeagueSchedulePayload, FetchSoccerGermanyBundesligaSchedulePayload, ValidateMySoccerEnglandPremierLeaguePickPayload } from "@/lib/interfaces/interfaces";
-import { fetchDraftkingsSoccerEnglandPremierLeagueOddsFailure, fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerEnglandPremierLeagueOddsSuccess, fetchDraftkingsSoccerGermanyBundesligaOddsFailure, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsSuccess, fetchFanduelSoccerEnglandPremierLeagueOddsFailure, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsSuccess, fetchFanduelSoccerGermanyBundesligaOddsFailure, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsSuccess, fetchSoccerEnglandPremierLeagueScheduleByTimezoneFailure, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneSuccess, fetchSoccerEnglandPremierLeagueScheduleFailure, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerEnglandPremierLeagueScheduleSuccess, fetchSoccerGermanyBundesligaScheduleByTimezoneFailure, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneSuccess, fetchSoccerGermanyBundesligaScheduleFailure, fetchSoccerGermanyBundesligaScheduleRequest, fetchSoccerGermanyBundesligaScheduleSuccess, soccerEnglandPremierLeaguePickValidateFailure, soccerEnglandPremierLeaguePickValidateRequest, soccerEnglandPremierLeaguePickValidateSuccess, soccerGermanyBundesligaPickValidateFailure, soccerGermanyBundesligaPickValidateRequest, soccerGermanyBundesligaPickValidateSuccess } from "../slices/soccerSlice";
+import { FetchSoccerEnglandPremierLeagueOddsPayload, FetchSoccerEnglandPremierLeagueSchedulePayload, FetchSoccerFIFAWorldCupOddsPayload, FetchSoccerFIFAWorldCupSchedulePayload, FetchSoccerGermanyBundesligaSchedulePayload, ValidateMySoccerEnglandPremierLeaguePickPayload, ValidateMySoccerFIFAWorldCupPickPayload } from "@/lib/interfaces/interfaces";
+import { fetchDraftkingsSoccerEnglandPremierLeagueOddsFailure, fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSoccerEnglandPremierLeagueOddsSuccess, fetchDraftkingsSoccerFIFAWorldCupOddsFailure, fetchDraftkingsSoccerFIFAWorldCupOddsRequest, fetchDraftkingsSoccerFIFAWorldCupOddsSuccess, fetchDraftkingsSoccerGermanyBundesligaOddsFailure, fetchDraftkingsSoccerGermanyBundesligaOddsRequest, fetchDraftkingsSoccerGermanyBundesligaOddsSuccess, fetchFanduelSoccerEnglandPremierLeagueOddsFailure, fetchFanduelSoccerEnglandPremierLeagueOddsRequest, fetchFanduelSoccerEnglandPremierLeagueOddsSuccess, fetchFanduelSoccerFIFAWorldCupOddsFailure, fetchFanduelSoccerFIFAWorldCupOddsRequest, fetchFanduelSoccerFIFAWorldCupOddsSuccess, fetchFanduelSoccerGermanyBundesligaOddsFailure, fetchFanduelSoccerGermanyBundesligaOddsRequest, fetchFanduelSoccerGermanyBundesligaOddsSuccess, fetchSoccerEnglandPremierLeagueScheduleByTimezoneFailure, fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest, fetchSoccerEnglandPremierLeagueScheduleByTimezoneSuccess, fetchSoccerEnglandPremierLeagueScheduleFailure, fetchSoccerEnglandPremierLeagueScheduleRequest, fetchSoccerEnglandPremierLeagueScheduleSuccess, fetchSoccerFIFAWorldCupScheduleByTimezoneFailure, fetchSoccerFIFAWorldCupScheduleByTimezoneRequest, fetchSoccerFIFAWorldCupScheduleByTimezoneSuccess, fetchSoccerFIFAWorldCupScheduleFailure, fetchSoccerFIFAWorldCupScheduleRequest, fetchSoccerFIFAWorldCupScheduleSuccess, fetchSoccerGermanyBundesligaScheduleByTimezoneFailure, fetchSoccerGermanyBundesligaScheduleByTimezoneRequest, fetchSoccerGermanyBundesligaScheduleByTimezoneSuccess, fetchSoccerGermanyBundesligaScheduleFailure, fetchSoccerGermanyBundesligaScheduleRequest, fetchSoccerGermanyBundesligaScheduleSuccess, soccerEnglandPremierLeaguePickValidateFailure, soccerEnglandPremierLeaguePickValidateRequest, soccerEnglandPremierLeaguePickValidateSuccess, soccerFIFAWorldCupPickValidateFailure, soccerFIFAWorldCupPickValidateRequest, soccerFIFAWorldCupPickValidateSuccess, soccerGermanyBundesligaPickValidateFailure, soccerGermanyBundesligaPickValidateRequest, soccerGermanyBundesligaPickValidateSuccess } from "../slices/soccerSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -199,6 +199,95 @@ function* handleValidateSoccerGermanyBundesligaPick(action: PayloadAction<Valida
     }
 };
 
+// FIFA World Cup
+function* handleFetchFanduelSoccerFifaWorldCupSchedule(action: PayloadAction<FetchSoccerFIFAWorldCupSchedulePayload | undefined>): SagaIterator {
+    try {
+        const { is_pick_of_day, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/soccer/fifa-world-cup-schedules-with-odds-fanduel`,
+            {
+                params: { is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchSoccerFIFAWorldCupScheduleSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchSoccerFIFAWorldCupScheduleFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+};
+
+function* handleFetchFanduelSoccerFifaWorldCupScheduleByTimezone(action: PayloadAction<FetchSoccerFIFAWorldCupSchedulePayload | undefined>): SagaIterator {
+    try {
+        const { is_pick_of_day, date } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/soccer/fifa-world-cup-schedules-for-all-tz`,
+            {
+                params: { is_pick_of_day, date },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchSoccerFIFAWorldCupScheduleByTimezoneSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchSoccerFIFAWorldCupScheduleByTimezoneFailure(getErrorMessage(error, "Schedules Fetch Failed")));
+    }
+};
+
+function* handleFetchFanduelSoccerFifaWorldCupOdds(action: PayloadAction<FetchSoccerFIFAWorldCupOddsPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, is_live } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/soccer/fifa-world-cup-odds-fanduel`,
+            {
+                params: { match_id, is_live },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchFanduelSoccerFIFAWorldCupOddsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchFanduelSoccerFIFAWorldCupOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+    }
+};
+
+function* handleFetchDraftkingsSoccerFifaWorldCupOdds(action: PayloadAction<FetchSoccerFIFAWorldCupOddsPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, is_live } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/leagues/soccer/fifa-world-cup-odds-draftkings`,
+            {
+                params: { match_id, is_live },
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchDraftkingsSoccerFIFAWorldCupOddsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchDraftkingsSoccerFIFAWorldCupOddsFailure(getErrorMessage(error, "Live Odds Fetch Failed")));
+    }
+};
+
+function* handleValidateSoccerFifaWorldCupPick(action: PayloadAction<ValidateMySoccerFIFAWorldCupPickPayload | undefined>): SagaIterator {
+    try {
+        const { match_id, external_pick_key, is_live = false } = action.payload || {};
+
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/leagues/soccer/fifa-world-cup-bet-validate`,
+            { match_id, external_pick_key, is_live }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(soccerFIFAWorldCupPickValidateSuccess(payload));
+    } catch (error: unknown) {
+        yield put(soccerFIFAWorldCupPickValidateFailure(getErrorMessage(error, "FIFA World Cup Pick Validation Failed")));
+    }
+};
+
 export default function* soccerSaga() {
     yield takeLatest(fetchSoccerEnglandPremierLeagueScheduleRequest.type, handleFetchFanduelSoccerEnglandPremierLeagueSchedule);
     yield takeLatest(fetchFanduelSoccerEnglandPremierLeagueOddsRequest.type, handleFetchFanduelSoccerEnglandPremierLeagueOdds);
@@ -210,4 +299,9 @@ export default function* soccerSaga() {
     yield takeLatest(soccerGermanyBundesligaPickValidateRequest.type, handleValidateSoccerGermanyBundesligaPick);
     yield takeLatest(fetchSoccerEnglandPremierLeagueScheduleByTimezoneRequest.type, handleFetchFanduelSoccerEnglandPremierLeagueScheduleByTimezone);
     yield takeLatest(fetchSoccerGermanyBundesligaScheduleByTimezoneRequest.type, handleFetchFanduelSoccerGermanyBundesligaScheduleByTimezone);
+    yield takeLatest(fetchSoccerFIFAWorldCupScheduleRequest.type, handleFetchFanduelSoccerFifaWorldCupSchedule);
+    yield takeLatest(fetchSoccerFIFAWorldCupScheduleByTimezoneRequest.type, handleFetchFanduelSoccerFifaWorldCupScheduleByTimezone);
+    yield takeLatest(fetchFanduelSoccerFIFAWorldCupOddsRequest.type, handleFetchFanduelSoccerFifaWorldCupOdds);
+    yield takeLatest(fetchDraftkingsSoccerFIFAWorldCupOddsRequest.type, handleFetchDraftkingsSoccerFifaWorldCupOdds);
+    yield takeLatest(soccerFIFAWorldCupPickValidateRequest.type, handleValidateSoccerFifaWorldCupPick);
 };
