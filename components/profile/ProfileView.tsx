@@ -120,6 +120,15 @@ const ProfileView = ({
     const [showScrollTop, setShowScrollTop] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const [badgesOpen, setBadgesOpen] = useState(false);
+    // Pick id to scroll to / highlight, sourced from a `?pick=` deep link (e.g. the
+    // weekly winners leaderboard's "biggest hit" cell).
+    const [highlightPickId, setHighlightPickId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const pickParam = new URLSearchParams(window.location.search).get("pick");
+        setHighlightPickId(pickParam);
+    }, [targetUserId]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -145,8 +154,12 @@ const ProfileView = ({
     const { followings, followers, followersById, followingsById, blockedUsers, loading: authLoader, isProfileLoading, message: authMessage, user, profileUpdateMessage, error, followReuests, sentFollowReuests, profileBadges: profileBadgesList, badgeLoading } = useSelector((state: RootState) => state.user);
     const { progress, picksCount } = useSelector((state: RootState) => state.progress);
 
-    const fetchData = useCallback((pageNum: number, customLimit?: number) => {
-        const payload = { page: pageNum, limit: customLimit ?? limit };
+    const fetchData = useCallback((pageNum: number, customLimit?: number, pickId?: string) => {
+        const payload = {
+            page: pageNum,
+            limit: customLimit ?? limit,
+            ...(pickId ? { pick_id: pickId } : {}),
+        };
         if (!targetUserId) return;
         dispatch(fetchPostPicksByUserIdRequest({ user_id: targetUserId, ...payload }));
     }, [dispatch, targetUserId, limit]);
@@ -161,9 +174,15 @@ const ProfileView = ({
         dispatch(fetchProgressByUserIdRequest({ user_id: targetUserId }));
         dispatch(fetchProfileBadgesRequest({ user_id: targetUserId }));
 
-        // Reset pagination and fetch page 1
+        // Reset pagination and fetch page 1. Pass the deep-linked `?pick=` id (read
+        // directly from the URL to avoid the highlightPickId state-timing race) so the
+        // API pins that pick to the top of page 1 even if it lives deeper in the feed.
         setPage(1);
-        fetchData(1);
+        const pickParam =
+            typeof window !== "undefined"
+                ? new URLSearchParams(window.location.search).get("pick")
+                : null;
+        fetchData(1, undefined, pickParam ?? undefined);
     }, [targetUserId, dispatch, mode, fetchData]);
 
     useEffect(() => {
@@ -871,6 +890,7 @@ const ProfileView = ({
                                     lastItemRef={lastItemRef}
                                     loading={postLoader}
                                     onReaction={handleReaction}
+                                    highlightPickId={highlightPickId}
                                 />
                             </div>
                         </div>

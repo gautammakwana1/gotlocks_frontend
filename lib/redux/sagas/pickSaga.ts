@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
+import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalLeaderboardFailure, fetchGlobalLeaderboardRequest, fetchGlobalLeaderboardSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 import { fetchPostablePickSlipsRequest } from "../slices/slipSlice";
 
 type ApiErrorResponse = {
@@ -261,12 +261,12 @@ function* handleFetchFollowingUsersPicksPosts(action: PayloadAction<FetchPostPic
 
 function* handleFetchPostPicksByUserIdPosts(action: PayloadAction<FetchPostPicksByUserIdPayload>): SagaIterator {
     try {
-        const { user_id, page = 1, limit = 10 } = action.payload;
+        const { user_id, page = 1, limit = 10, pick_id } = action.payload;
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/post-picks-by-user-id`,
             {
-                params: { user_id, page, limit }
+                params: { user_id, page, limit, ...(pick_id ? { pick_id } : {}) }
             }
         );
         const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
@@ -360,6 +360,23 @@ function* handleResetPicksScoringPoints(action: PayloadAction<ResetPicksScoringP
     }
 }
 
+function* handleFetchGlobalLeaderboard(action: PayloadAction<FetchSocialGlobalLeaderboardPayload>): SagaIterator {
+    try {
+        const { range = "last-week" } = action.payload || {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/pick/fetch-social-global-leaderboard`,
+            {
+                params: { range }
+            }
+        );
+        const payload = response.data as { data?: unknown };
+        yield put(fetchGlobalLeaderboardSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(fetchGlobalLeaderboardFailure(getErrorMessage(error, "Global Leaderboard fetch failed")));
+    }
+}
+
 export default function* pickSaga() {
     yield takeLatest(createPickRequest.type, handleCreatePick);
     yield takeLatest(fetchAllPicksRequest.type, handleFetchAllPicks);
@@ -382,4 +399,5 @@ export default function* pickSaga() {
     yield takeLatest(fetchAllContestsPicksRequest.type, handleFetchAllContestsPicks);
     yield takeLatest(replaceOrCreatePostablePickRequest.type, handleReplaceOrCreatePostablePick);
     yield takeLatest(resetPicksScoringPointsRequest.type, handleResetPicksScoringPoints);
+    yield takeLatest(fetchGlobalLeaderboardRequest.type, handleFetchGlobalLeaderboard);
 };

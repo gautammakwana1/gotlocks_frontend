@@ -15,6 +15,7 @@ type PostFeedProps = {
     onReaction: (reaction: PickReaction, pickId: string) => void;
     lastItemRef?: (node: HTMLDivElement | null) => void;
     loading?: boolean;
+    highlightPickId?: string | null;
 };
 
 const PostFeed = ({
@@ -28,6 +29,7 @@ const PostFeed = ({
     onReaction,
     lastItemRef,
     loading,
+    highlightPickId,
 }: PostFeedProps) => {
     const countLabel =
         totalCount === picks.length
@@ -78,6 +80,7 @@ const PostFeed = ({
                             canDelete={canDeletePick(pick)}
                             onDelete={onDeletePick}
                             onReaction={onReaction}
+                            highlightPickId={highlightPickId}
                         />
                     </div>
                 ))}

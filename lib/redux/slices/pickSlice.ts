@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
@@ -7,6 +7,7 @@ const initialState: PickState = {
     pickOfDay: null,
     vibePicks: null,
     postPicks: null,
+    globalLeaderboard: null,
     session: null,
     hasSeenIntro: false,
     loading: false,
@@ -14,6 +15,7 @@ const initialState: PickState = {
     message: null,
     deleteMessage: null,
     hasMore: true,
+    globalLeaderboardLoading: false,
 };
 
 const pickSlice = createSlice({
@@ -451,6 +453,25 @@ const pickSlice = createSlice({
             state.error = null;
             state.message = null;
         },
+
+        // Social Global Leaderboard
+        fetchGlobalLeaderboardRequest: (state, action: PayloadAction<FetchSocialGlobalLeaderboardPayload>) => {
+            void action;
+            state.globalLeaderboardLoading = true;
+            state.error = null;
+        },
+        fetchGlobalLeaderboardSuccess: (state, action) => {
+            state.globalLeaderboardLoading = false;
+            state.globalLeaderboard = action.payload;
+        },
+        fetchGlobalLeaderboardFailure: (state, action) => {
+            state.globalLeaderboardLoading = false;
+            state.error = action.payload;
+        },
+        clearGlobalLeaderboardMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
     },
 });
 
@@ -539,6 +560,10 @@ export const {
     resetPicksScoringPointsSuccess,
     resetPicksScoringPointsFailure,
     clearResetPicksScoringPointsMessage,
+    fetchGlobalLeaderboardRequest,
+    fetchGlobalLeaderboardSuccess,
+    fetchGlobalLeaderboardFailure,
+    clearGlobalLeaderboardMessage,
 } = pickSlice.actions;
 
 export default pickSlice.reducer;

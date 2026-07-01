@@ -109,6 +109,7 @@ export type User = {
         access_token?: string;
         refresh_token?: string;
     };
+    is_public: boolean;
 }
 
 export type UsernameHistory = {
@@ -832,6 +833,9 @@ export type FetchPostPicksByUserIdPayload = {
     user_id: string;
     page?: number;
     limit?: number;
+    // When set, the API guarantees this pick is included at the top of page 1, so a
+    // deep-linked "highlight" pick is present even if it would fall outside the first page.
+    pick_id?: string;
 };
 
 export type DeletePostPickPayload = {
@@ -871,6 +875,10 @@ export type FetchSlipByIdPayload = {
 
 export type ResetPicksScoringPointsPayload = {
     slip_id: string;
+};
+
+export type FetchSocialGlobalLeaderboardPayload = {
+    range: "last-week" | "this-week";
 };
 
 export type FetchPickOfDayByUserIdPayload = {
@@ -967,12 +975,50 @@ export type SlipState = {
     postableSlipsLoadingMore: boolean;
 };
 
+export type GlobalLeaderboadUserRows = {
+    rank: number;
+    user_id: string;
+    username: string;
+    profile_image: string | null;
+    total_xp: number;
+    win_count: number;
+    latest_win_at: string;
+    biggest_win: number;
+    biggest_win_pick_id: string;
+    biggest_win_post: GlobalLeaderboadPostRows | null;
+}
+
+export type GlobalLeaderboadPostRows = {
+    rank: number;
+    pick_id: string;
+    user_id: string;
+    username: string;
+    profile_image: string | null;
+    description: string;
+    odds_bracket: string;
+    points: number;
+    bonus: number;
+    xp: number;
+    settled_at: string;
+}
+
+export type GlobalLeaderboard = {
+    week: {
+        range: "this-week" | "last-week";
+        start: string;
+        end: string;
+    };
+    userRows: GlobalLeaderboadUserRows[];
+    postRows: GlobalLeaderboadPostRows[];
+};
+
 export type PickState = {
     pick: Pick | null;
     picks: Picks | null;
     pickOfDay: Pick | null;
     vibePicks: Picks | null;
     postPicks: Picks | null;
+    globalLeaderboard: GlobalLeaderboard | null;
     session: SessionState | null;
     hasSeenIntro: boolean;
     loading: boolean;
@@ -980,6 +1026,7 @@ export type PickState = {
     message: string | null;
     deleteMessage: string | null;
     hasMore: boolean;
+    globalLeaderboardLoading: boolean;
 };
 
 export type MarkLockPayload = Record<string, unknown>;

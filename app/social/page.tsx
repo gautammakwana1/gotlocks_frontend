@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useMemo, useState, CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
+import { GlobalLeaderboadPostRows, Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
+import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalLeaderboardRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import Image from "next/image";
 import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -22,8 +22,11 @@ import OnboardingModal from "@/components/modals/OnboardingModal";
 import { GLOBAL_TUTORIAL } from "@/lib/onboarding/tutorials";
 import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import PostPickSkeleton from "@/components/skeletons/social/PostPickSkeleton";
+import GlobalLeaderboardSkeleton from "@/components/skeletons/social/GlobalLeaderboardSkeleton";
+import { WeeklyWinnersRange } from "@/lib/social/weeklyWinnersLeaderboard";
 
 type SocialTab = "top-hits" | "for-you" | "following";
+type WinnersView = "leaderboard" | "recent-wins";
 
 const resultTone = (result: PickResult | null | undefined) => {
     switch (result) {
@@ -47,6 +50,17 @@ const isPendingResult = (result: PickResult | null | undefined) =>
 
 const postedAtLabel = (iso: string | undefined) =>
     `posted at: ${formatDateTime(iso)}`;
+
+const formatXp = (value: number) => `${value.toLocaleString()} XP`;
+
+const formatWeekRange = (start: Date, end: Date) => {
+    const formatter = new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+    });
+    const finalDay = new Date(end.getTime() - 1);
+    return `${formatter.format(start)} - ${formatter.format(finalDay)}`;
+};
 
 const PLACEHOLDER = EM_DASH;
 const META_SEPARATOR = " \u00b7 ";
@@ -76,6 +90,155 @@ const getTierCardStyle = (color?: string) => {
         )}, ${withAlpha(hex, "22")}, rgba(0,0,0,0))`,
     };
 };
+
+type PodiumAccent = {
+    rowTint: string;
+    rankClass: string;
+};
+
+const NEUTRAL_PODIUM_ACCENT: PodiumAccent = {
+    rowTint: "",
+    rankClass: "text-xs font-semibold text-[var(--text-secondary)]",
+};
+
+// Ranks 1-3 get a bolder gold/silver/bronze number; everyone else stays muted.
+const getPodiumAccent = (rank: number): PodiumAccent => {
+    switch (rank) {
+        case 1:
+            return { rowTint: "bg-amber-400/[0.06]", rankClass: "text-sm font-bold text-amber-300" };
+        case 2:
+            return { rowTint: "bg-slate-200/[0.05]", rankClass: "text-sm font-bold text-slate-200" };
+        case 3:
+            return { rowTint: "bg-orange-500/[0.05]", rankClass: "text-sm font-bold text-orange-400" };
+        default:
+            return NEUTRAL_PODIUM_ACCENT;
+    }
+};
+
+// Shared column template so the header row and every data row line up on both viewports.
+const LEADERBOARD_GRID =
+    "grid grid-cols-[26px_minmax(0,1fr)_56px_72px] gap-2 sm:grid-cols-[40px_minmax(0,1fr)_96px_104px] sm:gap-4";
+
+const renderBiggestHitCell = (
+    biggestWin: GlobalLeaderboadPostRows | null,
+    onClick: () => void
+) => {
+    const oddsCopy = biggestWin?.odds_bracket ?? PLACEHOLDER;
+    const tierMeta = getTierMetaForPick({ odds: biggestWin?.odds_bracket, mode: "global" });
+    const accentHex = getHexFromGradient(tierMeta?.color);
+    const xpCopy = `+${formatXp(biggestWin?.xp ?? 0)}`;
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            title="View this pick"
+            className="group flex min-w-0 flex-col items-start text-left transition hover:opacity-80"
+        >
+            <span
+                className="truncate text-[12px] font-semibold tabular-nums group-hover:underline sm:text-[13px]"
+                style={accentHex ? { color: accentHex } : undefined}
+            >
+                {oddsCopy}
+            </span>
+            <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-emerald-200 sm:text-[11px]">
+                {xpCopy}
+            </span>
+        </button>
+    );
+};
+
+// Weekly "Total XP" cell. Shows the user's total (awarded) XP for the week and,
+// on hover or tap, a breakdown of total vs raw XP. The fuller explanation of the
+// difference lives in the profile scoring-rules modal.
+const TotalXpCell = ({ actualXp, rawXp }: { actualXp: number; rawXp: number }) => {
+    const [open, setOpen] = useState(false);
+    const cellRef = useRef<HTMLDivElement | null>(null);
+    const cappedXp = Math.max(0, rawXp - actualXp);
+
+    useEffect(() => {
+        if (!open) return;
+        const handlePointerDown = (event: PointerEvent) => {
+            if (!cellRef.current?.contains(event.target as Node)) setOpen(false);
+        };
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }, [open]);
+
+    return (
+        <div
+            ref={cellRef}
+            className="group relative flex justify-end"
+            onMouseLeave={() => setOpen(false)}
+        >
+            <button
+                type="button"
+                onClick={() => setOpen((prev) => !prev)}
+                aria-label="Total XP breakdown"
+                className="text-[12px] font-semibold tabular-nums text-emerald-200 transition hover:text-emerald-100 sm:text-[13px]"
+            >
+                {formatXp(actualXp)}
+            </button>
+            <div
+                role="tooltip"
+                className={`absolute right-0 top-full z-30 mt-1.5 w-40 rounded-lg border border-white/10 bg-black/90 p-2.5 text-left shadow-lg backdrop-blur ${open ? "block" : "hidden group-hover:block"
+                    }`}
+            >
+                <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--text-secondary)]">Total XP</span>
+                    <span className="font-semibold tabular-nums text-emerald-200">
+                        {formatXp(actualXp)}
+                    </span>
+                </div>
+                <div className="mt-1 flex items-center justify-between text-[11px]">
+                    <span className="text-[var(--text-secondary)]">Raw XP</span>
+                    <span className="font-semibold tabular-nums text-[var(--app-text)]">
+                        {formatXp(rawXp)}
+                    </span>
+                </div>
+                <div className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] text-[var(--text-muted)]">
+                    {cappedXp > 0
+                        ? `${formatXp(cappedXp)} trimmed by caps`
+                        : "No caps applied this week"}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Segmented sub-tab toggle shared by the for-you, following, and winners tabs.
+function SubToggle<T extends string>({
+    options,
+    value,
+    onChange,
+}: {
+    options: readonly { value: T; label: string }[];
+    value: T;
+    onChange: (next: T) => void;
+}) {
+    return (
+        <div className="-mr-1 shrink-0 sm:mr-0">
+            <div className="inline-flex w-fit items-center gap-0.5 rounded-md border border-white/10 bg-white/5 p-0.5 sm:gap-1 sm:p-1">
+                {options.map((option) => {
+                    const active = value === option.value;
+                    return (
+                        <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => onChange(option.value)}
+                            className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-1 sm:text-[11px] ${active
+                                ? "bg-white/10 text-white"
+                                : "text-[var(--text-secondary)] hover:text-white"
+                                }`}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
 
 const resolveLegCategoryLabel = (market?: string) => {
     if (!market) return null;
@@ -113,18 +276,21 @@ const SocialPage = () => {
     const router = useRouter();
     const dispatch = useDispatch();
     const [activeTab, setActiveTab] = useState<SocialTab>("for-you");
-    const [topHitsScope, setTopHitsScope] = useState<"global" | "following">("global");
+    const [winnersView, setWinnersView] = useState<WinnersView>("leaderboard");
+    const [winnersRange, setWinnersRange] = useState<WeeklyWinnersRange>("this-week");
     const [forYouScope, setForYouScope] = useState<"posts" | "reacted">("posts");
+    const [followingScope, setFollowingScope] = useState<"posts" | "winning">("posts");
     const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
     const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    const [imgError, setImgError] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
     const currentUser = useCurrentUser();
 
-    const { loading: pickLoader, message: pickMessage, postPicks } = useSelector((state: RootState) => state.pick);
+    const { loading: pickLoader, message: pickMessage, postPicks, globalLeaderboard, globalLeaderboardLoading } = useSelector((state: RootState) => state.pick);
     const { hasSeenSocialIntro, hasSeenWelcomeIntro } = useSelector((state: RootState) => state.progress);
 
     const fetchDataByTab = (pageNum: number, customLimit?: number) => {
@@ -137,13 +303,15 @@ const SocialPage = () => {
             }
         }
         else if (activeTab === "following") {
-            dispatch(fetchFollowingUsersPostsRequest(payload));
+            if (followingScope === "posts") {
+                dispatch(fetchFollowingUsersPostsRequest(payload));
+            } else if (followingScope === "winning") {
+                dispatch(fetchFollowingUsersWinTopHitPostsRequest(payload));
+            }
         }
         else if (activeTab === "top-hits") {
-            if (topHitsScope === "global") {
+            if (winnersView === "recent-wins") {
                 dispatch(fetchGlobalWinnerTopHitPostsRequest(payload));
-            } else if (topHitsScope === "following") {
-                dispatch(fetchFollowingUsersWinTopHitPostsRequest(payload));
             }
         }
     };
@@ -153,7 +321,14 @@ const SocialPage = () => {
         setPage(1);
         setHasMore(true);
         fetchDataByTab(1);
-    }, [activeTab, forYouScope, topHitsScope, dispatch, currentUser]);
+    }, [activeTab, forYouScope, dispatch, currentUser, winnersView, followingScope]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        if (winnersView === "leaderboard") {
+            dispatch(fetchGlobalLeaderboardRequest({ range: winnersRange }));
+        }
+    }, [dispatch, currentUser, winnersView, winnersRange, activeTab]);
 
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
@@ -207,6 +382,8 @@ const SocialPage = () => {
         [forYouBaseFeed]
     );
 
+    const winnersLeaderboard = globalLeaderboard;
+
     const toggleCollapsed = useCallback((pickId: string) => {
         setCollapsedPicks((prev) => ({
             ...prev,
@@ -218,6 +395,12 @@ const SocialPage = () => {
         if (userId) {
             router.push(getProfilePath(userId, currentUser?.userId));
         }
+    };
+
+    const handleViewPick = (userId: string, pickId: string) => {
+        router.push(
+            `${getProfilePath(userId, currentUser?.userId)}?pick=${encodeURIComponent(pickId)}`
+        );
     };
 
     const handleReaction = (pickId: string, reaction: PickReaction) => {
@@ -640,6 +823,148 @@ const SocialPage = () => {
         </div>
     );
 
+    const renderWinnersUserLeaderboard = () => {
+        if (!winnersLeaderboard) {
+            return globalLeaderboardLoading
+                ? <GlobalLeaderboardSkeleton />
+                : (
+                    <p className="py-4 text-sm text-[var(--text-secondary)]">
+                        No public weekly winners yet.
+                    </p>
+                );
+        }
+        const weekLabel = formatWeekRange(
+            new Date(winnersLeaderboard.week.start),
+            new Date(winnersLeaderboard.week.end)
+        );
+
+        return (
+            <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 sm:px-3">
+                    <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100">
+                            weekly xp
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                            {weekLabel} · {winnersLeaderboard.userRows.length} ranked
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] font-semibold uppercase tracking-wide">
+                        {(["this-week", "last-week"] as const).map((range) => {
+                            const active = winnersRange === range;
+                            return (
+                                <button
+                                    key={range}
+                                    type="button"
+                                    onClick={() => setWinnersRange(range)}
+                                    className={`relative pb-1 transition ${active
+                                        ? "text-white"
+                                        : "text-[var(--text-secondary)] hover:text-white"
+                                        }`}
+                                >
+                                    {range === "this-week" ? "this week" : "last week"}
+                                    {active && (
+                                        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-amber-300/80" />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {winnersLeaderboard.userRows.length > 0 ? (
+                    // Break out of the page gutter so row backgrounds reach the screen edge on mobile.
+                    <div className="-mx-5 sm:mx-0">
+                        {/* Column headers — shared grid template keeps both viewports aligned */}
+                        <div
+                            className={`${LEADERBOARD_GRID} items-center border-b border-white/10 px-5 pb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)] sm:px-3 sm:text-[10px]`}
+                        >
+                            <span className="-ml-1 text-center">#</span>
+                            <span>Player</span>
+                            <span>
+                                <span className="sm:hidden">Hit</span>
+                                <span className="hidden sm:inline">Biggest Hit</span>
+                            </span>
+                            <span className="text-right">
+                                <span className="sm:hidden">Total</span>
+                                <span className="hidden sm:inline">Total XP</span>
+                            </span>
+                        </div>
+
+                        <div className="divide-y divide-white/10">
+                            {winnersLeaderboard.userRows.map((row) => {
+                                const userName = row.username ?? "Member";
+                                const initials = userName.slice(0, 2).toUpperCase();
+                                const winLabel = row.win_count === 1 ? "1 win" : `${row.win_count} wins`;
+                                const accent = getPodiumAccent(row.rank);
+                                const profileImg = generateProfileImageUrl(row.profile_image ?? "");
+                                const hasValidImage =
+                                    row.profile_image && !imgError;
+
+                                return (
+                                    <div
+                                        key={row.user_id}
+                                        className={`${LEADERBOARD_GRID} items-center px-5 py-2.5 sm:px-3 ${accent.rowTint}`}
+                                    >
+                                        <div className="-ml-1 flex items-center justify-center">
+                                            <span className={`tabular-nums ${accent.rankClass}`}>
+                                                {row.rank}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleViewProfile(row.user_id)}
+                                            className="group flex min-w-0 items-center gap-2 text-left sm:gap-2.5"
+                                        >
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-semibold uppercase text-slate-100 transition group-hover:text-sky-100 sm:h-8 sm:w-8 sm:text-[11px]">
+                                                {profileImg && hasValidImage ? (
+                                                    <Image
+                                                        src={profileImg}
+                                                        alt="Profile image"
+                                                        width={52}
+                                                        height={52}
+                                                        className={`tracking-wide rounded-full object-cover h-6 w-6 sm:h-7 sm:w-7`}
+                                                        draggable={false}
+                                                        onDragStart={(e) => e.preventDefault()}
+                                                        unoptimized
+                                                        onError={() => setImgError(true)}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center text-white/80 text-[10px] sm:text-[12px]" >
+                                                        <span>{initials}</span>
+                                                    </div>
+                                                )}
+                                            </span>
+                                            <span className="min-w-0">
+                                                <span
+                                                    className="block truncate text-[13px] font-semibold text-[var(--app-text)] group-hover:underline sm:text-sm"
+                                                    title={userName}
+                                                >
+                                                    {userName}
+                                                </span>
+                                                <span className="block text-[10px] uppercase tracking-wide text-[var(--text-secondary)]">
+                                                    {winLabel}
+                                                </span>
+                                            </span>
+                                        </button>
+                                        {renderBiggestHitCell(row.biggest_win_post, () =>
+                                            handleViewPick(row.user_id, row.biggest_win_pick_id)
+                                        )}
+                                        <TotalXpCell actualXp={row.total_xp} rawXp={row.biggest_win} />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <p className="py-4 text-sm text-[var(--text-secondary)] sm:px-3">
+                        No public weekly winners yet.
+                    </p>
+                )}
+            </div>
+        );
+    };
+
     const handleUserSearch = () => {
         dispatch(fetchFollowingListRequest());
         setIsUserSearchOpen(true);
@@ -677,62 +1002,58 @@ const SocialPage = () => {
                             </button>
                         </div>
                         {activeTab === "top-hits" && (
-                            <div className="shrink-0">
-                                <div className="inline-flex w-fit items-center gap-0.5 rounded-md border border-white/10 bg-white/5 p-0.5 sm:gap-1 sm:p-1">
-                                    {(["global", "following"] as const).map((scope) => {
-                                        const active = topHitsScope === scope;
-                                        return (
-                                            <button
-                                                key={scope}
-                                                type="button"
-                                                onClick={() => setTopHitsScope(scope)}
-                                                className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-1 sm:text-[11px] ${active
-                                                    ? "bg-white/10 text-white"
-                                                    : "text-[var(--text-secondary)] hover:text-white"
-                                                    }`}
-                                            >
-                                                {scope === "global" ? "global" : "following"}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <SubToggle
+                                value={winnersView}
+                                onChange={setWinnersView}
+                                options={[
+                                    { value: "leaderboard", label: "rankings" },
+                                    { value: "recent-wins", label: "wins" },
+                                ]}
+                            />
                         )}
                         {activeTab === "for-you" && (
-                            <div className="shrink-0">
-                                <div className="inline-flex w-fit items-center gap-0.5 rounded-md border border-white/10 bg-white/5 p-0.5 sm:gap-1 sm:p-1">
-                                    {(["posts", "reacted"] as const).map((scope) => {
-                                        const active = forYouScope === scope;
-                                        return (
-                                            <button
-                                                key={scope}
-                                                type="button"
-                                                onClick={() => setForYouScope(scope)}
-                                                className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-1 sm:text-[11px] ${active
-                                                    ? "bg-white/10 text-white"
-                                                    : "text-[var(--text-secondary)] hover:text-white"
-                                                    }`}
-                                            >
-                                                {scope === "posts" ? "all posts" : "reacted to"}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <SubToggle
+                                value={forYouScope}
+                                onChange={setForYouScope}
+                                options={[
+                                    { value: "posts", label: "latest" },
+                                    { value: "reacted", label: "reacted" },
+                                ]}
+                            />
+                        )}
+                        {activeTab === "following" && (
+                            <SubToggle
+                                value={followingScope}
+                                onChange={setFollowingScope}
+                                options={[
+                                    { value: "posts", label: "latest" },
+                                    { value: "winning", label: "wins" },
+                                ]}
+                            />
                         )}
                     </div>
                 </div>
 
                 {activeTab === "top-hits" && (
                     <section className="space-y-4">
-                        {renderFeedItems(
-                            feedItems,
-                            topHitsScope === "following"
-                                ? "No recent wins from the people you follow yet."
-                                : "No winning posts in the last day. Check back soon.",
-                            true,
-                            true,
-                            false,
+                        {winnersView === "leaderboard" ? (
+                            renderWinnersUserLeaderboard()
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                        recent wins
+                                    </p>
+                                    <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                        {feedItems.length} posts
+                                    </p>
+                                </div>
+                                {renderFeedItems(
+                                    feedItems,
+                                    "No public winning posts yet.",
+                                    false
+                                )}
+                            </div>
                         )}
                     </section>
                 )}
@@ -759,15 +1080,24 @@ const SocialPage = () => {
 
                 {activeTab === "following" && (
                     <section className="space-y-4">
-                        {renderFeedItems(
-                            feedItems,
-                            feedItems.length === 0
-                                ? "Follow members to see their posts land here."
-                                : "No posts from people you follow yet. Check back after they drop picks.",
-                            true,
-                            true,
-                            false,
-                        )}
+                        {followingScope === "posts"
+                            ? renderFeedItems(
+                                feedItems,
+                                feedItems.length === 0
+                                    ? "Follow members to see their posts land here."
+                                    : "No posts from people you follow yet. Check back after they drop picks.",
+                                true,
+                                true,
+                                false,
+                            )
+                            : renderFeedItems(
+                                feedItems,
+                                feedItems.length === 0
+                                    ? "Follow members to see their wins land here."
+                                    : "No winning posts from people you follow yet.",
+                                true
+                            )
+                        }
                     </section>
                 )}
             </section>

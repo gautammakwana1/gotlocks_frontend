@@ -14,6 +14,7 @@ type PostCardProps = {
     canDelete: boolean;
     onDelete: (pickId: string) => void;
     onReaction: (reaction: PickReaction, pickId: string) => void;
+    highlightPickId?: string | null;
 };
 
 const resultTone = (result: PickResult) => {
@@ -106,10 +107,12 @@ const WinningHeaderArt = () => (
     />
 );
 
-const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
+const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: PostCardProps) => {
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [isHighlighted, setIsHighlighted] = useState(false);
     const menuRef = useRef<HTMLDivElement | null>(null);
+    const cardRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -130,6 +133,21 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
             document.removeEventListener("keydown", handleKeyDown);
         };
     }, [menuOpen]);
+
+    useEffect(() => {
+        if (!highlightPickId || highlightPickId !== pick.id) return;
+        const node = cardRef.current;
+        if (!node) return;
+        const scrollTimer = window.setTimeout(() => {
+            node.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 150);
+        setIsHighlighted(true);
+        const clearTimer = window.setTimeout(() => setIsHighlighted(false), 2600);
+        return () => {
+            window.clearTimeout(scrollTimer);
+            window.clearTimeout(clearTimer);
+        };
+    }, [highlightPickId, pick.id]);
 
     const tierMeta = getTierMetaForPick({
         odds: pick.odds_bracket,
@@ -220,7 +238,12 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction }: PostCardProps) => {
     if (pick.pick_type !== PickType.POST) return null;
 
     return (
-        <div className="py-4">
+        <div
+            ref={cardRef}
+            id={`pick-${pick.id}`}
+            className={`scroll-mt-24 py-4 transition-colors duration-500 
+                ${isHighlighted ? "bg-amber-400/10" : ""}`}
+        >
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
                 <div className="felx items-center">
                     {collapsed && (

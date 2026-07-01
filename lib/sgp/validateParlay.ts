@@ -111,7 +111,8 @@ const timeScopeFromMarket = (market: string): SlipTimeScope => {
     if (
         trimmed.startsWith("1st 3 Minutes") ||
         trimmed.startsWith("1st 5 Minutes") ||
-        trimmed.startsWith("1st 10 Minutes")
+        trimmed.startsWith("1st 10 Minutes") ||
+        trimmed.startsWith("1st 15 Minutes")
     ) {
         return "live_segment";
     }
@@ -147,7 +148,7 @@ const periodKeyFromTimeScope = (timeScope: SlipTimeScope): ParlayLeg["periodKey"
 const marketFamilyFromMarket = (market: string) =>
     market
         .replace(
-            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\s+/i,
+            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st 15 Minutes|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\s+/i,
             ""
         )
         .replace(/^Alt\s+/i, "")
@@ -157,7 +158,7 @@ const marketScopePrefixFromMarket = (market: string) => {
     const match = market
         .trim()
         .match(
-            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\b/i
+            /^(1st 3 Innings|1st 5 Innings|1st 7 Innings|1st 15 Minutes|1st Half|2nd Half|1st Quarter|2nd Quarter|3rd Quarter|4th Quarter|1st Period|2nd Period|3rd Period)\b/i
         );
     return match?.[1] ?? "";
 };
