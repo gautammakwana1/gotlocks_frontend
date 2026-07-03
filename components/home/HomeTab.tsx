@@ -23,6 +23,7 @@ import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import Image from "next/image";
 import HomeTabSkeleton from "../skeletons/home/HomeTabSkeleton";
+import { getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 
 type GroupSliceState = {
     group: {
@@ -90,7 +91,7 @@ const ActionCard = ({
     <button
         type="button"
         onClick={locked ? onLockedTap : action.onClick}
-        aria-label={locked ? "Locked — finish the league tour first" : undefined}
+        aria-label={locked ? "Locked - finish the group tour first" : undefined}
         className={`ui-accent-card group relative overflow-hidden rounded-[18px] border border-white/10 px-3 py-3 text-left shadow-sm transition sm:px-4 sm:py-4 lg:px-5 lg:py-5 ${locked ? "opacity-45" : ""
             }`}
     >
@@ -174,7 +175,7 @@ const HomeTab = () => {
         setToast({
             id: Date.now(),
             type: "info",
-            message: "Tap the leagues tab to continue the tour 🔒",
+            message: "Tap the groups tab to continue the tour.",
             duration: 3000
         });
     }, [setToast]);
@@ -598,7 +599,7 @@ const HomeTab = () => {
 
     const stats: StatDefinition[] = [
         {
-            label: "Leagues",
+            label: "Groups",
             value: String(sortedGroups.length),
         },
         {
@@ -619,7 +620,7 @@ const HomeTab = () => {
     const quickActions: ActionDefinition[] = [
         {
             id: "create",
-            label: <TwoLineActionLabel top="Start a" bottom="league" />,
+            label: <TwoLineActionLabel top="Start a" bottom="group" />,
             href: "/cag-explained",
             description: "Start a new league",
             featured: true,
@@ -630,7 +631,7 @@ const HomeTab = () => {
         },
         {
             id: "join",
-            label: <TwoLineActionLabel top="Join a" bottom="league" />,
+            label: <TwoLineActionLabel top="Join a" bottom="group" />,
             href: "/fantasy",
             description: "Join a league by invitation code",
             onClick: openJoinModal,
@@ -713,7 +714,7 @@ const HomeTab = () => {
                     <div className="border-t border-white/10 pt-4 sm:pt-6">
                         <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
                             <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 sm:text-xs sm:tracking-[0.24em]">
-                                Your leagues
+                                Your groups
                             </p>
                             <button
                                 type="button"
@@ -725,7 +726,7 @@ const HomeTab = () => {
                         </div>
                         {sortedGroups.length === 0 ? (
                             <div className="rounded-[18px] border border-dashed border-white/20 bg-white/5 p-4 text-[11px] text-gray-300 sm:p-5 sm:text-sm">
-                                You are not in any leagues yet. Start one to get the vibe going.
+                                You are not in any groups yet. Start one to get the vibe going.
                             </div>
                         ) : (
                             <>
@@ -741,10 +742,18 @@ const HomeTab = () => {
                                                 onClick={() => router.push(`/league/${group.id}`)}
                                                 className="relative min-h-[7.5rem] min-w-full snap-center rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-3 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                             >
-                                                <span className="absolute right-3 top-3 text-[9px] uppercase tracking-[0.12em] text-gray-300">
-                                                    code {group.invite_code}
-                                                </span>
                                                 <div className="flex h-full flex-col">
+                                                    <div className="mb-2 flex flex-wrap items-center gap-1.5 pr-14">
+                                                        <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+                                                            {getGroupTypeLabel(group?.group_type ?? "league")}
+                                                        </span>
+                                                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-gray-300">
+                                                            {getHostingTierLabel(group?.hosting_tier ?? "free")}
+                                                        </span>
+                                                    </div>
+                                                    <span className="absolute right-3 top-3 text-[9px] uppercase tracking-[0.12em] text-gray-300">
+                                                        code {group.invite_code}
+                                                    </span>
                                                     <h3
                                                         className="allow-caps pr-16 text-base font-extrabold text-transparent bg-clip-text"
                                                         style={displayNameGradientStyle}
@@ -755,9 +764,10 @@ const HomeTab = () => {
                                                         {group.description ??
                                                             "Run slips, share picks, and climb the table together."}
                                                     </p>
-                                                    <span className="mt-auto pt-3 text-[9px] uppercase tracking-[0.16em] text-gray-400">
-                                                        {group.member_count} members
-                                                    </span>
+                                                    <div className="mt-auto flex flex-wrap gap-2 pt-3 text-[9px] uppercase tracking-[0.14em] text-gray-400">
+                                                        <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                                        <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                                    </div>
                                                 </div>
                                             </button>
                                         ))}
@@ -775,7 +785,7 @@ const HomeTab = () => {
                                                         key={group.id}
                                                         type="button"
                                                         onClick={() => scrollLeagueCarouselToIndex(realIndex)}
-                                                        aria-label={`Go to league ${realIndex + 1}`}
+                                                        aria-label={`Go to group ${realIndex + 1}`}
                                                         className={`
                                                             rounded-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
                                                             ${isActive
@@ -799,10 +809,18 @@ const HomeTab = () => {
                                             onClick={() => router.push(`/league/${group.id}`)}
                                             className="relative min-h-[9rem] rounded-[18px] border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-4 text-left shadow-lg shadow-black/30 transition hover:border-blue-400/60 hover:shadow-blue-500/25"
                                         >
-                                            <span className="absolute right-4 top-4 text-[10px] uppercase tracking-[0.14em] text-gray-300">
-                                                code {group.invite_code}
-                                            </span>
                                             <div className="flex h-full flex-col">
+                                                <div className="mb-2 flex flex-wrap items-center gap-1.5 pr-20">
+                                                    <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+                                                        {getGroupTypeLabel(group?.group_type ?? "league")}
+                                                    </span>
+                                                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
+                                                        {getHostingTierLabel(group?.hosting_tier ?? "free")}
+                                                    </span>
+                                                </div>
+                                                <span className="absolute right-4 top-4 text-[10px] uppercase tracking-[0.14em] text-gray-300">
+                                                    code {group.invite_code}
+                                                </span>
                                                 <h3
                                                     className="allow-caps pr-20 text-lg font-extrabold text-transparent bg-clip-text"
                                                     style={displayNameGradientStyle}
@@ -813,9 +831,10 @@ const HomeTab = () => {
                                                     {group.description ??
                                                         "Run slips, share picks, and climb the table together."}
                                                 </p>
-                                                <span className="mt-auto pt-4 text-[11px] uppercase tracking-[0.18em] text-gray-400">
-                                                    {group.member_count} members
-                                                </span>
+                                                <div className="mt-auto flex flex-wrap gap-2 pt-4 text-[10px] uppercase tracking-[0.16em] text-gray-400">
+                                                    <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                                </div>
                                             </div>
                                         </button>
                                     ))}
@@ -921,7 +940,7 @@ const HomeTab = () => {
                     <form onSubmit={handleJoin} className="space-y-4 text-center">
                         <div className="space-y-1">
                             <p className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                join a league
+                                join a league or Arena
                             </p>
                             <p className="text-lg font-semibold text-white">Enter invite code</p>
                         </div>

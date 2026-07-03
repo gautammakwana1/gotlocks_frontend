@@ -2,16 +2,22 @@
 
 import { ChevronIcon } from "@/components/ui/SvgIcons";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
 import Link from "next/link";
 
 const AppSettingsPage = () => {
     const currentUser = useCurrentUser();
+    const plan = useUserPlan();
     if (!currentUser) return null;
 
     const rows = [
         {
             title: "Account information",
             href: "/app-settings/account-information",
+        },
+        {
+            title: "Plan and billing",
+            href: "/app-settings/plan",
         },
         {
             title: "Change your password",
@@ -38,6 +44,9 @@ const AppSettingsPage = () => {
                         View your account details, update your password, manage blocked accounts,
                         or review account deletion options.
                     </p>
+                    <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text)]">
+                        {plan === "pro" ? "Founding Pro" : "Free"} plan
+                    </div>
                 </header>
 
                 <div className="divide-y divide-[var(--border-soft)]">

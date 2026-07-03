@@ -80,7 +80,7 @@ const MemberActions = ({
                 onClick={onPromote}
                 className="ui-accent-button w-full rounded-lg px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
             >
-                {state?.promoting ? "transferring..." : "make commissioner"}
+                {state?.promoting ? "transferring..." : "transfer ownership"}
             </button>
         )}
         {state?.error && <p className="text-xs text-red-300">{state.error}</p>}
@@ -91,7 +91,7 @@ const MemberActions = ({
                 disabled={leavingGroup}
                 className="w-full rounded-lg border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
             >
-                {leavingGroup ? "Leaving..." : "Leave league"}
+                {leavingGroup ? "Leaving..." : "Leave group"}
             </button>
         )}
     </div>
@@ -172,7 +172,7 @@ const MemberCard = ({
                     <p className="text-sm font-semibold text-white">{displayName || "Member"}</p>
                     {isCommissioner && (
                         <p className="mt-1 text-[9px] font-semibold lowercase tracking-[0.16em] text-amber-200">
-                            commissioner
+                            owner
                         </p>
                     )}
                 </div>
@@ -322,7 +322,7 @@ export const ModifyMembers = ({
             if (isActionFailure(result)) {
                 updateActionState(member.user_id, {
                     promoting: false,
-                    error: result.error ?? "Unable to transfer commissioner.",
+                    error: result.error ?? "Unable to transfer ownership.",
                 });
                 return;
             }
@@ -331,7 +331,7 @@ export const ModifyMembers = ({
             const message =
                 error instanceof Error
                     ? error.message
-                    : "Unable to transfer commissioner.";
+                    : "Unable to transfer ownership.";
             updateActionState(member.user_id, { promoting: false, error: message });
         }
     };
@@ -421,21 +421,21 @@ export const ModifyMembers = ({
                             </p>
                             <p className="text-sm text-gray-300">
                                 {pendingAction.kind === "remove"
-                                    ? `Remove ${formatDisplayName(pendingAction.member.profiles?.username)} from the league?`
+                                    ? `Remove ${formatDisplayName(pendingAction.member.profiles?.username)} from the group?`
                                     : pendingAction.kind === "leave"
-                                        ? "Leave this league?"
-                                        : `Make ${formatDisplayName(pendingAction.member.profiles?.username)} the commissioner?`}
+                                        ? "Leave this group?"
+                                        : `Transfer ownership to ${formatDisplayName(pendingAction.member.profiles?.username)}?`}
                             </p>
                         </div>
                         {pendingAction.kind === "remove" && (
                             <p className="text-[11px] text-gray-400">
-                                This will remove this user from your league permanently. Their name will still
+                                This will remove this user from your group permanently. Their name will still
                                 be visible in any past slips and leaderboards.
                             </p>
                         )}
                         {pendingAction.kind === "promote" && (
                             <p className="text-[11px] text-gray-400">
-                                This action will give this user the power to control this league from now on.
+                                This gives this member ownership and control of this group from now on.
                             </p>
                         )}
                         {pendingAction.kind === "leave" && (
@@ -479,7 +479,7 @@ export const ModifyMembers = ({
 
             {canManage && (
                 <p className="text-[11px] text-gray-500">
-                    Removing a member immediately hides this league from their &quot;your leagues&quot;
+                    Removing a member immediately hides this group from their &quot;your groups&quot;
                     list and
                     removes them from the leaderboard display.
                 </p>

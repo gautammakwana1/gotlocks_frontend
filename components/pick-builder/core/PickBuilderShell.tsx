@@ -402,7 +402,11 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                 invite_code: "00000",
                 created_by: context.currentUser.userId,
                 members: [context.currentUser.userId],
-                is_enable_secondary_leaderboard: false
+                is_enable_secondary_leaderboard: false,
+                group_type: "league",
+                hosting_tier: "free",
+                max_active_contests: 3,
+                max_members: 10
             } satisfies Group)
             : null;
 

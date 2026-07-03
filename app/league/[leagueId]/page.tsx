@@ -21,6 +21,7 @@ import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/
 import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 import { SettingIcon } from "@/components/ui/SvgIcons";
+import { canCreateContestInGroup, getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 
 interface FormErrors {
   name?: string;
@@ -498,6 +499,10 @@ const LeagueDashboardPage = () => {
     return <LeaguePageSkeleton />;
   }
 
+  const memberCount = group?.member_count ?? group?.members?.length ?? 0;
+  const activeContestCount = group?.active_contest ?? activeContests?.length ?? 0;
+  const createContestCheck = canCreateContestInGroup(group, activeContestCount);
+
   return (
     <div
       className={
@@ -509,18 +514,35 @@ const LeagueDashboardPage = () => {
       {activeTab !== "chat" && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <BackButton label="back to all leagues" fallback="/fantasy" preferFallback />
+            <BackButton label="back to all groups" fallback="/fantasy" preferFallback />
             <InviteCodeCopy code={group?.invite_code} />
           </div>
           <header className="-mx-5 space-y-3 px-5 pb-5 sm:mx-0 sm:px-0">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+                    {getGroupTypeLabel(group?.group_type ?? "league")}
+                  </span>
+                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
+                    {getHostingTierLabel(group?.hosting_tier ?? "free")}
+                  </span>
+                </div>
                 <h1
                   className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
                   style={displayNameGradientStyle}
                 >
                   {group?.name}
                 </h1>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-gray-400">
+                  {group && (
+                    <>
+                      <span>{getGroupCapacityLabel(group, memberCount)}</span>
+                      <span>{getActiveContestCountsLabel(group, activeContestCount)}</span>
+                    </>
+                  )}
+                  <span>Archived contests do not count.</span>
+                </div>
                 {group?.description && (
                   <p className="mt-2 max-w-2xl text-sm text-gray-400">
                     {group.description}
@@ -587,20 +609,29 @@ const LeagueDashboardPage = () => {
 
       {activeTab === "contests" && (
         <div className="space-y-6">
-          <Link
-            href={`/league/${group?.id}/contests/create`}
-            className="flex w-full items-center justify-between gap-4 rounded-lg border border-sky-300/30 bg-sky-500/10 px-5 py-4 text-left transition hover:border-sky-200/70 hover:bg-sky-500/15"
-          >
-            <span>
-              <span className="block text-sm font-semibold text-white">Start a contest</span>
-              <span className="mt-1 block text-xs text-gray-400">
-                Set sports, dates, and a standings container for this group.
+          {createContestCheck.allowed ? (
+            <Link
+              href={`/league/${group?.id}/contests/create`}
+              className="flex w-full items-center justify-between gap-4 rounded-lg border border-sky-300/30 bg-sky-500/10 px-5 py-4 text-left transition hover:border-sky-200/70 hover:bg-sky-500/15"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-white">Start a contest</span>
+                <span className="mt-1 block text-xs text-gray-400">
+                  Set sports, dates, and a standings container for this group.
+                </span>
               </span>
-            </span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/40 text-xl text-sky-100">
-              +
-            </span>
-          </Link>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/40 text-xl text-sky-100">
+                +
+              </span>
+            </Link>
+          ) : (
+            <section className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-5 py-4 text-sm text-amber-50">
+              <p className="font-semibold">{createContestCheck.error}</p>
+              <p className="mt-1 text-xs text-amber-100/80">
+                Archive an active contest to open another one. Historical contests are unlimited.
+              </p>
+            </section>
+          )}
 
           {activeContests?.length ? (
             <div className="space-y-4">

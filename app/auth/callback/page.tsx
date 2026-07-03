@@ -4,9 +4,12 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { saveCleanUser } from "@/lib/utils/useAuthSync";
 import { Session } from "@supabase/supabase-js";
+import { useAppDispatch } from "@/lib/redux/hooks";
+import { fetchPlanOverviewRequest } from "@/lib/redux/slices/planSlice";
 
 export default function AuthCallbackPage() {
     const router = useRouter();
+    const dispatch = useAppDispatch();
 
     useEffect(() => {
         let isNavigating = false;
@@ -20,6 +23,9 @@ export default function AuthCallbackPage() {
             try {
                 if (session) {
                     await saveCleanUser(session);
+                    // The Supabase OAuth session carries only Google identity data, not the
+                    // backend purchase plan. Fetch it so it lands in the shared plan storage.
+                    dispatch(fetchPlanOverviewRequest());
                 }
 
                 if (session?.user) {
@@ -86,7 +92,7 @@ export default function AuthCallbackPage() {
             authListener?.subscription.unsubscribe();
             if (timeoutId) clearTimeout(timeoutId);
         };
-    }, [router]);
+    }, [router, dispatch]);
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)] text-white">

@@ -20,6 +20,12 @@ export type SlipConflictWarningMode = "competition" | "group_combo";
 
 export type TutorialKeys = "home" | "social" | "group" | "profile" | "global" | null;
 
+export type UserPlan = "free" | "pro";
+
+export type GroupType = "league" | "arena";
+
+export type HostingTier = "free" | "pro";
+
 export type TierIndex =
     | 1
     | 2
@@ -86,6 +92,7 @@ export type Toast = {
 export type CurrentUser = {
     username: string;
     email: string;
+    plan: UserPlan;
     email_verified: boolean;
     phone_verified: boolean;
     sub: string;
@@ -132,6 +139,7 @@ export type Profile = {
     sharedGroup?: number;
     full_name?: string;
     username_history?: UsernameHistory[];
+    plan?: UserPlan;
 }
 
 export type ActiveSlip = {
@@ -168,10 +176,16 @@ export type Group = {
     invite_code?: string;
     created_by?: string;
     members?: Members;
+    member_count?: number;
+    active_contest?: number;
     active_slip?: ActiveSlip;
     open_slip?: number;
     final_slip?: number;
     is_enable_secondary_leaderboard: boolean;
+    group_type: GroupType;
+    hosting_tier: HostingTier;
+    max_members: number;
+    max_active_contests: number;
 }
 
 export type ContestBadgeCategory = "generic" | "football" | "nba" | "mlb" | "nhl" | "soccer";
@@ -441,6 +455,7 @@ export type GroupState = {
     loadingOlderChats: boolean;
     olderChats: ChatMessage[] | null;
     unreadCounts: number;
+    groupsCounts: GroupCounts | null;
 }
 
 export type GroupSelector = {
@@ -487,7 +502,25 @@ export type GroupResponse = {
     };
 }
 
-export type CreateGroupPayload = Group;
+export type CreateGroupPayload = {
+    name: string;
+    description: string;
+    is_enable_secondary_leaderboard: boolean;
+    group_type: GroupType;
+};
+
+export type GroupCounts = {
+    user: {
+        username?: string;
+        profile_image?: string;
+        plan?: UserPlan;
+        [key: string]: unknown;
+    };
+    counts: {
+        league: number;
+        arena: number;
+    }
+};
 
 export type GroupObject = {
     id: string;
@@ -496,10 +529,16 @@ export type GroupObject = {
     description: string;
     member_count: number;
     created_by: string;
+    active_contest: number;
     current_user_member: {
         joined_at: string;
         role: string;
-    }
+    },
+    is_enable_secondary_leaderboard: boolean;
+    group_type: GroupType;
+    hosting_tier: HostingTier;
+    max_members: number;
+    max_active_contests: number;
 }
 
 export type FetchGroupsParams = {
@@ -1348,6 +1387,39 @@ export type ContestState = {
     badgeAwards: BadgeAward[] | null;
     badgeDefinitions: BadgeDefinition[] | null;
     manageableBadgeDefinitions: BadgeDefinition[] | null;
+};
+
+export type PlanBlockerGroup = {
+    id: string;
+    name: string;
+};
+
+export type PlanDowngrade = {
+    allowed: boolean;
+    error: string | null;
+    blockers: {
+        ownedArenas: PlanBlockerGroup[];
+        proHostedLeagues: PlanBlockerGroup[];
+        ownedLeagueCount: number;
+        maxFreeLeagues: number;
+    };
+};
+
+export type PlanOverview = {
+    plan: UserPlan;
+    status: string;
+    downgrade: PlanDowngrade;
+};
+
+export type UpdatePlanpayload = {
+    plan: UserPlan;
+};
+
+export type PlanState = {
+    overview: PlanOverview | null;
+    loading: boolean;
+    error: string | null;
+    message: string | null;
 };
 
 export type PickSliceState = {

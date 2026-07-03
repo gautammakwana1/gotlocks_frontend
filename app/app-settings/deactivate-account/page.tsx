@@ -132,7 +132,7 @@ const DeleteAccountPage = () => {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: "Transfer commissioner access and leave those leagues first.",
+                message: "Transfer or delete your leagues and Arenas before deleting your account.",
                 duration: 3000
             });
             return;
@@ -142,7 +142,7 @@ const DeleteAccountPage = () => {
             setToast({
                 id: Date.now(),
                 type: "error",
-                message: "Leave every league you're part of before deleting your account.",
+                message: "Leave every group you're part of before deleting your account.",
                 duration: 3000
             });
             return;
@@ -217,17 +217,17 @@ const DeleteAccountPage = () => {
                         </h2>
                         <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
                             {commissionerLeagues.length > 0 && memberLeagues.length > 0
-                                ? "Transfer commissioner access where needed and leave all remaining leagues first."
+                                ? "Transfer or delete groups you own, then leave all remaining groups first."
                                 : commissionerLeagues.length > 0
-                                    ? "You still commission one or more leagues. Transfer ownership and leave those leagues first."
-                                    : "You still belong to one or more leagues. Leave them before deleting your account."}
+                                    ? "You still own one or more groups. Transfer or delete those groups first."
+                                    : "You still belong to one or more groups. Leave them before deleting your account."}
                         </p>
                     </div>
 
                     {commissionerLeagues.length > 0 && (
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                Commissioner leagues
+                                Owned groups
                             </p>
                             <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
                                 {commissionerLeagues.map((league) => (
@@ -240,7 +240,7 @@ const DeleteAccountPage = () => {
                                                 {league.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {league?.member_count ?? 0} members · invite code {league.invite_code}
+                                                {league?.member_count ?? 0} members - invite code {league.invite_code}
                                             </p>
                                         </div>
                                         <Link
@@ -248,11 +248,11 @@ const DeleteAccountPage = () => {
                                             className="shrink-0 text-right text-sm leading-5 text-[var(--app-text)] transition hover:text-white"
                                         >
                                             <span className="sm:hidden">
-                                                Open league
+                                                Open group
                                                 <br />
                                                 settings
                                             </span>
-                                            <span className="hidden sm:inline">Open league settings</span>
+                                            <span className="hidden sm:inline">Open group settings</span>
                                         </Link>
                                     </div>
                                 ))}
@@ -263,7 +263,7 @@ const DeleteAccountPage = () => {
                     {memberLeagues.length > 0 && (
                         <div className="space-y-3">
                             <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                Joined leagues
+                                Joined groups
                             </p>
                             <div className="divide-y divide-[var(--border-soft)] border-y border-[var(--border-soft)]">
                                 {memberLeagues.map((league) => (
@@ -276,14 +276,14 @@ const DeleteAccountPage = () => {
                                                 {league.name}
                                             </p>
                                             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                                                {league?.member_count ?? 0} members · invite code {league.invite_code}
+                                                {league?.member_count ?? 0} members - invite code {league.invite_code}
                                             </p>
                                         </div>
                                         <Link
                                             href={`/league/${league.id}?tab=members`}
                                             className="text-sm text-[var(--app-text)] transition hover:text-white"
                                         >
-                                            Leave league
+                                            Leave group
                                         </Link>
                                     </div>
                                 ))}

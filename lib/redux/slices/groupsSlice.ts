@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { setStoredPlan } from "@/lib/plan/planStorage";
 import type {
 	CreateGroupPayload,
 	FetchGroupsParams,
@@ -38,6 +39,7 @@ import type {
 	DeleteMessagePayload,
 	FetchUnreadCountsByLeagueIdPayload,
 	MarkGroupChatsReadPayload,
+	GroupCounts,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -73,6 +75,7 @@ type GroupState = {
 	loadingOlderChats: boolean;
 	olderChats: ChatMessage[] | null;
 	unreadCounts: number;
+	groupsCounts: GroupCounts | null;
 };
 
 const initialState: GroupState = {
@@ -106,6 +109,7 @@ const initialState: GroupState = {
 	loadingOlderChats: false,
 	olderChats: null,
 	unreadCounts: 0,
+	groupsCounts: null,
 };
 
 const groupSlice = createSlice({
@@ -654,6 +658,25 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		fetchOwnGroupsCountsRequest: (state, action) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchOwnGroupsCountsSuccess: (state, action) => {
+			state.loading = false;
+			state.groupsCounts = action.payload;
+			setStoredPlan(action.payload?.user?.plan);
+		},
+		fetchOwnGroupsCountsFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchOwnGroupsCountsMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -767,6 +790,10 @@ export const {
 	markGroupChatsReadSuccess,
 	markGroupChatsReadFailure,
 	clearMarkGroupChatsReadMessage,
+	fetchOwnGroupsCountsRequest,
+	fetchOwnGroupsCountsSuccess,
+	fetchOwnGroupsCountsFailure,
+	clearFetchOwnGroupsCountsMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

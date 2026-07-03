@@ -11,6 +11,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
 import GroupsTabSkeleton from "../skeletons/fantasy/GroupsTabSkeleton";
+import { getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 
 type GroupSliceState = {
     group: {
@@ -139,7 +140,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={() => router.push("/cag-explained")}
                     className={`${actionButtonClassName} col-span-2 min-h-[88px] px-5 py-4 lg:col-span-1 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Start a new league</p>
+                    <p className="text-sm font-semibold text-white">Start a new group</p>
                     <span
                         className={actionIconClassName}
                         aria-hidden
@@ -152,7 +153,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={openJoinModal}
                     className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Join a league</p>
+                    <p className="text-sm font-semibold text-white">Join a group</p>
                     <span
                         className={actionIconClassName}
                         aria-hidden
@@ -165,7 +166,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={() => setShowScoringModal(true)}
                     className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">League scoring</p>
+                    <p className="text-sm font-semibold text-white">Group scoring</p>
                     <span className={actionIconClassName} aria-hidden>
                         <InfoIcon />
                     </span>
@@ -175,7 +176,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
             <div className="flex h-full flex-col gap-4">
                 {sortedGroups.length === 0 ? (
                     <p className="text-sm text-gray-300">
-                        no leagues yet; start a league or join one with an invite code to get started.
+                        no groups yet; start a League or join one with an invite code to get started.
                     </p>
                 ) : (
                     sortedGroups.slice(0, 2).map((group) => {
@@ -188,9 +189,17 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
-                                    <span>{isCommissioner ? "commissioner" : "member"}</span>
+                                    <span>{isCommissioner ? "owner" : "member"}</span>
                                     <span className="text-[10px] text-gray-300">
                                         code {group.invite_code}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+                                        {getGroupTypeLabel(group?.group_type ?? "league")}
+                                    </span>
+                                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
+                                        {getHostingTierLabel(group?.hosting_tier ?? "free")}
                                     </span>
                                 </div>
                                 <h3
@@ -202,8 +211,9 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 <p className="hidden text-sm text-gray-200 sm:block sm:line-clamp-2">
                                     {group.description || "Run slips, share picks, and climb the table together."}
                                 </p>
-                                <div className="text-xs uppercase tracking-wide text-gray-400">
-                                    <span>{group?.member_count} members</span>
+                                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-wide text-gray-400">
+                                    <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
                                 </div>
                             </button>
                         );
@@ -223,9 +233,17 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
                             >
                                 <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
-                                    <span>{isCommissioner ? "commissioner" : "member"}</span>
+                                    <span>{isCommissioner ? "owner" : "member"}</span>
                                     <span className="text-[10px] text-gray-300">
                                         code {group.invite_code}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
+                                        {getGroupTypeLabel(group?.group_type ?? "league")}
+                                    </span>
+                                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
+                                        {getHostingTierLabel(group?.hosting_tier ?? "free")}
                                     </span>
                                 </div>
                                 <h3
@@ -237,8 +255,9 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 <p className="hidden text-sm text-gray-200 sm:block sm:line-clamp-2">
                                     {group.description || "Run slips, share picks, and climb the table together."}
                                 </p>
-                                <div className="text-xs uppercase tracking-wide text-gray-400">
-                                    <span>{group?.member_count} members</span>
+                                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-wide text-gray-400">
+                                    <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
                                 </div>
                             </button>
                         );
@@ -266,7 +285,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">
                     <form onSubmit={handleJoin} className="space-y-4 text-center">
                         <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">join a league</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">join a league or Arena</p>
                             <p className="text-lg font-semibold text-white">Enter invite code</p>
                         </div>
                         <input

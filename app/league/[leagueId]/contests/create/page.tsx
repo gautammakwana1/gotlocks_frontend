@@ -11,6 +11,7 @@ import { CreateContestPayload, GroupSelector, RootState } from "@/lib/interfaces
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreateContestMessage, createContestRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { canCreateContestInGroup, getActiveContestCountsLabel } from "@/lib/groups/limits";
 
 type FormErrors = {
     name?: string;
@@ -120,7 +121,14 @@ const CreateContestPage = () => {
         return Object.keys(nextErrors).length === 0;
     }, [name, sportScope, startsAt, endsAt]);
 
+    const activeContestCount = group?.active_contest ?? 0;
+    const contestCheck = canCreateContestInGroup(group, activeContestCount);
+
     const handleSubmit = () => {
+        if (!contestCheck.allowed) {
+            setToast({ id: Date.now(), type: "error", message: contestCheck.error, duration: 3000 });
+            return;
+        }
         if (!validate()) return;
 
         const contestSports =
@@ -155,6 +163,9 @@ const CreateContestPage = () => {
                     {group.name}
                 </p>
                 <h1 className="text-3xl font-semibold text-white">Start a contest</h1>
+                <p className="text-xs uppercase tracking-wide text-gray-500">
+                    {getActiveContestCountsLabel(group, activeContestCount)} - archived contests do not count
+                </p>
             </header>
 
             <section className="relative overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-br from-slate-950/75 via-slate-900/55 to-blue-900/35 p-5 shadow-lg backdrop-blur sm:p-6">
@@ -285,11 +296,16 @@ const CreateContestPage = () => {
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={contestLoader}
+                        disabled={contestLoader || !contestCheck.allowed}
                         className="w-full rounded-lg bg-sky-500/25 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-sky-100 transition hover:bg-sky-500/35 sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         Create contest
                     </button>
+                    {!contestCheck.allowed && (
+                        <p className="text-xs font-semibold text-amber-100">
+                            {contestCheck.error}
+                        </p>
+                    )}
                 </div>
             </section>
         </div>

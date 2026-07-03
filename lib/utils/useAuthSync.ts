@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { Session } from '@supabase/supabase-js';
 import { getLocalStorage, setLocalStorage } from './jwtUtils';
 import { CurrentUser } from '../interfaces/interfaces';
+import { clearStoredPlan, setStoredPlan } from '../plan/planStorage';
 
 export function AuthSync() {
     useEffect(() => {
@@ -27,6 +28,7 @@ export function AuthSync() {
                 localStorage.removeItem('refresh_token');
                 localStorage.removeItem('userId');
                 localStorage.removeItem('provider');
+                clearStoredPlan();
             }
         });
 
@@ -61,4 +63,8 @@ export async function saveCleanUser(session: Session) {
     setLocalStorage("refresh_token", session.refresh_token);
     setLocalStorage("userId", user?.id);
     setLocalStorage("provider", user?.app_metadata?.provider);
+
+    // Supabase sessions (Google OAuth) don't carry the backend purchase plan;
+    // persist it when the backend exposes it on the user metadata.
+    setStoredPlan(user?.user_metadata?.plan as string | undefined);
 }

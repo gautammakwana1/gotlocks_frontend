@@ -8,15 +8,15 @@ import { useState } from "react";
 const EXPLAINED_STEPS = [
   {
     eyebrow: "step 1",
-    title: "Create your league",
+    title: "Create your group",
     body:
-      "Name your league and add a quick description. You’ll be the commissioner, with a few extra controls to manage the league.",
+      "Start a smaller League or, with Founding Pro, create an Arena for a bigger competition.",
   },
   {
     eyebrow: "step 2",
     title: "Share the code",
     body:
-      "Your invite code is ready instantly. Send it to friends so they can join right away.",
+      "Your invite code is ready instantly. Send it to members so they can join right away.",
   },
   {
     eyebrow: "step 3",
@@ -57,7 +57,7 @@ const CagExplainedPage = () => {
         <div onClick={(event) => event.stopPropagation()}>
           <BackButton />
         </div>
-        <span>League Creation</span>
+        <span>Group Creation</span>
       </div>
 
       <section className="grid max-w-xl gap-4 md:max-w-none md:grid-cols-3">

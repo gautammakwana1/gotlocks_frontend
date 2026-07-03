@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { RegisterPayload, LoginPayload, FetchMemberProfilePayload, User, SessionState, FollowUnfollowUserPayload, VerifyPasswordOTPPayload, InitialPasswordOTPPayload, ResetPasswordPayload, FetchFollowerUsersListByIdPayload, FetchFollowingUsersListByIdPayload, ChangePasswordPayload, AcceptDeclineFollowRequestPayload, FollowRequest, BlockUserPayload, UnblockUserPayload, BlockedUsers, EnablePostAlertPayload, DisablePostAlertPayload, PostAlerts, FetchBlockedUsersPayload, CurrentUser } from "@/lib/interfaces/interfaces";
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from "@/lib/utils/jwtUtils";
 import { ProfileBadgeProgress } from "@/lib/profile/badges";
+import { clearStoredPlan, setStoredPlan } from "@/lib/plan/planStorage";
 
 type AuthState = {
 	user: User | null;
@@ -74,6 +75,7 @@ const authSlice = createSlice({
 			removeLocalStorage("refresh_token");
 			removeLocalStorage("userId");
 			removeLocalStorage("provider");
+			clearStoredPlan();
 			state.session = null;
 			state.hasSeenIntro = false;
 			state.user = null;
@@ -98,6 +100,7 @@ const authSlice = createSlice({
 			state.loading = false;
 			state.user = action.payload;
 			state.message = action.payload?.message;
+			setStoredPlan(action.payload?.data?.user?.userData?.plan ?? action.payload?.data?.user?.plan);
 		},
 		loginWithEmailFailure: (state, action) => {
 			state.loading = false;
@@ -116,6 +119,7 @@ const authSlice = createSlice({
 			state.loading = false;
 			state.user = action.payload;
 			state.message = action.payload?.message;
+			setStoredPlan(action.payload?.data?.user?.userData?.plan ?? action.payload?.data?.profile?.plan);
 		},
 		loginWithGoogleFailure: (state, action) => {
 			state.loading = false;
@@ -136,6 +140,7 @@ const authSlice = createSlice({
 			state.loading = false;
 			state.user = action.payload;
 			state.message = action.payload?.message;
+			setStoredPlan(action.payload?.data?.user?.userData?.plan ?? action.payload?.user?.user_metadata?.plan);
 		},
 		registerUserFailure: (state, action) => {
 			state.loading = false;
@@ -177,6 +182,7 @@ const authSlice = createSlice({
 			}
 			state.user = action.payload;
 			state.profileUpdateMessage = action.payload?.message;
+			setStoredPlan(action.payload?.data?.profile?.plan);
 		},
 		updateProfileFailure: (state, action) => {
 			state.loading = false;
@@ -216,6 +222,7 @@ const authSlice = createSlice({
 			state.loading = false;
 			state.isProfileLoading = false;
 			state.user = action.payload?.data;
+			setStoredPlan(action.payload?.data?.profile?.plan ?? action.payload?.data?.plan);
 		},
 		fetchMemberProfileFailure: (state, action) => {
 			state.loading = false;
