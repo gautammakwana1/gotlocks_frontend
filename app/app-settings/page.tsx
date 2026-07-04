@@ -20,6 +20,10 @@ const AppSettingsPage = () => {
             href: "/app-settings/plan",
         },
         {
+            title: "Transaction history",
+            href: "/app-settings/transaction-history",
+        },
+        {
             title: "Change your password",
             href: "/app-settings/change-password",
         },

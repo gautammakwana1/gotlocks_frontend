@@ -1405,9 +1405,16 @@ export type PlanDowngrade = {
     };
 };
 
+export type PlanPricing = {
+    amount: number;   // price in the currency's smallest unit (e.g. cents)
+    currency: string; // ISO currency code, e.g. "usd"
+    label: string;    // preformatted display price, e.g. "$29.99"
+};
+
 export type PlanOverview = {
     plan: UserPlan;
     status: string;
+    pricing?: PlanPricing;
     downgrade: PlanDowngrade;
 };
 
@@ -1415,11 +1422,33 @@ export type UpdatePlanpayload = {
     plan: UserPlan;
 };
 
+export type PaymentTransaction = {
+    id: string;
+    amount: number;   // smallest currency unit (e.g. cents)
+    currency: string;
+    status: string;   // 'succeeded' | 'refunded' | 'failed'
+    plan?: string | null;
+    description?: string | null;
+    receipt_url?: string | null;
+    card_brand?: string | null;
+    card_last4?: string | null;
+    created_at: string;
+};
+
+export type FetchTransactionsPayload = {
+    page?: number;
+    limit?: number;
+};
+
 export type PlanState = {
     overview: PlanOverview | null;
     loading: boolean;
     error: string | null;
     message: string | null;
+    transactions: PaymentTransaction[];
+    transactionsLoading: boolean;
+    transactionsError: string | null;
+    transactionsHasMore: boolean;
 };
 
 export type PickSliceState = {

@@ -1,35 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { normalizeUserPlan } from "@/lib/groups/limits";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type { PlanDowngrade, PlanState } from "@/lib/interfaces/interfaces";
-import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
+import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, createCheckoutSessionRequest, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
 
 type RootState = {
     plan: PlanState;
-};
-
-type CheckoutForm = {
-    name: string;
-    email: string;
-    cardNumber: string;
-    expiry: string;
-    cvc: string;
-    postalCode: string;
-};
-
-const emptyCheckoutForm: CheckoutForm = {
-    name: "",
-    email: "",
-    cardNumber: "",
-    expiry: "",
-    cvc: "",
-    postalCode: "",
 };
 
 const fieldClassName =
@@ -47,24 +29,14 @@ const AppPlanPage = () => {
     const { setToast } = useToast();
     const [checkoutOpen, setCheckoutOpen] = useState(false);
     const [downgradeOpen, setDowngradeOpen] = useState(false);
-    const [checkoutForm, setCheckoutForm] = useState<CheckoutForm>(emptyCheckoutForm);
-    const [checkoutError, setCheckoutError] = useState<string | null>(null);
     const [downgradeConfirmation, setDowngradeConfirmation] = useState("");
+    const [checkoutReturn, setCheckoutReturn] = useState<null | "success" | "cancel">(null);
 
     useEffect(() => {
         if (!currentUser) {
             router.replace("/landing-page");
         }
     }, [currentUser, router]);
-
-    useEffect(() => {
-        if (!currentUser) return;
-        setCheckoutForm((current) => ({
-            ...current,
-            name: current.name || currentUser.full_name,
-            email: current.email || currentUser.email,
-        }));
-    }, [currentUser]);
 
     const { overview, error, loading, message } = useSelector((state: RootState) => state.plan);
 
@@ -101,6 +73,7 @@ const AppPlanPage = () => {
     }, [error, setToast, dispatch]);
 
     const plan = normalizeUserPlan(overview?.plan ?? currentUser?.plan);
+    const priceLabel = overview?.pricing?.label ?? "One-time unlock";
     const downgradeCheck = overview?.downgrade
         ? { allowed: overview.downgrade.allowed, error: overview.downgrade.error }
         : { allowed: false, error: null as string | null };
@@ -111,32 +84,72 @@ const AppPlanPage = () => {
         maxFreeLeagues: 3,
     };
 
+    // Detect the Stripe checkout return once, then strip the query param.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const checkout = params.get("checkout");
+        if (checkout === "success" || checkout === "cancel") {
+            setCheckoutReturn(checkout);
+            window.history.replaceState({}, "", "/app-settings/plan");
+        }
+    }, []);
+
+    // Cancelled checkout — inform the user, nothing was charged.
+    useEffect(() => {
+        if (checkoutReturn !== "cancel") return;
+        setToast({
+            id: Date.now(),
+            type: "error",
+            message: "Checkout canceled. You have not been charged.",
+            duration: 4000,
+        });
+        setCheckoutReturn(null);
+    }, [checkoutReturn, setToast]);
+
+    // Successful checkout — the backend webhook flips the plan to Pro, which can
+    // lag the browser redirect by a few seconds, so poll the overview until Pro.
+    useEffect(() => {
+        if (checkoutReturn !== "success" || !currentUser) return;
+        setCheckoutOpen(false);
+        let tries = 0;
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const poll = () => {
+            if (cancelled) return;
+            dispatch(fetchPlanOverviewRequest());
+            tries += 1;
+            if (tries < 6) timer = setTimeout(poll, 2000);
+        };
+        poll();
+        return () => {
+            cancelled = true;
+            if (timer) clearTimeout(timer);
+        };
+    }, [checkoutReturn, currentUser, dispatch]);
+
+    // Celebrate once the polled overview reports Pro.
+    useEffect(() => {
+        if (checkoutReturn === "success" && plan === "pro") {
+            setToast({
+                id: Date.now(),
+                type: "success",
+                message: "Welcome to Founding Pro! 🎉",
+                duration: 4000,
+            });
+            setCheckoutReturn(null);
+        }
+    }, [checkoutReturn, plan, setToast]);
+
     if (!currentUser) return null;
 
-    const checkoutReady =
-        checkoutForm.name.trim() &&
-        checkoutForm.email.trim() &&
-        checkoutForm.cardNumber.trim() &&
-        checkoutForm.expiry.trim() &&
-        checkoutForm.cvc.trim() &&
-        checkoutForm.postalCode.trim();
     const needsDowngradeConfirmation = plan === "pro" && downgradeCheck.allowed;
     const canConfirmDowngrade =
         needsDowngradeConfirmation && downgradeConfirmation.trim().toUpperCase() === "FREE";
 
-    const handleCheckoutSubmit = (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        setCheckoutError(null);
-
-        if (!checkoutReady) {
-            setCheckoutError("Complete the simulated payment fields to continue.");
-            return;
-        }
-
-        dispatch(updateUserPlanRequest({ plan: "pro" }));
-
-        setCheckoutOpen(false);
-        setCheckoutForm(emptyCheckoutForm);
+    const handleStartCheckout = () => {
+        // Kicks off Stripe hosted checkout; the saga redirects to Stripe on success.
+        dispatch(createCheckoutSessionRequest());
     };
 
     const handleDowngrade = () => {
@@ -158,7 +171,7 @@ const AppPlanPage = () => {
                     Plan and billing
                 </h1>
                 <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Manage the gotLocks organizer plan. Payment collection is simulated in this build.
+                    Manage the gotLocks organizer plan. Payments are processed securely by Stripe.
                 </p>
             </header>
 
@@ -197,6 +210,15 @@ const AppPlanPage = () => {
                         Switch to Free
                     </button>
                 )}
+
+                <div>
+                    <Link
+                        href="/app-settings/transaction-history"
+                        className="text-sm font-medium text-sky-300 transition hover:text-sky-200"
+                    >
+                        View payment history →
+                    </Link>
+                </div>
             </section>
 
             <section className="grid gap-3 sm:grid-cols-2">
@@ -248,20 +270,18 @@ const AppPlanPage = () => {
 
             {checkoutOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6">
-                    <form
-                        onSubmit={handleCheckoutSubmit}
-                        className="w-full max-w-lg space-y-5 rounded-3xl border border-white/10 bg-black p-5 shadow-2xl"
-                    >
+                    <div className="w-full max-w-lg space-y-5 rounded-3xl border border-white/10 bg-black p-5 shadow-2xl">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <p className="text-xs uppercase tracking-[0.18em] text-sky-200">
-                                    simulated checkout
+                                <p className="text-xs tracking-[0.18em] text-sky-200">
+                                    secure checkout
                                 </p>
                                 <h2 className="mt-2 text-xl font-semibold text-white">
                                     Founding Pro one-time unlock
                                 </h2>
                                 <p className="mt-2 text-sm leading-6 text-gray-300">
-                                    This form mirrors a future payment step. No card is charged in this build.
+                                    You&apos;ll be redirected to Stripe&apos;s secure checkout to complete
+                                    your purchase. Your card details are handled entirely by Stripe.
                                 </p>
                             </div>
                             <button
@@ -276,107 +296,22 @@ const AppPlanPage = () => {
                         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
                             <div className="flex items-center justify-between gap-3">
                                 <span>Founding Pro</span>
-                                <span className="font-semibold text-white">One-time unlock</span>
+                                <span className="font-semibold text-white">{priceLabel}</span>
                             </div>
+                            <p className="mt-2 text-xs text-gray-400">
+                                One-time payment. Unlocks unlimited leagues and up to 3 Arenas.
+                            </p>
                         </div>
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="block space-y-2 sm:col-span-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    billing name
-                                </span>
-                                <input
-                                    value={checkoutForm.name}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({ ...current, name: event.target.value }))
-                                    }
-                                    className={fieldClassName}
-                                />
-                            </label>
-                            <label className="block space-y-2 sm:col-span-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    email
-                                </span>
-                                <input
-                                    type="email"
-                                    value={checkoutForm.email}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({ ...current, email: event.target.value }))
-                                    }
-                                    className={fieldClassName}
-                                />
-                            </label>
-                            <label className="block space-y-2 sm:col-span-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    card number
-                                </span>
-                                <input
-                                    value={checkoutForm.cardNumber}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({
-                                            ...current,
-                                            cardNumber: event.target.value,
-                                        }))
-                                    }
-                                    placeholder="4242 4242 4242 4242"
-                                    inputMode="numeric"
-                                    className={fieldClassName}
-                                />
-                            </label>
-                            <label className="block space-y-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    expiry
-                                </span>
-                                <input
-                                    value={checkoutForm.expiry}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({ ...current, expiry: event.target.value }))
-                                    }
-                                    placeholder="MM/YY"
-                                    className={fieldClassName}
-                                />
-                            </label>
-                            <label className="block space-y-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    cvc
-                                </span>
-                                <input
-                                    value={checkoutForm.cvc}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({ ...current, cvc: event.target.value }))
-                                    }
-                                    placeholder="123"
-                                    inputMode="numeric"
-                                    className={fieldClassName}
-                                />
-                            </label>
-                            <label className="block space-y-2 sm:col-span-2">
-                                <span className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                    postal code
-                                </span>
-                                <input
-                                    value={checkoutForm.postalCode}
-                                    onChange={(event) =>
-                                        setCheckoutForm((current) => ({
-                                            ...current,
-                                            postalCode: event.target.value,
-                                        }))
-                                    }
-                                    className={fieldClassName}
-                                />
-                            </label>
-                        </div>
-
-                        {checkoutError && <p className="text-sm font-semibold text-red-200">{checkoutError}</p>}
 
                         <button
-                            type="submit"
+                            type="button"
+                            onClick={handleStartCheckout}
                             disabled={loading}
                             className="w-full rounded-2xl border border-sky-300/50 bg-sky-500/20 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-sky-50 transition hover:bg-sky-500/30 disabled:opacity-[0.5] disabled:cursor-not-allowed"
                         >
-                            Simulate payment and unlock Pro
+                            {loading ? "Redirecting to Stripe…" : "Continue to secure checkout"}
                         </button>
-                    </form>
+                    </div>
                 </div>
             )}
 
