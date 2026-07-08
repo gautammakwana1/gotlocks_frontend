@@ -11,6 +11,10 @@
         {
             "path": "/api/cron/finalized-slips",
             "schedule": "5-59/10 * * * *"
+        },
+        {
+            "path": "/api/cron/clean-dead-push-tokens",
+            "schedule": "*/15 * * * *"
         }
     ]
 }

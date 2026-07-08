@@ -20,10 +20,6 @@ const AppSettingsPage = () => {
             href: "/app-settings/plan",
         },
         {
-            title: "Transaction history",
-            href: "/app-settings/transaction-history",
-        },
-        {
             title: "Change your password",
             href: "/app-settings/change-password",
         },
@@ -58,7 +54,7 @@ const AppSettingsPage = () => {
                         <Link
                             key={row.title}
                             href={row.href}
-                            className="group flex w-full items-center gap-3 py-4 text-left transition sm:py-5"
+                            className="group flex w-full items-center gap-3 px-2 py-4 text-left transition sm:py-5 hover:bg-white/5"
                         >
                             <div className="min-w-0 flex-1">
                                 <p className="text-lg font-medium tracking-tight text-[var(--app-text)] sm:text-xl">
