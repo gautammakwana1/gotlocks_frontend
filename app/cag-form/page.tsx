@@ -62,7 +62,6 @@ const CagFormPage = () => {
 
   const showSuccess = createdId && inviteCode;
   const userPlan = useUserPlan();
-  const planLabel = userPlan === "pro" ? "Founding Pro" : "Free";
   const selectedLabel = groupType === "arena" ? "Arena" : "League";
   const planUser = currentUser ? { ...currentUser, plan: userPlan } : undefined;
   const arenaCheck = canCreateGroup(planUser, "arena", (groupsCounts?.counts.arena ?? 0), (groupsCounts?.counts.league ?? 0));
@@ -199,9 +198,6 @@ const CagFormPage = () => {
         {!showSuccess && (
           <div className={`${accentGradientBox} p-6`}>
             <h1 className="text-2xl font-semibold text-white">Create a group</h1>
-            <p className="mt-2 text-sm text-gray-400">
-              Create a private League or use Founding Pro to create a larger Arena.
-            </p>
 
             <div className="mt-6 flex flex-col gap-4">
               <div className="space-y-3">
@@ -248,19 +244,6 @@ const CagFormPage = () => {
                       </button>
                     );
                   })}
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-xs leading-5 text-gray-300">
-                  <p className="font-semibold text-white">{planLabel}</p>
-                  <p>
-                    {userPlan === "pro"
-                      ? "Host unlimited leagues, create up to 3 Arenas, and run up to 6 active contests per group."
-                      : "Host up to 3 leagues with 10 members and 3 active contests each."}
-                  </p>
-                  {arenaLocked && (
-                    <p className="mt-1 text-amber-100">
-                      Upgrade to Pro to create an Arena.
-                    </p>
-                  )}
                 </div>
               </div>
 

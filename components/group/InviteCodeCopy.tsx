@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { MouseEvent, useCallback, useState } from "react";
 import { CheckIcon, CopyIcon } from "../ui/SvgIcons";
 import { useToast } from "@/lib/state/ToastContext";
+import { groupPreviewMetaTextClassName } from "./GroupPreviewChip";
 
 type Props = {
     code?: string | null;
@@ -13,8 +14,10 @@ export const InviteCodeCopy = ({ code, className }: Props) => {
     const { setToast } = useToast();
     const [copied, setCopied] = useState(false);
 
-    const handleCopy = useCallback(async () => {
+    const handleCopy = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
         if (!code) return;
+        event.preventDefault();
+        event.stopPropagation();
         try {
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(code);
@@ -44,14 +47,11 @@ export const InviteCodeCopy = ({ code, className }: Props) => {
             type="button"
             onClick={handleCopy}
             aria-label="Copy invite code"
-            className={`group flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-3 pr-2.5 text-xs transition hover:border-white/20 hover:bg-white/[0.07] ${className ?? ""}`}
+            className={`group flex shrink-0 items-center gap-2 rounded-full py-1 pl-3 pr-2.5 text-xs transition hover:border-white/20 hover:bg-white/[0.07] ${groupPreviewMetaTextClassName} ${className}`}
         >
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                invite
-            </span>
             <span className="font-semibold tracking-wide text-gray-200">{code}</span>
             <span className="flex h-4 w-4 items-center justify-center text-gray-400 transition group-hover:text-sky-200">
-                {copied ? <CheckIcon className="h-3 w-3 text-sky-300" /> : <CopyIcon />}
+                {copied ? <CheckIcon className="h-3 w-3 text-sky-300" /> : <CopyIcon className="h-3.5 w-3.5" />}
             </span>
         </button>
     );

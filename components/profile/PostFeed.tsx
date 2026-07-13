@@ -85,7 +85,7 @@ const PostFeed = ({
                     </div>
                 ))}
 
-                {picks.length === 0 && (
+                {!loading && picks.length === 0 && (
                     <div className="px-5 py-4 sm:px-6">
                         <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-[var(--text-secondary)]">
                             {emptyMessage}

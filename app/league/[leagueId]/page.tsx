@@ -10,7 +10,7 @@ import { Contest, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchGroupOwnerPlanDetailsRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
 import ModifyMembers from "@/components/group/ModifyMembers";
 import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
@@ -22,6 +22,7 @@ import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 import { SettingIcon } from "@/components/ui/SvgIcons";
 import { canCreateContestInGroup, getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "@/components/group/GroupPreviewChip";
 
 interface FormErrors {
   name?: string;
@@ -131,6 +132,7 @@ const LeagueDashboardPage = () => {
     deleteLoading,
     deleteMessage,
     unreadCounts,
+    ownerPlan,
   } = useSelector((state: GroupSelector) => state.group);
   const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
 
@@ -156,6 +158,7 @@ const LeagueDashboardPage = () => {
     // if (fetchedGroupId.current === leagueId) return;
 
     dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
+    dispatch(fetchGroupOwnerPlanDetailsRequest({ group_id: leagueId }));
     dispatch(fetchActiveContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     dispatch(fetchUnreadCountsByLeagueIdRequest({ group_id: leagueId }));
@@ -172,6 +175,10 @@ const LeagueDashboardPage = () => {
     0,
     visibleTabs.findIndex((tab) => tab.id === activeTab)
   );
+  const groupOwnerPlan = useMemo(
+    () => ownerPlan ? ownerPlan.plan : "free",
+    [ownerPlan]
+  );
 
   useEffect(() => {
     const rawTab = searchParams.get("tab");
@@ -180,13 +187,11 @@ const LeagueDashboardPage = () => {
     }
   }, [params.leagueId, router, searchParams]);
 
-  const [showScoringModal, setShowScoringModal] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [editLeagueName, setEditLeagueName] = useState("");
   const [editLeagueDescription, setEditLeagueDescription] = useState("");
   const [deleteConfirmCode, setDeleteConfirmCode] = useState("");
   const [deleteCodeInput, setDeleteCodeInput] = useState("");
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isDeletingGroup, setIsDeletingGroup] = useState(false);
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
@@ -507,8 +512,8 @@ const LeagueDashboardPage = () => {
     <div
       className={
         activeTab === "chat"
-          ? "flex flex-col gap-6 -mb-36 h-[calc(var(--app-vvh,100dvh)-var(--topnav-height))] min-h-0 overflow-hidden"
-          : "flex flex-col gap-6 pb-10"
+          ? "flex flex-col gap-3 -mb-36 h-[calc(var(--app-vvh,100dvh)-var(--topnav-height))] min-h-0 overflow-hidden"
+          : "flex flex-col gap-3 pb-10"
       }
     >
       {activeTab !== "chat" && (
@@ -517,47 +522,36 @@ const LeagueDashboardPage = () => {
             <BackButton label="back to all groups" fallback="/fantasy" preferFallback />
             <InviteCodeCopy code={group?.invite_code} />
           </div>
-          <header className="-mx-5 space-y-3 px-5 pb-5 sm:mx-0 sm:px-0">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
-                    {getGroupTypeLabel(group?.group_type ?? "league")}
-                  </span>
-                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
-                    {getHostingTierLabel(group?.hosting_tier ?? "free")}
-                  </span>
-                </div>
-                <h1
-                  className="allow-caps text-3xl font-extrabold text-transparent bg-clip-text"
-                  style={displayNameGradientStyle}
-                >
-                  {group?.name}
-                </h1>
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.14em] text-gray-400">
+          <header className="-mx-5 px-5 pb-3 sm:mx-0 sm:px-0">
+            <div className="min-w-0">
+              <div
+                className={`flex items-start justify-between gap-3 text-gray-400 ${groupPreviewMetaTextClassName}`}
+              >
+                <div className="flex min-w-0 flex-wrap gap-2">
                   {group && (
                     <>
                       <span>{getGroupCapacityLabel(group, memberCount)}</span>
                       <span>{getActiveContestCountsLabel(group, activeContestCount)}</span>
                     </>
                   )}
-                  <span>Archived contests do not count.</span>
                 </div>
-                {group?.description && (
-                  <p className="mt-2 max-w-2xl text-sm text-gray-400">
-                    {group.description}
-                  </p>
-                )}
+                <GroupTypeMetaLabel
+                  group={group}
+                  ownerPlan={groupOwnerPlan}
+                  className="shrink-0 text-right"
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => setShowScoringModal(true)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-xs font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
-                aria-label="Contest scoring"
-                aria-haspopup="dialog"
+              <h1
+                className="allow-caps mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
+                style={displayNameGradientStyle}
               >
-                i
-              </button>
+                {group?.name}
+              </h1>
+              {group?.description && (
+                <p className="mt-1.5 max-w-2xl truncate text-xs text-gray-500">
+                  {group.description}
+                </p>
+              )}
             </div>
           </header>
         </>
@@ -566,7 +560,7 @@ const LeagueDashboardPage = () => {
       <section
         className={`-mx-5 border-y border-white/10 px-5 sm:mx-0 sm:px-0 ${activeTab === "chat"
           ? "sticky top-0 z-20 bg-[var(--app-bg)]"
-          : "-mt-6"
+          : "-mt-3"
           }`}
       >
         <div
@@ -719,10 +713,8 @@ const LeagueDashboardPage = () => {
       )}
 
       {activeTab === "feed" && (
-        <div className="space-y-4 pt-2">
-          <div className="rounded-3xl border border-white/10 bg-black/60 p-5 text-sm text-gray-300 shadow-lg">
-            <FeedTab groupId={group?.id} />
-          </div>
+        <div className="pt-1">
+          <FeedTab groupId={group?.id} />
         </div>
       )}
 
@@ -830,12 +822,6 @@ const LeagueDashboardPage = () => {
           onConfirm={handleConfirmDeleteGroup}
         />
       )}
-
-      <ScoringModal
-        open={showScoringModal}
-        variant="league"
-        onClose={() => setShowScoringModal(false)}
-      />
     </div>
   );
 };

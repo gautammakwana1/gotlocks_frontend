@@ -352,7 +352,7 @@ const AppPlanPage = () => {
                     </p>
                 ) : downgradeCheck.allowed ? (
                     <p className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                        This account can switch to Free. Existing Free-hosted groups keep their stored limits.
+                        No Pro-hosted group blockers are currently active for this account.
                     </p>
                 ) : (
                     <div className="space-y-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50">

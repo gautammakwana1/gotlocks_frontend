@@ -40,6 +40,8 @@ import type {
 	FetchUnreadCountsByLeagueIdPayload,
 	MarkGroupChatsReadPayload,
 	GroupCounts,
+	GroupOwnerPlan,
+	FetchGroupOwnerPlanPayload,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -76,6 +78,7 @@ type GroupState = {
 	olderChats: ChatMessage[] | null;
 	unreadCounts: number;
 	groupsCounts: GroupCounts | null;
+	ownerPlan: GroupOwnerPlan | null;
 };
 
 const initialState: GroupState = {
@@ -110,6 +113,7 @@ const initialState: GroupState = {
 	olderChats: null,
 	unreadCounts: 0,
 	groupsCounts: null,
+	ownerPlan: null,
 };
 
 const groupSlice = createSlice({
@@ -677,6 +681,24 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		fetchGroupOwnerPlanDetailsRequest: (state, action: PayloadAction<FetchGroupOwnerPlanPayload>) => {
+			void action;
+			state.loading = true;
+			state.error = null;
+		},
+		fetchGroupOwnerPlanDetailsSuccess: (state, action) => {
+			state.loading = false;
+			state.ownerPlan = action.payload.owner;
+		},
+		fetchGroupOwnerPlanDetailsFailure: (state, action) => {
+			state.loading = false;
+			state.error = action.payload;
+		},
+		clearFetchGroupOwnerPlanDetailsMessage(state) {
+			state.error = null;
+			state.message = null;
+		},
 	},
 });
 
@@ -794,6 +816,10 @@ export const {
 	fetchOwnGroupsCountsSuccess,
 	fetchOwnGroupsCountsFailure,
 	clearFetchOwnGroupsCountsMessage,
+	fetchGroupOwnerPlanDetailsRequest,
+	fetchGroupOwnerPlanDetailsSuccess,
+	fetchGroupOwnerPlanDetailsFailure,
+	clearFetchGroupOwnerPlanDetailsMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

@@ -17,12 +17,21 @@ const GroupsTabSkeleton = () => {
                 {[1, 2].map((i) => (
                     <div
                         key={i}
-                        className="flex h-44 w-full flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg sm:p-6"
+                        className="flex h-44 w-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg sm:p-6"
                     >
-                        <div className="h-3 w-24 rounded bg-white/10" />
+                        <div className="flex justify-between">
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                        </div>
                         <div className="h-6 w-1/2 rounded bg-white/10" />
-                        <div className="h-4 w-3/4 rounded bg-white/10" />
-                        <div className="mt-auto h-3 w-16 rounded bg-white/10" />
+                        <div className="flex gap-3">
+                            <div className="mt-auto h-3 w-30 rounded bg-white/10" />
+                            <div className="mt-auto h-3 w-30 rounded bg-white/10" />
+                        </div>
                     </div>
                 ))}
             </div>
@@ -32,12 +41,21 @@ const GroupsTabSkeleton = () => {
                 {[1, 2].map((i) => (
                     <div
                         key={i}
-                        className="flex h-44 w-full flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg sm:p-6"
+                        className="flex h-44 w-full flex-col gap-5 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg sm:p-6"
                     >
-                        <div className="h-3 w-24 rounded bg-white/10" />
-                        <div className="h-6 w-3/4 rounded bg-white/10" />
-                        <div className="h-4 w-full rounded bg-white/10" />
-                        <div className="mt-auto h-3 w-16 rounded bg-white/10" />
+                        <div className="flex justify-between">
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                            <div className="h-3 w-20 rounded bg-white/10" />
+                        </div>
+                        <div className="h-6 w-1/2 rounded bg-white/10" />
+                        <div className="flex gap-3">
+                            <div className="mt-auto h-3 w-30 rounded bg-white/10" />
+                            <div className="mt-auto h-3 w-30 rounded bg-white/10" />
+                        </div>
                     </div>
                 ))}
             </div>

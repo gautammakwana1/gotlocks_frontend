@@ -456,6 +456,7 @@ export type GroupState = {
     olderChats: ChatMessage[] | null;
     unreadCounts: number;
     groupsCounts: GroupCounts | null;
+    ownerPlan: GroupOwnerPlan | null;
 }
 
 export type GroupSelector = {
@@ -507,6 +508,16 @@ export type CreateGroupPayload = {
     description: string;
     is_enable_secondary_leaderboard: boolean;
     group_type: GroupType;
+};
+
+export type FetchGroupOwnerPlanPayload = {
+    group_id: string;
+};
+
+export type GroupOwnerPlan = {
+    plan: UserPlan;
+    username: string;
+    full_name: string;
 };
 
 export type GroupCounts = {
@@ -872,6 +883,10 @@ export type FetchPostPicksByUserIdPayload = {
     user_id: string;
     page?: number;
     limit?: number;
+    sort_by?: string;
+    result?: string;
+    pick_type?: string;
+    confidence_lvl?: string;
     // When set, the API guarantees this pick is included at the top of page 1, so a
     // deep-linked "highlight" pick is present even if it would fall outside the first page.
     pick_id?: string;

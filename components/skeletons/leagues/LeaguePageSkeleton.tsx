@@ -49,14 +49,22 @@ const LeaguePageSkeleton = () => {
       {/* Header Skeleton */}
       <header className="-mx-5 space-y-3 border-b border-white/10 px-5 pb-5 sm:mx-0 sm:px-0">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2 flex-1">
-            {/* Title Placeholder */}
-            <div className="h-9 w-48 rounded bg-white/10 sm:w-64" />
-            {/* Description Placeholder */}
-            <div className="h-4 w-5/6 max-w-2xl rounded bg-white/5 sm:w-3/4" />
+          <div className="flex gap-3">
+            <div className="h-4 w-20 rounded-full bg-white/10" />
+            <div className="h-4 w-20 rounded-full bg-white/10" />
           </div>
           {/* Scoring Info Button Placeholder */}
-          <div className="h-8 w-8 rounded-full bg-white/5" />
+          <div className="h-8 w-8 rounded-full bg-white/10" />
+        </div>
+        <div className="min-w-0 space-y-2 flex-1">
+          {/* Title Placeholder */}
+          <div className="h-9 w-48 rounded bg-white/10 sm:w-64" />
+          {/* Description Placeholder */}
+          <div className="h-4 w-5/6 max-w-2xl rounded bg-white/5 sm:w-3/4" />
+          <div className="flex items-start gap-3">
+            <div className="h-4 w-30 rounded bg-white/10" />
+            <div className="h-4 w-30 rounded bg-white/10" />
+          </div>
         </div>
       </header>
 

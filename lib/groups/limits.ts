@@ -125,6 +125,32 @@ export const normalizeLeague = (
     };
 };
 
+export const upgradeOwnedFreeLeaguesToPro = (leagues: GroupObject[], ownerId: string): GroupObject[] => {
+    const proLeagueLimits = getGroupLimits("league", "pro");
+
+    return leagues.map((league) => {
+        if (
+            league.created_by !== ownerId ||
+            normalizeGroupType(league.group_type) !== "league" ||
+            normalizeHostingTier(league.hosting_tier) === "pro"
+        ) {
+            return league;
+        }
+
+        const settings = normalizeLeagueSettings(league);
+        return {
+            ...league,
+            groupType: "league",
+            hostingTier: "pro",
+            settings: {
+                ...settings,
+                maxMembers: proLeagueLimits.maxMembers,
+                maxActiveContests: proLeagueLimits.maxActiveContests,
+            },
+        };
+    });
+};
+
 export const getOwnedLeagueCount = (
     leagues: GroupObject[],
     userId: string,

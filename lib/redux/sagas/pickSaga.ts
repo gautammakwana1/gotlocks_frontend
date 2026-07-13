@@ -261,12 +261,21 @@ function* handleFetchFollowingUsersPicksPosts(action: PayloadAction<FetchPostPic
 
 function* handleFetchPostPicksByUserIdPosts(action: PayloadAction<FetchPostPicksByUserIdPayload>): SagaIterator {
     try {
-        const { user_id, page = 1, limit = 10, pick_id } = action.payload;
+        const { user_id, page = 1, limit = 10, pick_id, sort_by, result, pick_type, confidence_lvl } = action.payload;
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}/pick/post-picks-by-user-id`,
             {
-                params: { user_id, page, limit, ...(pick_id ? { pick_id } : {}) }
+                params: {
+                    user_id,
+                    page,
+                    limit,
+                    ...(sort_by ? { sort_by } : {}),
+                    ...(result ? { result } : {}),
+                    ...(pick_type ? { pick_type } : {}),
+                    ...(confidence_lvl ? { confidence_lvl } : {}),
+                    ...(pick_id ? { pick_id } : {}),
+                }
             }
         );
         const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };

@@ -12,6 +12,8 @@ import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
 import GroupsTabSkeleton from "../skeletons/fantasy/GroupsTabSkeleton";
 import { getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { groupPreviewKickerTextClassName, groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "../group/GroupPreviewChip";
+import InviteCodeCopy from "../group/InviteCodeCopy";
 
 type GroupSliceState = {
     group: {
@@ -137,7 +139,7 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
             <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
                 <button
                     type="button"
-                    onClick={() => router.push("/cag-explained")}
+                    onClick={() => router.push("/cag-form")}
                     className={`${actionButtonClassName} col-span-2 min-h-[88px] px-5 py-4 lg:col-span-1 lg:min-h-[88px]`}
                 >
                     <p className="text-sm font-semibold text-white">Start a new group</p>
@@ -182,40 +184,51 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     sortedGroups.slice(0, 2).map((group) => {
                         const isCommissioner = group.created_by === currentUser?.userId;
                         return (
-                            <button
+                            <div
                                 key={group.id}
-                                type="button"
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => router.push(`/league/${group.id}`)}
-                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
+                                onKeyDown={(event) => {
+                                    if (event.target !== event.currentTarget) return;
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        router.push(`/league/${group.id}`);
+                                    }
+                                }}
+                                className="relative flex h-full min-h-[128px] cursor-pointer flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-5 text-left shadow-lg shadow-black/25 transition hover:border-sky-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70 sm:min-h-[136px] sm:p-6"
                             >
-                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
-                                    <span>{isCommissioner ? "owner" : "member"}</span>
-                                    <span className="text-[10px] text-gray-300">
-                                        code {group.invite_code}
-                                    </span>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div
+                                        className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
+                                    >
+                                        <GroupTypeMetaLabel
+                                            group={group}
+                                            ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
+                                            textClassName={groupPreviewKickerTextClassName}
+                                        />
+                                        <span aria-hidden className="text-gray-600">
+                                            ·
+                                        </span>
+                                        <span className="text-gray-300">{isCommissioner ? "OWNER" : "MEMBER"}</span>
+                                    </div>
+                                    <InviteCodeCopy code={group?.invite_code} />
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
-                                        {getGroupTypeLabel(group?.group_type ?? "league")}
-                                    </span>
-                                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
-                                        {getHostingTierLabel(group?.hosting_tier ?? "free")}
-                                    </span>
+                                <div className="flex min-w-0 flex-1 items-center py-4">
+                                    <h3
+                                        className="allow-caps line-clamp-2 break-words text-xl font-extrabold leading-tight text-transparent bg-clip-text"
+                                        style={displayNameGradientStyle}
+                                    >
+                                        {group.name}
+                                    </h3>
                                 </div>
-                                <h3
-                                    className="allow-caps text-xl font-extrabold text-transparent bg-clip-text"
-                                    style={displayNameGradientStyle}
+                                <div
+                                    className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                 >
-                                    {group.name}
-                                </h3>
-                                <p className="hidden text-sm text-gray-200 sm:block sm:line-clamp-2">
-                                    {group.description || "Run slips, share picks, and climb the table together."}
-                                </p>
-                                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-wide text-gray-400">
                                     <span>{getGroupCapacityLabel(group, group.member_count)}</span>
                                     <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })
                 )}
@@ -226,40 +239,51 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     {sortedGroups.slice(2).map((group) => {
                         const isCommissioner = group.created_by === currentUser?.userId;
                         return (
-                            <button
+                            <div
                                 key={group.id}
-                                type="button"
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => router.push(`/league/${group.id}`)}
-                                className="flex h-full flex-col gap-3 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/0 p-5 text-left shadow-lg shadow-black/30 transition hover:border-sky-400/60 hover:shadow-sky-500/25 sm:p-6"
+                                onKeyDown={(event) => {
+                                    if (event.target !== event.currentTarget) return;
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        router.push(`/league/${group.id}`);
+                                    }
+                                }}
+                                className="relative flex h-full min-h-[128px] cursor-pointer flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-5 text-left shadow-lg shadow-black/25 transition hover:border-sky-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70 sm:min-h-[136px] sm:p-6"
                             >
-                                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-gray-400">
-                                    <span>{isCommissioner ? "owner" : "member"}</span>
-                                    <span className="text-[10px] text-gray-300">
-                                        code {group.invite_code}
-                                    </span>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div
+                                        className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
+                                    >
+                                        <GroupTypeMetaLabel
+                                            group={group}
+                                            ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
+                                            textClassName={groupPreviewKickerTextClassName}
+                                        />
+                                        <span aria-hidden className="text-gray-600">
+                                            ·
+                                        </span>
+                                        <span className="text-gray-300">{isCommissioner ? "OWNER" : "MEMBER"}</span>
+                                    </div>
+                                    <InviteCodeCopy code={group?.invite_code} />
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    <span className="rounded-full border border-sky-300/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-100">
-                                        {getGroupTypeLabel(group?.group_type ?? "league")}
-                                    </span>
-                                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-gray-300">
-                                        {getHostingTierLabel(group?.hosting_tier ?? "free")}
-                                    </span>
+                                <div className="flex min-w-0 flex-1 items-center py-4">
+                                    <h3
+                                        className="allow-caps line-clamp-2 break-words text-xl font-extrabold leading-tight text-transparent bg-clip-text"
+                                        style={displayNameGradientStyle}
+                                    >
+                                        {group.name}
+                                    </h3>
                                 </div>
-                                <h3
-                                    className="allow-caps text-xl font-extrabold text-transparent bg-clip-text"
-                                    style={displayNameGradientStyle}
+                                <div
+                                    className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                 >
-                                    {group.name}
-                                </h3>
-                                <p className="hidden text-sm text-gray-200 sm:block sm:line-clamp-2">
-                                    {group.description || "Run slips, share picks, and climb the table together."}
-                                </p>
-                                <div className="flex flex-wrap gap-2 text-xs uppercase tracking-wide text-gray-400">
                                     <span>{getGroupCapacityLabel(group, group.member_count)}</span>
                                     <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })}
                 </div>
