@@ -36,13 +36,22 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const detectIOS = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  // iPhone/iPod/iPad, incl. iPadOS 13+ which reports as "Macintosh" + touch.
+  return /iP(hone|od|ad)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+};
+
 const useIsIOS = () => {
-  const [isIOS, setIsIOS] = useState(false);
-  useEffect(() => {
-    const ua = navigator.userAgent;
-    // iPhone/iPod/iPad, incl. iPadOS 13+ which reports as "Macintosh" + touch.
-    setIsIOS(/iP(hone|od|ad)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1));
-  }, []);
+  // Resolve synchronously on the first render (lazy init) so isIOSRef is correct
+  // before the viewport effect's initial apply() runs. If isIOS were resolved in a
+  // post-mount effect, that first apply() would still see isIOS=false and wrongly
+  // clamp html/body overflow+height on iOS; the iOS-only body lock then captures
+  // those clamped values as its "previous" state and never releases them, freezing
+  // page scroll after the chat closes. (This subtree is client-only — mounted after
+  // user interaction — and isIOS is not used in JSX, so there is no hydration risk.)
+  const [isIOS] = useState(detectIOS);
   return isIOS;
 };
 
@@ -204,7 +213,9 @@ export const GroupChatTab = ({ groupId }: Props) => {
   const keyboardWasOpenRef = useRef(false);
   const settleRef = useRef<number | null>(null);
   // Mirror isIOS into a ref so the once-bound viewport effect (deps: []) can
-  // branch by platform — isIOS starts false and flips true only after mount.
+  // branch by platform. isIOS is resolved synchronously (lazy useState), so this
+  // ref is already correct on the first render and the initial apply() won't
+  // mis-clamp the document on iOS.
   const isIOSRef = useRef(isIOS);
   isIOSRef.current = isIOS;
   const isTouchDevice =

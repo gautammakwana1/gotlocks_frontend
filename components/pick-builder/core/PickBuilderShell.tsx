@@ -364,6 +364,18 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         }
     }, [leagueCounts, hasManualDateSelection, dateOptions, activeDateKey, handleDateChange]);
 
+    // Auto-select the first available date when the current selection isn't in the
+    // window (e.g. slip mode where today is outside the slip's eligibility window),
+    // unless the user has already picked a date manually.
+    useEffect(() => {
+        if (hasManualDateSelection) return;
+        if (dateOptions.length === 0) return;
+        const isActiveValid = dateOptions.some((option) => option.key === activeDateKey);
+        if (!isActiveValid) {
+            handleDateChange(dateOptions[0].key, "auto");
+        }
+    }, [dateOptions, activeDateKey, hasManualDateSelection, handleDateChange]);
+
     useEffect(() => {
         if (typeof window === "undefined") return;
         window.dispatchEvent(
@@ -508,7 +520,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                         draftPick={draftPick}
                         onDraftPickChange={setDraftPick}
                         activeDateKey={activeDateKey}
-                        // onDateChange={handleDateChange}
+                        onDateChange={handleDateChange}
                         // allowAutoDateAdvance={!hasManualDateSelection}
                         hideDateControls
                         onDateOptionsChange={handleDateOptionsChange}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { displayNameGradientStyle } from "@/lib/styles/text";
@@ -38,6 +39,7 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+type LeagueTab = (typeof TABS)[number];
 
 const normalizeTab = (value: string | null, isCommissioner: boolean): TabId => {
   if (value === "settings") return isCommissioner ? "settings" : "contests";
@@ -94,6 +96,58 @@ const tabIcon = (tabId: TabId) => {
   }
   return (
     <SettingIcon {...common} />
+  );
+};
+
+const LeagueTabStrip = ({
+  tabs,
+  activeTab,
+  onTabChange,
+  className,
+}: {
+  tabs: readonly LeagueTab[];
+  activeTab: TabId;
+  onTabChange: (tabId: TabId) => void;
+  className: string;
+}) => {
+  const activeTabIndex = Math.max(
+    0,
+    tabs.findIndex((tab) => tab.id === activeTab)
+  );
+
+  return (
+    <div
+      className={`relative w-full gap-1 py-1 ${className}`}
+      style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.08] transition-transform duration-300 ease-out"
+        style={{
+          width: `calc(100% / ${tabs.length})`,
+          transform: `translateX(${activeTabIndex * 100}%)`,
+        }}
+      />
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onTabChange(tab.id)}
+            aria-label={tab.label}
+            aria-current={isActive ? "page" : undefined}
+            className={`relative z-10 flex h-11 min-w-0 items-center justify-center px-1 text-center text-[10px] font-semibold uppercase tracking-wide transition sm:h-10 sm:px-3 sm:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
+              }`}
+          >
+            <span className="flex min-w-0 items-center justify-center gap-1.5">
+              <span className="shrink-0 sm:hidden">{tabIcon(tab.id)}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 };
 
@@ -171,9 +225,9 @@ const LeagueDashboardPage = () => {
     () => TABS.filter((tab) => isCommissioner || tab.id !== "settings"),
     [isCommissioner]
   );
-  const activeTabIndex = Math.max(
-    0,
-    visibleTabs.findIndex((tab) => tab.id === activeTab)
+  const mobileVisibleTabs = useMemo(
+    () => visibleTabs.filter((tab) => tab.id !== "chat"),
+    [visibleTabs]
   );
   const groupOwnerPlan = useMemo(
     () => ownerPlan ? ownerPlan.plan : "free",
@@ -196,6 +250,76 @@ const LeagueDashboardPage = () => {
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
   const [leavingLeague, setLeavingLeague] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  // Tracks the desktop breakpoint so the desktop chat pane is truly not mounted on
+  // mobile (CSS `hidden` is display:none but still mounts + runs global effects).
+  const [isDesktop, setIsDesktop] = useState(false);
+  // Gate for the portaled mobile chat drawer (createPortal needs document.body,
+  // which does not exist during SSR / the first render).
+  const [mounted, setMounted] = useState(false);
+  const chatTriggerRef = useRef<HTMLButtonElement>(null);
+  const chatCloseButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const desktopMedia = window.matchMedia("(min-width: 640px)");
+    const update = () => setIsDesktop(desktopMedia.matches);
+    update();
+    desktopMedia.addEventListener("change", update);
+    return () => desktopMedia.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (activeTab !== "chat" || !group) return;
+
+    const mobileMedia = window.matchMedia("(max-width: 639px)");
+    const moveChatToDrawer = () => {
+      if (!mobileMedia.matches) return;
+      setChatOpen(true);
+      router.replace(`/league/${group.id}`);
+    };
+
+    moveChatToDrawer();
+    mobileMedia.addEventListener("change", moveChatToDrawer);
+    return () => mobileMedia.removeEventListener("change", moveChatToDrawer);
+  }, [activeTab, group, router]);
+
+  useEffect(() => {
+    if (!chatOpen) return;
+
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const desktopMedia = window.matchMedia("(min-width: 640px)");
+    const focusFrame = window.requestAnimationFrame(() => {
+      chatCloseButtonRef.current?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Tab") {
+        event.preventDefault();
+        chatCloseButtonRef.current?.focus();
+      }
+    };
+    const handleDesktopChange = () => {
+      if (desktopMedia.matches) setChatOpen(false);
+    };
+
+    // NOTE: do not lock document.body scroll here. The mounted GroupChatTab owns
+    // the body scroll lock for the whole time the drawer is open (and releases it
+    // on unmount). Locking it here too races that lock — React runs GroupChatTab's
+    // effect first, so this effect would capture the already-locked value as its
+    // "previous" and re-apply it on cleanup, leaving the page unscrollable.
+    document.addEventListener("keydown", handleKeyDown);
+    desktopMedia.addEventListener("change", handleDesktopChange);
+    handleDesktopChange();
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      desktopMedia.removeEventListener("change", handleDesktopChange);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [chatOpen]);
 
   useEffect(() => {
     if (!group) return;
@@ -520,10 +644,10 @@ const LeagueDashboardPage = () => {
         <>
           <div className="flex items-center justify-between gap-3">
             <BackButton label="back to all groups" fallback="/fantasy" preferFallback />
-            <InviteCodeCopy code={group?.invite_code} />
+            <InviteCodeCopy code={group?.invite_code} className="-mr-[5px]" />
           </div>
           <header className="-mx-5 px-5 pb-3 sm:mx-0 sm:px-0">
-            <div className="min-w-0">
+            <div className="relative min-w-0">
               <div
                 className={`flex items-start justify-between gap-3 text-gray-400 ${groupPreviewMetaTextClassName}`}
               >
@@ -542,7 +666,7 @@ const LeagueDashboardPage = () => {
                 />
               </div>
               <h1
-                className="allow-caps mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
+                className="allow-caps pr-24 mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
                 style={displayNameGradientStyle}
               >
                 {group?.name}
@@ -552,6 +676,18 @@ const LeagueDashboardPage = () => {
                   {group.description}
                 </p>
               )}
+              <button
+                ref={chatTriggerRef}
+                type="button"
+                onClick={() => setChatOpen(true)}
+                aria-label="Open group chat"
+                aria-controls="mobile-league-chat"
+                aria-expanded={chatOpen}
+                title="Open group chat"
+                className="absolute right-0 top-7 inline-flex h-7 items-center justify-end text-[10px] font-semibold tracking-[0.12em] text-gray-500 transition hover:text-gray-300 sm:hidden"
+              >
+                {"<- open chat"}
+              </button>
             </div>
           </header>
         </>
@@ -563,42 +699,18 @@ const LeagueDashboardPage = () => {
           : "-mt-3"
           }`}
       >
-        <div
-          className="relative grid w-full gap-1 py-1"
-          style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.08] transition-transform duration-300 ease-out"
-            style={{
-              width: `calc(100% / ${visibleTabs.length})`,
-              transform: `translateX(${activeTabIndex * 100}%)`,
-            }}
-          />
-          {visibleTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabChange(tab.id)}
-                aria-label={tab.label}
-                className={`relative z-10 flex h-11 min-w-0 items-center justify-center px-1 text-center text-[10px] font-semibold uppercase tracking-wide transition sm:h-10 sm:px-3 sm:text-sm ${isActive ? "text-white" : "text-gray-400 hover:text-white"
-                  }`}
-              >
-                <span className="flex min-w-0 items-center justify-center gap-1.5">
-                  <span className="shrink-0 sm:hidden">{tabIcon(tab.id)}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </span>
-                {tab.id === "chat" && unreadCounts > 0 && activeTab !== "chat" && (
-                  <span className="absolute right-1 top-1 rounded-full border border-blue-300/40 bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-semibold leading-none tracking-normal text-blue-100 sm:right-2">
-                    {unreadCounts > 99 ? "99+" : unreadCounts}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <LeagueTabStrip
+          tabs={mobileVisibleTabs}
+          activeTab={activeTab === "chat" ? "contests" : activeTab}
+          onTabChange={handleTabChange}
+          className="grid sm:hidden"
+        />
+        <LeagueTabStrip
+          tabs={visibleTabs}
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          className="hidden sm:grid"
+        />
       </section>
 
       {activeTab === "contests" && (
@@ -718,8 +830,10 @@ const LeagueDashboardPage = () => {
         </div>
       )}
 
-      {activeTab === "chat" && (
-        <GroupChatTab groupId={group?.id} />
+      {activeTab === "chat" && isDesktop && (
+        <div className="hidden min-h-0 flex-1 flex-col sm:flex">
+          <GroupChatTab groupId={group?.id} />
+        </div>
       )}
 
       {activeTab === "settings" && isCommissioner && (
@@ -809,6 +923,69 @@ const LeagueDashboardPage = () => {
           </section>
         </div>
       )}
+
+      {/* Mobile chat drawer. Portaled to <body> and sized to the VISUAL viewport
+          (height:--app-vvh + translateY(--kb-offset), both published by GroupChatTab)
+          so it stays OUT of the app-shell's iOS keyboard counter-transform. A transform
+          on an ancestor makes position:fixed resolve against that ancestor's (tall) box
+          instead of the viewport, which was stretching the panel and pushing the
+          composer below the keyboard. Portaling also escapes the body-lock's -scrollY
+          offset, so the drawer tracks the visible viewport on iOS. */}
+      {mounted &&
+        createPortal(
+          <div
+            className={`fixed inset-x-0 top-0 z-50 sm:hidden ${chatOpen ? "pointer-events-auto" : "pointer-events-none"
+              }`}
+            style={{
+              height: "var(--app-vvh, 100dvh)",
+              transform: "translateY(var(--kb-offset, 0px))",
+            }}
+            aria-hidden={!chatOpen}
+          >
+            <aside
+              id="mobile-league-chat"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mobile-league-chat-title"
+              className={`absolute inset-0 flex w-full flex-col bg-neutral-950 shadow-2xl transition-transform duration-300 ease-out ${chatOpen ? "translate-x-0" : "translate-x-full"
+                }`}
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-200">
+                    {group?.name}
+                  </p>
+                  <h2 id="mobile-league-chat-title" className="mt-1 text-lg font-semibold text-white">
+                    Group chat
+                  </h2>
+                </div>
+                <button
+                  ref={chatCloseButtonRef}
+                  type="button"
+                  onClick={() => setChatOpen(false)}
+                  aria-label="Close group chat"
+                  tabIndex={chatOpen ? 0 : -1}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:border-white/25 hover:bg-white/10 hover:text-white"
+                >
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    className="h-4 w-4"
+                  >
+                    <path d="m6 6 12 12M18 6 6 18" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col">
+                {chatOpen && !isDesktop && <GroupChatTab groupId={group?.id} />}
+              </div>
+            </aside>
+          </div>,
+          document.body
+        )}
 
       {isConfirmDeleteModalOpen && (
         <DeleteGroupConfirmationModal

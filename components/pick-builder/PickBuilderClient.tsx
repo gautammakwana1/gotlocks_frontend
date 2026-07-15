@@ -65,13 +65,18 @@ const getPickStartTimes = (payload?: BuiltPickPayload | null) => {
     const legStarts = Array.from(
         new Set(
             (payload.legs ?? [])
-                .map((leg) => leg.selection?.gameStartTime)
+                .map((leg) => leg.selection?.gameStartTime ?? leg.selection?.match_date)
                 .filter((start): start is string => Boolean(start))
         )
     );
 
     if (legStarts.length > 0) return legStarts;
-    return payload.selection?.gameStartTime ? [payload.selection.gameStartTime] : [];
+
+    const singleStart =
+        payload.selection?.gameStartTime ??
+        payload.selection?.match_date ??
+        payload.match_date;
+    return singleStart ? [singleStart] : [];
 };
 
 const PickBuilderClientPage = () => {
@@ -451,6 +456,7 @@ const PickBuilderClientPage = () => {
                                 <div className="space-y-3">
                                     {leagueCandidates.map((candidate) => {
                                         const assignedSlipId = assignments[candidate.id] ?? "";
+                                        const candidateStartTimes = getPickStartTimes(candidate.payload);
                                         const isPickPostedAlready = postableSlips?.some(
                                             (s) => s.id === assignedSlipId && s.pick !== null
                                         );
@@ -493,16 +499,25 @@ const PickBuilderClientPage = () => {
                                                         hasMore={postableSlipsHasMore}
                                                         loadingMore={postableSlipsLoadingMore}
                                                         onReachEnd={handleLoadMorePostableSlips}
-                                                        options={(eligibleSlips ?? []).map<IosSelectOption>(({ id, name, group }) => {
+                                                        options={(eligibleSlips ?? []).map<IosSelectOption>(({ id, name, group, pick_deadline_at, window_days }) => {
                                                             const usedElsewhere = slipUsedByOther(
                                                                 id ?? "",
                                                                 candidate.id
                                                             );
+                                                            const outOfWindow =
+                                                                candidateStartTimes.length > 0 &&
+                                                                !candidateStartTimes.every((startTime) =>
+                                                                    isGameEligible(startTime, pick_deadline_at, window_days)
+                                                                );
                                                             return {
                                                                 value: id ?? "",
                                                                 label: `${group.name} · ${name}`,
-                                                                disabled: usedElsewhere,
-                                                                hint: usedElsewhere ? "in use" : undefined,
+                                                                disabled: usedElsewhere || outOfWindow,
+                                                                hint: usedElsewhere
+                                                                    ? "in use"
+                                                                    : outOfWindow
+                                                                        ? "out of window"
+                                                                        : undefined,
                                                             };
                                                         })}
                                                         onChange={(nextValue) =>
