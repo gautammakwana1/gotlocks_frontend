@@ -4,7 +4,7 @@ import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/inter
 import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
 import { formatDateTime } from "@/lib/utils/date";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
-import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
+import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useEffect, useRef, useState } from "react";
 
 type PostCardProps = {
@@ -155,10 +155,15 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
         points: pick.points,
         mode: "global",
     });
-    const tierPrimary = tierMeta
-        ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} XP` : ""
-        }`
-        : "Tier -";
+    const calculatedGlobalXp = getCalculatedGlobalXpForPick(pick);
+    const displayedGlobalXp =
+        pick.result === "pending"
+            ? calculatedGlobalXp
+            : getAppliedGlobalXpForPick(pick);
+    const xpHelperLabel = pick.result === "pending" ? "Potential XP" : "XP";
+    const xpPrimary = tierMeta
+        ? `${displayedGlobalXp > 0 ? "+" : ""}${displayedGlobalXp.toLocaleString()} XP`
+        : "—";
     const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;
     const tierCardTone = tierCardStyle
         ? "bg-transparent"
@@ -349,10 +354,10 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
                                 style={tierCardStyle}
                             >
                                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                    tier
+                                    {xpHelperLabel}
                                 </span>
                                 <span className="mt-1 block text-xs font-semibold text-white">
-                                    {tierPrimary}
+                                    {xpPrimary}
                                 </span>
                             </div>
                             <div

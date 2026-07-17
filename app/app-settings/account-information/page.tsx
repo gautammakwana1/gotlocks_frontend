@@ -12,6 +12,7 @@ import { calculateAge, checkAnyRestrictedWords, checkForReservedWords } from "@/
 import AccountInformationSkeleton from "@/components/skeletons/app-settings/AccountInformationSkeleton";
 import { ArrowLeft } from "lucide-react";
 import { normalizeUserPlan } from "@/lib/groups/limits";
+import { getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
 
 type AuthSliceState = {
     user: {
@@ -178,7 +179,12 @@ const AccountInformationPage = () => {
         )
         : "Recently joined";
 
-    const plan = normalizeUserPlan(user?.profile?.plan);
+    // const plan = normalizeUserPlan(user?.profile?.plan);
+    const planView = getProLifetimePlanViewModel({
+        plan: user?.profile?.plan,
+        offerKind: user?.profile?.proLifetimeOfferKind,
+        entitlement: user?.profile?.proLifetimeEntitlement,
+    });
 
     const remainingUsernameChanges = 3 - (user?.profile?.username_history?.length ?? 0);
 
@@ -349,13 +355,9 @@ const AccountInformationPage = () => {
 
                 <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--text-secondary)]">
                     <p className="font-medium text-[var(--app-text)]">
-                        {plan === "pro" ? "Founding Pro" : "Free"} plan
+                        {planView.currentPlanName} plan
                     </p>
-                    <p className="mt-1 leading-6">
-                        {plan === "pro"
-                            ? "Host unlimited leagues, create up to 3 Arenas, and run up to 6 active contests per group."
-                            : "Host up to 3 leagues with 10 members and 3 active contests each."}
-                    </p>
+                    <p className="mt-1 leading-6">{planView.currentPlanSummary}</p>
                     <Link
                         href="/app-settings/plan"
                         className="mt-3 inline-flex text-sm font-medium text-[var(--app-text)] transition hover:text-white"

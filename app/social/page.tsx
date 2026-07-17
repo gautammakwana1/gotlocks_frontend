@@ -6,7 +6,7 @@ import { GlobalLeaderboadPostRows, Pick, PickReaction, PickResult, Picks, PickTy
 import { useDispatch, useSelector } from "react-redux";
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalLeaderboardRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import Image from "next/image";
-import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
+import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import FootballAnimation from "@/components/animations/FootballAnimation";
 import { formatDateTime } from "@/lib/utils/date";
@@ -126,7 +126,7 @@ const renderBiggestHitCell = (
     const oddsCopy = biggestWin?.odds_bracket ?? PLACEHOLDER;
     const tierMeta = getTierMetaForPick({ odds: biggestWin?.odds_bracket, mode: "global" });
     const accentHex = getHexFromGradient(tierMeta?.color);
-    const xpCopy = `+${formatXp(biggestWin?.xp ?? 0)}`;
+    const globalXpCopy = `+${formatXp(biggestWin?.applied_global_xp ?? 0)}`;
 
     return (
         <button
@@ -142,19 +142,25 @@ const renderBiggestHitCell = (
                 {oddsCopy}
             </span>
             <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-emerald-200 sm:text-[11px]">
-                {xpCopy}
+                {globalXpCopy}
             </span>
         </button>
     );
 };
 
-// Weekly "Total XP" cell. Shows the user's total (awarded) XP for the week and,
-// on hover or tap, a breakdown of total vs raw XP. The fuller explanation of the
-// difference lives in the profile scoring-rules modal.
-const TotalXpCell = ({ actualXp, rawXp }: { actualXp: number; rawXp: number }) => {
+// Weekly XP cell. The tooltip separates the amount applied from the
+// exact-odds calculation when the account-day cap matters.
+const GlobalXpCell = ({
+    appliedGlobalXp,
+    calculatedGlobalXp,
+}: {
+    appliedGlobalXp: number;
+    calculatedGlobalXp: number;
+}) => {
     const [open, setOpen] = useState(false);
     const cellRef = useRef<HTMLDivElement | null>(null);
-    const cappedXp = Math.max(0, rawXp - actualXp);
+    const ungrantedXp = Math.max(0, calculatedGlobalXp - appliedGlobalXp);
+    const retainedLegacyXp = Math.max(0, appliedGlobalXp - calculatedGlobalXp);
 
     useEffect(() => {
         if (!open) return;
@@ -177,7 +183,7 @@ const TotalXpCell = ({ actualXp, rawXp }: { actualXp: number; rawXp: number }) =
                 aria-label="Total XP breakdown"
                 className="text-[12px] font-semibold tabular-nums text-emerald-200 transition hover:text-emerald-100 sm:text-[13px]"
             >
-                {formatXp(actualXp)}
+                {formatXp(appliedGlobalXp)}
             </button>
             <div
                 role="tooltip"
@@ -185,21 +191,23 @@ const TotalXpCell = ({ actualXp, rawXp }: { actualXp: number; rawXp: number }) =
                     }`}
             >
                 <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[var(--text-secondary)]">Total XP</span>
+                    <span className="text-[var(--text-secondary)]">XP</span>
                     <span className="font-semibold tabular-nums text-emerald-200">
-                        {formatXp(actualXp)}
+                        {formatXp(appliedGlobalXp)}
                     </span>
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px]">
-                    <span className="text-[var(--text-secondary)]">Raw XP</span>
+                    <span className="text-[var(--text-secondary)]">Calculated</span>
                     <span className="font-semibold tabular-nums text-[var(--app-text)]">
-                        {formatXp(rawXp)}
+                        {formatXp(calculatedGlobalXp)}
                     </span>
                 </div>
                 <div className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] text-[var(--text-muted)]">
-                    {cappedXp > 0
-                        ? `${formatXp(cappedXp)} trimmed by caps`
-                        : "No caps applied this week"}
+                    {ungrantedXp > 0
+                        ? `${formatXp(ungrantedXp)} not applied due to the daily XP cap`
+                        : retainedLegacyXp > 0
+                            ? `${formatXp(retainedLegacyXp)} historical XP retained`
+                            : "All calculated XP applied"}
                 </div>
             </div>
         </div>
@@ -458,10 +466,15 @@ const SocialPage = () => {
                     points: item.points,
                     mode: "global",
                 });
-                const tierPrimary = tierMeta
-                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` • ${tierMeta.points} XP` : ""
-                    }`
-                    : "Tier —";
+                const calculatedGlobalXp = getCalculatedGlobalXpForPick(item);
+                const displayedGlobalXp =
+                    item.result === "pending"
+                        ? calculatedGlobalXp
+                        : getAppliedGlobalXpForPick(item);
+                const xpHelperLabel = item.result === "pending" ? "Potential XP" : "XP";
+                const xpPrimary = tierMeta
+                    ? `${displayedGlobalXp > 0 ? "+" : ""}${displayedGlobalXp.toLocaleString()} XP`
+                    : "—";
                 const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;
                 const tierCardTone = tierCardStyle
                     ? "bg-transparent"
@@ -640,10 +653,10 @@ const SocialPage = () => {
                                             style={tierCardStyle}
                                         >
                                             <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                tier
+                                                {xpHelperLabel}
                                             </span>
                                             <span className="mt-1 block text-xs font-semibold text-white">
-                                                {tierPrimary}
+                                                {xpPrimary}
                                             </span>
                                         </div>
                                         <div
@@ -887,7 +900,7 @@ const SocialPage = () => {
                             </span>
                             <span className="text-right">
                                 <span className="sm:hidden">Total</span>
-                                <span className="hidden sm:inline">Total XP</span>
+                                <span className="hidden sm:inline">XP</span>
                             </span>
                         </div>
 
@@ -950,7 +963,10 @@ const SocialPage = () => {
                                         {renderBiggestHitCell(row.biggest_win_post, () =>
                                             handleViewPick(row.user_id, row.biggest_win_pick_id)
                                         )}
-                                        <TotalXpCell actualXp={row.total_xp} rawXp={row.biggest_win} />
+                                        <GlobalXpCell
+                                            appliedGlobalXp={row.biggest_win_post?.applied_global_xp ?? 0}
+                                            calculatedGlobalXp={row.biggest_win_post?.calculated_global_xp ?? 0}
+                                        />
                                     </div>
                                 );
                             })}

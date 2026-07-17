@@ -1,3 +1,4 @@
+import { StructuredFeedContest } from "../domain/community";
 import { Contest, CurrentUser, Group, GroupObject, GroupType, HostingTier, UserPlan } from "../interfaces/interfaces";
 
 export type GroupLimits = {
@@ -6,7 +7,7 @@ export type GroupLimits = {
 };
 
 export type PlanLimits = {
-    maxOwnedLeagues: number | "unlimited";
+    maxOwnedLeagues: number;
     maxOwnedArenas: number;
 };
 
@@ -25,13 +26,18 @@ export const PRO_ARENA_LIMITS: GroupLimits = {
     maxActiveContests: 6,
 };
 
+export const LEAGUE_FEED_CONTEST_LIMITS: Record<HostingTier, number> = {
+    free: 1,
+    pro: 3,
+};
+
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     free: {
-        maxOwnedLeagues: 3,
+        maxOwnedLeagues: 2,
         maxOwnedArenas: 0,
     },
     pro: {
-        maxOwnedLeagues: "unlimited",
+        maxOwnedLeagues: 5,
         maxOwnedArenas: 3,
     },
 };
@@ -79,6 +85,18 @@ export type LeagueSettingsInput = Pick<
     GroupObject,
     "group_type" | "hosting_tier" | "max_members" | "max_active_contests" | "is_enable_secondary_leaderboard"
 >;
+
+/**
+ * Input for the league capacity-label helpers: the league settings plus the few
+ * fields those labels read directly. `id` / `active_contest` / `member_count` are
+ * optional so a loosely typed `Group` (page state) works here just as well as a
+ * fully-formed `GroupObject` (which also satisfies this shape).
+ */
+export type LeagueCapacityInput = LeagueSettingsInput & {
+    id?: string;
+    active_contest?: number;
+    member_count?: number;
+};
 
 export const normalizeLeagueSettings = (
     league: LeagueSettingsInput,
@@ -175,20 +193,103 @@ export const getOwnedArenaCount = (
             normalizeGroupType(league.group_type) === "arena"
     ).length;
 
+export const getRegularMemberCount = (league: Pick<LeagueCapacityInput, "member_count">) =>
+    // league.members.filter((memberId) => memberId !== league.created_by).length;
+    league.member_count ?? 0;
+
+export const getRegularMemberCapacityLabel = (league: LeagueCapacityInput) => {
+    const settings = normalizeLeagueSettings(league);
+    return `${getRegularMemberCount(league)}/${settings.max_members} regular members`;
+};
+
+const getMemberCapacityCount = (league: GroupObject) =>
+    normalizeGroupType(league.group_type) === "league"
+        ? getRegularMemberCount(league)
+        : league.member_count;
+
 export const isActiveContest = (contest: Contest) => contest.status === "ACTIVE";
 
-export const getActiveContestCount = (contests: Contest[], leagueId: string) =>
+export const getActiveContestCount = (contests: readonly Contest[], leagueId: string) =>
     contests.filter((contest) => contest.group_id === leagueId && isActiveContest(contest)).length;
+
+export const ACTIVE_LEAGUE_FEED_CONTEST_STATUSES = [
+    "scheduled",
+    "open",
+    "locked",
+    "grading",
+] as const satisfies readonly StructuredFeedContest["lifecycleStatus"][];
+
+const activeLeagueFeedContestStatuses = new Set<StructuredFeedContest["lifecycleStatus"]>(
+    ACTIVE_LEAGUE_FEED_CONTEST_STATUSES
+);
+
+export const isActiveLeagueFeedContest = (contest: StructuredFeedContest) =>
+    contest.context.type === "league_feed" &&
+    activeLeagueFeedContestStatuses.has(contest.lifecycleStatus);
+
+export const getActiveLeagueFeedContestCount = (
+    contests: readonly StructuredFeedContest[],
+    leagueId: string
+) =>
+    contests.filter(
+        (contest) =>
+            isActiveLeagueFeedContest(contest) &&
+            contest.context.type === "league_feed" &&
+            contest.context.leagueId === leagueId
+    ).length;
+
+export const getLeagueFeedContestLimit = (league: Pick<GroupObject, "hosting_tier">) =>
+    LEAGUE_FEED_CONTEST_LIMITS[normalizeHostingTier(league.hosting_tier)];
 
 export const getGroupCapacityLabel = (league: LeagueSettingsInput, memberCount: number) => {
     const settings = normalizeLeagueSettings(league);
+    // const capacity = getMemberCapacityCount(league);
     return `${memberCount}/${settings.max_members} members`;
 };
 
-export const getActiveContestCapacityLabel = (league: GroupObject, contests: Contest[]) => {
+export const getActiveContestCapacityLabel = (league: LeagueCapacityInput, contests: Contest[]) => {
     const settings = normalizeLeagueSettings(league);
-    return `${getActiveContestCount(contests, league.id)}/${settings.max_active_contests} active contests`;
+    const label = normalizeGroupType(league.group_type) === "league"
+        ? "active standard contests"
+        : "active contests";
+    return `${league.active_contest}/${settings.max_active_contests} ${label}`;
 };
+
+export const getActiveLeagueFeedContestCapacityLabel = (
+    league: LeagueCapacityInput,
+    contests: readonly StructuredFeedContest[]
+) =>
+    `${getActiveLeagueFeedContestCount(contests, league.id ?? "")}/${getLeagueFeedContestLimit(
+        league
+    )} active Feed contests`;
+
+/** Compact preview count. Standard and Feed capacity remain independent. */
+export const getCombinedContestCapacityLabel = (
+    league: LeagueCapacityInput,
+    // Kept for call-site compatibility; the label uses the server-provided
+    // `active_contest` count rather than re-counting the standard contests here.
+    _standardContests: readonly Contest[],
+    feedContests: readonly StructuredFeedContest[]
+) => {
+    const settings = normalizeLeagueSettings(league);
+    const activeContest = league.active_contest ?? 0;
+    if (normalizeGroupType(league.group_type) !== "league") {
+        return `${activeContest}/${settings.max_active_contests} contests`;
+    }
+
+    const feedCount = getActiveLeagueFeedContestCount(feedContests, league.id ?? "");
+    const totalLimit = settings.max_active_contests + getLeagueFeedContestLimit(league);
+    return `${activeContest + feedCount}/${totalLimit} contests`;
+};
+
+const getOwnedLeagueLimit = (plan: UserPlan) => {
+    return PLAN_LIMITS[plan].maxOwnedLeagues;
+};
+
+const getOwnedLeagueLimitError = (plan: UserPlan) =>
+    plan === "pro"
+        ? "Pro users can host up to 5 leagues."
+        : "Free users can host up to 2 leagues.";
 
 export const getActiveContestCountsLabel = (league: LeagueSettingsInput, contestsCounts: number) => {
     const settings = normalizeLeagueSettings(league);
@@ -221,17 +322,21 @@ export const canCreateGroup = (
 
     if (plan === "free") {
         const maxOwnedLeagues = PLAN_LIMITS.free.maxOwnedLeagues;
-        if (maxOwnedLeagues !== "unlimited" && leagueCount >= maxOwnedLeagues) {
+        if (leagueCount >= maxOwnedLeagues) {
             return { allowed: false, error: "Free users can host up to 3 leagues." };
         }
     }
+
+    // if (getOwnedLeagueCount(leagues, user.userId) >= getOwnedLeagueLimit(plan)) {
+    //     return { allowed: false, error: getOwnedLeagueLimitError(plan) };
+    // }
 
     return { allowed: true };
 };
 
 export const canJoinGroup = (league: GroupObject): { allowed: true } | { allowed: false; error: string } => {
     const settings = normalizeLeagueSettings(league);
-    if (league.member_count >= settings.max_members) {
+    if (getMemberCapacityCount(league) >= settings.max_members) {
         return {
             allowed: false,
             error: normalizeGroupType(league.group_type) === "arena" ? "This Arena is full." : "This league is full.",
@@ -248,6 +353,25 @@ export const canCreateContestInGroup = (
     const settings = normalizeLeagueSettings(league);
     if (activeContestCount >= settings.max_active_contests) {
         return { allowed: false, error: "This group has reached its active contest limit." };
+    }
+    return { allowed: true };
+};
+
+export const canCreateFeedContestInLeague = (
+    league: GroupObject,
+    contests: readonly StructuredFeedContest[]
+): { allowed: true } | { allowed: false; error: string } => {
+    if (normalizeGroupType(league.group_type) !== "league") {
+        return { allowed: false, error: "League Feed contests require a League." };
+    }
+    if (
+        getActiveLeagueFeedContestCount(contests, league.id) >=
+        getLeagueFeedContestLimit(league)
+    ) {
+        return {
+            allowed: false,
+            error: "This League has reached its active Feed contest limit.",
+        };
     }
     return { allowed: true };
 };
@@ -283,77 +407,77 @@ export const canTransferGroupOwnership = ({
         return { allowed: false, error: "Upgrade to Pro to own this group." };
     }
 
-    if (hostingTier === "free" && recipientPlan === "free") {
-        const maxOwnedLeagues = PLAN_LIMITS.free.maxOwnedLeagues;
-        if (maxOwnedLeagues !== "unlimited" && getOwnedLeagueCount(leagues, recipient.userId, league.id) >= maxOwnedLeagues) {
-            return { allowed: false, error: "Free users can host up to 3 leagues." };
-        }
+    if (
+        getOwnedLeagueCount(leagues, recipient.userId, league.id) >=
+        getOwnedLeagueLimit(recipientPlan)
+    ) {
+        return { allowed: false, error: getOwnedLeagueLimitError(recipientPlan) };
     }
 
     return { allowed: true };
 };
 
-export type DowngradeBlockers = {
-    ownedArenas: GroupObject[];
-    proHostedLeagues: GroupObject[];
-    ownedLeagueCount: number;
-    maxFreeLeagues: number;
-};
+// export type DowngradeBlockers = {
+//     ownedArenas: GroupObject[];
+//     proHostedLeagues: GroupObject[];
+//     ownedLeagueCount: number;
+//     maxFreeLeagues: number;
+// };
 
-export const getDowngradeBlockers = (
-    user: CurrentUser | undefined,
-    leagues: GroupObject[]
-): DowngradeBlockers => {
-    const userId = user?.userId ?? "";
-    const ownedGroups = leagues.filter((league) => league.created_by === userId);
-    const maxFreeLeagues =
-        PLAN_LIMITS.free.maxOwnedLeagues === "unlimited"
-            ? Number.POSITIVE_INFINITY
-            : PLAN_LIMITS.free.maxOwnedLeagues;
+// export const getDowngradeBlockers = (
+//     user: CurrentUser | undefined,
+//     leagues: GroupObject[]
+// ): DowngradeBlockers => {
+//     const userId = user?.userId ?? "";
+//     const ownedGroups = leagues.filter((league) => league.created_by === userId);
+//     const maxFreeLeagues =
+//         PLAN_LIMITS.free.maxOwnedLeagues === "unlimited"
+//             ? Number.POSITIVE_INFINITY
+//             : PLAN_LIMITS.free.maxOwnedLeagues;
 
-    return {
-        ownedArenas: ownedGroups.filter((league) => normalizeGroupType(league.group_type) === "arena"),
-        proHostedLeagues: ownedGroups.filter(
-            (league) =>
-                normalizeGroupType(league.group_type) === "league" &&
-                normalizeHostingTier(league.hosting_tier) === "pro"
-        ),
-        ownedLeagueCount: ownedGroups.filter(
-            (league) => normalizeGroupType(league.group_type) === "league"
-        ).length,
-        maxFreeLeagues,
-    };
-};
+//     return {
+//         ownedArenas: ownedGroups.filter((league) => normalizeGroupType(league.group_type) === "arena"),
+//         proHostedLeagues: ownedGroups.filter(
+//             (league) =>
+//                 normalizeGroupType(league.group_type) === "league" &&
+//                 normalizeHostingTier(league.hosting_tier) === "pro"
+//         ),
+//         ownedLeagueCount: ownedGroups.filter(
+//             (league) => normalizeGroupType(league.group_type) === "league"
+//         ).length,
+//         maxFreeLeagues,
+//     };
+// };
 
-export const canDowngradeToFree = (
-    user: CurrentUser | undefined,
-    leagues: GroupObject[]
-): { allowed: true } | { allowed: false; error: string; blockers: DowngradeBlockers } => {
-    const blockers = getDowngradeBlockers(user, leagues);
+// export const canDowngradeToFree = (
+//     user: CurrentUser | undefined,
+//     leagues: GroupObject[]
+// ): { allowed: true } | { allowed: false; error: string; blockers: DowngradeBlockers } => {
+//     const blockers = getDowngradeBlockers(user, leagues);
 
-    if (!user) {
-        return { allowed: false, error: "Sign in to manage your plan.", blockers };
-    }
-    if (normalizeUserPlan(user.plan) === "free") {
-        return { allowed: true };
-    }
-    if (blockers.ownedArenas.length > 0 || blockers.proHostedLeagues.length > 0) {
-        return {
-            allowed: false,
-            error: "Transfer or delete Pro-hosted groups before switching to Free.",
-            blockers,
-        };
-    }
-    if (blockers.ownedLeagueCount > blockers.maxFreeLeagues) {
-        return {
-            allowed: false,
-            error: "Free users can host up to 3 leagues.",
-            blockers,
-        };
-    }
+//     if (!user) {
+//         return { allowed: false, error: "Sign in to manage your plan.", blockers };
+//     }
+//     if (normalizeUserPlan(user.plan) === "free") {
+//         return { allowed: true };
+//     }
+//     if (blockers.ownedArenas.length > 0 || blockers.proHostedLeagues.length > 0) {
+//         return {
+//             allowed: false,
+//             error: "Transfer or delete Pro-hosted groups before switching to Free.",
+//             blockers,
+//         };
+//     }
+//     if (blockers.ownedLeagueCount > blockers.maxFreeLeagues) {
+//         return {
+//             allowed: false,
+//             error: "Free users can host up to 3 leagues.",
+//             blockers,
+//         };
+//     }
 
-    return { allowed: true };
-};
+//     return { allowed: true };
+// };
 
 export const getGroupTypeLabel = (group_type: GroupType) => GROUP_TYPE_LABELS[normalizeGroupType(group_type)];
 

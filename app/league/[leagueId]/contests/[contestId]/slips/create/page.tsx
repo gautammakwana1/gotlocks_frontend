@@ -13,6 +13,8 @@ import { CreateSlipPayload, Group, GroupSelector, RootState } from "@/lib/interf
 import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
 import { clearCreateSlipMessage, createSlipRequest } from "@/lib/redux/slices/slipSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
+import { canAddContestSlip, isContestInLeague } from "@/lib/permissions/leaguePermissions";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
 
 type FormErrors = {
     name?: string;
@@ -55,6 +57,7 @@ const ContestSlipCreatePage = () => {
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
+    const plan = useUserPlan();
 
     const rawGroup = useSelector((state: GroupSelector) => state.group.group);
     const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
@@ -68,6 +71,14 @@ const ContestSlipCreatePage = () => {
     );
     const [windowDays, setWindowDays] = useState(DEFAULT_ELIGIBLE_WINDOW_DAYS);
     const [errors, setErrors] = useState<FormErrors>({});
+
+    const belongsToLeague = isContestInLeague(contest, group?.id);
+    const permission = canAddContestSlip({
+        league: group,
+        actorId: currentUser?.userId,
+        sessionUserId: currentUser?.userId,
+        plan: plan
+    });
 
     useEffect(() => {
         if (!leagueId || !currentUser || !contestId) return;
@@ -169,7 +180,7 @@ const ContestSlipCreatePage = () => {
     ]);
 
     const canManage = currentUser?.userId === contest?.created_by || currentUser?.userId === group?.created_by;
-    if (!canManage || contest?.status === "ARCHIVED") {
+    if (!canManage || !permission.allowed || contest?.status === "ARCHIVED") {
         router.replace(`/league/${group?.id}/contests/${contest?.id}`);
         return null;
     }
@@ -203,7 +214,7 @@ const ContestSlipCreatePage = () => {
         }
     };
 
-    if (!group || !contest || !currentUser) return null;
+    if (!group || !contest || !currentUser || !belongsToLeague || !permission.allowed) return null;
 
     return (
         <div className="flex flex-col gap-6 pb-10">

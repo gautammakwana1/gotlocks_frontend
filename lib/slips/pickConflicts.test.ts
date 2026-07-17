@@ -39,7 +39,7 @@ const makePick = (overrides: Partial<Pick> = {}): Pick => ({
     created_at: overrides.created_at ?? "2026-04-15T20:00:00.000Z",
     is_combo: overrides.is_combo ?? false,
     legs: overrides.legs,
-    xpAwarded: overrides.xpAwarded,
+    xp_awarded: overrides.xp_awarded,
     updated_at: overrides.updated_at ?? "2026-04-15T20:00:00.000Z",
     selection: overrides.selection ?? makeSelection(),
     source_tab: overrides.source_tab ?? "Player Props",

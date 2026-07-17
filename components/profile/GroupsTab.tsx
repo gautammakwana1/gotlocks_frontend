@@ -11,7 +11,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
 import GroupsTabSkeleton from "../skeletons/fantasy/GroupsTabSkeleton";
-import { getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 import { groupPreviewKickerTextClassName, groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "../group/GroupPreviewChip";
 import InviteCodeCopy from "../group/InviteCodeCopy";
 
@@ -226,7 +226,14 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                     className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                 >
                                     <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                    {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
+                                    <span>
+                                        {getCombinedContestCapacityLabel(
+                                            group,
+                                            [],
+                                            []
+                                        )}
+                                    </span>
                                 </div>
                             </div>
                         );
@@ -281,7 +288,14 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                     className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                 >
                                     <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                    {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
+                                    <span>
+                                        {getCombinedContestCapacityLabel(
+                                            group,
+                                            [],
+                                            []
+                                        )}
+                                    </span>
                                 </div>
                             </div>
                         );

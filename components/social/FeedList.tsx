@@ -3,7 +3,7 @@
 import { CSSProperties, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDateTime } from "@/lib/utils/date";
-import { formatTierPrimary, getTierMetaForPick } from "@/lib/utils/scoring";
+import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
 import { Pick, PickReaction, PickResult, Picks } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
@@ -175,10 +175,15 @@ const FeedList = ({
                     points: item.points,
                     mode: "global",
                 });
-                const tierPrimary = tierMeta
-                    ? `${formatTierPrimary(tierMeta.tier)}${tierMeta.points ? ` \u2022 ${tierMeta.points} XP` : ""
-                    }`
-                    : "Tier \u2014";
+                const calculatedGlobalXp = getCalculatedGlobalXpForPick(item);
+                const displayedGlobalXp =
+                    item.result === "pending"
+                        ? calculatedGlobalXp
+                        : getAppliedGlobalXpForPick(item);
+                const xpHelperLabel = item.result === "pending" ? "Potential XP" : "XP";
+                const xpPrimary = tierMeta
+                    ? `${displayedGlobalXp > 0 ? "+" : ""}${displayedGlobalXp.toLocaleString()} XP`
+                    : "—";
                 const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;
                 const tierCardTone = tierCardStyle
                     ? "bg-transparent"
@@ -356,10 +361,10 @@ const FeedList = ({
                                             style={tierCardStyle}
                                         >
                                             <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                tier
+                                                {xpHelperLabel}
                                             </span>
                                             <span className="mt-1 block text-xs font-semibold text-white">
-                                                {tierPrimary}
+                                                {xpPrimary}
                                             </span>
                                         </div>
                                         <div

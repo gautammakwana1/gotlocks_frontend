@@ -28,7 +28,7 @@ type Stat = {
 };
 
 const STATS: Stat[] = [
-    { id: "postXp", end: 7500, sub: "post xp", accent: "#fcd34d", startT: 1.4, tickStart: 2.0, tickDur: 2.0 },
+    { id: "globalXp", end: 7500, sub: "xp", accent: "#fcd34d", startT: 1.4, tickStart: 2.0, tickDur: 2.0 },
     { id: "wins", end: 184, sub: "wins", accent: "#86efac", startT: 1.55, tickStart: 2.15, tickDur: 1.85 },
     { id: "losses", end: 71, sub: "losses", accent: "#fca5a5", startT: 1.7, tickStart: 2.3, tickDur: 1.7 },
     { id: "followers", end: 550, sub: "followers", accent: "#bef0ff", startT: 1.85, tickStart: 2.45, tickDur: 1.55 },

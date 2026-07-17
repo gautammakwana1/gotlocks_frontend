@@ -386,7 +386,7 @@ const ProfileView = ({
 
     const postPicksList: Picks = useMemo(() => {
         if (!Array.isArray(postPicks) || !postPicks?.length) return [];
-        return postPicks.filter((pick) => pick.pick_type === PickType.POST)
+        return postPicks.filter((pick) => pick.pick_type === PickType.POST);
     }, [postPicks]);
 
     // Result / type / confidence filtering and sorting are applied server-side (see

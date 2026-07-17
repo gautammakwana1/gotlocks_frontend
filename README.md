@@ -1,129 +1,82 @@
-# gotLocks Codex Setup Guide
+# gotLocks Local Product Prototype
 
-This repository provides full context for Codex to generate the **frontend skeleton** of gotLocks — a mobile-first web app for tracking sports picks, leaderboards, and league competitions.
+This repository is the local gotLocks **UI, domain-architecture, and product-behavior prototype**. It is a functional and visual handoff that demonstrates how the product should look and behave; it is not the production repository.
 
----
+The prototype is intentionally built around Next.js, TypeScript domain types, mock fixtures, local application state, reusable components, and tests. Product flows should work end to end without depending on a live backend or vendor.
 
-## 🧠 Objective
+## What belongs in this repository
 
-Codex should:
+- Mobile-first routes, screens, components, and interactions.
+- Product terminology and TypeScript domain models.
+- Local permissions, plan limits, contest lifecycles, scoring, and state transitions.
+- Mock data and deterministic mock adapters for pricing, grading, and simulated billing states.
+- Unit, state, and UI tests that characterize product behavior.
+- Documentation that gives the production developer clear invariants and acceptance criteria.
 
-* Build the **frontend UI and logic** according to the `/docs` folder.
-* Keep `lib/mockData.ts` + `AppState` working for local prototyping/demos while Supabase coverage ramps up.
-* Simulate state changes (locks, results, points) locally until the corresponding Supabase endpoints land.
-* When a task calls for backend integration, use the helpers in `lib/supabase/` (and future `lib/services/` modules) to talk to Supabase — no other APIs.
-* Continue to rely on the docs here for data shapes, flows, and UX.
+`lib/mockData.ts` and `lib/state/appState.tsx` currently act as the local data source and in-memory application state. A browser refresh may reset locally simulated changes. Local permission checks demonstrate the intended UX, but they are not a production security boundary.
 
----
+## Production infrastructure is out of scope
 
-## Phase 2 — Supabase Integration
+Production work will happen separately. Do not add or expand production infrastructure here, including:
 
-**Phase 1**
+- Supabase schemas, SQL migrations, row-level-security policies, generated production database types, or data backfills.
+- Production authentication middleware, API routes, service-role workflows, or persistent services.
+- Real odds-provider or grading-provider calls, background jobs, or notification delivery.
+- Real payment collection, checkout sessions, subscriptions, billing webhooks, or vendor credentials.
+- Production deployment infrastructure, monitoring, or operational migration tooling.
 
-* Relied on `lib/mockData.ts` plus in-memory `AppState` as a fake backend so we could iterate on UI + game logic without latency or schema concerns.
-* Every action (auth, leagues, slips, picks, leaderboard updates) lived entirely in React state, making it easy to prototype flows.
+The existing files under `lib/supabase/` are legacy scaffolding, not the prototype's source of truth and not a signal to begin a Supabase integration. External behavior should be represented through local, deterministic interfaces that a production developer can replace later.
 
-**Phase 2 (current)**
+## Repository map
 
-* Supabase (Postgres + Auth) becomes the **source of truth** for users, leagues, slips, picks, leaderboards, and activity feed.
-* `lib/state/appState.tsx` will evolve into a UI cache/state manager that hydrates from Supabase instead of `mockData`.
-* `lib/mockData.ts` stays available for demos/tests and story-style fixtures, but **is no longer the long-term production source of truth**.
+| Path | Purpose |
+| --- | --- |
+| `app/` | Next.js routes and screen composition. |
+| `components/` | Reusable product and UI components. |
+| `lib/types.ts` | Current shared product types. |
+| `lib/mockData.ts` | Local fixtures used by the prototype. |
+| `lib/state/appState.tsx` | In-memory state and product actions. |
+| `lib/` | Domain rules, scoring, limits, helpers, and tests. |
+| `docs/domain/` | Baselines and domain handoff documentation. |
+| `docs/components/` | Component-specific behavior notes. |
 
-This repo now contains Supabase client helpers so future tasks can begin swapping mock calls for real Supabase reads/writes without rebuilding the scaffolding each time.
+The current traditional League Contest/Slip behavior is recorded in [`docs/domain/league-slip-baseline.md`](docs/domain/league-slip-baseline.md). The Pass 1–2 scoring and community-domain handoff is documented in [`docs/domain/community-domain-model.md`](docs/domain/community-domain-model.md).
 
----
+Scoring is deliberately separated into [`lib/scoring/slipPoints.ts`](lib/scoring/slipPoints.ts), the shared exact-odds utility in [`lib/scoring/oddsBasedPoints.ts`](lib/scoring/oddsBasedPoints.ts), contextual routing in [`lib/scoring/context/`](lib/scoring/context/), and XP account-day cap handling in [`lib/scoring/dailyXp.ts`](lib/scoring/dailyXp.ts).
 
-## 📂 Folder Overview
+## Product identity rule
 
-| Folder                      | Description                                                         |
-| --------------------------- | ------------------------------------------------------------------- |
-| `/docs/theme-guidelines.md` | Color palette, fonts, spacing, and UI tone.                         |
-| `/docs/app-overview.md`     | Overall app flow and navigation structure.                          |
-| `/docs/logic/game-logic.md` | Rules for pick behavior, deadlines, scoring, and leaderboard logic. |
-| `/docs/screens`             | Screen-by-screen UI breakdown and interactive logic instructions.   |
-| `/docs/STRUCTURE.md`        | Current folder layout, component organization, and key entry points. |
-| `/lib/mockData.ts`          | Dummy data for Codex to simulate backend reads/writes.              |
+Users are identified throughout gameplay, chat, Leagues, and leaderboards by their in-app username (`User.name`), not by a legal name. A real name returned by an authentication provider may eventually suggest a username, but it is not the gameplay display identity.
 
----
+## Navigation orientation
 
-## 🧩 Rules for Codex
+The primary flow is:
 
-* Use **Next.js + TypeScript**, **Tailwind CSS**, and a **mobile-first layout**.
-* Phase 2 tasks may now call Supabase using the helpers in `lib/supabase/*` and grow a services layer (e.g., `lib/services/`) that wraps database reads/writes.
-* `lib/mockData.ts` is treated as seed/demo data. It is fine for demos/tests but should not stay the production source of truth.
-* `lib/state/appState.tsx` currently operates entirely on mock data, but Phase 2 tasks may replace individual actions with Supabase-backed calls (this task has **not** changed any behaviors yet).
-* Continue reading existing docs before coding UI/logic updates so flows stay accurate.
-* When mocking behavior, it is still acceptable to use local async stubs such as:
+`landing -> account creation -> onboarding -> home -> League`
 
-```ts
-// Simulated fetch
-const fetchPicks = async () => mockPicks
+Within a League, the prototype exposes picks, leaderboards, Slips, chat, and feed-oriented experiences. Home provides League creation and joining flows and links to every League the current user belongs to.
+
+## Local development
+
+Install dependencies and start the development server:
+
+```sh
+npm install
+npm run dev
 ```
 
----
+Then open [http://localhost:3000](http://localhost:3000).
 
-### Username as the canonical display name
+Useful checks:
 
-* Users are always identified by their **in-app username** (`User.name`), not their legal name.
-* Username selection happens during onboarding. Email/password signups choose it within the form; Google sign-in users pick one immediately after their first successful OAuth flow.
-* Real names returned by Google Auth are only used to suggest a username — they are not stored as the display identity for gameplay, chat, leagues, or leaderboards.
+```sh
+npm test
+npm run lint
+npm run build
+```
 
----
+This project uses Next.js, TypeScript, Tailwind CSS, and Vitest.
 
-## 🧭 Navigation Flow
+## Working convention
 
-**Global flow:**
-landing page → account creation → intro text → home → individual league
-
-**Within a league:**
-picks → leaderboard → slip → chat → feed → back to home
-
-**Home functions:**
-
-* “Create League” → opens league creation form
-* “Join League” → enter league code
-* Displays all leagues the user belongs to (each card links into that league’s flow)
-
----
-
-## ⚙️ Implementation Notes
-
-* Codex should use this guide and the supporting `.md` files as its **master instruction set**.
-* Each screen’s behavior, state structure, and UI layout are defined in their respective `docs/screens/[screen-name].md` files.
-* When implementing a feature, **reference those individual screen docs for specific functional context** (form inputs, buttons, conditional logic, etc.).
-* Use `/docs/logic/game-logic.md` as the source of truth for time-based or rules-based behavior.
-* Maintain full consistency with color, spacing, and typography defined in `/docs/theme-guidelines.md`.
-
----
-
-## ⚡ Output Expectation
-
-Codex should produce:
-
-1. A **fully functional frontend prototype** that still works end-to-end with mock data today.
-2. Local-only interactivity for any flows that are not yet wired to Supabase (state-driven UI, no external API).
-3. Screens that visually and logically represent the gotLocks experience, ready for incremental Supabase-backed integration.
-
----
-
-## 🧰 Local Development Notes
-
-To start the dev server locally:
-`npm run dev`
-
-Then open [http://localhost:3000](http://localhost:3000)
-
-Deployment target: **Vercel**
-
-This repo uses **Next.js + TypeScript**.
-
----
-
-**Final Goal:**
-A playable, mobile-optimized **frontend prototype** that mirrors the real app flow and logic, giving us breathing room to layer in Supabase as the production backend without losing UI velocity.
-
----
-
-## Changelog
-
-- 2025-Phase2: Added Supabase client helpers and documented Phase 2 direction, username rules, and Google sign-in onboarding expectations.
+Keep prototype behavior deterministic and locally testable. Preserve existing product flows while evolving domain boundaries, and document any intentional behavior change. When a future production implementation needs a trusted value or permission check, capture that requirement in the domain handoff instead of building the production backend here.

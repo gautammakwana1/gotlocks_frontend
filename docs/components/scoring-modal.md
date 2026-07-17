@@ -1,76 +1,81 @@
 # Scoring Modal — gotLocks
 
 ## Purpose
-Reusable component that displays the scoring breakdown for either **profiles (post XP)** or **leagues (leaderboard scoring)**.  
-Lightweight and scrollable — opens as a centered overlay.
 
----
+Reusable, scrollable explanation for two existing surfaces:
 
-## Trigger Points
+- Profile and Global Social use **XP**.
+- Traditional League Slips use **Slip Points**.
 
-- Profile screen → “Profile scoring rules” button (global)  
-- League screens → “League scoring” trigger (league)  
-- Pick builder → “Scoring” reference link (league)  
+League Feed and Arena screens must use their own contextual names—**League Points** and **Arena Points**—when their explanation surfaces are added. A pick earns points in only the context where it was submitted.
 
----
+## Trigger points
 
-## Content
+- Profile screen → “Scoring rules” button (`global` variant)
+- Traditional League screens → “League scoring” trigger (`league` variant)
+- Pick builder → contextual scoring reference
 
-### 🧭 Scoring Modes
+## XP mode
 
-**Profile scoring (post XP)**
-- Uses the full Tier 1-14 table (see `ODDS_BRACKETS` in `lib/constants.ts`).  
-- Wins add tier XP to profile progression. Losses only mark the post as a loss.  
-- Post XP is awarded on wins only and capped at **1,000 XP per day**.  
+- Only eligible public Global Social posts earn XP.
+- A winning post uses `round(20 × decimalOdds^0.55)` from its immutable accepted odds.
+- Losses and voids earn zero XP and never remove XP.
+- XP powers the main Profile level and Reward Room progress.
+- Up to **1,000 XP per account day** may be applied in the account timezone.
+- League Points, Arena Points, and Slip Points neither consume that allowance nor increase the main Profile level.
 
-**League leaderboard scoring (Epic cap)**
-- Uses the same tier table, but caps at **Epic** (higher odds score as Epic).  
-- Awarded points can override tier points during review.  
-- Vibe slips do not impact league standings or profile XP.  
+### Simplified eight-band guide
 
----
+| Submitted odds | Typical XP |
+| ---: | ---: |
+| –300 or shorter | About 20 |
+| –299 to +150 | About 25–35 |
+| +151 to +500 | About 35–55 |
+| +501 to +1000 | About 55–75 |
+| +1001 to +2500 | About 75–120 |
+| +2501 to +5000 | About 120–175 |
+| +5001 to +10000 | About 175–250 |
+| +10001 or longer | 250+ |
 
-### 🏅 League Table (Cap Preview)
+> XP is calculated using the exact odds accepted when your post is submitted.
 
-| Name | Odds Range | Win Points |
-|------|------------|------------|
-| Safe | -300 or less | +5 pts |
-| Lock | -299 to -150 | +15 pts |
-| Edge | -149 to +150 | +25 pts |
-| Risky | +151 to +450 | +35 pts |
-| Spicy | +451 to +850 | +45 pts |
-| Epic | +851 or greater | +60 pts |
+These ranges are an approximate guide, not scoring buckets. The mathematical result remains continuous; the daily cap can reduce only the XP applied to the Profile.
 
----
+Contextual explanation screens reuse this same guide with the surface-specific sentence:
 
-### ⚖️ Legal Note
+- League Feed: “League Points are calculated using the exact odds accepted when your pick is submitted.”
+- Arena: “Arena Points are calculated using the exact odds accepted when your pick is submitted.”
 
-gotLocks does **not handle money or wagers**.  
-All scoring is purely for entertainment, leaderboard ranking, and personal bragging rights.
+League Points and Arena Points are uncapped and do not become XP.
 
----
+## Traditional Slip Points mode
+
+| Name | Submitted odds | Slip Points on win |
+| --- | ---: | ---: |
+| Safe | –300 or shorter | +5 |
+| Lock | –299 to –150 | +15 |
+| Edge | –149 to +150 | +25 |
+| Risky | +151 to +450 | +35 |
+| Spicy | +451 to +850 | +45 |
+| Epic | +851 or longer | +60 maximum |
+
+- A loss earns –15 Slip Points; a void or not-found result earns zero.
+- Authorized review controls may override Slip Points without changing the pick outcome.
+- Vibe Slips do not affect Slip standings or award Slip Points, League Points, Arena Points, or XP.
+- Slip Points never convert into League Points, Arena Points, or XP.
 
 ## Behavior
 
 | Element | Action |
-|----------|--------|
-| “Close” button | Closes modal and returns to previous screen. |
-| Background click | Dismisses modal. |
-| Scroll | Smooth, mobile-optimized. |
+| --- | --- |
+| Close button | Closes the modal and returns to the previous screen. |
+| Background click | Dismisses the modal. |
+| Scroll | Keeps long content usable on mobile. |
 
----
+## Legal note
 
-## UI / UX Notes
+gotLocks does not handle money or wagers. All scoring is for entertainment, leaderboard ranking, and personal bragging rights.
 
-- `rounded-xl` container with `border-slate-800/80` + `bg-black/85`  
-- Header: title + subtitle, `text-white` / `text-gray-400`  
-- Section headers: `text-sky-200`  
-- Row cards: `rounded-2xl` cards with subtle borders  
-- Appears centered with dimmed backdrop  
-- Close button: small circular `x` button in header  
+Triggered from: `/docs/screens/picks-page.md` and `/docs/screens/settings.md`
 
-Triggered from: /docs/screens/picks-page.md and /docs/screens/settings.md
-
----
-
-**Last Updated:** February 2026
+**Last updated:** July 2026

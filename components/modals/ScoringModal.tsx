@@ -5,6 +5,7 @@ import { ODDS_BRACKETS } from "@/lib/constants";
 import { formatTierPrimary, getGroupTierColor, getGroupTierName, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER } from "@/lib/utils/scoring";
 import Link from "next/link";
 import { XP_POST_DAILY_CAP } from "@/lib/utils/progression";
+import { GLOBAL_XP_DAILY_CAP } from "@/lib/scoring/dailyXp";
 
 type Props = {
   open: boolean;
@@ -14,13 +15,24 @@ type Props = {
 
 const GROUP_MODAL_TABS = [
   { id: "slips", label: "What are Slips?" },
-  { id: "scoring", label: "Scoring and Leaderboards" },
+  { id: "scoring", label: "Slip Points and Leaderboards" },
 ] as const;
 
 const GLOBAL_MODAL_TABS = [
-  { id: "scoring", label: "Scoring & XP" },
+  { id: "scoring", label: "XP" },
   { id: "shop", label: "Reward Room" },
 ] as const;
+
+const GLOBAL_XP_GUIDE = [
+  { odds: "-300 or shorter", value: "About 20" },
+  { odds: "-299 to +150", value: "About 25–35" },
+  { odds: "+151 to +500", value: "About 35–55" },
+  { odds: "+501 to +1000", value: "About 55–75" },
+  { odds: "+1001 to +2500", value: "About 75–120" },
+  { odds: "+2501 to +5000", value: "About 120–175" },
+  { odds: "+5001 to +10000", value: "About 175–250" },
+  { odds: "+10001 or longer", value: "250+" },
+];
 
 type GroupModalTab = (typeof GROUP_MODAL_TABS)[number]["id"];
 type GlobalModalTab = (typeof GLOBAL_MODAL_TABS)[number]["id"];
@@ -44,7 +56,6 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   const [openGlobalSections, setOpenGlobalSections] = useState<
     Record<GlobalModalTab, string | null>
   >(DEFAULT_GLOBAL_OPEN_SECTIONS);
-  const globalTiers = ODDS_BRACKETS;
   const groupTiers = ODDS_BRACKETS.filter((tier) => tier.tier <= LEAGUE_CAP_TIER);
   const groupCapPoints = groupTiers[groupTiers.length - 1]?.points ?? LEAGUE_CAP_POINTS;
   const groupCapName = getGroupTierName(LEAGUE_CAP_TIER, `Tier ${LEAGUE_CAP_TIER}`);
@@ -55,12 +66,12 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   const isSingleMode = isGroupOnly || isGlobalOnly;
   const modalTitle =
     variant === "global"
-      ? "Profile Scoring Rules"
-      : "League Scoring Rules";
+      ? "XP Rules"
+      : "Traditional Slip Rules";
   const modalSubtitle =
     variant === "global"
-      ? "How post XP levels up your profile and unlocks Reward Room access."
-      : "How slips, scoring, and commissioner controls work inside your league.";
+      ? "How Global Social posts earn XP and level up your profile."
+      : "How traditional Slips, Slip Points, and commissioner controls work inside your league.";
   const modalWidthClassName = "max-w-3xl";
   const modalHeaderClassName = "px-6 py-5 sm:px-7";
   const modalTitleClassName = "text-xl sm:text-2xl";
@@ -72,7 +83,6 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
   const singleModeHeaderTextClassName = isSingleMode ? "max-w-[560px]" : "";
   const tierGridClassName = "grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-[max-content_max-content] md:justify-center";
   const groupGridClassName = tierGridClassName;
-  const globalGridClassName = tierGridClassName;
 
   const sectionTitleClassName = isSingleMode ? "text-base" : "text-sm";
   const legalTextClassName = isSingleMode
@@ -182,11 +192,6 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
     };
   };
 
-  const getHexFromGradient = (color: string) => {
-    const match = color.match(/#([0-9a-fA-F]{6})/);
-    return match ? `#${match[1]}` : undefined;
-  };
-
   const renderTierCard = (
     tier: (typeof ODDS_BRACKETS)[number],
     {
@@ -202,7 +207,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
       showDescriptor?: boolean;
       nameOverride?: string;
       colorOverride?: string;
-      cardVariant?: "default" | "league" | "global";
+      cardVariant?: "default" | "league";
     } = {}
   ) => {
     const tierPrimary = formatTierPrimary(tier.tier);
@@ -213,10 +218,8 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
     const cardTone = colorOverride ? "bg-transparent" : `bg-gradient-to-br ${tier.color}`;
     const cardStyle = getCardStyle(colorOverride);
     const isGroupCard = cardVariant === "league";
-    const isGlobalCard = cardVariant === "global";
-    const isTierCard = isGroupCard || isGlobalCard;
-    const isTierLarge =
-      (isGroupCard && isGroupOnly) || (isGlobalCard && isGlobalOnly);
+    const isTierCard = isGroupCard;
+    const isTierLarge = isGroupCard && isGroupOnly;
     const cardClassName = isTierCard
       ? isTierLarge
         ? `flex min-h-[72px] w-full items-center justify-between gap-2 rounded-xl border border-white/20 px-3 py-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] sm:min-h-[92px] sm:gap-4 sm:rounded-2xl sm:px-5 sm:py-4 sm:w-[260px] ${cardTone}`
@@ -272,9 +275,9 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 : "flex flex-col items-end gap-1 text-right leading-tight"
           }
         >
-          <p className={pointsLabelClassName}>{isGlobalCard ? "Win XP" : "Win"}</p>
+          <p className={pointsLabelClassName}>Win</p>
           <p className={pointsValueClassName}>
-            +{tier.points} {isGlobalCard ? "XP" : "pts"}
+            +{tier.points} Slip Points
           </p>
         </div>
       </div>
@@ -363,7 +366,7 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                 </li>
                 <li>
                   <strong>Vibe Slips.</strong> Casual league play. They never affect
-                  leaderboard totals or profile XP.
+                  Slip standings or award Slip Points, League Points, or XP.
                 </li>
               </ul>
             ),
@@ -412,16 +415,16 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  Only the <strong>commissioner</strong> can create Leaderboard Slips.
-                  Any league member can create a Vibe Slip.
+                  Only the <strong>commissioner</strong> can create or manage
+                  Leaderboard and Vibe Slips. Members add only their own picks.
                 </li>
                 <li>
                   After a Leaderboard Slip locks, the commissioner reviews it with
                   auto-grading and optional point adjustments.
                 </li>
                 <li>
-                  After a Vibe Slip locks, the creator or commissioner can auto-grade
-                  it. Once every pick resolves, it finalizes automatically.
+                  After a Vibe Slip locks, the commissioner can auto-grade it. Once
+                  every pick resolves, it finalizes automatically.
                 </li>
                 <li>
                   Before finalization, a locked slip can be reopened. Reopening clears
@@ -442,17 +445,17 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGroupSection("scoring", "tiers"),
             panelId: "league-rule-scoring-tiers",
             eyebrow: "Tiers",
-            title: "How league scoring works",
+            title: "How Slip Points work",
             children: (
               <div className="space-y-4">
                 <ul className={groupBulletListClassName}>
                   <li>
-                    Each pick lands in a scoring tier based on its odds. Wins earn the
-                    tier value, and losses are <strong>-15 points</strong>.
+                    Each pick lands in a Slip scoring tier based on its odds. Wins earn
+                    that many Slip Points, and losses earn <strong>-15 Slip Points</strong>.
                   </li>
                   <li>
-                    League leaderboard scoring caps at {groupCapName}. Any odds above it
-                    still score {groupCapPoints} points max.
+                    Traditional Slip scoring caps at {groupCapName}. Any odds above it
+                    still earn at most {groupCapPoints} Slip Points.
                   </li>
                 </ul>
                 <div className={groupGridClassName}>
@@ -475,12 +478,12 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGroupSection("scoring", "adjustments"),
             panelId: "league-rule-scoring-adjustments",
             eyebrow: "Commissioner",
-            title: "Optional score adjustments",
+            title: "Optional Slip Point adjustments",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  <strong>Allowed.</strong> Commissioners can add bonus points, reduce
-                  points, or customize totals for special rules and side competitions.
+                  <strong>Allowed.</strong> Eligible commissioner review controls can add,
+                  reduce, or customize Slip Points for special rules and side competitions.
                 </li>
                 <li>
                   <strong>Locked.</strong> Pick outcomes cannot be changed. Winning
@@ -503,12 +506,12 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
                   affect standings yet.
                 </li>
                 <li>
-                  <strong>Total score.</strong> A member&apos;s score is the sum of
-                  their finalized Leaderboard Slip results.
+                  <strong>Total Slip Points.</strong> A member&apos;s Slip total is the sum
+                  of their finalized Leaderboard Slip results.
                 </li>
                 <li>
                   <strong>Vibe Slips.</strong> They never change league standings or
-                  profile XP.
+                  award Slip Points, League Points, or XP.
                 </li>
               </ul>
             ),
@@ -547,23 +550,24 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGlobalSection("scoring", "xp"),
             panelId: "global-rule-scoring-xp",
             eyebrow: "XP",
-            title: "What is XP?",
+            title: "XP and profile progression",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  XP stands for experience points and powers your profile
-                  progression.
+                  Only eligible public Global Social posts earn XP.
                 </li>
                 <li>
-                  Winning posts earn XP, which helps level up your profile and fill
-                  your progress bar.
+                  Winning posts earn XP from their exact accepted odds. XP powers your
+                  profile level and Reward Room progress.
                 </li>
                 <li>
-                  Losses do <strong>not</strong> remove XP.
+                  Losses and voids earn zero XP and never remove XP.
                 </li>
                 <li>
-                  Winning posts can award up to{" "}
-                  <strong>{XP_POST_DAILY_CAP} post XP per day</strong>.
+                  Each account can receive up to{" "}
+                  <strong>{GLOBAL_XP_DAILY_CAP} XP per account day</strong> in
+                  its stored timezone. League Points, Arena Points, and Slip Points do
+                  not consume this allowance or increase your profile level.
                 </li>
               </ul>
             ),
@@ -574,18 +578,21 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
             onToggle: () => toggleGlobalSection("scoring", "settlement"),
             panelId: "global-rule-scoring-settlement",
             eyebrow: "Basics",
-            title: "When does XP get added?",
+            title: "When is XP added?",
             children: (
               <ul className={groupBulletListClassName}>
                 <li>
-                  Posts need to settle as wins before XP is added to your profile.
+                  A public Global Social post must settle as a win before its XP is
+                  confirmed.
                 </li>
                 <li>
-                  Losses only mark the post as a loss. They do not remove XP or
-                  create any profile penalty.
+                  Accepted American odds are snapshotted at submission and later
+                  market movement does not change the score.
                 </li>
                 <li>
-                  League slips and vibe slips do not award profile XP.
+                  League activity awards League Points, Arena activity awards Arena
+                  Points, and traditional Slips award Slip Points. None of them award
+                  XP.
                 </li>
               </ul>
             ),
@@ -601,28 +608,34 @@ export const ScoringModal = ({ open, onClose, variant }: Props) => {
           onToggle: () => toggleGlobalSection("shop", "tiers"),
           panelId: "global-rule-shop-tiers",
           eyebrow: "Tiers",
-          title: "Post XP tier table",
+          title: "XP guide",
           children: (
             <div className="space-y-4">
               <ul className={groupBulletListClassName}>
                 <li>
-                  Winning posts earn XP based on their odds tier.
+                  XP is calculated using the exact odds accepted when your post is
+                  submitted.
                 </li>
                 <li>
-                  Higher-risk picks can earn more XP on wins. Losses carry no XP
-                  penalty.
+                  The formula is <strong>round(20 × decimal odds^0.55)</strong>. It is
+                  continuous and system-calculated; the daily XP cap may reduce
+                  the amount applied to your profile.
                 </li>
               </ul>
-              <div className={globalGridClassName}>
-                {globalTiers.map((tier) =>
-                  renderTierCard(tier, {
-                    showTierLabel: false,
-                    nameOverride: `Tier ${tier.tier}`,
-                    colorOverride: getHexFromGradient(tier.color),
-                    cardVariant: "global",
-                  })
-                )}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {GLOBAL_XP_GUIDE.map((band) => (
+                  <div
+                    key={band.odds}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-3"
+                  >
+                    <p className="text-xs text-white/60">{band.odds}</p>
+                    <p className="text-sm font-semibold text-white">{band.value}</p>
+                  </div>
+                ))}
               </div>
+              <p className="text-xs text-white/55">
+                These ranges are an approximate guide, not scoring buckets.
+              </p>
             </div>
           ),
         })}

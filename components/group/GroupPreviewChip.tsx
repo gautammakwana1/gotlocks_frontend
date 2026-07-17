@@ -16,6 +16,7 @@ type GroupPreviewChipProps = {
 
 type GroupTypeMetaLabelProps = GroupPreviewChipProps & {
     textClassName?: string;
+    showTitle?: boolean;
 };
 
 type GroupPreviewCornerMetaProps = GroupPreviewChipProps & {
@@ -151,6 +152,7 @@ export const GroupTypeMetaLabel = ({
     ownerPlan,
     className = "",
     textClassName = groupPreviewMetaTextClassName,
+    showTitle = true,
 }: GroupTypeMetaLabelProps) => {
     const isProOwner = ownerPlan
         ? normalizeUserPlan(ownerPlan) === "pro"
@@ -160,7 +162,7 @@ export const GroupTypeMetaLabel = ({
     return (
         <span
             className={`${textClassName} ${colorClassName} ${className}`}
-            title={isProOwner ? "Pro owner group" : "Free owner group"}
+            title={showTitle ? (isProOwner ? "Pro owner group" : "Free owner group") : undefined}
         >
             {getGroupTypeLabel(group?.group_type ?? "league").toUpperCase()}
         </span>

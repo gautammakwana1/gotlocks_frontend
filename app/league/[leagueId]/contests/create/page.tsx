@@ -12,6 +12,8 @@ import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearCreateContestMessage, createContestRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { canCreateContestInGroup, getActiveContestCountsLabel } from "@/lib/groups/limits";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
+import { canCreateStandardContest } from "@/lib/permissions/leaguePermissions";
 
 type FormErrors = {
     name?: string;
@@ -37,6 +39,7 @@ const CreateContestPage = () => {
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
+    const plan = useUserPlan();
     const [name, setName] = useState("");
     const [sportScope, setSportScope] = useState("");
     const [badgesEnabled, setBadgesEnabled] = useState(false);
@@ -47,10 +50,23 @@ const CreateContestPage = () => {
     const { group } = useSelector((state: GroupSelector) => state.group);
     const { contest, loading: contestLoader, error, message } = useSelector((state: RootState) => state.contest);
 
+    const permission = canCreateStandardContest({
+        league: group,
+        actorId: currentUser?.userId,
+        sessionUserId: currentUser?.userId,
+        plan: plan
+    });
+
     useEffect(() => {
         if (!leagueId || !currentUser) return;
         dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
     }, [leagueId, currentUser, dispatch]);
+
+    useEffect(() => {
+        if (group && currentUser && !permission.allowed) {
+            router.replace(`/league/${group.id}`);
+        }
+    }, [currentUser, group, permission.allowed, router]);
 
     useEffect(() => {
         if (!contestLoader && message) {
@@ -153,7 +169,7 @@ const CreateContestPage = () => {
         }
     };
 
-    if (!group || !currentUser) return null;
+    if (!group || !currentUser || !permission.allowed) return null;
 
     return (
         <div className="flex flex-col gap-6 pb-10">

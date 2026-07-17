@@ -7,7 +7,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { formatDateTime } from "@/lib/utils/date";
-import { Contest, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
+import { Contest, Group, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
@@ -22,8 +22,9 @@ import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/
 import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 import { SettingIcon } from "@/components/ui/SvgIcons";
-import { canCreateContestInGroup, getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { canCreateContestInGroup, getActiveContestCapacityLabel, getActiveContestCountsLabel, getActiveLeagueFeedContestCapacityLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel, getRegularMemberCapacityLabel, normalizeHostingTier } from "@/lib/groups/limits";
 import { groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "@/components/group/GroupPreviewChip";
+import { isLeagueMember } from "@/lib/permissions/leaguePermissions";
 
 interface FormErrors {
   name?: string;
@@ -151,6 +152,108 @@ const LeagueTabStrip = ({
   );
 };
 
+const LeagueTierDetailsLabel = ({
+  league,
+  memberCapacityLabel,
+  standardContestCapacityLabel,
+  feedContestCapacityLabel,
+}: {
+  league: Group;
+  memberCapacityLabel: string;
+  standardContestCapacityLabel: string;
+  feedContestCapacityLabel: string;
+}) => {
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const open = hovered || focused || pinned;
+  const isPro = normalizeHostingTier(league.hosting_tier) === "pro";
+  const tierLabel = isPro ? "Pro League" : "Free League";
+
+  const closeDetails = useCallback(() => {
+    setHovered(false);
+    setFocused(false);
+    setPinned(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) closeDetails();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeDetails();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeDetails, open]);
+
+  return (
+    <span
+      ref={rootRef}
+      className="relative inline-flex shrink-0 text-right"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setFocused(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={league.id}
+        aria-label={`Show ${tierLabel} details`}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (pinned) closeDetails();
+          else setPinned(true);
+        }}
+        className="cursor-help rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300/70"
+      >
+        <GroupTypeMetaLabel group={league} showTitle={false} />
+      </button>
+
+      {open && (
+        <span
+          id={league.id}
+          role="tooltip"
+          className="absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/15 bg-[#090d16] p-3 text-left font-sans text-xs font-normal normal-case tracking-normal text-gray-300 shadow-2xl shadow-black/50"
+        >
+          <span className={`block font-semibold ${isPro ? "text-amber-100" : "text-sky-100"}`}>
+            {tierLabel}
+          </span>
+          <span className="mt-1 block leading-5 text-gray-400">
+            {isPro
+              ? "Pro League limits and manual scoring controls apply."
+              : "Free League limits and standard scoring controls apply."}
+          </span>
+          <span className="mt-2 block border-t border-white/10 pt-2 leading-5">
+            {memberCapacityLabel}
+            <br />
+            {standardContestCapacityLabel}
+            <br />
+            {feedContestCapacityLabel}
+          </span>
+          <span className="mt-2 block text-[10px] uppercase tracking-[0.1em] text-gray-500">
+            Hover or tap the League label for details
+          </span>
+        </span>
+      )}
+    </span>
+  );
+};
+
 const contestSportLabels = (contest: Contest) =>
   contest.sports.length > 1 ? ["Multi"] : contest.sports;
 
@@ -176,7 +279,6 @@ const LeagueDashboardPage = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
-
 
   const {
     group,
@@ -219,6 +321,7 @@ const LeagueDashboardPage = () => {
     fetchedGroupId.current = leagueId;
   }, [leagueId, currentUser, dispatch]);
 
+  const isMember = isLeagueMember(group, currentUser?.userId);
   const isCommissioner = !!group && !!currentUser && group.created_by === currentUser.userId;
   const activeTab = normalizeTab(searchParams.get("tab"), isCommissioner);
   const visibleTabs = useMemo(
@@ -240,6 +343,10 @@ const LeagueDashboardPage = () => {
       router.replace(`/league/${params.leagueId}`);
     }
   }, [params.leagueId, router, searchParams]);
+
+  useEffect(() => {
+    if (group && currentUser && !isMember) router.replace("/home");
+  }, [currentUser, isMember, group, router]);
 
   const [showArchived, setShowArchived] = useState(false);
   const [editLeagueName, setEditLeagueName] = useState("");
@@ -655,15 +762,37 @@ const LeagueDashboardPage = () => {
                   {group && (
                     <>
                       <span>{getGroupCapacityLabel(group, memberCount)}</span>
-                      <span>{getActiveContestCountsLabel(group, activeContestCount)}</span>
+                      {/* <span>{getActiveContestCountsLabel(group, activeContestCount)}</span> */}
+                      <span>
+                        {getCombinedContestCapacityLabel(
+                          group,
+                          [],
+                          []
+                        )}
+                      </span>
                     </>
                   )}
                 </div>
-                <GroupTypeMetaLabel
-                  group={group}
-                  ownerPlan={groupOwnerPlan}
-                  className="shrink-0 text-right"
-                />
+                {group?.group_type === "league" ? (
+                  <LeagueTierDetailsLabel
+                    league={group}
+                    memberCapacityLabel={getRegularMemberCapacityLabel(group)}
+                    standardContestCapacityLabel={getActiveContestCapacityLabel(
+                      group,
+                      []
+                    )}
+                    feedContestCapacityLabel={getActiveLeagueFeedContestCapacityLabel(
+                      group,
+                      []
+                    )}
+                  />
+                ) : (
+                  <GroupTypeMetaLabel
+                    group={group}
+                    ownerPlan={groupOwnerPlan}
+                    className="shrink-0 text-right"
+                  />
+                )}
               </div>
               <h1
                 className="allow-caps pr-24 mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
@@ -715,29 +844,31 @@ const LeagueDashboardPage = () => {
 
       {activeTab === "contests" && (
         <div className="space-y-6">
-          {createContestCheck.allowed ? (
-            <Link
-              href={`/league/${group?.id}/contests/create`}
-              className="flex w-full items-center justify-between gap-4 rounded-lg border border-sky-300/30 bg-sky-500/10 px-5 py-4 text-left transition hover:border-sky-200/70 hover:bg-sky-500/15"
-            >
-              <span>
-                <span className="block text-sm font-semibold text-white">Start a contest</span>
-                <span className="mt-1 block text-xs text-gray-400">
-                  Set sports, dates, and a standings container for this group.
+          {isCommissioner &&
+            (createContestCheck.allowed ? (
+              <Link
+                href={`/league/${group?.id}/contests/create`}
+                className="flex w-full items-center justify-between gap-4 rounded-lg border border-sky-300/30 bg-sky-500/10 px-5 py-4 text-left transition hover:border-sky-200/70 hover:bg-sky-500/15"
+              >
+                <span>
+                  <span className="block text-sm font-semibold text-white">Start a contest</span>
+                  <span className="mt-1 block text-xs text-gray-400">
+                    Set sports, dates, and a standings container for this group.
+                  </span>
                 </span>
-              </span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/40 text-xl text-sky-100">
-                +
-              </span>
-            </Link>
-          ) : (
-            <section className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-5 py-4 text-sm text-amber-50">
-              <p className="font-semibold">{createContestCheck.error}</p>
-              <p className="mt-1 text-xs text-amber-100/80">
-                Archive an active contest to open another one. Historical contests are unlimited.
-              </p>
-            </section>
-          )}
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-300/40 text-xl text-sky-100">
+                  +
+                </span>
+              </Link>
+            ) : (
+              <section className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-5 py-4 text-sm text-amber-50">
+                <p className="font-semibold">{createContestCheck.error}</p>
+                <p className="mt-1 text-xs text-amber-100/80">
+                  Archive an active contest to open another one. Historical contests are unlimited.
+                </p>
+              </section>
+            ))
+          }
 
           {activeContests?.length ? (
             <div className="space-y-4">
@@ -765,7 +896,12 @@ const LeagueDashboardPage = () => {
           ) : (
             <section className="rounded-lg border border-dashed border-white/15 bg-black/30 p-6 text-sm text-gray-400">
               <p className="font-semibold text-white">No contests yet.</p>
-              <p className="mt-2">Any group member can start the first one.</p>
+              <p className="mt-2">
+                {isCommissioner
+                  ? "Start the first contest when your League is ready."
+                  : "The commissioner has not started a contest yet."
+                }
+              </p>
             </section>
           )}
 

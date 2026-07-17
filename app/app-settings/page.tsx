@@ -2,12 +2,18 @@
 
 import { ChevronIcon } from "@/components/ui/SvgIcons";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import { getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
 import { useUserPlan } from "@/lib/plan/useUserPlan";
 import Link from "next/link";
 
 const AppSettingsPage = () => {
     const currentUser = useCurrentUser();
     const plan = useUserPlan();
+    const planView = getProLifetimePlanViewModel({
+        plan: plan,
+        offerKind: currentUser?.proLifetimeOfferKind,
+        entitlement: currentUser?.proLifetimeEntitlement,
+    });
     if (!currentUser) return null;
 
     const rows = [
@@ -45,7 +51,7 @@ const AppSettingsPage = () => {
                         or review account deletion options.
                     </p>
                     <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text)]">
-                        {plan === "pro" ? "Founding Pro" : "Free"} plan
+                        {planView.currentPlanName} plan
                     </div>
                 </header>
 

@@ -1,4 +1,8 @@
-export const XP_POST_DAILY_CAP = 1000;
+import { GLOBAL_XP_DAILY_CAP } from "../scoring/dailyXp";
+
+export { GLOBAL_XP_DAILY_CAP };
+/** @deprecated Use GLOBAL_XP_DAILY_CAP; XP is account-wide, not post-specific. */
+export const XP_POST_DAILY_CAP = GLOBAL_XP_DAILY_CAP;
 export const XP_LEVEL_BASE = 250;
 
 export const getLocalDateKey = (date: Date) => {

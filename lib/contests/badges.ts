@@ -492,6 +492,32 @@ export const getBadgePointValue = (
     badgeId: string
 ) => settings.badgePointOverrides[badgeId] ?? settings.defaultPoints;
 
+/**
+ * Badge selection and enablement remain available to every commissioner. Only
+ * changing the values awarded by those badges is a Pro capability.
+ */
+export const hasCustomBadgePointValues = (
+    settings: Pick<ContestBadgeSettings, "defaultPoints" | "badgePointOverrides">
+) =>
+    settings.defaultPoints !== DEFAULT_BADGE_POINTS ||
+    Object.keys(settings.badgePointOverrides).length > 0;
+
+export const haveSameBadgePointValues = (
+    left: Pick<ContestBadgeSettings, "defaultPoints" | "badgePointOverrides">,
+    right: Pick<ContestBadgeSettings, "defaultPoints" | "badgePointOverrides">
+) =>
+    left.defaultPoints === right.defaultPoints &&
+    JSON.stringify(
+        Object.entries(left.badgePointOverrides).sort(([leftId], [rightId]) =>
+            leftId.localeCompare(rightId)
+        )
+    ) ===
+    JSON.stringify(
+        Object.entries(right.badgePointOverrides).sort(([leftId], [rightId]) =>
+            leftId.localeCompare(rightId)
+        )
+    );
+
 export const applyBadgeBonusCap = (value: number) =>
     Math.min(value, MAX_BADGE_BONUS_PER_USER);
 

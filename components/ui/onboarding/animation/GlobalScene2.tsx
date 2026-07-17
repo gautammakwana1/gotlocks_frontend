@@ -4,25 +4,23 @@ import { Easing, clamp, useTime } from "./engine";
 import { APP_BG, FONT_MONO, FONT_SANS, TEXT, TEXT_MUTED } from "./primitives";
 
 // Tutorial 3 · Scene 2 — "How you get rewarded"
-// 14 tier cards cascade into a 2-column grid sized to fit the stage.
+// The simplified XP guide cascades into a 2-column grid.
 
-type Tier = { n: number; range: string; pts: number; hue: number };
+type GlobalXpBand = {
+    oddsRange: string;
+    typicalValue: string;
+    hue: number;
+};
 
-const TIERS: Tier[] = [
-    { n: 1, range: "−300 or less", pts: 5, hue: 290 },
-    { n: 2, range: "−299 to −150", pts: 15, hue: 270 },
-    { n: 3, range: "−149 to +150", pts: 25, hue: 245 },
-    { n: 4, range: "+151 to +450", pts: 35, hue: 225 },
-    { n: 5, range: "+451 to +850", pts: 45, hue: 200 },
-    { n: 6, range: "+851 to +1350", pts: 60, hue: 180 },
-    { n: 7, range: "+1351 to +1950", pts: 75, hue: 160 },
-    { n: 8, range: "+1951 to +3000", pts: 90, hue: 140 },
-    { n: 9, range: "+3001 to +5000", pts: 120, hue: 120 },
-    { n: 10, range: "+5001 to +8000", pts: 150, hue: 100 },
-    { n: 11, range: "+8001 to +11000", pts: 180, hue: 80 },
-    { n: 12, range: "+11001 to +15000", pts: 210, hue: 60 },
-    { n: 13, range: "+15001 to +25000", pts: 240, hue: 40 },
-    { n: 14, range: "+25001 or greater", pts: 300, hue: 22 },
+const GLOBAL_XP_BANDS: GlobalXpBand[] = [
+    { oddsRange: "−300 or shorter", typicalValue: "About 20", hue: 290 },
+    { oddsRange: "−299 to +150", typicalValue: "About 25–35", hue: 255 },
+    { oddsRange: "+151 to +500", typicalValue: "About 35–55", hue: 220 },
+    { oddsRange: "+501 to +1000", typicalValue: "About 55–75", hue: 185 },
+    { oddsRange: "+1001 to +2500", typicalValue: "About 75–120", hue: 145 },
+    { oddsRange: "+2501 to +5000", typicalValue: "About 120–175", hue: 105 },
+    { oddsRange: "+5001 to +10000", typicalValue: "About 175–250", hue: 65 },
+    { oddsRange: "+10001 or longer", typicalValue: "250+", hue: 25 },
 ];
 
 export function GlobalScene2({ showText = false }: { showText?: boolean }) {
@@ -35,7 +33,7 @@ export function GlobalScene2({ showText = false }: { showText?: boolean }) {
     const COL_GAP = 24;
     const ROW_GAP = 16;
     const startX = (W - (CARD_W * 2 + COL_GAP)) / 2;
-    const totalH = 7 * CARD_H + 6 * ROW_GAP;
+    const totalH = 4 * CARD_H + 3 * ROW_GAP;
     const startY = (H - totalH) / 2;
 
     return (
@@ -49,7 +47,7 @@ export function GlobalScene2({ showText = false }: { showText?: boolean }) {
             }}
         >
             <div style={{ position: "absolute", inset: 0 }}>
-                {TIERS.map((tier, i) => {
+                {GLOBAL_XP_BANDS.map((band, i) => {
                     const col = i % 2;
                     const row = Math.floor(i / 2);
                     const x = startX + col * (CARD_W + COL_GAP);
@@ -60,13 +58,13 @@ export function GlobalScene2({ showText = false }: { showText?: boolean }) {
                     if (enterT <= 0) return null;
 
                     return (
-                        <TierCard
-                            key={tier.n}
+                        <GlobalXpBandCard
+                            key={band.oddsRange}
                             x={x}
                             y={y}
                             w={CARD_W}
                             h={CARD_H}
-                            tier={tier}
+                            band={band}
                             enterE={enterE}
                         />
                     );
@@ -96,7 +94,7 @@ export function GlobalScene2({ showText = false }: { showText?: boolean }) {
                                 zIndex: 25,
                             }}
                         >
-                            bolder odds · bigger post xp
+                            exact accepted odds · approximate guide
                         </div>
                     );
                 })()}
@@ -104,17 +102,24 @@ export function GlobalScene2({ showText = false }: { showText?: boolean }) {
     );
 }
 
-type TierCardProps = {
+type GlobalXpBandCardProps = {
     x: number;
     y: number;
     w: number;
     h: number;
-    tier: Tier;
+    band: GlobalXpBand;
     enterE: number;
 };
 
-function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
-    const baseHue = tier.hue;
+function GlobalXpBandCard({
+    x,
+    y,
+    w,
+    h,
+    band,
+    enterE,
+}: GlobalXpBandCardProps) {
+    const baseHue = band.hue;
     const bg = `radial-gradient(circle at 0% 0%, oklch(38% 0.13 ${baseHue} / 0.85), oklch(20% 0.06 ${baseHue} / 0.55) 55%, #0a0a0a 100%)`;
 
     const scale = enterE;
@@ -170,7 +175,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "-0.01em",
                         }}
                     >
-                        Tier {tier.n}
+                        {band.oddsRange}
                     </div>
                     <div
                         style={{
@@ -180,7 +185,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "-0.01em",
                         }}
                     >
-                        {tier.range}
+                        submitted odds
                     </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -191,7 +196,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "0.04em",
                         }}
                     >
-                        Win XP
+                        Typical XP
                     </div>
                     <div
                         style={{
@@ -202,7 +207,7 @@ function TierCard({ x, y, w, h, tier, enterE }: TierCardProps) {
                             letterSpacing: "-0.01em",
                         }}
                     >
-                        +{tier.pts} XP
+                        {band.typicalValue}
                     </div>
                 </div>
             </div>

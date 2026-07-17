@@ -5119,9 +5119,9 @@ export const NflPickBuilder = ({
 //                         <div className="flex gap-3 rounded-2xl border border-white/5 bg-white/5 px-4 py-3 leading-relaxed">
 //                             <span className="mt-1 text-rose-200">•</span>
 //                             <p>
-//                                 The tier system maps real odds into points from Tier 1 (LOCK) to Tier 14
-//                                 (LEGENDARY). Profiles use the full table; league leaderboards cap at Tier{" "}
-//                                 {LEAGUE_CAP_TIER} ({LEAGUE_CAP_POINTS} pts max).
+//                                 Builder tiers preview how odds compare. Traditional Slip scoring caps at Tier{" "}
+//                                 {LEAGUE_CAP_TIER} ({LEAGUE_CAP_POINTS} Slip Points); XP, League Points,
+//                                 and Arena Points use the exact accepted odds.
 //                             </p>
 //                         </div>
 //                     </div>
@@ -5170,7 +5170,11 @@ export const NflPickBuilder = ({
 //                 <div className="max-h-[70vh] overflow-y-auto px-6 py-6 text-sm text-gray-300">
 //                     <div className="space-y-4">
 //                         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-gray-300">
-//                             <p>Profile post XP uses the full Tier 1-14 table.</p>
+// <p>
+//     Builder tiers are previews. Outside traditional Slips, the exact-odds
+//     calculation is labeled XP, League Points, or Arena Points based
+//     on where the pick is submitted.
+// </p>
 //                             <p>
 //                                 Group leaderboards cap at Tier {GROUP_CAP_TIER} ({LEAGUE_CAP_POINTS} pts
 //                                 max).

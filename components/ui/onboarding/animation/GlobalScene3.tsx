@@ -26,7 +26,7 @@ type Pick = {
     pickType?: string;
     name?: string;
     odds?: string;
-    tier: string;
+    globalXp: string;
     confidence: string;
     combo?: boolean;
     comboOdds?: string;
@@ -45,7 +45,7 @@ const FOR_YOU_PICKS: Pick[] = [
         hue: 220,
         league: "COMBO",
         leagueLine: "COMBO · 3 picks · posted at: May 2, 4:29 PM",
-        tier: "Tier 5 · 45 XP",
+        globalXp: "61 XP",
         confidence: "high",
         combo: true,
         comboOdds: "+659",
@@ -63,7 +63,7 @@ const FOR_YOU_PICKS: Pick[] = [
         hue: 200,
         league: "NBA",
         leagueLine: "NBA · 4 picks · posted at: May 2, 4:29 PM",
-        tier: "Tier 5 · 45 XP",
+        globalXp: "57 XP",
         confidence: "high",
         combo: true,
         comboOdds: "+577",
@@ -85,7 +85,7 @@ const FOLLOWING_PICKS: Pick[] = [
         hue: 160,
         league: "MLB",
         leagueLine: "MLB · 4 picks · posted at: May 2, 4:28 PM",
-        tier: "Tier 6 · 60 XP",
+        globalXp: "70 XP",
         confidence: "medium",
         combo: true,
         comboOdds: "+879",
@@ -110,7 +110,7 @@ const WINNERS_PICKS: Pick[] = [
         pickType: "game lines",
         name: "Philadelphia 76ers Moneyline",
         odds: "+640",
-        tier: "Tier 5 · 45 XP",
+        globalXp: "60 XP",
         confidence: "high",
         status: "win",
         startT: 4.7,
@@ -125,7 +125,7 @@ const WINNERS_PICKS: Pick[] = [
         pickType: "game lines",
         name: "Minnesota Timberwolves Moneyline",
         odds: "+240",
-        tier: "Tier 4 · 35 XP",
+        globalXp: "39 XP",
         confidence: "low",
         status: "win",
         startT: 5.2,
@@ -356,8 +356,8 @@ function FeedPickCard({ pick, time }: { pick: Pick; time: number }) {
                         border: "1px solid rgba(125,211,252,0.3)",
                     }}
                 >
-                    <div style={{ fontSize: 11, color: TEXT_MUTED }}>tier</div>
-                    <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{pick.tier}</div>
+                    <div style={{ fontSize: 11, color: TEXT_MUTED }}>xp</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{pick.globalXp}</div>
                 </div>
                 <div
                     style={{

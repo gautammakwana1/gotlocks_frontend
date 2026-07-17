@@ -40,6 +40,9 @@ import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import SlipDetailsSkeleton from "@/components/skeletons/slips/SlipDetailsSkeleton";
 import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
+import { canUseProLeagueScoringControls, isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
+import Link from "next/link";
 
 interface FormErrors {
     name?: string;
@@ -109,6 +112,7 @@ const SlipDetailsPage = () => {
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
+    const plan = useUserPlan();
     const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
     const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -160,6 +164,8 @@ const SlipDetailsPage = () => {
         }
     }, [slip?.contest_id, dispatch]);
 
+    const belongsToLeague = isSlipInLeague(slip, group?.id);
+    const canView = isLeagueMember(group, currentUser?.userId) && belongsToLeague;
     const isFinalized = slip ? isSlipFinal(slip) : false;
     const secondaryLeaderboardsEnabled =
         group?.is_enable_secondary_leaderboard ?? false;
@@ -449,11 +455,17 @@ const SlipDetailsPage = () => {
         if (!group || !isSlipFinal(slip)) return;
         if (!slip) {
             router.replace(`/league/${group.id}`);
+            return;
         }
         if (group.id && slip?.id) {
             router.replace(`/league/${group.id}/slips/${slip.id}/results`);
+            return;
         }
-    }, [group, slip, router]);
+        if (!canView) {
+            router.replace("/home");
+            return;
+        }
+    }, [canView, group, slip, router]);
 
     useEffect(() => {
         return () => {
@@ -502,15 +514,15 @@ const SlipDetailsPage = () => {
     // }, [slipPicks]);
 
     const preflightIsCommissioner = group?.created_by === currentUser?.userId;
-    const preflightIsCreator = slip?.created_by === currentUser?.userId;
-    const preflightIsContestManager = contest?.created_by === currentUser?.userId;
+    // const preflightIsCreator = slip?.created_by === currentUser?.userId;
+    // const preflightIsContestManager = contest?.created_by === currentUser?.userId;
     // const isVibeSlip = Boolean(slip && !slip.isGraded && slip.slip_type === "vibe");
     const availableSports = Array.isArray(slip?.sports) && slip.sports.length > 0
         ? slip.sports
         : [DEFAULT_SPORT];
-    const showReviewTab = Boolean(slip && slip.isGraded && (preflightIsCommissioner || preflightIsContestManager) && isSlipTimeLocked(slip));
+    const showReviewTab = Boolean(slip && slip.isGraded && preflightIsCommissioner && isSlipTimeLocked(slip));
     const showActionsTab = Boolean(
-        slip && (preflightIsCommissioner || preflightIsContestManager || (!slip.isGraded && preflightIsCreator))
+        slip && preflightIsCommissioner
     );
     const tabs = useMemo<{ id: SlipTab; label: string }[]>(() => {
         const baseTabs: { id: SlipTab; label: string }[] = [
@@ -554,7 +566,7 @@ const SlipDetailsPage = () => {
         return Object.keys(nextErrors).length === 0;
     }, [editingName]);
 
-    if (slipLoader || !group || !currentUser || !slip) {
+    if (slipLoader || !group || !currentUser || !slip || !canView) {
         return <SlipDetailsSkeleton />;
     }
 
@@ -564,26 +576,33 @@ const SlipDetailsPage = () => {
 
     const windowDays = slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS;
     const isCommissioner = group.created_by === currentUser.userId;
-    const isCreator = slip.created_by === currentUser.userId;
-    const isContestManager = contest?.created_by === currentUser.userId;
-    const hasVibeControl = !slip.isGraded && isCreator;
-    const hasReviewControl = isCommissioner || isContestManager || hasVibeControl;
+    // const isCreator = slip.created_by === currentUser.userId;
+    // const isContestManager = contest?.created_by === currentUser.userId;
+    // const hasVibeControl = !slip.isGraded && isCreator;
+    const hasProScoringControls = canUseProLeagueScoringControls({
+        league: group,
+        actor: currentUser,
+        actorId: currentUser.userId,
+        sessionUserId: currentUser.userId,
+        plan: plan
+    }).allowed;
+    const hasReviewControl = isCommissioner;
     const limitValue = slip.pick_limit === "unlimited" ? Infinity : slip.pick_limit;
     const isTimeLocked = isSlipTimeLocked(slip);
     const canManagePicks = canUserEditSlipPicks(slip);
     const canAddPick = canManagePicks && userPicks.length < limitValue;
     const canReview = canCommissionerReview(slip);
-    const canAdjustPoints = (isCommissioner || isContestManager) && canReview;
+    const canAdjustPoints = hasProScoringControls && canReview;
     const canResetScoring = canAdjustPoints;
     const canReopen = hasReviewControl && isTimeLocked && !isFinalized;
     const canFinalizeSlip = canFinalize(slip, {
-        isCommissioner: hasReviewControl,
+        isCommissioner,
         picks: slipPicks,
     });
-    const canRenameSlip = isCommissioner || isContestManager || (!slip.isGraded && isCreator);
+    const canRenameSlip = isCommissioner;
     const canEditDeadlines =
-        (isCommissioner || isContestManager || (!slip.isGraded && isCreator)) && canManagePicks;
-    const canEditWarningMode = slip.isGraded && (isCommissioner || isContestManager) && canManagePicks;
+        isCommissioner && canManagePicks;
+    const canEditWarningMode = slip.isGraded && isCommissioner && canManagePicks;
     const canAssignSecondaryLeaderboard =
         isCommissioner &&
         secondaryLeaderboardsEnabled &&
@@ -1278,7 +1297,7 @@ const SlipDetailsPage = () => {
                             {activeTab === "actions" && showActionsTab && (
                                 <div className="space-y-5">
                                     <div className="grid gap-4">
-                                        {isCreator || isCommissioner ? (
+                                        {isCommissioner ? (
                                             <div className="space-y-4">
                                                 <div className="grid gap-4">
                                                     <form
@@ -1420,7 +1439,7 @@ const SlipDetailsPage = () => {
                                         ) : (
                                             <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-gray-400">
                                                 <p className="font-semibold uppercase tracking-wide text-gray-300">Slip basics</p>
-                                                <p>Only the creator or commissioner can rename the slip or edit deadlines.</p>
+                                                <p>Only the commissioner can rename the slip or edit deadlines.</p>
                                             </div>
                                         )}
 
@@ -1485,7 +1504,7 @@ const SlipDetailsPage = () => {
                                             </div>
                                         )}
 
-                                        {canAssignSecondaryLeaderboard && (isCreator || isCommissioner) && (
+                                        {canAssignSecondaryLeaderboard && isCommissioner && (
                                             <div className="h-px w-full bg-white/10" />
                                         )}
 
@@ -1514,7 +1533,7 @@ const SlipDetailsPage = () => {
                                         )}
                                     </div>
 
-                                    {(isCreator || isCommissioner) && (
+                                    {isCommissioner && (
                                         <>
                                             <div className="h-px w-full bg-white/10" />
                                             <section className="pt-2">
@@ -1577,19 +1596,32 @@ const SlipDetailsPage = () => {
                                                     </div>
                                                     <p className="text-xs text-gray-500">
                                                         {isTimeLocked
-                                                            ? "Slip is locked by the pick deadline. Adjust awarded points, or reset them back to the default scoring."
-                                                            : "Review unlocks once the pick deadline passes."}
+                                                            ? hasProScoringControls
+                                                                ? "Slip is locked by the pick deadline. Adjust awarded points, or reset them back to the default scoring."
+                                                                : "Slip is locked by the pick deadline. Standard Slip Points apply automatically on Free."
+                                                            : "Review unlocks once the pick deadline passes."
+                                                        }
                                                     </p>
+                                                    {isTimeLocked && !hasProScoringControls && (
+                                                        <Link
+                                                            href="/app-settings/plan"
+                                                            className="inline-flex text-xs font-semibold text-amber-200 transition hover:text-amber-100"
+                                                        >
+                                                            Upgrade to Pro for manual Slip Point controls
+                                                        </Link>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex w-full flex-nowrap items-center gap-2">
-                                                <ActionButton
-                                                    label="Reset"
-                                                    onClick={handleResetScoring}
-                                                    disabled={!canResetScoring || pickLoader}
-                                                    className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
-                                                />
-                                                <ActionButton
+                                                {hasProScoringControls && (
+                                                    <ActionButton
+                                                        label="Reset"
+                                                        onClick={handleResetScoring}
+                                                        disabled={!canResetScoring || pickLoader}
+                                                        className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
+                                                    />
+                                                )}
+                                                < ActionButton
                                                     label="Reopen"
                                                     onClick={openReopenModal}
                                                     disabled={!canReopen}
@@ -1689,61 +1721,78 @@ const SlipDetailsPage = () => {
                                                                     </div>
                                                                     {showPointsAdjuster && (
                                                                         <div className="flex flex-shrink-0 items-center">
-                                                                            <div className="grid grid-cols-[26px_1fr_26px] items-center rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-white">
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => adjustHeaderPoints(-1)}
-                                                                                    disabled={headerPointsDisabled}
-                                                                                    className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                                                                    aria-label="Decrease points"
-                                                                                >
-                                                                                    –
-                                                                                </button>
-                                                                                <input
-                                                                                    type="number"
-                                                                                    step="1"
-                                                                                    value={headerPointsValue}
-                                                                                    placeholder={headerIsPending ? "—" : undefined}
-                                                                                    onChange={(event) => {
-                                                                                        const raw = event.target.value;
-                                                                                        if (raw === "" || raw === "-") {
-                                                                                            handlePointsDraftChange(headerPick.id, raw);
-                                                                                            return;
-                                                                                        }
-                                                                                        const nextValue = Number(raw);
-                                                                                        if (Number.isNaN(nextValue)) return;
-                                                                                        const validValue = Math.max(
-                                                                                            MINIMUM_PICK_POINTS,
-                                                                                            Math.min(MAXIMUM_PICK_POINTS, nextValue)
-                                                                                        );
+                                                                            {hasProScoringControls ? (
+                                                                                <div className="grid grid-cols-[26px_1fr_26px] items-center rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-white">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => adjustHeaderPoints(-1)}
+                                                                                        disabled={headerPointsDisabled}
+                                                                                        className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                                                                        aria-label="Decrease points"
+                                                                                    >
+                                                                                        –
+                                                                                    </button>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        step="1"
+                                                                                        value={headerPointsValue}
+                                                                                        placeholder={headerIsPending ? "—" : undefined}
+                                                                                        onChange={(event) => {
+                                                                                            const raw = event.target.value;
+                                                                                            if (raw === "" || raw === "-") {
+                                                                                                handlePointsDraftChange(headerPick.id, raw);
+                                                                                                return;
+                                                                                            }
+                                                                                            const nextValue = Number(raw);
+                                                                                            if (Number.isNaN(nextValue)) return;
+                                                                                            const validValue = Math.max(
+                                                                                                MINIMUM_PICK_POINTS,
+                                                                                                Math.min(MAXIMUM_PICK_POINTS, nextValue)
+                                                                                            );
 
-                                                                                        handlePointsDraftChange(headerPick.id, String(validValue));
+                                                                                            handlePointsDraftChange(headerPick.id, String(validValue));
 
-                                                                                        debouncedUpdatePoints(headerPick.id, validValue, headerPick);
-                                                                                    }}
-                                                                                    max={100}
-                                                                                    min={-100}
-                                                                                    onBlur={() => persistAwardedPoints(headerPick.id, headerPick)}
-                                                                                    onKeyDown={(event) => {
-                                                                                        if (event.key === "Enter") {
-                                                                                            event.currentTarget.blur();
-                                                                                        }
-                                                                                    }}
-                                                                                    disabled={headerPointsDisabled}
-                                                                                    className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
-                                                                                        headerResult
-                                                                                    )}`}
-                                                                                />
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => adjustHeaderPoints(1)}
-                                                                                    disabled={headerPointsDisabled}
-                                                                                    className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                                                                    aria-label="Increase points"
-                                                                                >
-                                                                                    +
-                                                                                </button>
-                                                                            </div>
+                                                                                            debouncedUpdatePoints(headerPick.id, validValue, headerPick);
+                                                                                        }}
+                                                                                        max={100}
+                                                                                        min={-100}
+                                                                                        onBlur={() => persistAwardedPoints(headerPick.id, headerPick)}
+                                                                                        onKeyDown={(event) => {
+                                                                                            if (event.key === "Enter") {
+                                                                                                event.currentTarget.blur();
+                                                                                            }
+                                                                                        }}
+                                                                                        disabled={headerPointsDisabled}
+                                                                                        className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
+                                                                                            headerResult
+                                                                                        )}`}
+                                                                                    />
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => adjustHeaderPoints(1)}
+                                                                                        disabled={headerPointsDisabled}
+                                                                                        className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                                                                        aria-label="Increase points"
+                                                                                    >
+                                                                                        +
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-right">
+                                                                                    <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">
+                                                                                        Slip Points
+                                                                                    </p>
+                                                                                    <p
+                                                                                        className={`text-[15px] font-semibold leading-none tabular-nums ${pointsTextTone(
+                                                                                            headerResult
+                                                                                        )}`}
+                                                                                    >
+                                                                                        {headerIsPending
+                                                                                            ? "—"
+                                                                                            : `${headerCurrentPoints > 0 ? "+" : ""}${headerCurrentPoints}`}
+                                                                                    </p>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -2311,14 +2360,14 @@ const DeadlinesOverviewModal = ({
                         </h3>
                         <p>
                             {isGraded
-                                ? "Once the pick deadline passes, the slip locks and review opens. Commissioners can run auto-grade, adjust awarded points, and finalize when ready."
+                                ? "Once the pick deadline passes, the slip locks and review opens. Commissioners can review and finalize; Pro commissioners can also adjust awarded Slip Points."
                                 : "Once the pick deadline passes, the slip locks into locked picks. Auto-grade resolves finished results, and the vibe slip finalizes automatically once every pick has a result."}
                         </p>
                         <ul className="list-disc space-y-2 pl-5 text-xs text-gray-300">
                             {isGraded ? (
                                 <>
                                     <li>Auto-grade sets results to win/loss/not found when possible.</li>
-                                    <li>Awarded points override the default tier scoring.</li>
+                                    <li>Pro manual Slip Points override the default Slip scoring.</li>
                                     <li>
                                         Losses default to <span className="font-semibold text-red-300">-15 points</span>.
                                     </li>
@@ -2332,7 +2381,10 @@ const DeadlinesOverviewModal = ({
                                         Pending picks stay locked until their games finish and grading can resolve
                                         them.
                                     </li>
-                                    <li>Not found and void settle without any profile XP impact.</li>
+                                    <li>
+                                        Not found and void settle without awarding Slip Points, League Points,
+                                        or XP.
+                                    </li>
                                     <li>As soon as every pick is graded, the slip finalizes automatically.</li>
                                 </>
                             )}

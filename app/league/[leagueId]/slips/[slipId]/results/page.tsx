@@ -22,6 +22,7 @@ import { ShareIcon } from "@/components/ui/SvgIcons";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import SlipResultsSkeleton from "@/components/skeletons/slips/SlipResultsSkeleton";
 import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
+import { isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
 
 const PICK_RESULT_ACCENTS = {
     win: {
@@ -265,7 +266,10 @@ const SlipResultsPage = () => {
         }
     }, [searchParams]);
 
-    if (slipLoader || !group || !activeSlip || !currentUser) {
+    const belongsToLeague = isSlipInLeague(activeSlip, group?.id);
+    const canView = isLeagueMember(group, currentUser?.userId) && belongsToLeague;
+
+    if (slipLoader || !group || !activeSlip || !currentUser || !canView) {
         return <SlipResultsSkeleton />;
     }
 
@@ -275,9 +279,7 @@ const SlipResultsPage = () => {
         : `/league/${group.id}`;
     const fallbackPath = fallbackFromQuery ?? contestPath;
     const isCommissioner = group.created_by === currentUser.userId;
-    const isCreator = activeSlip.created_by === currentUser.userId;
-    const isContestManager = contest?.created_by === currentUser.userId;
-    const canDeleteSlip = isCommissioner || isCreator || isContestManager;
+    const canDeleteSlip = isCommissioner;
     const slipHeader = (
         <div className="space-y-2">
             <h1 className="truncate text-2xl font-semibold text-white sm:text-3xl">
@@ -547,7 +549,7 @@ const SlipResultsPage = () => {
                                             <p className="font-semibold uppercase tracking-wide text-gray-300">
                                                 Slip basics
                                             </p>
-                                            <p>Only the creator or commissioner can delete this slip.</p>
+                                            <p>Only the commissioner can delete this slip.</p>
                                         </div>
                                     )}
 

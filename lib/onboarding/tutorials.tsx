@@ -41,7 +41,7 @@ export const GROUP_TUTORIAL: OnboardingStep[] = [
         mediaNode: <GroupStep3Animation />,
         mediaAlt: "Vibe slips",
         title: "Just for fun? Vibe slips",
-        body: "Anyone can create one. Bundle multiple picks into a single submission and let other members stack their own picks on top. No limit, no leaderboard impact, just gut feels, wild combos, and odds that stack up fast.",
+        body: "The commissioner can open one for casual play, then members stack their own picks on top. Vibe Slips do not change Slip standings or award Slip Points, League Points, or XP.",
     },
 ];
 
@@ -56,7 +56,7 @@ export const GLOBAL_TUTORIAL: OnboardingStep[] = [
         mediaNode: <GlobalStep2Animation />,
         mediaAlt: "Rewards",
         title: "How you get rewarded",
-        body: "Winning posts earn XP based on their odds tier. The bolder the call the bigger the XP reward. Losses only mark the post as a loss. Leveling up your profile automatically unlocks more Reward Room access.",
+        body: "Winning Global Social posts earn XP calculated from the exact odds accepted when the post is submitted. Up to 1,000 XP can be applied per account day. Losses earn none and never remove XP.",
     },
     {
         mediaNode: <GlobalStep3Animation />,

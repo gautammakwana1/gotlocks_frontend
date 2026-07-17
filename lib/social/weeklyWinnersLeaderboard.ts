@@ -57,8 +57,8 @@ const getPickSettledTimestamp = (pick: Pick) =>
     toFiniteTimestamp(pick.created_at);
 
 const getActualXpForPick = (pick: Pick, rawXp: number) => {
-    if (typeof pick.xpAwarded === "number" && Number.isFinite(pick.xpAwarded)) {
-        return Math.max(0, pick.xpAwarded);
+    if (typeof pick.xp_awarded === "number" && Number.isFinite(pick.xp_awarded)) {
+        return Math.max(0, pick.xp_awarded);
     }
     return rawXp;
 };

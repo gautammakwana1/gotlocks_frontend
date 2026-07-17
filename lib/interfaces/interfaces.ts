@@ -22,6 +22,8 @@ export type TutorialKeys = "home" | "social" | "group" | "profile" | "global" | 
 
 export type UserPlan = "free" | "pro";
 
+export type ProLifetimeOfferKind = "founding" | "standard";
+
 export type GroupType = "league" | "arena";
 
 export type HostingTier = "free" | "pro";
@@ -66,6 +68,15 @@ export type LeaderboardStatus = "ACTIVE" | "ARCHIVED";
 
 export type ContestStatus = "ACTIVE" | "ARCHIVED";
 
+export type ProLifetimeEntitlement = {
+    status: "owned";
+    offerKind: ProLifetimeOfferKind;
+    amountCents: 1000 | 2000;
+    purchasedAt: string;
+    simulatedPaymentReference: string;
+    billingMode: "simulated";
+};
+
 // Canonical pick categories; profiles, feeds, Winners Hall, and badge queries rely on this instead of inferring from location.
 export enum PickType {
     GROUP = "GROUP",
@@ -99,6 +110,12 @@ export type CurrentUser = {
     userId: string;
     full_name: string;
     dob?: string;
+    /** Deterministic offer presented before the permanent Pro Lifetime unlock. */
+    proLifetimeOfferKind?: ProLifetimeOfferKind;
+    /** Local simulated purchase provenance; `plan` remains the entitlement shortcut. */
+    proLifetimeEntitlement?: ProLifetimeEntitlement;
+    /** IANA timezone used for account-calendar-day rules such as the XP cap. */
+    accountTimezone?: string;
 }
 
 // NOTE: `name` is a legacy alias for the username/handle chosen during onboarding.
@@ -140,6 +157,12 @@ export type Profile = {
     full_name?: string;
     username_history?: UsernameHistory[];
     plan?: UserPlan;
+    /** Deterministic offer presented before the permanent Pro Lifetime unlock. */
+    proLifetimeOfferKind?: ProLifetimeOfferKind;
+    /** Local simulated purchase provenance; `plan` remains the entitlement shortcut. */
+    proLifetimeEntitlement?: ProLifetimeEntitlement;
+    /** IANA timezone used for account-calendar-day rules such as the XP cap. */
+    accountTimezone?: string;
 }
 
 export type ActiveSlip = {
@@ -177,6 +200,7 @@ export type Group = {
     created_by?: string;
     members?: Members;
     member_count?: number;
+    total_member_count?: number;
     active_contest?: number;
     active_slip?: ActiveSlip;
     open_slip?: number;
@@ -186,6 +210,10 @@ export type Group = {
     hosting_tier: HostingTier;
     max_members: number;
     max_active_contests: number;
+    current_user_member?: {
+        joined_at: string;
+        role: string;
+    },
 }
 
 export type ContestBadgeCategory = "generic" | "football" | "nba" | "mlb" | "nhl" | "soccer";
@@ -307,8 +335,6 @@ export type Pick = {
     side?: PickSide;
     threshold?: number;
     difficulty_tier?: 1 | 2 | 3 | 4 | 5;
-    book_odds?: BookOdds[];
-    best_offer?: BookOffer;
     validation_status?: ValidatePickResponse["status"];
     sport: League | string;
     difficulty_label: DifficultyLabel | null;
@@ -320,7 +346,8 @@ export type Pick = {
     pick_type?: string;
     external_pick_key?: string;
     confidence?: ConfidenceLevel;
-    xpAwarded?: number;
+    xp_awarded?: number;
+    calculated_global_xp?: number;
     source_tab?: string;
     is_combo?: boolean;
     legs?: PickLeg[];
@@ -538,6 +565,7 @@ export type GroupObject = {
     name: string;
     invite_code: string;
     description: string;
+    total_member_count: number;
     member_count: number;
     created_by: string;
     active_contest: number;
@@ -1053,6 +1081,8 @@ export type GlobalLeaderboadPostRows = {
     points: number;
     bonus: number;
     xp: number;
+    applied_global_xp: number;
+    calculated_global_xp: number;
     settled_at: string;
 }
 

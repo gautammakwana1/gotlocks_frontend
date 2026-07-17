@@ -1,12 +1,14 @@
 import { ODDS_BRACKETS } from "@/lib/constants";
-import { Pick } from "../interfaces/interfaces";
+import { Pick, PickType } from "../interfaces/interfaces";
+import { calculateSlipPoints, SLIP_WIN_POINTS_CAP } from "../scoring/slipPoints";
+import { calculateOddsBasedPoints } from "../scoring/oddsBasedPoints";
 
 export type TierMeta = (typeof ODDS_BRACKETS)[number];
 export type TierIndex = TierMeta["tier"];
 export type TierMode = "global" | "leagueLeaderboard";
 
 export const LEAGUE_CAP_TIER: TierIndex = 6;
-export const LEAGUE_CAP_POINTS = 60;
+export const LEAGUE_CAP_POINTS = SLIP_WIN_POINTS_CAP;
 
 const LEAGUE_TIER_NAME_OVERRIDES: Partial<Record<TierIndex, string>> = {
     1: "Safe",
@@ -167,24 +169,65 @@ export const getBasePointsForPick = (pick: Pick, mode: TierMode = "global") => {
     return ODDS_BRACKETS[2]?.points ?? 25;
 };
 
+/** Resolve the full formula value for a Global Social post before its daily cap. */
+export const getCalculatedGlobalXpForPick = (pick: Pick): number => {
+    if (pick.pick_type !== PickType.POST) return 0;
+
+    if (
+        pick.result === "loss" ||
+        pick.result === "void" ||
+        pick.result === "not_found"
+    ) {
+        return 0;
+    }
+
+    if (
+        typeof pick.calculated_global_xp === "number" &&
+        Number.isFinite(pick.calculated_global_xp)
+    ) {
+        return Math.max(0, pick.calculated_global_xp);
+    }
+
+    // Migration-only fallback for local records written before contextual naming.
+    const legacyCalculatedValue = (pick as Pick & { performancePoints?: unknown })
+        .performancePoints;
+    if (
+        typeof legacyCalculatedValue === "number" &&
+        Number.isFinite(legacyCalculatedValue)
+    ) {
+        return Math.max(0, legacyCalculatedValue);
+    }
+
+    const americanOdds = parseAmericanOdds(pick.odds_bracket);
+    if (americanOdds === null || americanOdds === 0) return 0;
+
+    return calculateOddsBasedPoints(americanOdds);
+};
+
+/** Resolve the Global XP actually applied to Profile progression. */
+export const getAppliedGlobalXpForPick = (pick: Pick): number => {
+    if (pick.pick_type !== PickType.POST || pick.result !== "win") return 0;
+    if (typeof pick.xp_awarded === "number" && Number.isFinite(pick.xp_awarded)) {
+        return Math.max(0, pick.xp_awarded);
+    }
+    return getCalculatedGlobalXpForPick(pick);
+};
+
 export const getPickPoints = (
     pick?: Pick | null,
     mode: TierMode = "global"
 ): number => {
     if (!pick) return 0;
-    if (
-        mode === "leagueLeaderboard" &&
-        typeof pick.points === "number" &&
-        Number.isFinite(pick.points)
-    ) {
-        return pick.points;
-    }
     const result = (pick.result ?? "pending") as NonNullable<Pick["result"]>;
-    if (result === "win") {
-        const base = getBasePointsForPick(pick, mode);
-        return mode === "leagueLeaderboard" ? Math.min(base, LEAGUE_CAP_POINTS) : base;
+    if (mode === "leagueLeaderboard") {
+        return calculateSlipPoints({
+            result,
+            baseWinPoints: getBasePointsForPick(pick, mode),
+            awardedPoints: pick.awardedPoints,
+        });
     }
-    if (result === "loss") mode === "leagueLeaderboard" ? -15 : 0;
+    if (result === "win") return getBasePointsForPick(pick, mode);
+    if (result === "loss") return 0;
     if (result === "void" || result === "not_found") return 0;
     return 0;
 };

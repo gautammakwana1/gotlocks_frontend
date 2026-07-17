@@ -10,6 +10,7 @@ import { useToast } from "@/lib/state/ToastContext";
 import type { PlanDowngrade, PlanState } from "@/lib/interfaces/interfaces";
 import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, createCheckoutSessionRequest, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
 import { ArrowLeft, Check, CheckCircle2, Clock, Crown, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { FREE_PLAN_SUMMARY, getProLifetimeOffer, getProLifetimePlanViewModel, PRO_PLAN_SUMMARY } from "@/lib/billing/proLifetime";
 
 type PaymentPhase = "processing" | "confirmed" | "timeout" | null;
 
@@ -42,6 +43,10 @@ const AppPlanPage = () => {
     const [downgradeConfirmation, setDowngradeConfirmation] = useState("");
     const [checkoutReturn, setCheckoutReturn] = useState<null | "success" | "cancel">(null);
     const [paymentPhase, setPaymentPhase] = useState<PaymentPhase>(null);
+
+    const [confirmationOpen, setConfirmationOpen] = useState(false);
+    const [purchaseError, setPurchaseError] = useState<string | null>(null);
+    const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (!currentUser) {
@@ -84,6 +89,26 @@ const AppPlanPage = () => {
     }, [error, setToast, dispatch]);
 
     const plan = normalizeUserPlan(overview?.plan ?? currentUser?.plan);
+    const planView = getProLifetimePlanViewModel({
+        plan: plan,
+        offerKind: currentUser?.proLifetimeOfferKind,
+        entitlement: currentUser?.proLifetimeEntitlement,
+    });
+    const foundingOffer = getProLifetimeOffer("founding");
+    const standardOffer = getProLifetimeOffer("standard");
+    const availableOffer = getProLifetimeOffer(currentUser?.proLifetimeOfferKind);
+    const offer = planView.offer;
+
+    const openConfirmation = () => {
+        setPurchaseError(null);
+        setConfirmationOpen(true);
+    };
+
+    const closeConfirmation = () => {
+        setPurchaseError(null);
+        setConfirmationOpen(false);
+    };
+
     const planRef = useRef(plan);
     useEffect(() => {
         planRef.current = plan;
@@ -191,6 +216,12 @@ const AppPlanPage = () => {
         setDowngradeConfirmation("");
     };
 
+    const handleSimulatedUnlock = () => {
+        setPurchaseError(null);
+        dispatch(createCheckoutSessionRequest());
+        setConfirmationOpen(false);
+    };
+
     return (
         <div className="mx-auto w-full max-w-3xl space-y-6">
             {paymentPhase && (
@@ -277,9 +308,15 @@ const AppPlanPage = () => {
                     Plan and billing
                 </h1>
                 <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Manage the gotLocks organizer plan. Payments are processed securely by Stripe.
+                    Manage your gotLocks League organizer plan. Billing is simulated in this local build.
                 </p>
             </header>
+
+            {purchaseMessage && (
+                <p className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
+                    {purchaseMessage}
+                </p>
+            )}
 
             <section className="space-y-4 border-b border-[var(--border-soft)] pb-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -288,33 +325,44 @@ const AppPlanPage = () => {
                             current plan
                         </p>
                         <h2 className="mt-2 text-xl font-semibold text-[var(--app-text)]">
-                            {plan === "pro" ? "Founding Pro" : "Free"}
+                            {planView.currentPlanName}
                         </h2>
                         <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
-                            {planSummary[plan]}
+                            {planView.currentPlanSummary}
                         </p>
                     </div>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text)]">
-                        {plan === "pro" ? "one-time unlock" : "starter"}
+                        {planView.currentPlanBadge}
                     </span>
                 </div>
 
-                {plan === "free" ? (
+                {planView.status === "available" ? (
                     <button
                         type="button"
                         onClick={() => setCheckoutOpen(true)}
                         className="rounded-full border border-sky-300/50 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-50 transition hover:bg-sky-500/25"
                     >
-                        Upgrade to Founding Pro
+                        {planView.actionLabel}
                     </button>
                 ) : (
-                    <button
-                        type="button"
-                        onClick={() => setDowngradeOpen(true)}
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
-                    >
-                        Switch to Free
-                    </button>
+                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
+                        <p className="font-semibold">{offer.name} is already owned.</p>
+                        <p className="mt-1 text-emerald-50/80">
+                            This is a permanent one-time account unlock. No recurring League plan payment is
+                            required.
+                        </p>
+                        {currentUser.proLifetimeEntitlement && (
+                            <div className="mt-2 space-y-1 text-xs text-emerald-50/70">
+                                <p className="uppercase tracking-[0.12em]">
+                                    {offer.priceLabel} one time · simulated purchase
+                                </p>
+                                <p>
+                                    Purchased {currentUser.proLifetimeEntitlement.purchasedAt.slice(0, 10)} · receipt{" "}
+                                    {currentUser.proLifetimeEntitlement.simulatedPaymentReference}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 <div>
@@ -331,47 +379,53 @@ const AppPlanPage = () => {
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <p className="text-sm font-semibold text-[var(--app-text)]">Free</p>
                     <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        {planSummary.free}
+                        {FREE_PLAN_SUMMARY}
                     </p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">$0</p>
                 </div>
                 <div className="rounded-2xl border border-sky-300/30 bg-sky-500/10 p-4">
-                    <p className="text-sm font-semibold text-[var(--app-text)]">Founding Pro</p>
+                    <p className="text-sm font-semibold text-[var(--app-text)]">Pro Lifetime</p>
                     <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        {planSummary.pro}
+                        {PRO_PLAN_SUMMARY}
                     </p>
+                    {availableOffer.kind === "founding" ? (
+                        <>
+                            <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">
+                                {foundingOffer.priceLabel} one time during the founding offer
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                                Standard Pro is {standardOffer.priceLabel} one time after the promotion. Both
+                                offers unlock the same features.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">
+                                {standardOffer.priceLabel} one time
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                                The {foundingOffer.priceLabel} Founding Pro promotion has ended. Standard Pro has
+                                the same features.
+                            </p>
+                        </>
+                    )}
                 </div>
             </section>
 
             <section className="space-y-3">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--app-text)]">
-                    downgrade readiness
+                    Pro Lifetime includes
                 </h2>
-                {!overview ? (
-                    <p className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-[var(--text-secondary)]">
-                        Loading plan…
-                    </p>
-                ) : downgradeCheck.allowed ? (
-                    <p className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                        No Pro-hosted group blockers are currently active for this account.
-                    </p>
-                ) : (
-                    <div className="space-y-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-50">
-                        <p className="font-semibold">{downgradeCheck.error}</p>
-                        {downgradeBlockers.ownedArenas.length > 0 && (
-                            <p>{downgradeBlockers.ownedArenas.length} Arena ownership blocker(s).</p>
-                        )}
-                        {downgradeBlockers.proHostedLeagues.length > 0 && (
-                            <p>
-                                {downgradeBlockers.proHostedLeagues.length} Pro-hosted League blocker(s).
-                            </p>
-                        )}
-                        {downgradeBlockers.ownedLeagueCount > downgradeBlockers.maxFreeLeagues && (
-                            <p>
-                                {downgradeBlockers.ownedLeagueCount} owned leagues; Free supports 3.
-                            </p>
-                        )}
-                    </div>
-                )}
+                <ul className="grid gap-2 text-sm text-[var(--text-secondary)] sm:grid-cols-2">
+                    {offer.entitlements.map((entitlement) => (
+                        <li
+                            key={entitlement}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+                        >
+                            {entitlement}
+                        </li>
+                    ))}
+                </ul>
             </section>
 
             {checkoutOpen && (
@@ -402,7 +456,7 @@ const AppPlanPage = () => {
                             {/* Header */}
                             <div className="flex items-start justify-between gap-4">
                                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200">
-                                    <Crown size={13} /> Founding Pro
+                                    <Crown size={13} /> {offer.name}
                                 </span>
                                 <button
                                     type="button"
@@ -416,12 +470,12 @@ const AppPlanPage = () => {
                             {/* Title + price */}
                             <div>
                                 <h2 className="bg-gradient-to-r from-amber-200 via-white to-amber-100 bg-clip-text text-2xl font-semibold tracking-tight text-transparent sm:text-3xl">
-                                    Founding Pro
+                                    {offer.name}
                                 </h2>
                                 <div className="mt-2 flex items-end gap-2">
-                                    <span className="text-3xl font-bold text-white">{priceLabel}</span>
+                                    <span className="text-3xl font-bold text-white">{offer.priceLabel}</span>
                                     <span className="pb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                                        one-time unlock
+                                        {offer.cadenceLabel}
                                     </span>
                                 </div>
                             </div>

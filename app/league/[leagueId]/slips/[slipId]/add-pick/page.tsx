@@ -10,6 +10,7 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { BuiltPickPayload, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { createPickRequest } from "@/lib/redux/slices/pickSlice";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage } from "@/lib/slips/pickConflicts";
+import { isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
 
 const DEFAULT_SPORT = "NFL";
 
@@ -51,6 +52,9 @@ const SlipAddPickPage = () => {
         return pickList.filter(pick => pick.slip_id === slip.id);
     }, [pickList, slip?.id]);
 
+    const belongsToLeague = isSlipInLeague(slip, group?.id);
+    const canView = isLeagueMember(group, currentUser?.userId) && belongsToLeague;
+
     const returnPath = group && slip ? `/league/${group.id}/slips/${slip.id}` : "/home";
 
     const returnToSlip = useCallback(() => {
@@ -76,10 +80,14 @@ const SlipAddPickPage = () => {
             router.replace(`/league/${group.id}`);
             return;
         }
+        if (!canView) {
+            router.replace("/home");
+            return;
+        }
         if (isSlipFinal(slip)) {
             router.replace(`/league/${group.id}/slips/${slip.id}/results`);
         }
-    }, [group, currentUser, slip, router]);
+    }, [canView, group, currentUser, slip, router]);
 
     const availableSports = (slip?.sports?.length ? slip.sports : [DEFAULT_SPORT]).filter(Boolean);
     const limitValue = slip?.pick_limit === "unlimited" ? Infinity : (slip?.pick_limit ?? 0);
@@ -119,7 +127,7 @@ const SlipAddPickPage = () => {
         );
     }
 
-    if (!group || !currentUser || !slip || !canAddPick) {
+    if (!group || !currentUser || !slip || !canAddPick || !canView) {
         return null;
     }
 

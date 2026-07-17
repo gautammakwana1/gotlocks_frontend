@@ -19,9 +19,11 @@ import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
 import LeaderboardSkeleton from "@/components/skeletons/leagues/LeaderboardSkeleton";
 import PlayersSkeleton from "@/components/skeletons/leagues/contest/PlayersSkeleton";
 import BadgesSkeleton from "@/components/skeletons/leagues/contest/BadgeAwardSkeleton";
-import { getAppliedBadgeSettings, getBadgePointValue, getDefaultEnabledBadgeIds } from "@/lib/contests/badges";
+import { DEFAULT_BADGE_POINTS, getAppliedBadgeSettings, getBadgePointValue, getDefaultEnabledBadgeIds } from "@/lib/contests/badges";
 import ContestPageSkeleton from "@/components/skeletons/leagues/ContestPageSkeleton";
 import { BadgeIcon } from "@/components/badges/BadgeIcon";
+import { canUseProLeagueScoringControls, isContestInLeague } from "@/lib/permissions/leaguePermissions";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
 
 const CONTEST_TABS = [
     { id: "standings", label: "Standings" },
@@ -49,6 +51,7 @@ const ContestDetailPage = () => {
     const contestId = params.contestId as string;
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
+    const plan = useUserPlan();
     const { setToast } = useToast();
     const router = useRouter();
     const [activeContestTab, setActiveContestTab] = useState<ContestTabId>("standings");
@@ -87,6 +90,14 @@ const ContestDetailPage = () => {
     const isCommissioner = Boolean(currentUser && league && currentUser.userId === league.created_by);
     const isCreator = Boolean(currentUser && contest && currentUser.userId === contest.created_by);
     const canManage = isCommissioner || isCreator;
+    const belongsToLeague = isContestInLeague(contest, league?.id);
+    const canCustomizeBadgePoints = canUseProLeagueScoringControls({
+        league,
+        actor: currentUser,
+        actorId: currentUser?.userId,
+        sessionUserId: currentUser?.userId,
+        plan: plan
+    }).allowed;
 
     useEffect(() => {
         if (!leagueId || !contestId || !currentUser) return;
@@ -394,7 +405,13 @@ const ContestDetailPage = () => {
         if (badgeDraft && contest.id) {
             dispatch(updateBadgeSettingsRequest({
                 contest_id: contest.id,
-                settings: badgeDraft
+                settings: canCustomizeBadgePoints
+                    ? badgeDraft
+                    : {
+                        ...badgeDraft,
+                        defaultPoints: DEFAULT_BADGE_POINTS,
+                        badgePointOverrides: {},
+                    },
             }));
         }
         setShowBadgeSaveConfirm(false);
@@ -611,6 +628,17 @@ const ContestDetailPage = () => {
                                                     : "Badge changes apply immediately until the first contest slip is finalized."}
                                             </p>
                                         )}
+                                        {canManage && !canCustomizeBadgePoints && (
+                                            <p className="mt-2 text-xs text-amber-200/80">
+                                                Badge points stay at the Free default. {" "}
+                                                <Link
+                                                    href="/app-settings/plan"
+                                                    className="font-semibold text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition hover:text-amber-100"
+                                                >
+                                                    Upgrade to Pro to customize points.
+                                                </Link>
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -657,22 +685,31 @@ const ContestDetailPage = () => {
                                             </div>
                                             <label className="block rounded-lg border border-white/10 bg-black/25 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
                                                 Default points
-                                                <NumberInput
-                                                    min={0}
-                                                    max={1000}
-                                                    value={badgeDraft.defaultPoints}
-                                                    onValueChange={(nextPoints) =>
-                                                        setBadgeDraft((current) =>
-                                                            current
-                                                                ? {
-                                                                    ...current,
-                                                                    defaultPoints: nextPoints,
-                                                                }
-                                                                : current
-                                                        )
-                                                    }
-                                                    className="mt-2 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
-                                                />
+                                                {canCustomizeBadgePoints ? (
+                                                    <NumberInput
+                                                        min={0}
+                                                        max={1000}
+                                                        value={badgeDraft.defaultPoints}
+                                                        onValueChange={(nextPoints) =>
+                                                            setBadgeDraft((current) =>
+                                                                current
+                                                                    ? {
+                                                                        ...current,
+                                                                        defaultPoints: nextPoints,
+                                                                    }
+                                                                    : current
+                                                            )
+                                                        }
+                                                        className="mt-2 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+                                                    />
+                                                ) : (
+                                                    <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-sm normal-case text-white">
+                                                        <span>+{DEFAULT_BADGE_POINTS}</span>
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+                                                            Free default
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </label>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -716,7 +753,9 @@ const ContestDetailPage = () => {
                                         const cardDisabled = canManage && (!badgeSystemEnabled || !badgeEnabledForDraft);
                                         const displayedPoints =
                                             canManage && badgeDraft
-                                                ? getBadgePointValue(badgeDraft, definition.id)
+                                                ? canCustomizeBadgePoints
+                                                    ? getBadgePointValue(badgeDraft, definition.id)
+                                                    : DEFAULT_BADGE_POINTS
                                                 : appliedBadgeSettings
                                                     ? getBadgePointValue(appliedBadgeSettings, definition.id)
                                                     : 0;
@@ -800,7 +839,7 @@ const ContestDetailPage = () => {
                                                     )}
                                                 </div>
 
-                                                {canManage && badgeDraft && (
+                                                {canManage && canCustomizeBadgePoints && badgeDraft && (
                                                     <div className="mt-4 grid grid-cols-[1fr_auto] items-end gap-2 border-t border-white/10 pt-3">
                                                         <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                                                             Points

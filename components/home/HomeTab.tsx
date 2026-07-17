@@ -23,7 +23,7 @@ import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import Image from "next/image";
 import HomeTabSkeleton from "../skeletons/home/HomeTabSkeleton";
-import { getActiveContestCountsLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 import { groupPreviewKickerTextClassName, groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "../group/GroupPreviewChip";
 import InviteCodeCopy from "../group/InviteCodeCopy";
 
@@ -782,7 +782,14 @@ const HomeTab = () => {
                                                     className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                                 >
                                                     <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                                    <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                                    {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
+                                                    <span>
+                                                        {getCombinedContestCapacityLabel(
+                                                            group,
+                                                            [],
+                                                            []
+                                                        )}
+                                                    </span>
                                                 </div>
                                             </div>
                                         ))}
@@ -862,7 +869,14 @@ const HomeTab = () => {
                                                 className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
                                             >
                                                 <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                                <span>{getActiveContestCountsLabel(group, group.active_contest)}</span>
+                                                {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
+                                                <span>
+                                                    {getCombinedContestCapacityLabel(
+                                                        group,
+                                                        [],
+                                                        []
+                                                    )}
+                                                </span>
                                             </div>
                                         </div>
                                     ))}
