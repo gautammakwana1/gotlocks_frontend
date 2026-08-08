@@ -13,6 +13,12 @@ import Image from "next/image";
 import OnboardingModal from "../modals/OnboardingModal";
 import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import * as Sentry from "@sentry/nextjs";
+import {
+  isPrimaryNavigationHidden,
+  isPrimaryNavigationTabActive,
+  PRIMARY_NAVIGATION_TABS,
+} from "./primaryNavigation";
+import { SIDE_DRAWER_DESKTOP_WIDTH } from "./sideDrawerSizing";
 
 type AuthUserPayload = {
   data?: {
@@ -23,6 +29,7 @@ type AuthUserPayload = {
 };
 
 const HIDDEN_ROUTES = new Set([
+  "/signin",
   "/landing-page",
   "/account-creation",
   "/auth/callback",
@@ -62,6 +69,30 @@ export const TopNav = () => {
   // of reading localStorage during render, which would differ from SSR output.
   const storedUser = useCurrentUser();
   const currentUser = reduxUser ?? storedUser ?? null;
+
+  // Same derivation as MainTabBar, so the header nav and the bottom bar agree
+  // on which destination the onboarding flow is currently steering toward.
+  const { hasSeenSocialIntro, hasSeenWelcomeIntro, hasSeenGroupIntro } =
+    useAppSelector((state) => state.progress);
+  const guidedTarget: "leagues" | "social" | null = !hasSeenWelcomeIntro
+    ? null
+    : !hasSeenGroupIntro
+      ? "leagues"
+      : !hasSeenSocialIntro
+        ? "social"
+        : null;
+
+  const handleLockedTap = useCallback(() => {
+    setToast({
+      id: Date.now(),
+      type: "info",
+      message:
+        guidedTarget === "leagues"
+          ? "Tap the leagues tab to continue."
+          : "Tap the global tab to continue 🔒",
+      duration: 3000,
+    });
+  }, [guidedTarget, setToast]);
 
   const hideNav = useMemo(() => {
     if (!pathname) return false;
@@ -127,11 +158,15 @@ export const TopNav = () => {
     <>
       <header
         ref={headerRef}
-        className="sticky top-0 z-30 border-b backdrop-blur"
+        data-app-header
+        className="sticky top-0 z-30 border-b backdrop-blur lg:fixed lg:inset-x-0"
         style={{ backgroundColor: "var(--nav-bg)", borderColor: "var(--nav-border)" }}
       >
-        <div className="relative flex items-center justify-end sm:justify-center gap-10 mx-auto w-full max-w-4xl px-5 py-4">
-          <div className="absolute left-5 top-1/2 -translate-y-1/2">
+        {/* Below `lg` the hamburger is pinned left and the wordmark centered.
+            At `lg` the row becomes brand / primary nav / actions, so the
+            hamburger joins the flow on the right and the tabs move up here. */}
+        <div className="relative flex items-center justify-end sm:justify-center gap-10 mx-auto w-full max-w-4xl px-5 py-4 lg:h-[86px] lg:max-w-7xl lg:justify-start lg:gap-6 lg:py-0">
+          <div className="absolute left-5 top-1/2 -translate-y-1/2 lg:static lg:order-3 lg:ml-auto lg:translate-y-0">
             <button
               type="button"
               onClick={() => {
@@ -148,7 +183,7 @@ export const TopNav = () => {
               </span>
             </button>
           </div>
-          <div className="ml-auto flex justify-center items-end gap-2 sm:ml-0">
+          <div className="ml-auto flex justify-center items-end gap-2 sm:ml-0 lg:order-1 lg:ml-0 lg:shrink-0">
             <button
               type="button"
               onClick={() => router.push("/home")}
@@ -178,8 +213,77 @@ export const TopNav = () => {
               draggable={"false"}
             />
           </div>
+
+          {!isPrimaryNavigationHidden(pathname) && (
+            <nav
+              aria-label="Primary app navigation"
+              className="hidden min-w-0 flex-1 items-stretch justify-center lg:order-2 lg:flex"
+            >
+              <div className="grid w-full max-w-[34rem] grid-cols-5">
+                {PRIMARY_NAVIGATION_TABS.map((tab) => {
+                  const active = isPrimaryNavigationTabActive(pathname, tab);
+                  // Mirror MainTabBar's onboarding gate: until the intros are
+                  // seen, only the guided destination is reachable. Without
+                  // this the desktop header would let users skip the tutorial
+                  // that the bottom bar (hidden at `lg`) still enforces.
+                  const isGuided = guidedTarget !== null && tab.id === guidedTarget;
+                  const locked = guidedTarget !== null && tab.id !== guidedTarget;
+                  const tone = locked
+                    ? "cursor-not-allowed text-gray-600"
+                    : active || isGuided
+                      ? "text-white focus-visible:ring-sky-300"
+                      : "text-gray-400 hover:text-white focus-visible:ring-white/70";
+                  const commonClassName = `group relative flex min-w-0 items-center justify-center px-3 py-2 text-sm font-semibold lowercase tracking-[0.04em] transition-colors focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a0f] ${tone}`;
+                  const underline = (
+                    <span
+                      aria-hidden
+                      className={`absolute inset-x-3 -bottom-2 h-0.5 rounded-full bg-gradient-to-r transition-opacity ${active || isGuided
+                        ? "from-transparent via-sky-300 to-transparent opacity-100 shadow-[0_0_8px_rgba(125,211,252,0.35)]"
+                        : "from-transparent via-white/35 to-transparent opacity-0 group-hover:opacity-70"
+                        }`}
+                    />
+                  );
+
+                  if (locked) {
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={handleLockedTap}
+                        aria-label={`${tab.label} (locked)`}
+                        data-desktop-tab={tab.id}
+                        className={commonClassName}
+                      >
+                        <span>{tab.label}</span>
+                        {underline}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <Link
+                      key={tab.id}
+                      href={tab.href}
+                      aria-current={active ? "page" : undefined}
+                      data-desktop-tab={tab.id}
+                      className={commonClassName}
+                    >
+                      <span>{tab.label}</span>
+                      {underline}
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+          )}
         </div>
       </header>
+      {/* The header leaves the flow at `lg` (position: fixed); reserve its height. */}
+      <div
+        data-app-header-spacer
+        aria-hidden
+        className="hidden lg:block lg:h-[var(--app-header-height)]"
+      />
 
       {menuOpen && (
         <div className="fixed inset-0 z-40 flex">
@@ -191,8 +295,8 @@ export const TopNav = () => {
               }`}
           />
           <div
-            className={`ui-accent-menu-surface absolute left-0 top-0 h-full w-[80vw] min-w-[260px] p-6 ring-1 ring-white/10
-              sm:w-[40vw] lg:w-[25vw] transform transition-transform duration-300 ease-out ${isAnimating ? "translate-x-0" : "-translate-x-full"}
+            className={`ui-accent-menu-surface absolute left-0 top-0 h-full w-[80vw] min-w-[260px] overflow-y-auto p-6 ring-1 ring-white/10
+              sm:w-[40vw] lg:w-full ${SIDE_DRAWER_DESKTOP_WIDTH.standard} transform transition-transform duration-300 ease-out ${isAnimating ? "translate-x-0" : "-translate-x-full"}
             `}
           >
             <div className="mb-5 flex items-center justify-between">

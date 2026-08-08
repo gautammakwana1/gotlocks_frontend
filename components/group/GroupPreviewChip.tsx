@@ -20,7 +20,7 @@ type GroupTypeMetaLabelProps = GroupPreviewChipProps & {
 };
 
 type GroupPreviewCornerMetaProps = GroupPreviewChipProps & {
-    roleLabel: "owner" | "member";
+    roleLabel: "owner" | "manager" | "member";
     onCopied?: () => void;
     onCopyError?: () => void;
 };
@@ -29,6 +29,7 @@ type GroupInviteCodeCopyProps = {
     inviteCode: string;
     children?: ReactNode;
     className?: string;
+    tabIndex?: number;
     onCopied?: () => void;
     onCopyError?: () => void;
 };
@@ -78,6 +79,7 @@ export const GroupInviteCodeCopy = ({
     inviteCode,
     children,
     className = "",
+    tabIndex,
     onCopied,
     onCopyError,
 }: GroupInviteCodeCopyProps) => {
@@ -96,6 +98,7 @@ export const GroupInviteCodeCopy = ({
             {children ?? <span>{inviteCode}</span>}
             <button
                 type="button"
+                tabIndex={tabIndex}
                 onClick={handleCopy}
                 className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70"
                 aria-label={`Copy invite code ${inviteCode}`}
@@ -111,6 +114,7 @@ export const GroupPreviewChip = ({
     ownerPlan,
     className = "",
 }: GroupPreviewChipProps) => {
+    const isArena = group?.group_type === "arena";
     const isProOwner = ownerPlan
         ? normalizeUserPlan(ownerPlan) === "pro"
         : normalizeHostingTier(group?.hosting_tier) === "pro";
@@ -118,9 +122,13 @@ export const GroupPreviewChip = ({
     return (
         <span
             className={`inline-flex max-w-full items-center whitespace-nowrap text-gray-300 ${groupPreviewMetaTextClassName} ${className}`}
-            aria-label={`${getGroupTypeLabel(group?.group_type ?? "league")} code ${group?.invite_code}, ${isProOwner ? "Pro owner" : "Free owner"
-                }`}
-            title={isProOwner ? "Pro owner group" : "Free owner group"}
+            aria-label={
+                isArena
+                    ? `Arena code ${group.invite_code}`
+                    : `${getGroupTypeLabel(group?.group_type ?? "league")} code ${group?.invite_code}, ${isProOwner ? "Pro owner" : "Free owner"
+                    }`
+            }
+            title={isArena ? "Hosted Arena" : isProOwner ? "Pro owner group" : "Free owner group"}
         >
             {group?.invite_code}
         </span>
@@ -154,15 +162,24 @@ export const GroupTypeMetaLabel = ({
     textClassName = groupPreviewMetaTextClassName,
     showTitle = true,
 }: GroupTypeMetaLabelProps) => {
+    const isArena = group?.group_type === "arena";
     const isProOwner = ownerPlan
         ? normalizeUserPlan(ownerPlan) === "pro"
         : normalizeHostingTier(group?.hosting_tier) === "pro";
-    const colorClassName = isProOwner ? "text-amber-200" : "text-sky-200";
+    const colorClassName = isArena ? "text-violet-200" : isProOwner ? "text-amber-200" : "text-sky-200";
 
     return (
         <span
             className={`${textClassName} ${colorClassName} ${className}`}
-            title={showTitle ? (isProOwner ? "Pro owner group" : "Free owner group") : undefined}
+            title={
+                showTitle
+                    ? isArena
+                        ? "Arena hosting is independent of personal Pro."
+                        : isProOwner
+                            ? "Pro owner group"
+                            : "Free owner group"
+                    : undefined
+            }
         >
             {getGroupTypeLabel(group?.group_type ?? "league").toUpperCase()}
         </span>

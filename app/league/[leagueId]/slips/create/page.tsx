@@ -9,7 +9,7 @@ const LegacySlipCreateRedirectPage = () => {
 
     useEffect(() => {
         if (!params.leagueId) return;
-        router.replace(`/league/${params.leagueId}`);
+        router.replace(`/league/${params.leagueId}?tab=contests`);
     }, [params.leagueId, router]);
 
     return null;

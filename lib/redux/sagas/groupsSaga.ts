@@ -1,11 +1,12 @@
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, takeLatest, takeLeading } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type {
+	Group,
 	CreateGroupPayload,
 	FetchGroupsParams,
 	FetchGroupByIdPayload,
@@ -37,6 +38,8 @@ import type {
 	MarkGroupChatsReadPayload,
 	FetchUnreadCountsByLeagueIdPayload,
 	FetchGroupOwnerPlanPayload,
+	GroupType,
+	JoinedCommunity,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -53,31 +56,71 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 	return fallback;
 };
 
+type CreateGroupResponseBody = {
+	message?: string;
+	data?: { group?: Group | null };
+};
+
+const getErrorStatus = (error: unknown): number | null =>
+	axios.isAxiosError(error) ? error.response?.status ?? null : null;
+
+/**
+ * The `group_type` a wrong-tab join conflict names. Only the 409 raised by
+ * join-league / join-arena for a code belonging to the OTHER community type
+ * carries it; every other failure returns null.
+ */
+export const getJoinConflictGroupType = (error: unknown): GroupType | null => {
+	if (!axios.isAxiosError<{ data?: { group_type?: string } }>(error)) return null;
+	const groupType = error.response?.data?.data?.group_type;
+	return groupType === "arena" || groupType === "league" ? groupType : null;
+};
+
 function* handleCreateGroup(action: PayloadAction<CreateGroupPayload>): SagaIterator {
 	try {
-		const response: AxiosResponse<unknown> = yield call(
+		const response: AxiosResponse<CreateGroupResponseBody> = yield call(
 			axiosInstance.post,
 			`${API_BASE_URL}/group/create`,
 			action.payload
 		);
-		yield put(createGroupSuccess(response.data));
+		// Narrowed here, never in the reducer. A reducer that hard-dereferences
+		// `.data` throws inside `yield put`, the catch below swallows it, and a 201
+		// surfaces to the user as a create failure.
+		yield put(
+			createGroupSuccess({
+				message: response.data?.message ?? null,
+				group: response.data?.data?.group ?? null,
+			})
+		);
 	} catch (error: unknown) {
-		yield put(createGroupFailure(getErrorMessage(error, "Group Creation Failed")));
+		// The status is load-bearing: a 500 carrying "Group created, but failed to
+		// initialize Arena settings." means the group EXISTS and must not be retried.
+		yield put(
+			createGroupFailure({
+				message: getErrorMessage(error, "Group Creation Failed"),
+				status: getErrorStatus(error),
+			})
+		);
 	}
 }
 
+// GET /group returns the caller's memberships across BOTH group types (leagues +
+// arenas), each enriched to the same GroupObject shape as /group/my-groups and
+// /group/arena (member_count, active_contest, current_user_member, …).
 function* handleFetchAllGroups(action: PayloadAction<FetchGroupsParams | undefined>): SagaIterator {
 	try {
-		const { page = 0, limit = 10, sort_by = 'created_at', sort_order = 'desc', search = '' } = action.payload || {};
+		const { page = 1, limit = 10 } = action.payload || {};
 
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.get,
 			`${API_BASE_URL}/group`,
 			{
-				params: { page, limit, sort_by, sort_order, search }
+				params: { page, limit }
 			}
 		);
-		yield put(fetchAllGroupsSuccess(response.data));
+		const payload = response.data as { data?: { groups: GroupObject[], pagination: FetchGroupsPaginationPayload } };
+		const groups = payload.data?.groups ?? [];
+		const pagination = payload.data?.pagination;
+		yield put(fetchAllGroupsSuccess({ groups, page, hasMore: pagination?.hasMore ?? groups.length === limit }));
 	} catch (error: unknown) {
 		yield put(fetchAllGroupFailure(getErrorMessage(error, "Group Fetching Failed")))
 	}
@@ -100,6 +143,88 @@ function* handleFetchMyGroups(action: PayloadAction<FetchMyGroupsPayload | undef
 		yield put(fetchMyGroupsSuccess({ groups, page, hasMore: pagination?.hasMore ?? groups.length === limit }));
 	} catch (error: unknown) {
 		yield put(fetchMyGroupFailure(getErrorMessage(error, "Group Fetching Failed")))
+	}
+}
+
+// ---- League hub tabs (MVP2) -------------------------------------------------
+// GET /group/owned-leagues and GET /group/joined-leagues are the commissioner /
+// non-commissioner halves of the caller's Leagues, each paged on its own. Same
+// `{ data: { groups, pagination } }` envelope as /group/my-groups.
+type CommunityGroupsResponse = {
+	data?: { groups?: GroupObject[]; pagination?: FetchGroupsPaginationPayload };
+};
+
+function* handleFetchOwnedLeagues(action: PayloadAction<FetchMyGroupsPayload | undefined>): SagaIterator {
+	try {
+		const { page = 1, limit = 10 } = action.payload || {};
+		const response: AxiosResponse<CommunityGroupsResponse> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/owned-leagues`,
+			{ params: { page, limit } }
+		);
+		const groups = response.data?.data?.groups ?? [];
+		const pagination = response.data?.data?.pagination;
+		yield put(
+			fetchOwnedLeaguesSuccess({
+				groups,
+				page,
+				hasMore: pagination?.hasMore ?? groups.length === limit,
+				total: pagination?.total ?? groups.length,
+			})
+		);
+	} catch (error: unknown) {
+		yield put(fetchOwnedLeaguesFailure(getErrorMessage(error, "Failed to load hosted Leagues")));
+	}
+}
+
+function* handleFetchJoinedLeagues(action: PayloadAction<FetchMyGroupsPayload | undefined>): SagaIterator {
+	try {
+		const { page = 1, limit = 10 } = action.payload || {};
+		const response: AxiosResponse<CommunityGroupsResponse> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/joined-leagues`,
+			{ params: { page, limit } }
+		);
+		const groups = response.data?.data?.groups ?? [];
+		const pagination = response.data?.data?.pagination;
+		yield put(
+			fetchJoinedLeaguesSuccess({
+				groups,
+				page,
+				hasMore: pagination?.hasMore ?? groups.length === limit,
+				total: pagination?.total ?? groups.length,
+			})
+		);
+	} catch (error: unknown) {
+		yield put(fetchJoinedLeaguesFailure(getErrorMessage(error, "Failed to load joined Leagues")));
+	}
+}
+
+// POST /group/join-league — refuses an Arena code with 409 + { data: { group_type } }
+// rather than joining it. The status and that group_type are forwarded verbatim so
+// the dialog can offer the Arenas tab; collapsing them into a message string here
+// would make "wrong tab" indistinguishable from "already a member" (also a 409).
+function* handleJoinLeague(action: PayloadAction<InviteCodePayload>): SagaIterator {
+	try {
+		const response: AxiosResponse<{ message?: string; data?: { group?: JoinedCommunity } }> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/group/join-league`,
+			{ invite_code: action.payload.invite_code }
+		);
+		yield put(
+			joinLeagueSuccess({
+				message: response.data?.message ?? null,
+				group: response.data?.data?.group ?? null,
+			})
+		);
+	} catch (error: unknown) {
+		yield put(
+			joinLeagueFailure({
+				message: getErrorMessage(error, "Failed to join league!"),
+				status: getErrorStatus(error),
+				group_type: getJoinConflictGroupType(error),
+			})
+		);
 	}
 }
 
@@ -520,8 +645,18 @@ function* handleFetchGroupOwnerPlanDetails(action: PayloadAction<FetchGroupOwner
 }
 
 export default function* groupSaga() {
-	yield takeLatest(createGroupRequest.type, handleCreateGroup);
+	// takeLeading, not takeLatest: takeLatest cancels the first saga, but its POST is
+	// already on the wire and the server has already committed the group (and, for an
+	// Arena, its unlock + hosting rows). Ignoring the second dispatch is the only
+	// saga-level behaviour that cannot double-create.
+	yield takeLeading(createGroupRequest.type, handleCreateGroup);
 	yield takeLatest(fetchAllGroupsRequest.type, handleFetchAllGroups);
+	yield takeLatest(fetchOwnedLeaguesRequest.type, handleFetchOwnedLeagues);
+	yield takeLatest(fetchJoinedLeaguesRequest.type, handleFetchJoinedLeagues);
+	// takeLeading: a double-submit would otherwise leave the cancelled saga's POST
+	// on the wire, and the second one comes back "already a member" — an error toast
+	// for a join that actually succeeded.
+	yield takeLeading(joinLeagueRequest.type, handleJoinLeague);
 	yield takeLatest(fetchGroupByIdRequest.type, handleFetchGroupById);
 	yield takeLatest(joinedGroupByInviteCodeRequest.type, handleJoinedGroupByInviteCode);
 	yield takeLatest(removeGroupMemberRequest.type, handleRemoveGroupMember);

@@ -1,18 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { normalizeUserPlan } from "@/lib/groups/limits";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import ArenaBillingSection from "@/components/billing/ArenaBillingSection";
+import { getLeaguePlanCapacity, normalizeUserPlan } from "@/lib/groups/limits";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type { PlanDowngrade, PlanState } from "@/lib/interfaces/interfaces";
-import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, createCheckoutSessionRequest, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
-import { ArrowLeft, Check, CheckCircle2, Clock, Crown, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
+import { ArrowLeft, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import { FREE_PLAN_SUMMARY, getProLifetimeOffer, getProLifetimePlanViewModel, PRO_PLAN_SUMMARY } from "@/lib/billing/proLifetime";
 
 type PaymentPhase = "processing" | "confirmed" | "timeout" | null;
+
+// League organizer access and Arena hosting are separate products with separate
+// billing, so the page splits into two panels selected by ?product=.
+type BillingProduct = "league" | "arena";
 
 type RootState = {
     plan: PlanState;
@@ -26,27 +31,23 @@ const planSummary = {
     pro: "Host unlimited leagues, create up to 3 Arenas, and run up to 6 active contests per group.",
 };
 
-const proPerks = [
-    "Unlimited leagues",
-    "Up to 3 Arenas",
-    "6 active contests per group",
-    "50-member leagues",
+const BILLING_TABS: { id: BillingProduct; label: string; href: string }[] = [
+    { id: "league", label: "League Plan", href: "/app-settings/plan?product=league" },
+    { id: "arena", label: "Arena Hosting", href: "/app-settings/plan?product=arena" },
 ];
 
-const AppPlanPage = () => {
+const AppPlanContent = () => {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const dispatch = useDispatch();
     const currentUser = useCurrentUser();
     const { setToast } = useToast();
-    const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const product: BillingProduct =
+        searchParams.get("product") === "arena" ? "arena" : "league";
     const [downgradeOpen, setDowngradeOpen] = useState(false);
     const [downgradeConfirmation, setDowngradeConfirmation] = useState("");
     const [checkoutReturn, setCheckoutReturn] = useState<null | "success" | "cancel">(null);
     const [paymentPhase, setPaymentPhase] = useState<PaymentPhase>(null);
-
-    const [confirmationOpen, setConfirmationOpen] = useState(false);
-    const [purchaseError, setPurchaseError] = useState<string | null>(null);
-    const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (!currentUser) {
@@ -99,16 +100,6 @@ const AppPlanPage = () => {
     const availableOffer = getProLifetimeOffer(currentUser?.proLifetimeOfferKind);
     const offer = planView.offer;
 
-    const openConfirmation = () => {
-        setPurchaseError(null);
-        setConfirmationOpen(true);
-    };
-
-    const closeConfirmation = () => {
-        setPurchaseError(null);
-        setConfirmationOpen(false);
-    };
-
     const planRef = useRef(plan);
     useEffect(() => {
         planRef.current = plan;
@@ -123,6 +114,15 @@ const AppPlanPage = () => {
         ownedLeagueCount: 0,
         maxFreeLeagues: 3,
     };
+
+    const proOwned = planView.status === "owned";
+    const planLimit = getLeaguePlanCapacity(plan);
+    const ownedLeagueCount = downgradeBlockers.ownedLeagueCount;
+    const ownedLeagueLimit = plan === "pro" ? planLimit.maxOwnedLeagues : downgradeBlockers.maxFreeLeagues;
+    const leagueSlotPercent =
+        ownedLeagueLimit && ownedLeagueLimit > 0
+            ? Math.min(100, Math.round((ownedLeagueCount / ownedLeagueLimit) * 100))
+            : 0;
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -154,7 +154,6 @@ const AppPlanPage = () => {
     // overview until Pro; if it hasn't confirmed after a while, fall to "timeout".
     useEffect(() => {
         if (paymentPhase !== "processing" || !currentUser) return;
-        setCheckoutOpen(false);
         const MAX_TRIES = 6;
         let tries = 0;
         let cancelled = false;
@@ -196,10 +195,6 @@ const AppPlanPage = () => {
     const canConfirmDowngrade =
         needsDowngradeConfirmation && downgradeConfirmation.trim() === "FREE";
 
-    const handleStartCheckout = () => {
-        dispatch(createCheckoutSessionRequest());
-    };
-
     const handleRetryConfirm = () => {
         setPaymentPhase("processing");
     };
@@ -214,12 +209,6 @@ const AppPlanPage = () => {
         dispatch(updateUserPlanRequest({ plan: "free" }));
         setDowngradeOpen(false);
         setDowngradeConfirmation("");
-    };
-
-    const handleSimulatedUnlock = () => {
-        setPurchaseError(null);
-        dispatch(createCheckoutSessionRequest());
-        setConfirmationOpen(false);
     };
 
     return (
@@ -308,216 +297,211 @@ const AppPlanPage = () => {
                     Plan and billing
                 </h1>
                 <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Manage your gotLocks League organizer plan. Billing is simulated in this local build.
+                    League organizer access and Arena hosting are separate products with separate
+                    billing.
                 </p>
             </header>
 
-            {purchaseMessage && (
-                <p className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                    {purchaseMessage}
-                </p>
-            )}
-
-            <section className="space-y-4 border-b border-[var(--border-soft)] pb-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                            current plan
-                        </p>
-                        <h2 className="mt-2 text-xl font-semibold text-[var(--app-text)]">
-                            {planView.currentPlanName}
-                        </h2>
-                        <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-secondary)]">
-                            {planView.currentPlanSummary}
-                        </p>
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--app-text)]">
-                        {planView.currentPlanBadge}
-                    </span>
-                </div>
-
-                {planView.status === "available" ? (
-                    <button
-                        type="button"
-                        onClick={() => setCheckoutOpen(true)}
-                        className="rounded-full border border-sky-300/50 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-50 transition hover:bg-sky-500/25"
-                    >
-                        {planView.actionLabel}
-                    </button>
-                ) : (
-                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-50">
-                        <p className="font-semibold">{offer.name} is already owned.</p>
-                        <p className="mt-1 text-emerald-50/80">
-                            This is a permanent one-time account unlock. No recurring League plan payment is
-                            required.
-                        </p>
-                        {currentUser.proLifetimeEntitlement && (
-                            <div className="mt-2 space-y-1 text-xs text-emerald-50/70">
-                                <p className="uppercase tracking-[0.12em]">
-                                    {offer.priceLabel} one time · simulated purchase
-                                </p>
-                                <p>
-                                    Purchased {currentUser.proLifetimeEntitlement.purchasedAt.slice(0, 10)} · receipt{" "}
-                                    {currentUser.proLifetimeEntitlement.simulatedPaymentReference}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div>
-                    <Link
-                        href="/app-settings/transaction-history"
-                        className="text-sm font-medium text-sky-300 transition hover:text-sky-200"
-                    >
-                        View payment history →
-                    </Link>
-                </div>
-            </section>
-
-            <section className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <p className="text-sm font-semibold text-[var(--app-text)]">Free</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        {FREE_PLAN_SUMMARY}
-                    </p>
-                    <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">$0</p>
-                </div>
-                <div className="rounded-2xl border border-sky-300/30 bg-sky-500/10 p-4">
-                    <p className="text-sm font-semibold text-[var(--app-text)]">Pro Lifetime</p>
-                    <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        {PRO_PLAN_SUMMARY}
-                    </p>
-                    {availableOffer.kind === "founding" ? (
-                        <>
-                            <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">
-                                {foundingOffer.priceLabel} one time during the founding offer
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                Standard Pro is {standardOffer.priceLabel} one time after the promotion. Both
-                                offers unlock the same features.
-                            </p>
-                        </>
-                    ) : (
-                        <>
-                            <p className="mt-3 text-sm font-semibold text-[var(--app-text)]">
-                                {standardOffer.priceLabel} one time
-                            </p>
-                            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                The {foundingOffer.priceLabel} Founding Pro promotion has ended. Standard Pro has
-                                the same features.
-                            </p>
-                        </>
-                    )}
-                </div>
-            </section>
-
-            <section className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--app-text)]">
-                    Pro Lifetime includes
-                </h2>
-                <ul className="grid gap-2 text-sm text-[var(--text-secondary)] sm:grid-cols-2">
-                    {offer.entitlements.map((entitlement) => (
-                        <li
-                            key={entitlement}
-                            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+            <nav
+                role="tablist"
+                aria-label="Billing products"
+                className="grid grid-cols-2 rounded-2xl border border-white/10 bg-white/[0.025] p-1"
+            >
+                {BILLING_TABS.map((tab) => {
+                    const active = product === tab.id;
+                    return (
+                        <Link
+                            key={tab.id}
+                            href={tab.href}
+                            role="tab"
+                            id={`billing-${tab.id}-tab`}
+                            aria-controls="billing-product-panel"
+                            aria-selected={active}
+                            tabIndex={active ? 0 : -1}
+                            onKeyDown={(event) => {
+                                if (
+                                    event.key !== "ArrowLeft" &&
+                                    event.key !== "ArrowRight" &&
+                                    event.key !== "Home" &&
+                                    event.key !== "End"
+                                ) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                const nextProduct: BillingProduct =
+                                    event.key === "ArrowLeft" || event.key === "Home"
+                                        ? "league"
+                                        : "arena";
+                                document.getElementById(`billing-${nextProduct}-tab`)?.focus();
+                                router.push(`/app-settings/plan?product=${nextProduct}`);
+                            }}
+                            className={`flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active
+                                ? tab.id === "league"
+                                    ? "bg-sky-500/15 text-sky-100 focus-visible:outline-sky-200"
+                                    : "bg-violet-500/15 text-violet-100 focus-visible:outline-violet-200"
+                                : "text-gray-400 hover:bg-white/5 hover:text-white focus-visible:outline-white"
+                                }`}
                         >
-                            {entitlement}
-                        </li>
-                    ))}
-                </ul>
-            </section>
+                            {tab.label}
+                        </Link>
+                    );
+                })}
+            </nav>
 
-            {checkoutOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm">
-                    <div
-                        className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-amber-300/25 bg-[#0b0b0f] shadow-2xl"
-                        style={{ animation: "homeFadeUp 240ms ease-out both" }}
-                    >
-                        {/* Premium gradient backdrop + glow */}
-                        <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-500/20 via-fuchsia-600/10 to-indigo-600/20"
-                        />
-                        <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-amber-400/25 blur-3xl"
-                        />
-                        <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-fuchsia-500/15 blur-3xl"
-                        />
-                        <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                        />
-
-                        <div className="relative space-y-5 p-6 sm:p-7">
-                            {/* Header */}
-                            <div className="flex items-start justify-between gap-4">
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200">
-                                    <Crown size={13} /> {offer.name}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setCheckoutOpen(false)}
-                                    className="rounded-full border border-white/15 px-3 py-1 text-xs uppercase tracking-wide text-gray-300 transition hover:border-white/30 hover:text-white"
-                                >
-                                    close
-                                </button>
-                            </div>
-
-                            {/* Title + price */}
-                            <div>
-                                <h2 className="bg-gradient-to-r from-amber-200 via-white to-amber-100 bg-clip-text text-2xl font-semibold tracking-tight text-transparent sm:text-3xl">
-                                    {offer.name}
-                                </h2>
-                                <div className="mt-2 flex items-end gap-2">
-                                    <span className="text-3xl font-bold text-white">{offer.priceLabel}</span>
-                                    <span className="pb-1 text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                                        {offer.cadenceLabel}
+            <div
+                id="billing-product-panel"
+                role="tabpanel"
+                aria-labelledby={`billing-${product}-tab`}
+                className="space-y-6"
+            >
+                {product === "arena" ? <ArenaBillingSection /> : (
+                    <>
+                        <section aria-labelledby="league-plan-title" className="space-y-5">
+                            <div className="rounded-3xl border border-sky-300/20 bg-[linear-gradient(145deg,rgba(14,165,233,0.13),rgba(255,255,255,0.025))] p-5 sm:p-6">
+                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">
+                                            League Plan
+                                        </p>
+                                        <h2
+                                            id="league-plan-title"
+                                            className="mt-2 text-xl font-semibold text-white"
+                                        >
+                                            {planView.currentPlanName}
+                                        </h2>
+                                    </div>
+                                    <span className="rounded-full border border-sky-200/20 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100">
+                                        {planView.currentPlanBadge}
                                     </span>
+                                </div>
+
+                                <div
+                                    className="mt-5"
+                                    aria-label={`${ownedLeagueCount} of ${ownedLeagueLimit} hosted League slots used`}
+                                >
+                                    <div className="flex items-center justify-between gap-3 text-sm">
+                                        <span className="font-semibold text-white">Organizer slots</span>
+                                        <span className="text-sky-100">
+                                            {ownedLeagueCount} of {ownedLeagueLimit} hosted
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                                        <span
+                                            className="block h-full rounded-full bg-gradient-to-r from-sky-400 to-blue-400 transition-[width] motion-reduce:transition-none"
+                                            style={{ width: `${leagueSlotPercent}%` }}
+                                        />
+                                    </div>
+                                </div>
+
+                                <p className="mt-4 max-w-xl text-sm leading-6 text-gray-300">
+                                    {planView.currentPlanSummary}
+                                </p>
+
+                                {!proOwned ? (
+                                    // Routes to the full-page review instead of a
+                                    // confirm dialog: the next step hands the browser
+                                    // to Stripe, and a modal has nothing to return to.
+                                    <Link
+                                        href="/app-settings/plan/league/upgrade"
+                                        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-300/50 bg-sky-500/20 px-5 py-3 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+                                    >
+                                        Review Pro upgrade
+                                    </Link>
+                                ) : (
+                                    <p className="mt-5 text-sm font-semibold text-emerald-200">
+                                        Pro Lifetime is permanently owned. No recurring League plan
+                                        payment is required.
+                                    </p>
+                                )}
+
+                                {/* Kept from the previous layout. The MVP's ProBillingSection has
+                                    no payment-history link, but ours is live and must stay. */}
+                                <div className="mt-5 border-t border-white/10 pt-4">
+                                    <Link
+                                        href="/app-settings/transaction-history"
+                                        className="text-sm font-medium text-sky-300 transition hover:text-sky-200"
+                                    >
+                                        View payment history &rarr;
+                                    </Link>
                                 </div>
                             </div>
 
-                            {/* Perks */}
-                            <ul className="grid gap-2.5 sm:grid-cols-2">
-                                {proPerks.map((perk) => (
-                                    <li key={perk} className="flex items-center gap-2 text-sm text-gray-200">
-                                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400/20 text-amber-300">
-                                            <Check size={11} strokeWidth={3} />
-                                        </span>
-                                        {perk}
-                                    </li>
-                                ))}
-                            </ul>
-
-                            {/* CTA */}
-                            <button
-                                type="button"
-                                onClick={handleStartCheckout}
-                                disabled={loading}
-                                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 px-4 py-3.5 text-sm font-semibold text-black shadow-lg shadow-amber-500/25 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                            <div
+                                className="grid gap-3 sm:grid-cols-2"
+                                aria-label="League plan comparison"
                             >
-                                {loading ? (
-                                    <>
-                                        <Loader2 size={16} className="animate-spin" /> Redirecting to Stripe…
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={16} /> Continue to secure checkout
-                                    </>
-                                )}
-                            </button>
+                                <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h3 className="font-semibold text-white">Free</h3>
+                                        <span className="text-sm font-semibold text-gray-300">$0</span>
+                                    </div>
+                                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                                        {FREE_PLAN_SUMMARY}
+                                    </p>
+                                </article>
+                                <article className="rounded-2xl border border-sky-300/25 bg-sky-500/[0.08] p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h3 className="font-semibold text-white">Pro Lifetime</h3>
+                                        <span className="text-sm font-semibold text-sky-100">
+                                            {offer.priceLabel} once
+                                        </span>
+                                    </div>
+                                    <p className="mt-2 text-sm leading-6 text-gray-300">
+                                        {PRO_PLAN_SUMMARY}
+                                    </p>
+                                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                                        {offer.kind === "founding"
+                                            ? `${foundingOffer.priceLabel} one time during the founding offer; ${standardOffer.priceLabel} afterward.`
+                                            : `${standardOffer.priceLabel} one time. The founding offer has ended.`}
+                                    </p>
+                                </article>
+                            </div>
 
-                            {/* Secure note */}
-                            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-[var(--text-muted)]">
-                                <ShieldCheck size={13} /> Secured by Stripe · your card details never touch gotLocks
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
+                            <details className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                                <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-white">
+                                    Benefits and simulated receipt
+                                </summary>
+                                <div className="mt-3 border-t border-white/10 pt-4">
+                                    <ul className="grid gap-2 text-sm text-gray-300 sm:grid-cols-2">
+                                        {offer.entitlements.map((entitlement) => (
+                                            <li
+                                                key={entitlement}
+                                                className="rounded-xl bg-white/[0.035] px-3 py-2"
+                                            >
+                                                {entitlement}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    {currentUser?.proLifetimeEntitlement ? (
+                                        <dl className="mt-4 grid gap-3 text-xs text-gray-400 sm:grid-cols-2">
+                                            <div>
+                                                <dt className="uppercase tracking-[0.12em]">purchased</dt>
+                                                <dd className="mt-1 font-semibold text-white">
+                                                    {offer.priceLabel} one time &middot;{" "}
+                                                    {currentUser.proLifetimeEntitlement.purchasedAt.slice(0, 10)}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="uppercase tracking-[0.12em]">
+                                                    simulated receipt
+                                                </dt>
+                                                <dd className="mt-1 break-all font-mono text-white">
+                                                    {currentUser.proLifetimeEntitlement.simulatedPaymentReference}
+                                                </dd>
+                                            </div>
+                                        </dl>
+                                    ) : (
+                                        <p className="mt-4 text-xs text-gray-500">
+                                            No Pro Lifetime receipt yet.
+                                        </p>
+                                    )}
+                                </div>
+                            </details>
+                        </section>
+                    </>
+                )}
+            </div>
+
 
             {downgradeOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6">
@@ -596,5 +580,19 @@ const AppPlanPage = () => {
         </div>
     );
 };
+
+// useSearchParams needs a Suspense boundary or the whole route opts out of
+// static prerendering at build time.
+const AppPlanPage = () => (
+    <Suspense
+        fallback={
+            <div className="text-sm text-gray-400" role="status">
+                Preparing plan and billing…
+            </div>
+        }
+    >
+        <AppPlanContent />
+    </Suspense>
+);
 
 export default AppPlanPage;

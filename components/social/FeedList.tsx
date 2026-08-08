@@ -1,32 +1,73 @@
 "use client";
 
-import { CSSProperties, useCallback, useState } from "react";
+import { CSSProperties, useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { formatDateTime } from "@/lib/utils/date";
-import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
-import { Pick, PickReaction, PickResult, Picks } from "@/lib/interfaces/interfaces";
+import { Pick, PickReaction, PickReactionSummary, PickResult, Picks } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { UserIcon } from "../layout/MainTabBar";
-import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
-import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
+import { getFeedZebraRowClassName } from "./feedRowTone";
+import { getFeedDesktopSizing } from "./feedDesktopSizing";
+import {
+    getPickCardOddsCopy,
+    PickCardContent,
+    type PickCardAccent,
+    type PickCardPresentation,
+    type PickCardScale,
+} from "./PickCardContent";
+import PostReactionButtons from "./PostReactionButtons";
 
-type FeedListProps = {
+export type FeedListProps = {
     items: Picks | null;
     emptyCopy?: string;
     currentUserId?: string;
     showReactions?: boolean;
     showTopBorder?: boolean;
+    /** Removes the global Feed container chrome when cards are embedded elsewhere. */
+    embedded?: boolean;
+    /** Replaces Global XP with the points terminology for a League or Arena. */
+    contextualPointsLabel?: string;
+    /** Keeps shared Feed cards visually aligned with their community shell. */
+    accent?: PickCardAccent;
+    /** "structured" renders the League / Arena Feed tab's updated card scale. */
+    scale?: PickCardScale;
+    /** Explicitly selects ordinary, Slip Contest, or Feed Contest card metrics. */
+    getItemPresentation?: (item: Pick) => PickCardPresentation | undefined;
+    /** Item-scoped content rendered after the canonical pick card. */
+    renderItemSupplement?: (item: Pick) => FeedItemSupplement | undefined;
+    /** Optional controlled collapse state for hosts that swap FeedList views. */
+    collapsedItems?: Readonly<Record<string, boolean>>;
+    onToggleCollapsed?: (pickId: string) => void;
     onReaction?: (pickId: string, reaction: PickReaction) => void;
     onViewProfile?: (userId: string) => void;
+    /**
+     * Supplies reaction counts from the host's own store. Omit to read them off
+     * the pick row itself (`up` / `down` / `reaction`), which is what the Global
+     * and Profile feeds do.
+     */
+    getPickReactionSummary?: (pickId: string, userId?: string) => PickReactionSummary;
     lastItemRef?: (node: HTMLDivElement | null) => void;
     loading?: boolean;
 };
 
 export type FeedItem = Pick & { userName: string };
+export type FeedItemSupplement = {
+    body?: ReactNode;
+};
 
-const resultTone = (result: PickResult | null | undefined) => {
+const feedListAccentTone = {
+    sky: {
+        pendingResult: "border-blue-300/50 bg-blue-500/10 text-blue-100",
+        profileHover: "group-hover:text-sky-100",
+    },
+    violet: {
+        pendingResult: "border-violet-300/50 bg-violet-500/10 text-violet-100",
+        profileHover: "group-hover:text-violet-100",
+    },
+} as const;
+
+const resultTone = (result: PickResult | null | undefined, accent: PickCardAccent) => {
     switch (result) {
         case "win":
             return "border-amber-300/70 bg-amber-400/15 text-amber-100";
@@ -37,55 +78,14 @@ const resultTone = (result: PickResult | null | undefined) => {
         case "not_found":
             return "border-yellow-300/60 bg-yellow-500/15 text-yellow-100";
         case "pending":
-            return "border-blue-300/50 bg-blue-500/10 text-blue-100";
+            return feedListAccentTone[accent].pendingResult;
         default:
             return "border-white/10 bg-white/5 text-[var(--text-secondary)]";
     }
 };
 
-const postedAtLabel = (iso: string | undefined) => `posted at: ${formatDateTime(iso)}`;
-
-const PLACEHOLDER = EM_DASH;
-const META_SEPARATOR = " \u00b7 ";
-const UP_TRIANGLE = "\u25B2";
-const DOWN_TRIANGLE = "\u25BC";
-
-const withAlpha = (hex: string, alphaHex: string) => {
-    if (hex.startsWith("#") && hex.length === 7) {
-        return `${hex}${alphaHex}`;
-    }
-    return hex;
-};
-
-const getHexFromGradient = (color?: string) => {
-    if (!color) return undefined;
-    const match = color.match(/#([0-9a-fA-F]{6})/);
-    return match ? `#${match[1]}` : undefined;
-};
-
-const getTierCardStyle = (color?: string) => {
-    const hex = getHexFromGradient(color);
-    if (!hex) return undefined;
-    return {
-        backgroundImage: `linear-gradient(135deg, ${withAlpha(
-            hex,
-            "55"
-        )}, ${withAlpha(hex, "22")}, rgba(0,0,0,0))`,
-    };
-};
-
-const resolveLegCategoryLabel = (market?: string) => {
-    if (!market) return null;
-    const upper = market.toUpperCase();
-    if (upper.includes("MONEYLINE") || upper.includes("POINT SPREAD") || upper.includes("TOTAL")) {
-        return "game lines";
-    }
-    if (upper.includes("PASSING")) return "passing props";
-    if (upper.includes("RECEIVING") || upper.includes("RECEPTION")) return "receiving props";
-    if (upper.includes("RUSHING")) return "rushing props";
-    if (upper.includes("TD")) return "td scorer props";
-    return market.replace(/Player\s+/i, "Player ").toLowerCase();
-};
+const COLLAPSE_UP_TRIANGLE = "▲";
+const COLLAPSE_DOWN_TRIANGLE = "▼";
 
 const FEED_MAX_VISIBLE = 7;
 const FEED_CARD_EST_HEIGHT = 220;
@@ -93,33 +93,31 @@ const feedScrollStyle = {
     "--feed-max-height": `${FEED_MAX_VISIBLE * FEED_CARD_EST_HEIGHT}px`,
 } as CSSProperties;
 
-const WinningHeaderArt = () => (
-    <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-12 overflow-hidden rounded-t-[11px] opacity-[0.16] [mask-image:linear-gradient(to_bottom,black,transparent)]"
-        style={{
-            backgroundImage: "url('/winning-card-lock-bg.svg')",
-            backgroundRepeat: "no-repeat",
-            backgroundPosition: "center 18%",
-            backgroundSize: "cover",
-        }}
-    />
-);
-
 const FeedList = ({
     items,
     emptyCopy,
     currentUserId,
     showReactions = true,
     showTopBorder = true,
+    embedded = false,
+    contextualPointsLabel,
+    accent = "sky",
+    scale = "legacy",
+    getItemPresentation,
+    renderItemSupplement,
+    collapsedItems,
+    onToggleCollapsed,
     onReaction,
     onViewProfile,
+    getPickReactionSummary,
     lastItemRef,
     loading,
 }: FeedListProps) => {
     const router = useRouter();
-    const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
+    const [internalCollapsedItems, setInternalCollapsedItems] = useState<Record<string, boolean>>({});
     const reactionsEnabled = Boolean(showReactions && onReaction);
+    const accentTone = feedListAccentTone[accent];
+    const sizing = getFeedDesktopSizing(scale === "structured");
 
     const handleViewProfile = useCallback(
         (userId: string) => {
@@ -140,18 +138,29 @@ const FeedList = ({
         [onReaction]
     );
 
-    const toggleCollapsed = useCallback((pickId: string) => {
-        setCollapsedPicks((prev) => ({
-            ...prev,
-            [pickId]: !prev[pickId],
-        }));
-    }, []);
+    const toggleCollapsed = useCallback(
+        (pickId: string) => {
+            if (onToggleCollapsed) {
+                onToggleCollapsed(pickId);
+                return;
+            }
+            setInternalCollapsedItems((prev) => ({
+                ...prev,
+                [pickId]: !prev[pickId],
+            }));
+        },
+        [onToggleCollapsed]
+    );
 
     return (
         <div
-            className={`-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
-                }`}
-            style={feedScrollStyle}
+            className={
+                embedded
+                    ? "divide-y divide-white/10 overflow-visible"
+                    : `-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:max-h-[var(--feed-max-height)] sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
+                    }`
+            }
+            style={embedded ? undefined : feedScrollStyle}
         >
             {items?.length === 0 && (
                 <div className="px-5 py-4 sm:px-6">
@@ -162,164 +171,105 @@ const FeedList = ({
             )}
             {items?.map((item, index) => {
                 const showResultChip = item.result && item.result !== "pending";
-                const isCollapsed = Boolean(collapsedPicks[item.id]);
+                const isCollapsed = Boolean((collapsedItems ?? internalCollapsedItems)[item.id]);
                 const resultLabel = item.result === "not_found" ? "n/a" : item.result;
                 const username = item?.profiles?.username ?? "";
                 const displayName =
-                    username.length > 12
-                        ? `${username.slice(0, 12)}\u2026`
-                        : username;
-                const tierMeta = getTierMetaForPick({
-                    odds: item.odds_bracket,
-                    label: item.difficulty_label,
-                    points: item.points,
-                    mode: "global",
-                });
-                const calculatedGlobalXp = getCalculatedGlobalXpForPick(item);
-                const displayedGlobalXp =
-                    item.result === "pending"
-                        ? calculatedGlobalXp
-                        : getAppliedGlobalXpForPick(item);
-                const xpHelperLabel = item.result === "pending" ? "Potential XP" : "XP";
-                const xpPrimary = tierMeta
-                    ? `${displayedGlobalXp > 0 ? "+" : ""}${displayedGlobalXp.toLocaleString()} XP`
-                    : "—";
-                const tierCardStyle = tierMeta?.color ? getTierCardStyle(tierMeta.color) : undefined;
-                const tierCardTone = tierCardStyle
-                    ? "bg-transparent"
-                    : tierMeta?.color
-                        ? `bg-gradient-to-br ${tierMeta.color}`
-                        : "bg-white/[0.04]";
-                const confidenceLabel = item.confidence ? item.confidence.toLowerCase() : null;
-                const confidenceTone =
-                    confidenceLabel === "high"
-                        ? "text-sky-100"
-                        : confidenceLabel === "medium"
-                            ? "text-amber-100"
-                            : confidenceLabel === "low"
-                                ? "text-rose-100"
-                                : "text-slate-500";
-                const comboLabel = item.is_combo
-                    ? `combo${item.legs?.length ? ` \u00b7 ${item.legs.length} legs` : ""}`
-                    : null;
-                const displayPick = item.description ?? "No pick was submitted";
-                const pickLine = extractPickLine(displayPick);
-                const matchupCopy = item.matchup ?? extractMatchup(displayPick, item.selection?.matchup) ?? PLACEHOLDER;
-                const gameTimeCopy = formatDateTime(item.selection?.gameStartTime);
-                const showMatchup = matchupCopy !== PLACEHOLDER;
-                const showGameTime = gameTimeCopy !== PLACEHOLDER;
-                const oddsCopy = item.odds_bracket ?? PLACEHOLDER;
-                const legsCount = item.legs?.length ?? 0;
-                const legsCopy = legsCount > 0 ? `${legsCount} picks` : item.is_combo ? "combo" : null;
-                const postedLine = `${legsCopy ? `${legsCopy} \u00b7 ` : ""}${postedAtLabel(
-                    item.created_at ?? item.updated_at
-                )}`;
-                const baseSourceTabLabel =
-                    item.source_tab ?? (item.is_combo || item.legs?.length ? "Combo" : "Pick");
-                const normalizedSourceTabLabel = baseSourceTabLabel.toLowerCase();
-                const showComboLegs = Boolean(item.is_combo && item.legs && item.legs.length > 0);
-                const singleCategoryLabel =
-                    normalizedSourceTabLabel === "pick"
-                        ? resolveLegCategoryLabel(item.selection?.market) ?? normalizedSourceTabLabel
-                        : normalizedSourceTabLabel;
-                const postHeaderLabel = showComboLegs
-                    ? normalizedSourceTabLabel === "combo"
-                        ? "combo pick post"
-                        : normalizedSourceTabLabel
-                    : "single pick post";
-                const detailCategoryLabel = showComboLegs ? null : singleCategoryLabel;
-                const metaLabel = [showMatchup ? matchupCopy : null, showGameTime ? gameTimeCopy : null]
-                    .filter(Boolean)
-                    .join(META_SEPARATOR);
-                const reactionSummary = reactionsEnabled
-                    ? { up: item.up, down: item.down, total: (item.up ?? 0) + (item.down ?? 0), userReaction: item.reaction }
-                    : { up: 0, down: 0, total: 0, userReaction: null };
+                    username.length > 12 ? `${username.slice(0, 12)}…` : username;
+                const oddsCopy = getPickCardOddsCopy(item);
+                const reactionSummary = !reactionsEnabled
+                    ? { up: 0, down: 0, total: 0, userReaction: null }
+                    : getPickReactionSummary
+                        ? getPickReactionSummary(item.id, currentUserId)
+                        : {
+                            up: item.up ?? 0,
+                            down: item.down ?? 0,
+                            total: (item.up ?? 0) + (item.down ?? 0),
+                            userReaction: item.reaction ?? null,
+                        };
                 const { up, down, userReaction } = reactionSummary;
-                const upActive = userReaction === "up";
-                const downActive = userReaction === "down";
-                const isWinningPost = item.result === "win";
-                const isLosingPost = item.result === "loss";
-                const isPendingPost = (item.result ?? "pending") === "pending";
-                const pickAccentDotTone = isWinningPost
-                    ? "bg-emerald-300/80"
-                    : isLosingPost
-                        ? "bg-rose-300/80"
-                        : "bg-sky-300/80";
-                const pickAccentTextTone = isWinningPost
-                    ? "text-emerald-200"
-                    : isLosingPost
-                        ? "text-rose-200"
-                        : "text-sky-200";
+                const supplement = renderItemSupplement?.(item);
+                const presentation = getItemPresentation?.(item) ?? { kind: "ordinary" as const };
                 const profileImg = generateProfileImageUrl(item?.profiles?.profile_image);
 
                 return (
                     <div
                         key={item.id}
-                        ref={(index === (items?.length ?? 0) - 1) ? lastItemRef : null}
-                        className="py-4"
+                        ref={index === (items?.length ?? 0) - 1 ? lastItemRef : null}
+                        className={`py-4 ${sizing.row} ${getFeedZebraRowClassName(index) ?? ""}`.trim()}
                     >
-                        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
+                        <div
+                            data-feed-post-header
+                            className={`flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6 ${sizing.header}`}
+                        >
                             <button
+                                data-feed-post-author
                                 type="button"
                                 onClick={() => handleViewProfile(item.user_id)}
-                                className="group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5"
+                                className={`group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5 ${sizing.authorTrigger}`}
                             >
-                                <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition group-hover:text-sky-100">
+                                <div
+                                    data-feed-post-avatar
+                                    className={`ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition ${accentTone.profileHover} ${sizing.avatar}`}
+                                >
                                     {profileImg ? (
                                         <Image
                                             src={profileImg}
                                             alt="Profile image"
                                             width={56}
                                             height={56}
-                                            className={`tracking-wide rounded-full border object-cover h-8 w-8`}
+                                            className={`tracking-wide rounded-full border object-cover h-8 w-8 ${sizing.avatarImage}`}
                                             draggable={false}
                                             onDragStart={(e) => e.preventDefault()}
                                             unoptimized
                                         />
                                     ) : (
-                                        <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
+                                        <UserIcon
+                                            className={`h-6 w-6 text-white/80 sm:h-6 sm:w-6 ${sizing.avatarGlyph}`}
+                                        />
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-[var(--app-text)]">
+                                    <p
+                                        data-feed-post-author-name
+                                        className={`text-sm font-semibold text-[var(--app-text)] ${sizing.authorName}`}
+                                    >
                                         <span className="sm:hidden">{displayName}</span>
                                         <span className="hidden sm:inline">{username}</span>
                                     </p>
                                     <p className="text-xs text-[var(--text-secondary)]">view profile</p>
                                 </div>
                             </button>
-                            <div className="flex flex-wrap items-center justify-end gap-2">
+                            <div
+                                data-feed-post-controls
+                                className={`flex flex-wrap items-center justify-end gap-2 ${sizing.controlCluster}`}
+                            >
+                                {/* Structured Feed cards have no reaction tallies to render,
+                                    so the collapsed odds would vanish with them. */}
+                                {!reactionsEnabled && isCollapsed && scale === "structured" && (
+                                    <span
+                                        className={`text-[12px] font-semibold text-slate-100 ${sizing.collapsedOdds}`}
+                                    >
+                                        {oddsCopy}
+                                    </span>
+                                )}
                                 {reactionsEnabled && (
                                     <div className="flex items-center gap-2">
                                         {isCollapsed && (
-                                            <span className="text-[12px] font-semibold text-slate-100">
+                                            <span
+                                                className={`text-[12px] font-semibold text-slate-100 ${sizing.collapsedOdds}`}
+                                            >
                                                 {oddsCopy}
                                             </span>
                                         )}
-                                        <button
-                                            type="button"
-                                            onClick={() => handleReaction(item.id, "up")}
-                                            aria-pressed={upActive}
-                                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${upActive
-                                                ? "border-sky-300/70 bg-sky-500/20 text-sky-100"
-                                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"
-                                                }`}
-                                        >
-                                            <span aria-hidden="true">{UP_TRIANGLE}</span>
-                                            <span className="tabular-nums text-[11px]">{up}</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleReaction(item.id, "down")}
-                                            aria-pressed={downActive}
-                                            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition ${downActive
-                                                ? "border-rose-300/70 bg-rose-500/20 text-rose-100"
-                                                : "border-white/10 bg-white/5 text-[var(--text-secondary)] hover:border-white/30 hover:text-white"
-                                                }`}
-                                        >
-                                            <span aria-hidden="true">{DOWN_TRIANGLE}</span>
-                                            <span className="tabular-nums text-[11px]">{down}</span>
-                                        </button>
+                                        <PostReactionButtons
+                                            up={up}
+                                            down={down}
+                                            userReaction={userReaction}
+                                            onReaction={(reaction) => handleReaction(item.id, reaction)}
+                                            accent={accent}
+                                            scale={scale}
+                                        />
                                     </div>
                                 )}
                                 <button
@@ -327,17 +277,18 @@ const FeedList = ({
                                     onClick={() => toggleCollapsed(item.id)}
                                     aria-expanded={!isCollapsed}
                                     aria-label={isCollapsed ? "Expand post" : "Collapse post"}
-                                    className={`inline-flex h-4 w-4 items-center justify-center text-[10px] font-semibold transition ${isCollapsed
+                                    className={`inline-flex h-4 w-4 items-center justify-center text-[10px] font-semibold transition ${sizing.collapseButton} ${isCollapsed
                                         ? "text-[var(--text-secondary)] hover:text-white"
                                         : "text-white/90 hover:text-white"
                                         }`}
                                 >
-                                    {isCollapsed ? DOWN_TRIANGLE : UP_TRIANGLE}
+                                    {isCollapsed ? COLLAPSE_DOWN_TRIANGLE : COLLAPSE_UP_TRIANGLE}
                                 </button>
                                 {showResultChip && (
                                     <span
-                                        className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-wide ${resultTone(
-                                            item.result
+                                        className={`rounded-full px-3 py-1 text-[11px] uppercase tracking-wide ${sizing.resultChip} ${resultTone(
+                                            item.result,
+                                            accent
                                         )}`}
                                     >
                                         {resultLabel}
@@ -345,173 +296,19 @@ const FeedList = ({
                                 )}
                             </div>
                         </div>
-                        {!isCollapsed && (
-                            <div className="space-y-3 px-5 sm:px-6">
-                                <div
-                                    className={`flex flex-col gap-2 sm:flex-row ${showComboLegs ? "sm:items-start" : "sm:items-stretch"
-                                        }`}
-                                >
-                                    <div
-                                        className={`order-2 flex w-full h-full gap-2 sm:order-1 sm:w-[140px] sm:h-[140px] sm:flex-col ${showComboLegs ? "sm:self-start" : "sm:self-stretch"
-                                            }`}
-                                    >
-                                        <div
-                                            className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
-                                                } ${tierCardTone}`}
-                                            style={tierCardStyle}
-                                        >
-                                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                {xpHelperLabel}
-                                            </span>
-                                            <span className="mt-1 block text-xs font-semibold text-white">
-                                                {xpPrimary}
-                                            </span>
-                                        </div>
-                                        <div
-                                            className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
-                                                }`}
-                                        >
-                                            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                confidence
-                                            </span>
-                                            <span className={`mt-1 block text-xs font-semibold ${confidenceTone}`}>
-                                                {confidenceLabel ?? "\u2014"}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
-                                            ? WINNING_POST_CARD_TONE
-                                            : isLosingPost
-                                                ? LOSING_POST_CARD_TONE
-                                                : isPendingPost
-                                                    ? PENDING_POST_CARD_TONE
-                                                    : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
-                                            }`}
-                                    >
-                                        {isWinningPost && <WinningHeaderArt />}
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0 flex-1">
-                                                <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                                    {postHeaderLabel}
-                                                </span>
-                                                {!showComboLegs && (
-                                                    <>
-                                                        <div className="mt-3 h-px w-full bg-white/10" />
-                                                        <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
-                                                            <div className="min-w-0 flex flex-1 items-center gap-2">
-                                                                <span
-                                                                    className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
-                                                                />
-                                                                <div className="min-w-0 flex-1">
-                                                                    {detailCategoryLabel && (
-                                                                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                                                            {detailCategoryLabel}
-                                                                        </span>
-                                                                    )}
-                                                                    <p
-                                                                        className={`mt-1 min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}
-                                                                        title={displayPick}
-                                                                    >
-                                                                        {pickLine}
-                                                                    </p>
-                                                                    {metaLabel && (
-                                                                        <p className="mt-1 truncate text-[10px] text-slate-400">
-                                                                            {metaLabel}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex flex-col items-end gap-1 pt-2">
-                                                                <span className="text-[11px] font-semibold text-cyan-200">
-                                                                    {oddsCopy}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                            {showComboLegs && (
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[12px] font-semibold text-slate-100">
-                                                        {oddsCopy}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        {showComboLegs && <div className="mt-3 h-px w-full bg-white/10" />}
-                                        {showComboLegs ? (
-                                            <>
-                                                <ul className="mt-3 space-y-2">
-                                                    {item.legs?.map((leg, index) => {
-                                                        const legPickLine = extractPickLine(leg.description);
-                                                        const legMatchup = extractMatchup(leg.description, leg.selection?.matchup) ?? leg.matchup;
-                                                        const legTime = formatDateTime(leg.selection?.gameStartTime);
-                                                        const legMeta = [legMatchup, legTime !== PLACEHOLDER ? legTime : null]
-                                                            .filter(Boolean)
-                                                            .join(META_SEPARATOR);
-                                                        const legCategory = resolveLegCategoryLabel(leg.selection?.market);
-                                                        return (
-                                                            <li
-                                                                key={`${leg.description}-${index}`}
-                                                                className="flex items-start justify-between gap-3"
-                                                            >
-                                                                <div className="min-w-0 flex items-start gap-2">
-                                                                    <span
-                                                                        className={`mt-2 h-1.5 w-1.5 rounded-full ${pickAccentDotTone}`}
-                                                                    />
-                                                                    <div className="min-w-0">
-                                                                        {legCategory && (
-                                                                            <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                                                                {legCategory}
-                                                                            </span>
-                                                                        )}
-                                                                        <p className={`min-w-0 text-[12px] font-semibold leading-snug ${pickAccentTextTone}`}>
-                                                                            {legPickLine}
-                                                                        </p>
-                                                                        {legMeta && (
-                                                                            <p className="mt-1 text-[10px] text-slate-400">{legMeta}</p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex flex-col items-end gap-1 pt-2">
-                                                                    <span className="text-[11px] font-semibold text-slate-100">
-                                                                        {leg.odds_bracket ?? PLACEHOLDER}
-                                                                    </span>
-                                                                </div>
-                                                            </li>
-                                                        );
-                                                    })}
-                                                </ul>
-                                            </>
-                                        ) : null}
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-wide text-[var(--text-secondary)]">
-                                        {!showComboLegs && comboLabel && (
-                                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-gray-200">
-                                                {comboLabel}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                        {(item.sport?.toString().toUpperCase() || "SPORT") + " \u00b7 " + postedLine}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {isCollapsed && (
-                            <div className="px-5 sm:px-6">
-                                <div className="flex justify-end text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                    {(item.sport?.toString().toUpperCase() || "SPORT") +
-                                        " \u00b7 " +
-                                        postedLine}
-                                </div>
-                            </div>
-                        )}
+                        <div data-feed-post-pick>
+                            <PickCardContent
+                                pick={item}
+                                collapsed={isCollapsed}
+                                contextualPointsLabel={contextualPointsLabel}
+                                accent={accent}
+                                scale={scale}
+                                presentation={presentation}
+                            />
+                        </div>
+                        {supplement?.body ? (
+                            <div data-feed-post-supplement-body>{supplement.body}</div>
+                        ) : null}
                     </div>
                 );
             })}

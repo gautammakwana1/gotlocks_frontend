@@ -173,7 +173,7 @@ const DeleteAccountPage = () => {
     }
 
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-6">
+        <div className="mx-auto w-full max-w-2xl space-y-6 lg:max-w-7xl">
             <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
                 <Link
                     href="/app-settings"

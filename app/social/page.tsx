@@ -17,13 +17,14 @@ import UserSearchDialog from "@/components/social/UserSearchDialog";
 import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { SearchIcon } from "@/components/ui/SvgIcons";
-import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
+import { LOSING_POST_CARD_TONE, NEUTRAL_POST_CARD_SURFACE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
 import OnboardingModal from "@/components/modals/OnboardingModal";
 import { GLOBAL_TUTORIAL } from "@/lib/onboarding/tutorials";
 import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import PostPickSkeleton from "@/components/skeletons/social/PostPickSkeleton";
 import GlobalLeaderboardSkeleton from "@/components/skeletons/social/GlobalLeaderboardSkeleton";
 import { WeeklyWinnersRange } from "@/lib/social/weeklyWinnersLeaderboard";
+import PostReactionButtons from "@/components/social/PostReactionButtons";
 
 type SocialTab = "top-hits" | "for-you" | "following";
 type WinnersView = "leaderboard" | "recent-wins";
@@ -64,8 +65,8 @@ const formatWeekRange = (start: Date, end: Date) => {
 
 const PLACEHOLDER = EM_DASH;
 const META_SEPARATOR = " \u00b7 ";
-const UP_TRIANGLE = "\u25B2";
-const DOWN_TRIANGLE = "\u25BC";
+const COLLAPSE_UP_TRIANGLE = "\u25B2";
+const COLLAPSE_DOWN_TRIANGLE = "\u25BC";
 
 const withAlpha = (hex: string, alphaHex: string) => {
     if (hex.startsWith("#") && hex.length === 7) {
@@ -545,7 +546,7 @@ const SocialPage = () => {
                     <div
                         key={item.id}
                         ref={index === items.length - 1 ? lastItemRef : null}
-                        className="py-4"
+                        className={`py-4 ${index % 2 === 1 ? "bg-white/[0.025]" : ""}`.trim()}
                     >
                         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
                             <button
@@ -587,7 +588,7 @@ const SocialPage = () => {
                                                 {oddsCopy}
                                             </span>
                                         )}
-                                        <button
+                                        {/* <button
                                             type="button"
                                             onClick={() => handleReaction(item.id, "up")}
                                             aria-pressed={upActive}
@@ -610,7 +611,13 @@ const SocialPage = () => {
                                         >
                                             <span aria-hidden="true">{DOWN_TRIANGLE}</span>
                                             <span className="tabular-nums text-[11px]">{down}</span>
-                                        </button>
+                                        </button> */}
+                                        <PostReactionButtons
+                                            up={up}
+                                            down={down}
+                                            userReaction={userReaction}
+                                            onReaction={(reaction) => handleReaction(item.id, reaction)}
+                                        />
                                     </div>
                                 )}
                                 <button
@@ -623,7 +630,7 @@ const SocialPage = () => {
                                         : "text-white/90 hover:text-white"
                                         }`}
                                 >
-                                    {isCollapsed ? DOWN_TRIANGLE : UP_TRIANGLE}
+                                    {isCollapsed ? COLLAPSE_DOWN_TRIANGLE : COLLAPSE_UP_TRIANGLE}
                                 </button>
                                 {showResultChip && (
                                     <span
@@ -660,7 +667,7 @@ const SocialPage = () => {
                                             </span>
                                         </div>
                                         <div
-                                            className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
+                                            className={`w-full flex-1 rounded-xl border border-white/10 ${NEUTRAL_POST_CARD_SURFACE} p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
                                                 }`}
                                         >
                                             <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -674,12 +681,12 @@ const SocialPage = () => {
 
                                     <div
                                         className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
-                                            ? WINNING_POST_CARD_TONE
+                                            ? `${WINNING_POST_CARD_TONE} ${NEUTRAL_POST_CARD_SURFACE}`
                                             : isLosingPost
-                                                ? LOSING_POST_CARD_TONE
+                                                ? `${LOSING_POST_CARD_TONE} ${NEUTRAL_POST_CARD_SURFACE}`
                                                 : isPendingPost
                                                     ? PENDING_POST_CARD_TONE
-                                                    : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
+                                                    : `border-white/10 ${NEUTRAL_POST_CARD_SURFACE} shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]`
                                             }`}
                                     >
                                         {isWinningPost && <WinningHeaderArt />}
@@ -1086,7 +1093,7 @@ const SocialPage = () => {
                             )
                             : renderFeedItems(
                                 feedItems,
-                                "No reacted posts yet. Tap up or down on a post to save it here.",
+                                "No reacted posts yet. Tap like or dislike on a post to save it here.",
                                 true,
                                 true,
                                 false,

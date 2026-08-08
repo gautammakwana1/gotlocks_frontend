@@ -1,0 +1,701 @@
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import type {
+    CreateFeedContestPayload,
+    EnterFeedContestData,
+    EnterFeedContestPayload,
+    FeedContest,
+    FeedContestDetailData,
+    FeedContestEntriesData,
+    FeedContestLifecycleActionPayload,
+    FeedContestLifecycleData,
+    FeedContestListData,
+    FeedContestSection,
+    FeedContestStatsData,
+    FeedContestUpdateData,
+    FetchFeedContestDetailPayload,
+    FetchFeedContestEntriesPayload,
+    FetchFeedContestStatsPayload,
+    FetchFeedContestsPayload,
+    ReplaceDraftFeedContestPayload,
+    ReplaceFeedContestEntryData,
+    ReplaceFeedContestEntryPayload,
+    UpdateFeedContestPayload,
+} from "@/lib/interfaces/interfaces";
+
+/**
+ * Feed contests (/group/feed-contest/*) for BOTH surfaces — Arena and League
+ * Feed. The five section lists are kept apart because each is its own server-
+ * owned query (status set + sort + pagination), and the hub renders them as
+ * separate sections rather than one merged list.
+ */
+export type FeedContestSectionState = {
+    contests: FeedContest[] | null;
+    loading: boolean;
+    error: string | null;
+    page: number;
+    hasMore: boolean;
+    total: number;
+};
+
+const emptySection = (): FeedContestSectionState => ({
+    contests: null,
+    loading: false,
+    error: null,
+    page: 1,
+    hasMore: false,
+    total: 0,
+});
+
+export type FeedContestState = {
+    sections: Record<FeedContestSection, FeedContestSectionState>;
+    /** Echoed by every list response; drives the organizer-only affordances. */
+    isOrganizer: boolean;
+    createLoading: boolean;
+    createdContest: FeedContest | null;
+    createMessage: string | null;
+    createError: string | null;
+    /** Separate from createLoading so the two buttons can spin independently. */
+    draftLoading: boolean;
+    draftedContest: FeedContest | null;
+    draftMessage: string | null;
+    draftError: string | null;
+
+    /**
+     * GET /detail/:contest_id. Held in its OWN slot rather than merged into the
+     * section lists: the detail row carries two columns the lists drop
+     * (rules_text, eligible_games_json), so writing it back over a list row
+     * would make a card's shape depend on whether its detail happened to be
+     * opened first. The detail screen reads only this slot.
+     */
+    detail: FeedContestDetailData | null;
+    detailLoading: boolean;
+    detailError: string | null;
+
+    /**
+     * The two organizer lifecycle writes. Kept as separate loading flags rather
+     * than one shared one so a button only ever reports its OWN request — but
+     * the screen disables both while either runs, since cancel and archive move
+     * the same row.
+     */
+    cancelLoading: boolean;
+    cancelMessage: string | null;
+    cancelError: string | null;
+    archiveLoading: boolean;
+    archiveMessage: string | null;
+    archiveError: string | null;
+
+    /**
+     * The copy edit. Kept apart from cancel/archive because it is driven from a
+     * DIFFERENT screen (the edit route), which owns its own success navigation.
+     */
+    updateLoading: boolean;
+    updateMessage: string | null;
+    updateError: string | null;
+    /** TRUE when the last save minted a new rules_version — entrants must re-accept. */
+    updateBumpedRulesVersion: boolean;
+
+    /**
+     * GET /entries/:contest_id — the field. Held in its own slot for the same
+     * reason `detail` is: it is a different query with its own pagination, and
+     * whether a row carries a `pick` at all depends on the LOCK, not on which
+     * screen asked. Read through a `entries.contest.id === contestId` check.
+     */
+    entries: FeedContestEntriesData | null;
+    entriesLoading: boolean;
+    entriesError: string | null;
+
+    /**
+     * GET /stats/:contest_id — the whole tally in one read, in its own slot for
+     * the same reason `entries` is. Counts are public from the start even while
+     * the picks behind them are hidden, so this can be read on a still-open
+     * contest. Guard it with a `stats.contest.id === contestId` check.
+     */
+    stats: FeedContestStatsData | null;
+    statsLoading: boolean;
+    statsError: string | null;
+
+    /**
+     * The member write. `/enter` and `/replace-entry` share these flags because
+     * exactly one of them applies at a time — which one is decided by whether the
+     * member already has an accepted entry — and the screen shows one button.
+     *
+     * `/enter` is NOT idempotent: a second POST answers 409 "already entered", so
+     * the button must stay disabled while `entrySubmitLoading` is true.
+     */
+    entrySubmitLoading: boolean;
+    entrySubmitMessage: string | null;
+    entrySubmitError: string | null;
+    /** The accepted receipt, so the screen can render it before the refetch lands. */
+    submittedEntry: EnterFeedContestData | ReplaceFeedContestEntryData | null;
+};
+
+/**
+ * Folds a lifecycle reply into the loaded detail record. MERGE, never replace:
+ * the idempotent "already canceled/archived" replies carry only a few columns,
+ * and no reply carries `creator` / `participant_count` / `my_participation`,
+ * which are assembled by the read endpoints.
+ */
+const mergeDetailContest = (
+    state: FeedContestState,
+    incoming: FeedContestLifecycleData["contest"] | undefined
+) => {
+    if (!state.detail || !incoming?.id) return;
+    if (state.detail.contest.id !== incoming.id) return;
+    state.detail.contest = { ...state.detail.contest, ...incoming };
+};
+
+const initialState: FeedContestState = {
+    sections: {
+        open: emptySection(),
+        locked: emptySection(),
+        finalized: emptySection(),
+        drafts: emptySection(),
+        archived: emptySection(),
+    },
+    isOrganizer: false,
+    createLoading: false,
+    createdContest: null,
+    createMessage: null,
+    createError: null,
+    draftLoading: false,
+    draftedContest: null,
+    draftMessage: null,
+    draftError: null,
+    detail: null,
+    detailLoading: false,
+    detailError: null,
+    cancelLoading: false,
+    cancelMessage: null,
+    cancelError: null,
+    archiveLoading: false,
+    archiveMessage: null,
+    archiveError: null,
+    updateLoading: false,
+    updateMessage: null,
+    updateError: null,
+    updateBumpedRulesVersion: false,
+    entries: null,
+    entriesLoading: false,
+    entriesError: null,
+    stats: null,
+    statsLoading: false,
+    statsError: null,
+    entrySubmitLoading: false,
+    entrySubmitMessage: null,
+    entrySubmitError: null,
+    submittedEntry: null,
+};
+
+/**
+ * Folds an accepted entry back into the loaded detail, so the screen re-gates
+ * itself without waiting for a re-read. The write replies carry the participant
+ * row (enter) or only the pick (replace), and neither carries
+ * `participant_count` — which is why this patches `my_participation` alone.
+ */
+const applyOwnParticipation = (
+    state: FeedContestState,
+    contestId: string,
+    participation: FeedContest["my_participation"] | undefined
+) => {
+    if (!participation) return;
+    if (!state.detail || state.detail.contest.id !== contestId) return;
+    state.detail.contest = {
+        ...state.detail.contest,
+        my_participation: {
+            ...(state.detail.contest.my_participation ?? {}),
+            ...participation,
+        },
+    };
+};
+
+type SectionSuccess = { section: FeedContestSection; data: FeedContestListData };
+type SectionFailure = { section: FeedContestSection; error: string };
+
+const feedContestSlice = createSlice({
+    name: "feedContest",
+    initialState,
+    reducers: {
+        fetchFeedContestsRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestsPayload & { section: FeedContestSection }>
+        ) => {
+            const section = state.sections[action.payload.section];
+            section.loading = true;
+            section.error = null;
+        },
+        fetchFeedContestsSuccess: (state, action: PayloadAction<SectionSuccess>) => {
+            const { section: sectionId, data } = action.payload;
+            const section = state.sections[sectionId];
+            const incoming = data?.contests ?? [];
+            const page = data?.pagination?.page ?? 1;
+
+            section.loading = false;
+            section.error = null;
+            // Page 1 replaces; later pages append (Show more), de-duped by id so a
+            // refetch that overlaps the previous window can't double a row.
+            if (page <= 1) {
+                section.contests = incoming;
+            } else {
+                const seen = new Set((section.contests ?? []).map((contest) => contest.id));
+                section.contests = [
+                    ...(section.contests ?? []),
+                    ...incoming.filter((contest) => !seen.has(contest.id)),
+                ];
+            }
+            section.page = page;
+            section.hasMore = data?.pagination?.hasMore ?? false;
+            section.total = data?.pagination?.total ?? section.contests.length;
+            state.isOrganizer = data?.viewer?.is_organizer ?? state.isOrganizer;
+        },
+        fetchFeedContestsFailure: (state, action: PayloadAction<SectionFailure>) => {
+            const section = state.sections[action.payload.section];
+            section.loading = false;
+            section.error = action.payload.error;
+            // A 403 on /list/drafts is the expected answer for a member, not a
+            // reason to keep a stale organizer-only list on screen.
+            if (section.contests === null) section.contests = [];
+        },
+
+        createFeedContestRequest: (state, action: PayloadAction<CreateFeedContestPayload>) => {
+            void action;
+            state.createLoading = true;
+            state.createError = null;
+            state.createMessage = null;
+        },
+        createFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ contest: FeedContest | null; message?: string }>
+        ) => {
+            state.createLoading = false;
+            state.createdContest = action.payload.contest;
+            state.createMessage = action.payload.message ?? "Feed contest created.";
+        },
+        createFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.createLoading = false;
+            state.createError = action.payload;
+        },
+
+        createDraftFeedContestRequest: (
+            state,
+            action: PayloadAction<CreateFeedContestPayload>
+        ) => {
+            void action;
+            state.draftLoading = true;
+            state.draftError = null;
+            state.draftMessage = null;
+        },
+        createDraftFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ contest: FeedContest | null; message?: string }>
+        ) => {
+            state.draftLoading = false;
+            state.draftedContest = action.payload.contest;
+            state.draftMessage = action.payload.message ?? "Feed contest draft saved.";
+        },
+        createDraftFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.draftLoading = false;
+            state.draftError = action.payload;
+        },
+
+        /* --------------------------------------------------------------------
+         * Reopening a saved draft in the wizard — PUT /replace-draft/:contest_id,
+         * a whole-row replacement taking the same body as /create-draft.
+         *
+         * Reduced into the SAME slots the create path uses, deliberately: the
+         * wizard reads `draftLoading`/`draftedContest`/`draftMessage` for its
+         * spinner, its toast and its post-save navigation, and reusing them means
+         * that whole terminal path works for an edit without a second copy of it.
+         * ------------------------------------------------------------------ */
+        replaceDraftFeedContestRequest: (
+            state,
+            action: PayloadAction<ReplaceDraftFeedContestPayload>
+        ) => {
+            void action;
+            state.draftLoading = true;
+            state.draftError = null;
+            state.draftMessage = null;
+        },
+        replaceDraftFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ contest: FeedContest | null; message?: string }>
+        ) => {
+            state.draftLoading = false;
+            state.draftedContest = action.payload.contest;
+            state.draftMessage = action.payload.message ?? "Feed contest draft saved.";
+        },
+        replaceDraftFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.draftLoading = false;
+            state.draftError = action.payload;
+        },
+
+        /**
+         * Publishing an edited draft. Reduced into the CREATE slots for the same
+         * reason as above — publishing is what `/create` does, and the wizard
+         * already labels that button from `createLoading`.
+         */
+        publishDraftFeedContestRequest: (
+            state,
+            action: PayloadAction<ReplaceDraftFeedContestPayload>
+        ) => {
+            void action;
+            state.createLoading = true;
+            state.createError = null;
+            state.createMessage = null;
+        },
+        publishDraftFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ contest: FeedContest | null; message?: string }>
+        ) => {
+            state.createLoading = false;
+            state.createdContest = action.payload.contest;
+            state.createMessage = action.payload.message ?? "Feed contest published.";
+        },
+        publishDraftFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.createLoading = false;
+            state.createError = action.payload;
+        },
+
+        fetchFeedContestDetailRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestDetailPayload>
+        ) => {
+            // The previously-read contest is dropped at REQUEST time, not on
+            // success: this slot is single-tenant, and leaving the old row in
+            // place would let the detail screen render another contest's name,
+            // slate and rules for one commit after navigating between two.
+            if (state.detail?.contest?.id !== action.payload.contest_id) {
+                state.detail = null;
+            }
+            state.detailLoading = true;
+            state.detailError = null;
+        },
+        fetchFeedContestDetailSuccess: (
+            state,
+            action: PayloadAction<FeedContestDetailData>
+        ) => {
+            state.detailLoading = false;
+            state.detailError = null;
+            state.detail = action.payload;
+        },
+        fetchFeedContestDetailFailure: (state, action: PayloadAction<string>) => {
+            state.detailLoading = false;
+            state.detailError = action.payload;
+            state.detail = null;
+        },
+        /** Dropped when the detail screen unmounts. */
+        clearFeedContestDetail: (state) => {
+            state.detail = null;
+            state.detailLoading = false;
+            state.detailError = null;
+            state.cancelLoading = false;
+            state.cancelMessage = null;
+            state.cancelError = null;
+            state.archiveLoading = false;
+            state.archiveMessage = null;
+            state.archiveError = null;
+            state.updateLoading = false;
+            state.updateMessage = null;
+            state.updateError = null;
+            state.updateBumpedRulesVersion = false;
+        },
+
+        cancelFeedContestRequest: (
+            state,
+            action: PayloadAction<FeedContestLifecycleActionPayload>
+        ) => {
+            void action;
+            state.cancelLoading = true;
+            state.cancelMessage = null;
+            state.cancelError = null;
+        },
+        cancelFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ data: FeedContestLifecycleData | null; message?: string }>
+        ) => {
+            state.cancelLoading = false;
+            state.cancelMessage = action.payload.message ?? "Contest canceled.";
+            mergeDetailContest(state, action.payload.data?.contest);
+        },
+        cancelFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.cancelLoading = false;
+            state.cancelError = action.payload;
+        },
+
+        archiveFeedContestRequest: (
+            state,
+            action: PayloadAction<FeedContestLifecycleActionPayload>
+        ) => {
+            void action;
+            state.archiveLoading = true;
+            state.archiveMessage = null;
+            state.archiveError = null;
+        },
+        archiveFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ data: FeedContestLifecycleData | null; message?: string }>
+        ) => {
+            state.archiveLoading = false;
+            state.archiveMessage = action.payload.message ?? "Contest archived.";
+            mergeDetailContest(state, action.payload.data?.contest);
+        },
+        archiveFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.archiveLoading = false;
+            state.archiveError = action.payload;
+        },
+
+        /** Cleared once the screen has reported the outcome, so it toasts once. */
+        clearFeedContestLifecycleMessage: (state) => {
+            state.cancelMessage = null;
+            state.cancelError = null;
+            state.archiveMessage = null;
+            state.archiveError = null;
+        },
+
+        updateFeedContestRequest: (
+            state,
+            action: PayloadAction<UpdateFeedContestPayload>
+        ) => {
+            void action;
+            state.updateLoading = true;
+            state.updateMessage = null;
+            state.updateError = null;
+            state.updateBumpedRulesVersion = false;
+        },
+        updateFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ data: FeedContestUpdateData | null; message?: string }>
+        ) => {
+            state.updateLoading = false;
+            state.updateMessage = action.payload.message ?? "Contest updated.";
+            state.updateBumpedRulesVersion = Boolean(
+                action.payload.data?.rules_version_changed
+            );
+            mergeDetailContest(state, action.payload.data?.contest);
+        },
+        updateFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.updateLoading = false;
+            state.updateError = action.payload;
+        },
+        clearFeedContestUpdateState: (state) => {
+            state.updateLoading = false;
+            state.updateMessage = null;
+            state.updateError = null;
+            state.updateBumpedRulesVersion = false;
+        },
+
+        /* --------------------------------------------------------------------
+         * The field — GET /group/feed-contest/entries/:contest_id.
+         * ------------------------------------------------------------------ */
+        fetchFeedContestEntriesRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestEntriesPayload>
+        ) => {
+            // Dropped at REQUEST time on an id mismatch, exactly as `detail` is:
+            // this slot is single-tenant and one commit showing another
+            // contest's field would leak who entered what.
+            if (state.entries?.contest?.id !== action.payload.contest_id) {
+                state.entries = null;
+            }
+            state.entriesLoading = true;
+            state.entriesError = null;
+        },
+        fetchFeedContestEntriesSuccess: (
+            state,
+            action: PayloadAction<FeedContestEntriesData>
+        ) => {
+            const incoming = action.payload;
+            const page = incoming?.pagination?.page ?? 1;
+
+            state.entriesLoading = false;
+            state.entriesError = null;
+
+            // Page 1 replaces; later pages append (Show more), de-duped by pick
+            // id so a refetch overlapping the previous window cannot double a row.
+            if (page <= 1 || !state.entries || state.entries.contest.id !== incoming.contest.id) {
+                state.entries = incoming;
+                return;
+            }
+            const seen = new Set(state.entries.entries.map((row) => row.id));
+            state.entries = {
+                ...incoming,
+                entries: [
+                    ...state.entries.entries,
+                    ...incoming.entries.filter((row) => !seen.has(row.id)),
+                ],
+            };
+        },
+        fetchFeedContestEntriesFailure: (state, action: PayloadAction<string>) => {
+            state.entriesLoading = false;
+            state.entriesError = action.payload;
+            state.entries = null;
+        },
+
+        /* --------------------------------------------------------------------
+         * The tally — GET /group/feed-contest/stats/:contest_id.
+         * ------------------------------------------------------------------ */
+        fetchFeedContestStatsRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestStatsPayload>
+        ) => {
+            // Same single-tenant guard as `detail` and `entries`: one commit
+            // showing another contest's numbers would misreport this dashboard.
+            if (state.stats?.contest?.id !== action.payload.contest_id) {
+                state.stats = null;
+            }
+            state.statsLoading = true;
+            state.statsError = null;
+        },
+        fetchFeedContestStatsSuccess: (
+            state,
+            action: PayloadAction<FeedContestStatsData>
+        ) => {
+            state.statsLoading = false;
+            state.statsError = null;
+            state.stats = action.payload;
+        },
+        fetchFeedContestStatsFailure: (state, action: PayloadAction<string>) => {
+            state.statsLoading = false;
+            state.statsError = action.payload;
+            state.stats = null;
+        },
+
+        /* --------------------------------------------------------------------
+         * The member write. `/enter` joins AND submits in one call; once an entry
+         * exists `/replace-entry` swaps it in place. They share one set of flags
+         * because exactly one applies at any moment.
+         * ------------------------------------------------------------------ */
+        enterFeedContestRequest: (state, action: PayloadAction<EnterFeedContestPayload>) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
+        enterFeedContestSuccess: (
+            state,
+            action: PayloadAction<{ data: EnterFeedContestData | null; message?: string }>
+        ) => {
+            state.entrySubmitLoading = false;
+            state.entrySubmitMessage =
+                action.payload.message ?? "Joined the contest and submitted your entry.";
+            state.submittedEntry = action.payload.data;
+            const data = action.payload.data;
+            if (data?.contest?.id) {
+                applyOwnParticipation(state, data.contest.id, data.participant);
+            }
+        },
+        enterFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.entrySubmitLoading = false;
+            state.entrySubmitError = action.payload;
+        },
+
+        replaceFeedContestEntryRequest: (
+            state,
+            action: PayloadAction<ReplaceFeedContestEntryPayload>
+        ) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
+        replaceFeedContestEntrySuccess: (
+            state,
+            action: PayloadAction<{ data: ReplaceFeedContestEntryData | null; message?: string }>
+        ) => {
+            state.entrySubmitLoading = false;
+            state.entrySubmitMessage = action.payload.message ?? "Entry replaced.";
+            state.submittedEntry = action.payload.data;
+        },
+        replaceFeedContestEntryFailure: (state, action: PayloadAction<string>) => {
+            state.entrySubmitLoading = false;
+            state.entrySubmitError = action.payload;
+        },
+
+        /** Cleared once the screen has reported the outcome, so it toasts once. */
+        clearFeedContestEntryMessage: (state) => {
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
+
+        /** Dropped when the entry screen unmounts. */
+        clearFeedContestEntries: (state) => {
+            state.entries = null;
+            state.entriesLoading = false;
+            state.entriesError = null;
+            state.entrySubmitLoading = false;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+            state.submittedEntry = null;
+        },
+
+        clearFeedContestStats: (state) => {
+            state.stats = null;
+            state.statsLoading = false;
+            state.statsError = null;
+        },
+
+        clearCreateFeedContestState: (state) => {
+            state.createLoading = false;
+            state.createdContest = null;
+            state.createMessage = null;
+            state.createError = null;
+            state.draftLoading = false;
+            state.draftedContest = null;
+            state.draftMessage = null;
+            state.draftError = null;
+        },
+        /** Dropped when the hub unmounts so another group can't read these rows. */
+        resetFeedContests: () => initialState,
+    },
+});
+
+export const {
+    fetchFeedContestsRequest,
+    fetchFeedContestsSuccess,
+    fetchFeedContestsFailure,
+    createFeedContestRequest,
+    createFeedContestSuccess,
+    createFeedContestFailure,
+    createDraftFeedContestRequest,
+    createDraftFeedContestSuccess,
+    createDraftFeedContestFailure,
+    replaceDraftFeedContestRequest,
+    replaceDraftFeedContestSuccess,
+    replaceDraftFeedContestFailure,
+    publishDraftFeedContestRequest,
+    publishDraftFeedContestSuccess,
+    publishDraftFeedContestFailure,
+    fetchFeedContestDetailRequest,
+    fetchFeedContestDetailSuccess,
+    fetchFeedContestDetailFailure,
+    clearFeedContestDetail,
+    cancelFeedContestRequest,
+    cancelFeedContestSuccess,
+    cancelFeedContestFailure,
+    archiveFeedContestRequest,
+    archiveFeedContestSuccess,
+    archiveFeedContestFailure,
+    clearFeedContestLifecycleMessage,
+    updateFeedContestRequest,
+    updateFeedContestSuccess,
+    updateFeedContestFailure,
+    clearFeedContestUpdateState,
+    fetchFeedContestEntriesRequest,
+    fetchFeedContestEntriesSuccess,
+    fetchFeedContestEntriesFailure,
+    fetchFeedContestStatsRequest,
+    fetchFeedContestStatsSuccess,
+    fetchFeedContestStatsFailure,
+    clearFeedContestStats,
+    enterFeedContestRequest,
+    enterFeedContestSuccess,
+    enterFeedContestFailure,
+    replaceFeedContestEntryRequest,
+    replaceFeedContestEntrySuccess,
+    replaceFeedContestEntryFailure,
+    clearFeedContestEntryMessage,
+    clearFeedContestEntries,
+    clearCreateFeedContestState,
+    resetFeedContests,
+} = feedContestSlice.actions;
+
+export default feedContestSlice.reducer;

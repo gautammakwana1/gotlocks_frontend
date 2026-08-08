@@ -7,7 +7,13 @@ import { APP_BG, Avatar, BORDER, BRAND_HIGHLIGHT, FONT_MONO, FONT_SANS, PointsBu
 // Scene 2 V2 — Leaderboard Race.
 // Stable identities, points tick up live, rows reorder by rank,
 // "you" row glows and rises. Flying +points bursts on "you".
-export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
+export function WelcomeScene2({
+    compact = false,
+    showText = false,
+}: {
+    compact?: boolean;
+    showText?: boolean;
+}) {
     const time = useTime();
 
     type Person = {
@@ -29,7 +35,8 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
         { name: "ChalkEater", hue: 300, basePts: 85, growth: 2 },
     ];
 
-    const points = people.map((p) => ({
+    const visiblePeople = compact ? people.slice(0, 5) : people;
+    const points = visiblePeople.map((p) => ({
         ...p,
         // round to nearest 5 so displayed values always end in 0 or 5
         pts:
@@ -41,6 +48,11 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
     }));
 
     const sorted = [...points].sort((a, b) => b.pts - a.pts);
+    const headerTop = compact ? 38 : 80;
+    const horizontalInset = compact ? 64 : 100;
+    const rowsTop = compact ? 125 : 210;
+    const rowsInset = compact ? 54 : 80;
+    const rowGap = compact ? 67 : 80;
 
     return (
         <div style={{ position: "absolute", inset: 0, background: APP_BG, overflow: "hidden" }}>
@@ -56,16 +68,16 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
             <div
                 style={{
                     position: "absolute",
-                    top: 80,
-                    left: 100,
-                    right: 100,
+                    top: headerTop,
+                    left: horizontalInset,
+                    right: horizontalInset,
                     opacity: clamp(time / 0.4, 0, 1),
                     transform: `translateY(${(1 - clamp(time / 0.4, 0, 1)) * -10}px)`,
                 }}
             >
                 <div
                     style={{
-                        fontSize: 14,
+                        fontSize: compact ? 13 : 14,
                         fontFamily: FONT_MONO,
                         color: BRAND_HIGHLIGHT,
                         letterSpacing: "0.14em",
@@ -77,10 +89,10 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                 <div
                     style={{
                         fontFamily: FONT_SANS,
-                        fontSize: 48,
+                        fontSize: compact ? 38 : 48,
                         fontWeight: 700,
                         color: TEXT,
-                        marginTop: 8,
+                        marginTop: compact ? 5 : 8,
                         letterSpacing: "-0.03em",
                     }}
                 >
@@ -102,10 +114,17 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
             </div>
 
             {/* Leaderboard rows — absolute positioning, reorder via CSS transition */}
-            <div style={{ position: "absolute", top: 210, left: 80, right: 80 }}>
+            <div
+                style={{
+                    position: "absolute",
+                    top: rowsTop,
+                    left: rowsInset,
+                    right: rowsInset,
+                }}
+            >
                 {points.map((p, i) => {
                     const rank = sorted.findIndex((x) => x.name === p.name) + 1;
-                    const y = (rank - 1) * 80;
+                    const y = (rank - 1) * rowGap;
                     const enterDelay = 0.3 + i * 0.1;
                     const enterT = clamp((time - enterDelay) / 0.4, 0, 1);
 
@@ -130,25 +149,34 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                 style={{
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: 16,
-                                    padding: "14px 20px",
+                                    gap: compact ? 14 : 16,
+                                    padding: compact ? "10px 16px" : "14px 20px",
                                     background: p.you
-                                        ? "rgba(59,130,246,0.14)"
+                                        ? compact
+                                            ? "linear-gradient(90deg, rgba(57,255,20,0.14), rgba(34,197,94,0.075) 58%, rgba(134,239,172,0.025))"
+                                            : "rgba(59,130,246,0.14)"
                                         : "rgba(255,255,255,0.03)",
-                                    border: `1px solid ${p.you ? "rgba(125,211,252,0.5)" : BORDER}`,
-                                    borderRadius: 14,
+                                    border: `1px solid ${p.you
+                                            ? compact
+                                                ? BORDER
+                                                : "rgba(125,211,252,0.5)"
+                                            : BORDER
+                                        }`,
+                                    borderRadius: compact ? 12 : 14,
                                     boxShadow: p.you
-                                        ? `0 0 ${20 + 20 * glow}px rgba(96,165,250,${0.3 + 0.3 * glow})`
+                                        ? compact
+                                            ? `0 0 ${18 + 16 * glow}px rgba(74,222,128,${0.16 + 0.2 * glow})`
+                                            : `0 0 ${20 + 20 * glow}px rgba(96,165,250,${0.3 + 0.3 * glow})`
                                         : "none",
                                     position: "relative",
                                 }}
                             >
                                 <div
                                     style={{
-                                        width: 40,
+                                        width: compact ? 34 : 40,
                                         textAlign: "center",
                                         fontFamily: FONT_MONO,
-                                        fontSize: 26,
+                                        fontSize: compact ? 22 : 26,
                                         fontWeight: 700,
                                         color:
                                             rank === 1
@@ -162,14 +190,15 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                 </div>
                                 <Avatar
                                     initials={p.name.slice(0, 2).toUpperCase()}
-                                    size={50}
+                                    size={compact ? 42 : 50}
                                     hue={p.hue}
                                     ring={p.you}
+                                    ringColor={compact && p.you ? "#86efac" : undefined}
                                 />
                                 <div
                                     style={{
                                         flex: 1,
-                                        fontSize: 24,
+                                        fontSize: compact ? 21 : 24,
                                         fontWeight: p.you ? 700 : 500,
                                         color: TEXT,
                                         fontFamily: FONT_SANS,
@@ -183,11 +212,11 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                 <div
                                     style={{
                                         fontFamily: FONT_MONO,
-                                        fontSize: 36,
+                                        fontSize: compact ? 24 : 30,
                                         fontWeight: 700,
                                         color: TEXT,
                                         fontVariantNumeric: "tabular-nums",
-                                        minWidth: 86,
+                                        minWidth: compact ? 72 : 86,
                                         textAlign: "right",
                                     }}
                                 >
@@ -197,11 +226,11 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                                     <div
                                         style={{
                                             position: "absolute",
-                                            right: -8,
+                                            right: compact ? -6 : -8,
                                             top: "50%",
                                             transform: "translateY(-50%)",
                                             fontFamily: FONT_MONO,
-                                            fontSize: 17,
+                                            fontSize: compact ? 15 : 17,
                                             fontWeight: 700,
                                             color: "#86efac",
                                             textShadow: "0 0 10px #86efac",
@@ -224,11 +253,15 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                     const localT = clamp((time - t0) / 0.9, 0, 1);
                     if (localT <= 0 || localT >= 1) return null;
                     const youRank = sorted.findIndex((x) => x.you) + 1;
-                    const y = 210 + (youRank - 1) * 80 + 24 - localT * 100;
+                    const y =
+                        rowsTop +
+                        (youRank - 1) * rowGap +
+                        (compact ? 18 : 24) -
+                        localT * (compact ? 70 : 100);
                     return (
                         <PointsBurst
                             key={i}
-                            x={620}
+                            x={compact ? 660 : 620}
                             y={y}
                             value={["+25", "+50", "W"][i]}
                             color="#86efac"
@@ -245,7 +278,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                         position: "absolute",
                         left: 0,
                         right: 0,
-                        bottom: 50,
+                        bottom: compact ? 24 : 50,
                         textAlign: "center",
                         opacity: clamp((time - 4.5) / 0.4, 0, 1),
                     }}
@@ -253,7 +286,7 @@ export function WelcomeScene2({ showText = false }: { showText?: boolean }) {
                     <div
                         style={{
                             fontFamily: FONT_SANS,
-                            fontSize: 30,
+                            fontSize: compact ? 26 : 30,
                             fontWeight: 700,
                             color: TEXT,
                             letterSpacing: "-0.025em",

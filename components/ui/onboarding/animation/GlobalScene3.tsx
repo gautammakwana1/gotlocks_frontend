@@ -1,5 +1,6 @@
 "use client";
 
+import { ReactionThumbIcon } from "../../SvgIcons";
 import { clamp, useTime } from "./engine";
 import {
     APP_BG,
@@ -305,13 +306,13 @@ function FeedPickCard({ pick, time }: { pick: Pick; time: number }) {
 
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <ReactChip
-                        symbol="▲"
+                        reaction="up"
                         count={
                             reactActive || (pick.reactT !== undefined && time > pick.reactT) ? 1 : 0
                         }
                         highlight={reactPulse}
                     />
-                    <ReactChip symbol="▼" count={0} />
+                    <ReactChip reaction="down" count={0} />
                     {isWin && (
                         <div
                             style={{
@@ -614,11 +615,11 @@ function ComboPostBody({ pick, winFlashT }: { pick: Pick; winFlashT: number }) {
 }
 
 function ReactChip({
-    symbol,
+    reaction,
     count,
     highlight = 0,
 }: {
-    symbol: string;
+    reaction: "up" | "down";
     count: number;
     highlight?: number;
 }) {
@@ -645,7 +646,7 @@ function ReactChip({
                 transform: `scale(${1 + highlight * 0.06})`,
             }}
         >
-            <span style={{ fontSize: 9 }}>{symbol}</span>
+            <ReactionThumbIcon reaction={reaction} className="h-3 w-3" />
             <span
                 style={{
                     fontVariantNumeric: "tabular-nums",

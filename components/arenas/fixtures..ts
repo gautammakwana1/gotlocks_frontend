@@ -1,0 +1,152 @@
+import { LEGACY_MIGRATION_MONTH_FIXTURE } from "@/lib/domain/community";
+
+/**
+ * Live Pass 4 migration fixture. It intentionally enters through the legacy
+ * League-shaped input so normalization proves the Arena is grandfathered,
+ * permanently unlocked, and never charged another unlock fee.
+ */
+export const LIVE_LEGACY_ARENA_GROUP = {
+  id: "arena-legacy-1",
+  name: "Sunday Crowd",
+  description: "A grandfathered local Arena with its original members and history intact.",
+  inviteCode: "85050",
+  createdBy: "u2",
+  members: ["u2", "u1", "u3", "u4", "u5"],
+  groupType: "arena",
+  hostingTier: "pro",
+  timeZone: "America/New_York",
+  externalCommunityUrl: "https://discord.com",
+  createdAt: "2026-01-15T15:00:00.000Z",
+} as const;
+
+export const LIVE_ARENA_COMMUNITY_SEED = {
+  leagues: [LIVE_LEGACY_ARENA_GROUP],
+  structuredFeedContests: [
+    {
+      id: "arena-feed-contest-prime-time",
+      context: { type: "arena", arenaId: LIVE_LEGACY_ARENA_GROUP.id },
+      name: "Prime Time Lock",
+      description: "One NFL selection before the shared evening lock.",
+      template: "single_pick",
+      entryModel: "single_pick",
+      status: "open",
+      sport: "NFL",
+      seasonId: "nfl-2026",
+      opensAt: "2026-07-10T16:00:00.000Z",
+      locksAt: "2026-07-21T00:00:00.000Z",
+      expectedEndsAt: "2026-07-22T04:00:00.000Z",
+      winningPlaces: 3,
+      eligibleGameIds: ["nfl-buf-kc-2026w1", "nfl-dal-phi-2026w1"],
+      rulesVersion: "prime-time-v1",
+      rulesText: "Submit one eligible NFL selection before lock.",
+      createdByUserId: "u2",
+      createdAt: "2026-07-10T16:00:00.000Z",
+      updatedAt: "2026-07-10T16:00:00.000Z",
+    },
+    {
+      id: "league-feed-contest-opening-night",
+      context: { type: "league_feed", leagueId: "g1" },
+      name: "Opening Night Pick",
+      description: "A League Feed single-pick contest for the opener.",
+      template: "single_pick",
+      entryModel: "single_pick",
+      status: "open",
+      sport: "NFL",
+      seasonId: "nfl-2026",
+      opensAt: "2026-07-10T16:00:00.000Z",
+      locksAt: "2026-07-21T00:00:00.000Z",
+      expectedEndsAt: "2026-07-22T04:00:00.000Z",
+      winningPlaces: 3,
+      eligibleGameIds: ["nfl-buf-kc-2026w1", "nfl-dal-phi-2026w1"],
+      rulesVersion: "opening-night-v1",
+      rulesText: "Submit one eligible NFL selection before lock.",
+      createdByUserId: "u1",
+      createdAt: "2026-07-10T16:00:00.000Z",
+      updatedAt: "2026-07-10T16:00:00.000Z",
+    },
+  ],
+  contestParticipants: [
+    {
+      id: "arena-feed-participant-u1",
+      contestId: "arena-feed-contest-prime-time",
+      userId: "u1",
+      status: "opted_in",
+      rulesVersionAccepted: "prime-time-v1",
+      optedInAt: "2026-07-11T16:00:00.000Z",
+      updatedAt: "2026-07-11T16:00:00.000Z",
+    },
+    {
+      id: "league-feed-participant-u1",
+      contestId: "league-feed-contest-opening-night",
+      userId: "u1",
+      status: "opted_in",
+      rulesVersionAccepted: "opening-night-v1",
+      optedInAt: "2026-07-11T16:00:00.000Z",
+      updatedAt: "2026-07-11T16:00:00.000Z",
+    },
+  ],
+  staffFeedPosts: [
+    {
+      id: "arena-owner-welcome-post",
+      context: { type: "arena", arenaId: LIVE_LEGACY_ARENA_GROUP.id },
+      authorUserId: "u2",
+      authorRole: "arena_owner",
+      kind: "announcement",
+      title: "Prime Time week",
+      body: "Prime Time Lock is open. Review the rules and get your Competitive Pick in before lock.",
+      isPinned: true,
+      createdAt: "2026-07-14T13:30:00.000Z",
+      updatedAt: "2026-07-14T13:30:00.000Z",
+    },
+    {
+      id: "league-commissioner-welcome-post",
+      context: { type: "league_feed", leagueId: "g1" },
+      authorUserId: "u1",
+      authorRole: "league_commissioner",
+      kind: "announcement",
+      title: "League Feed is live",
+      body: "Community Picks stay separate from Slip standings and earn League Points only.",
+      isPinned: true,
+      createdAt: "2026-07-14T13:25:00.000Z",
+      updatedAt: "2026-07-14T13:25:00.000Z",
+    },
+  ],
+  arenaMemberships: [
+    {
+      arenaId: LIVE_LEGACY_ARENA_GROUP.id,
+      userId: "u5",
+      role: "manager",
+      status: "active",
+      joinedAt: "2026-02-01T15:00:00.000Z",
+    },
+  ],
+  arenaTotals: [
+    {
+      arenaId: LIVE_LEGACY_ARENA_GROUP.id,
+      userId: "u1",
+      finalizedArenaPoints: 184,
+      pendingArenaPoints: 0,
+      updatedAt: "2026-07-13T18:00:00.000Z",
+    },
+    {
+      arenaId: LIVE_LEGACY_ARENA_GROUP.id,
+      userId: "u3",
+      finalizedArenaPoints: 142,
+      pendingArenaPoints: 18,
+      updatedAt: "2026-07-12T18:00:00.000Z",
+    },
+    {
+      arenaId: LIVE_LEGACY_ARENA_GROUP.id,
+      userId: "u4",
+      finalizedArenaPoints: 96,
+      pendingArenaPoints: 0,
+      updatedAt: "2026-07-11T18:00:00.000Z",
+    },
+  ],
+} as const;
+
+export const LIVE_ARENA_NORMALIZATION_OPTIONS = {
+  now: "2026-07-14T12:00:00.000Z",
+  defaultTimeZone: "America/New_York",
+  legacyMigrationPeriod: LEGACY_MIGRATION_MONTH_FIXTURE,
+} as const;

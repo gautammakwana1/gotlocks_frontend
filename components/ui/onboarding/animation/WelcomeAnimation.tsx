@@ -11,10 +11,18 @@ import { WelcomeScene3 } from "./WelcomeScene3";
 const SPEED = 1.6;
 const DURATION = 6;
 
-function StageWrap({ children }: { children: ReactNode }) {
+function StageWrap({
+    children,
+    height = 1000,
+    speed = SPEED,
+}: {
+    children: ReactNode;
+    height?: number;
+    speed?: number;
+}) {
     return (
         <div style={{ position: "absolute", inset: 0 }}>
-            <EmbedStage width={800} height={1000} duration={DURATION} speed={SPEED}>
+            <EmbedStage width={800} height={height} duration={DURATION} speed={speed}>
                 {children}
             </EmbedStage>
         </div>
@@ -27,9 +35,9 @@ export const WelcomeStep1Animation = () => (
     </StageWrap>
 );
 
-export const WelcomeStep2Animation = () => (
-    <StageWrap>
-        <WelcomeScene2 showText={false} />
+export const WelcomeStep2Animation = ({ compact = false }: { compact?: boolean }) => (
+    <StageWrap height={compact ? 500 : 1000} speed={compact ? 0.65 : SPEED}>
+        <WelcomeScene2 compact={compact} showText={false} />
     </StageWrap>
 );
 

@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import dockStyles from "./BottomDock.module.css";
 
 type TabIconProps = { className?: string };
 
@@ -43,13 +44,17 @@ export const HomeIcon = ({ className }: TabIconProps) => (
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         className={className}
     >
+        <path d="m3.75 10.55 7.15-6.1a1.7 1.7 0 0 1 2.2 0l7.15 6.1" />
+        <path d="M5.6 9.8v8.35c0 .9.75 1.65 1.65 1.65h9.5c.9 0 1.65-.75 1.65-1.65V9.8" />
         <path
-            d="M4 10.5 12 4 20 10.5M6 9.5v9a1 1 0 0 0 1 1h3m8-10v9a1 1 0 0 1-1 1h-3m-6 0h6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            d="M9.4 19.8v-4a2.6 2.6 0 0 1 5.2 0v4H9.4Z"
+            fill="currentColor"
+            stroke="none"
         />
     </svg>
 );
@@ -87,19 +92,51 @@ export const PeopleIcon = ({ className }: TabIconProps) => (
     </svg>
 );
 
+const ArenaIcon = ({ className }: TabIconProps) => (
+    <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="none"
+        className={className}
+    >
+        <path
+            fill="currentColor"
+            d="M3 10.15c2.45-2.15 5.7-3.3 9-3.3s6.55 1.15 9 3.3v1.75c-2.75-1.55-5.75-2.3-9-2.3s-6.25.75-9 2.3v-1.75Z"
+        />
+        <path
+            fill="currentColor"
+            d="M5.5 8.75V3.35h.8v.55l3.1 1.35-3.1 1.4v2.1h-.8ZM11.6 7.15V1.4h.8v.55l3.45 1.45-3.45 1.5v2.25h-.8ZM17.7 8.75v-5.2h.8v.55l3.05 1.35-3.05 1.4v1.9h-.8Z"
+        />
+        <path
+            fill="currentColor"
+            fillOpacity="0.82"
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M3.2 12.35c2.7-1.45 5.65-2.15 8.8-2.15s6.1.7 8.8 2.15V20H3.2v-7.65ZM4.7 20v-4.05a2.05 2.05 0 0 1 4.1 0V20H4.7Zm4.95 0v-5.25a2.35 2.35 0 0 1 4.7 0V20h-4.7Zm5.55 0v-4.05a2.05 2.05 0 0 1 4.1 0V20h-4.1Z"
+        />
+        <path fill="currentColor" d="M2.1 19.85h19.8v1.5H2.1z" />
+    </svg>
+);
+
 export const GlobeIcon = ({ className }: TabIconProps) => (
     <svg
         aria-hidden
         viewBox="0 0 24 24"
         fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
         className={className}
     >
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M3.5 12h17" strokeLinecap="round" />
-        <path d="M12 3.5c3 3.2 3 14 0 17" strokeLinecap="round" />
-        <path d="M12 3.5c-3 3.2-3 14 0 17" strokeLinecap="round" />
+        <circle
+            cx="12"
+            cy="12"
+            r="9"
+            stroke="currentColor"
+            strokeWidth="1.6"
+        />
+        <path
+            fill="currentColor"
+            transform="translate(1.75 0)"
+            d="M5.1 8.2c.6-2.05 2.15-3.65 4.25-4.45l1.1.3.65.85 1.1-.65 1.15.6-.55.9.95.7-.6 1-1.35.1-.8 1.05-1.15-.25-1.1 1.1-1.2-.25-.75.95-.95-.8-.75-1.15Zm3.3 1.05 1.2.3.9.8 1 .45-.4.8-.9-.4-.7-.65-1-.15-.1-1.15Zm1.25 1.4 1.9.2 1.45.9.7 1.25-.65 1.2-.2 1.45-1 1-.6 1.75-1.15 1.6-.55-1.75-.7-1.5.2-1.4-.85-1.2.35-1.2-.5-1.1 1.6-1.2Z"
+        />
     </svg>
 );
 
@@ -158,24 +195,24 @@ const TabInner = ({
     isGuided?: boolean;
 }) => (
     <div
-        className={`relative flex h-11 w-11 min-[380px]:h-14 min-[380px]:w-14 sm:h-[70px] sm:w-[70px] flex-col items-center justify-center rounded-2xl border text-[10px] font-semibold tracking-[0.08em] transition ${active
-            ? "border-sky-300/70 bg-sky-400/10 shadow-[0_12px_40px_-18px_rgba(96,165,250,0.7)]"
+        className={`${dockStyles.dockTab} relative flex w-full flex-col items-center justify-center rounded-none bg-transparent text-[10px] font-semibold tracking-[0.08em] transition sm:rounded-[20px] sm:border ${active
+            ? "sm:border-sky-300/70 sm:bg-sky-400/10 sm:shadow-[0_12px_40px_-18px_rgba(96,165,250,0.7)]"
             : isGuided
                 ? "border-sky-300/70 bg-sky-400/15 shadow-[0_12px_40px_-16px_rgba(125,211,252,0.8)]"
-                : "border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.08]"
+                : "sm:border-white/10 sm:bg-white/[0.03] sm:hover:border-white/25 sm:hover:bg-white/[0.08]"
             } ${locked ? "opacity-45" : ""}`}
     >
         {isGuided && <GuidedArrow />}
         <div
-            className={`mb-0 sm:mb-1 flex h-8 w-8 min-[380px]:h-10 min-[380px]:w-10 items-center justify-center rounded-xl bg-gradient-to-br text-white transition ${active || isGuided
+            className={`mb-1 flex h-12 w-[calc(100%-0.25rem)] max-w-[52px] items-center justify-center rounded-2xl bg-gradient-to-br text-white transition ${active || isGuided
                 ? "from-sky-300 via-blue-500 to-sky-300 shadow-lg shadow-blue-500/35"
                 : "from-white/20 via-white/10 to-white/0 text-gray-200 group-hover:from-white/30 group-hover:via-white/20 group-hover:to-white/10"
                 }`}
         >
-            <tab.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+            <tab.icon className="h-6 w-6" />
         </div>
         <span
-            className={`hidden sm:inline lowercase ${active || isGuided ? "text-white" : "text-gray-300 group-hover:text-white"}`}
+            className={`inline leading-none lowercase ${active || isGuided ? "text-white" : "text-gray-300 group-hover:text-white"}`}
         >
             {tab.label}
         </span>
@@ -198,13 +235,13 @@ const TabButton = ({
 }) => {
     if (locked) {
         return (
-            <button type="button" onClick={onLockedTap} className="group relative block" aria-label={`${tab.label} (locked)`}>
+            <button type="button" onClick={onLockedTap} className="group relative block min-w-0 flex-1" aria-label={`${tab.label} (locked)`}>
                 <TabInner tab={tab} active={active} locked />
             </button>
         );
     }
     return (
-        <Link href={tab.href} className="group relative block">
+        <Link href={tab.href} className="group relative block min-w-0 flex-1">
             <TabInner tab={tab} active={active} isGuided={isGuided} />
         </Link>
     );
@@ -219,15 +256,15 @@ export const MainTabBar = () => {
 
     const { hasSeenSocialIntro, hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
-    const guidedTarget: "leaderboard" | "social" | null = !hasSeenWelcomeIntro
+    const guidedTarget: "leagues" | "social" | null = !hasSeenWelcomeIntro
         ? null
         : !hasSeenGroupIntro
-            ? "leaderboard"
+            ? "leagues"
             : !hasSeenSocialIntro
                 ? "social"
                 : null;
     const lockHintLabel =
-        guidedTarget === "leaderboard"
+        guidedTarget === "leagues"
             ? "Tap the groups tab to continue."
             : guidedTarget === "social"
                 ? "Tap the global tab to continue 🔒"
@@ -262,13 +299,6 @@ export const MainTabBar = () => {
                 matchers: ["/home"],
             },
             {
-                id: "leaderboard",
-                label: "groups",
-                href: "/fantasy",
-                icon: PeopleIcon,
-                matchers: ["/fantasy", "/league"],
-            },
-            {
                 id: "profile",
                 label: "profile",
                 href: "/profile",
@@ -276,19 +306,26 @@ export const MainTabBar = () => {
                 matchers: ["/profile"],
             },
             {
+                id: "leagues",
+                label: "leagues",
+                href: "/fantasy",
+                icon: PeopleIcon,
+                matchers: ["/fantasy", "/league"],
+            },
+            {
+                id: "arenas",
+                label: "arenas",
+                href: "/arena",
+                icon: ArenaIcon,
+                matchers: ["/arenas", "/arena"],
+            },
+            {
                 id: "social",
-                label: "social",
+                label: "global",
                 href: "/social",
                 icon: GlobeIcon,
                 matchers: ["/social", "/user"],
-            },
-            {
-                id: "builder",
-                label: "picks",
-                href: "/pick-builder",
-                icon: SlipIcon,
-                matchers: ["/pick-builder"],
-            },
+            }
         ],
         []
     );
@@ -298,10 +335,10 @@ export const MainTabBar = () => {
     return (
         <>
             {lockHintLabel && lockHintOpen && (
-                <div data-main-tabbar className="pointer-events-none fixed bottom-[-3px] sm:bottom-[-20px] left-0 right-0 z-50">
+                <div data-main-tabbar className="pointer-events-none fixed bottom-[-3px] sm:bottom-[-20px] left-0 right-0 z-50 lg:hidden">
                     <div className="mx-auto flex justify-center px-5 sm:px-6">
                         <div
-                            className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 p-1 sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
+                            className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 p-1 sm:gap-2 sm:origin-bottom sm:scale-[1.45] ${hasSelection
                                 ? "w-full max-w-[360px] sm:max-w-[390px]"
                                 : ""
                                 }`}
@@ -328,12 +365,16 @@ export const MainTabBar = () => {
                     </div>
                 </div>
             )}
-            <nav data-main-tabbar className="pointer-events-none fixed bottom-3 left-0 right-0 z-40">
-                <div className="pointer-events-auto mx-auto flex justify-center px-5 sm:px-6">
+            <nav
+                data-main-tabbar
+                aria-label="Primary app navigation"
+                className={`${dockStyles.viewportAnchor} ${dockStyles.dockPosition} pointer-events-none fixed z-40 lg:hidden`}
+            >
+                <div className={`${dockStyles.dockGutter} pointer-events-auto mx-auto flex justify-center`}>
                     <div
-                        className={`inline-flex justify-center gap-1 min-[380px]:gap-1.5 overflow-hidden border border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] p-1 shadow-lg shadow-blue-500/10 backdrop-blur sm:gap-2 md:origin-bottom md:scale-[1.45] ${hasSelection
-                            ? "w-full max-w-[360px] rounded-b-3xl rounded-t-none border-t-0 sm:max-w-[390px]"
-                            : "rounded-3xl"
+                        className={`${dockStyles.scaledFrame} flex justify-center gap-0 overflow-hidden border-x-0 border-y border-white/10 bg-[#080a0f] px-1 pb-2 pt-1 sm:gap-2 sm:border sm:p-1 ${hasSelection
+                            ? "shadow-none sm:rounded-b-[24px] sm:rounded-t-none"
+                            : "shadow-lg shadow-blue-500/10 sm:rounded-[24px]"
                             }`}
                     >
                         {tabs.map((tab) => {

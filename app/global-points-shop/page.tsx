@@ -81,7 +81,7 @@ const GlobalPointsShopPage = () => {
     if (!currentUser) return null;
 
     return (
-        <div className="mx-auto w-full max-w-4xl" style={{ animation: "homeFadeUp 240ms ease-out both" }}>
+        <div className="mx-auto w-full max-w-4xl lg:max-w-7xl" style={{ animation: "homeFadeUp 240ms ease-out both" }}>
             <header className="flex items-end justify-between gap-4 border-b border-[var(--border-soft)] pb-5 sm:gap-6 sm:pb-6">
                 <div className="min-w-0 flex-1">
                     <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">

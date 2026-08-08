@@ -58,6 +58,8 @@ type PickBuilderShellProps =
         leagues?: League[];
         onDismiss?: () => void;
         showDismissButton?: boolean;
+        compact?: boolean;
+        surface?: "page" | "drawer";
     }
     | {
         context: StandaloneBuilderContext;
@@ -66,6 +68,8 @@ type PickBuilderShellProps =
         leagues?: League[];
         onDismiss?: () => void;
         showDismissButton?: boolean;
+        compact?: boolean;
+        surface?: "page" | "drawer";
     };
 
 const ALL_LEAGUES: League[] = [
@@ -211,7 +215,7 @@ const StubLeagueBuilder = ({
 };
 
 export const PickBuilderShell = (props: PickBuilderShellProps) => {
-    const { context, onDismiss } = props;
+    const { compact = false, surface = "page", context, onDismiss } = props;
     const dispatch = useDispatch();
 
     // const buildMode = "ODDS";
@@ -874,13 +878,23 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
         )
     }
 
+    const dateControlsMargin = compact ? "mt-1" : "mt-3";
+    const leagueControlsMargin = compact
+        ? "mt-1"
+        : hasDateOptions
+            ? "mt-2"
+            : "mt-3";
+
     return (
-        <div className="space-y-4">
-            <div className="sticky top-0 z-20 -mx-5 bg-gradient-to-b from-black to-black/60 px-5 py-3">
+        <div className={`space-y-4 ${compact ? "[&_.pick-builder-game-list]:max-h-none [&_.pick-builder-game-list]:overflow-y-visible" : ""}`}>
+            {/* --app-header-height clears the app TopNav (77px, 87px at lg); inside a
+                drawer there is none, so the date rail must stick to the drawer's own
+                scroll container instead. */}
+            <div className={`sticky ${surface === "drawer" ? "top-0" : "top-[var(--app-header-height,77px)]"} z-20 -mx-5 bg-gradient-to-b from-black to-black/60 px-5 sm:-mx-6 sm:px-6 ${compact ? "pb-2 pt-1" : "py-3"}`}>
                 {hasDateOptions && (
                     <div
                         id="active-date-key--container"
-                        className="mt-3 flex w-full items-center gap-3 overflow-x-auto pb-1"
+                        className={`${dateControlsMargin} flex w-full items-center gap-3 overflow-x-auto pb-1`}
                     >
                         {dateOptions.map((option) => {
                             const active = option.key === activeDateKey;
@@ -902,7 +916,7 @@ export const PickBuilderShell = (props: PickBuilderShellProps) => {
                 )}
                 <div
                     id="league-list-tabs-container"
-                    className={`flex w-full items-center gap-3 overflow-x-auto pb-1 ${hasDateOptions ? "mt-2" : "mt-3"}`}
+                    className={`${leagueControlsMargin} flex w-full items-center gap-3 overflow-x-auto pb-1`}
                 >
                     {allowedLeagues.map((league) => {
                         const active = league === activeLeague;

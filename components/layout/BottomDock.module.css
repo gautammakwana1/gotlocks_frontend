@@ -1,0 +1,135 @@
+/*
+ * Geometry for every surface that docks to the bottom of the viewport: the
+ * MainTabBar itself, the pick-builder sheets that sit above it, and the page
+ * padding that keeps content clear of it. Each class reads an --app-dock-*
+ * variable defined on the [data-app-scale="desktop"] scope in globals.css, so
+ * the three breakpoints (phone / tablet / laptop) are tuned in one place
+ * instead of being spread across per-component utility classes.
+ */
+
+.viewportAnchor {
+  left: 50vw;
+  right: auto;
+  width: 100vw;
+  transform: translateX(-50%);
+}
+
+.dockPosition {
+  bottom: var(--app-dock-offset, 0px);
+}
+
+.dockGutter {
+  padding-inline: var(--app-dock-gutter, 0px);
+}
+
+.scaledFrame {
+  width: 100%;
+  max-width: var(--app-dock-frame-width, 100%);
+  transform: scale(var(--app-dock-scale, 1));
+  transform-origin: bottom center;
+}
+
+.dockClearance {
+  bottom: var(
+    --app-dock-clearance,
+    calc(4.75rem + env(safe-area-inset-bottom))
+  );
+}
+
+.openSheetViewport {
+  max-height: var(--app-dock-open-max-height, calc(100dvh - 6rem));
+}
+
+.dockTab {
+  height: var(
+    --app-dock-tab-height,
+    calc(64px + env(safe-area-inset-bottom))
+  );
+  padding-bottom: var(
+    --app-dock-tab-safe-padding,
+    env(safe-area-inset-bottom)
+  );
+}
+
+.sheetSurfaceClearance {
+  padding-bottom: var(
+    --app-dock-frame-height,
+    calc(4.75rem + env(safe-area-inset-bottom))
+  );
+}
+
+.postSheetActionClearance {
+  padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+}
+
+.sheetActionOffset {
+  bottom: var(
+    --app-dock-frame-height,
+    calc(4.75rem + env(safe-area-inset-bottom))
+  );
+}
+
+.appContentClearance {
+  padding-bottom: var(--app-dock-page-padding, 9rem);
+}
+
+.builderContentClearance {
+  padding-bottom: var(
+    --app-dock-builder-padding,
+    calc(6rem + env(safe-area-inset-bottom))
+  );
+}
+
+.activeBuilderContentClearance {
+  padding-bottom: calc(10rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .postSheetActionClearance {
+    padding-bottom: 9.75rem;
+  }
+
+  .activeBuilderContentClearance {
+    padding-bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * Laptop navigation lives in the top header. At that breakpoint the shared
+ * fixed surfaces dock directly to the viewport instead of reserving the
+ * tablet tab bar, while retaining ordinary page/action breathing room.
+ */
+@media (min-width: 1024px) {
+  .dockPosition,
+  .dockClearance,
+  .sheetActionOffset {
+    bottom: 0;
+  }
+
+  .scaledFrame {
+    width: min(37.125rem, calc(100vw - 3rem));
+    max-width: none;
+    transform: none;
+  }
+
+  .openSheetViewport {
+    max-height: calc(100dvh - 6rem);
+  }
+
+  .sheetSurfaceClearance {
+    padding-bottom: 0;
+  }
+
+  .postSheetActionClearance {
+    padding-bottom: 5.625rem;
+  }
+
+  .appContentClearance,
+  .builderContentClearance {
+    padding-bottom: 2.25rem;
+  }
+
+  .activeBuilderContentClearance {
+    padding-bottom: 7rem;
+  }
+}

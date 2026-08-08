@@ -23,7 +23,7 @@ const SlipsPage = () => {
 
     useEffect(() => {
         if (!league || !currentUser) return;
-        router.replace(`/league/${league.id}`);
+        router.replace(`/league/${league.id}?tab=contests`);
     }, [currentUser, league, router]);
 
     if (!league || !currentUser) {

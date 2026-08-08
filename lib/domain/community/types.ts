@@ -30,6 +30,11 @@ export interface ArenaIdentity {
     deletedAt: IsoDateTime | null;
 }
 
+/** A newly paid self-service Arena always has a usable invite code. */
+export type CreatedArenaIdentity = ArenaIdentity & {
+    inviteCode: string;
+};
+
 export type ArenaRole = "owner" | "manager" | "member";
 export type ArenaMembershipStatus =
     | "invited"
@@ -80,6 +85,9 @@ export interface ArenaUnlock {
     status: ArenaUnlockStatus;
     permanent: boolean;
     source: ArenaUnlockSource | null;
+    /** Zero for grandfathered records; 5,000 cents for the local simulated unlock. */
+    amountCents: number | null;
+    currency: "USD" | null;
     purchasedByUserId: string | null;
     unlockedAt: IsoDateTime | null;
     simulatedPaymentReference: string | null;
@@ -110,6 +118,11 @@ export interface ArenaHosting {
     status: ArenaHostingStatus;
     limits: ArenaHostingLimits;
     billingMode: "simulated";
+    monthlyAmountCents: number | null;
+    simulatedPaymentReference: string | null;
+    activatedAt: IsoDateTime | null;
+    /** Optional tier selected to begin after the current included/paid period. */
+    scheduledTier: ArenaHostingTier | null;
     periodStartsAt: IsoDateTime | null;
     periodEndsAt: IsoDateTime | null;
     paidThroughAt: IsoDateTime | null;
@@ -247,7 +260,11 @@ export interface SelectionSnapshot {
     pricing: AcceptedPricingSnapshot | null;
 }
 
-export type PickVersionKind = "community_pick" | "competitive_pick" | "pickem_card";
+export type PickVersionKind =
+    | "community_pick"
+    | "competitive_pick"
+    | "pickem_card"
+    | "staff_pick";
 export type PickVersionReason = "initial_submission" | "replacement";
 
 export interface PickVersion {
@@ -294,6 +311,43 @@ export interface CommunityPick {
     postingWindowStartedAt: IsoDateTime;
     gradedAt: IsoDateTime | null;
     finalizedAt: IsoDateTime | null;
+    deletedAt: IsoDateTime | null;
+}
+
+export type StaffFeedPostKind =
+    | "general"
+    | "announcement"
+    | "contest_reminder"
+    | "venue_promotion"
+    | "reward_instructions"
+    | "contest_results"
+    | "external_link"
+    | "staff_pick";
+
+export type StaffFeedPostAuthorRole = "arena_owner" | "arena_manager" | "league_commissioner";
+export type StaffFeedPostStatus = "published" | "deleted";
+
+/**
+ * Canonical structured staff content. A noncompetitive Staff Pick references a
+ * PickVersion with kind `staff_pick`; ordinary staff posts intentionally do not
+ * carry pricing or point-claim fields.
+ */
+export interface StaffFeedPost {
+    id: string;
+    context: CommunityContext;
+    authorUserId: string;
+    authorRole: StaffFeedPostAuthorRole;
+    kind: StaffFeedPostKind;
+    status: StaffFeedPostStatus;
+    title: string | null;
+    body: string;
+    externalUrl: string | null;
+    contestId: string | null;
+    currentVersionId: string | null;
+    versionIds: string[];
+    isPinned: boolean;
+    createdAt: IsoDateTime;
+    updatedAt: IsoDateTime;
     deletedAt: IsoDateTime | null;
 }
 
@@ -504,6 +558,7 @@ export interface CommunityDomainState {
     pickVersions: PickVersion[];
     communityPicks: CommunityPick[];
     competitivePicks: CompetitivePick[];
+    staffFeedPosts: StaffFeedPost[];
     pickemCards: PickemCard[];
     communityPointClaims: CommunityPointClaim[];
     communityPointLedger: CommunityPointLedgerEntry[];

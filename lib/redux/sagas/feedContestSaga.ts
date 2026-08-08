@@ -1,0 +1,568 @@
+import { call, put, takeEvery, takeLatest } from "redux-saga/effects";
+import axios, { AxiosResponse } from "axios";
+import { API_BASE_URL } from "@/lib/utils/api";
+import axiosInstance from "@/lib/utils/axiosInstance";
+import type { SagaIterator } from "redux-saga";
+import type { PayloadAction } from "@reduxjs/toolkit";
+import type {
+    CreateFeedContestPayload,
+    EnterFeedContestData,
+    EnterFeedContestPayload,
+    FeedContest,
+    FeedContestDetailData,
+    FeedContestEntriesData,
+    FeedContestLifecycleActionPayload,
+    FeedContestLifecycleData,
+    FeedContestListData,
+    FeedContestStatsData,
+    FeedContestSection,
+    FeedContestUpdateData,
+    FetchFeedContestDetailPayload,
+    FetchFeedContestEntriesPayload,
+    FetchFeedContestStatsPayload,
+    FetchFeedContestsPayload,
+    ReplaceDraftFeedContestPayload,
+    ReplaceFeedContestEntryData,
+    ReplaceFeedContestEntryPayload,
+    UpdateFeedContestPayload,
+} from "@/lib/interfaces/interfaces";
+import {
+    archiveFeedContestFailure,
+    archiveFeedContestRequest,
+    archiveFeedContestSuccess,
+    cancelFeedContestFailure,
+    cancelFeedContestRequest,
+    cancelFeedContestSuccess,
+    createDraftFeedContestFailure,
+    createDraftFeedContestRequest,
+    createDraftFeedContestSuccess,
+    createFeedContestFailure,
+    createFeedContestRequest,
+    createFeedContestSuccess,
+    enterFeedContestFailure,
+    enterFeedContestRequest,
+    enterFeedContestSuccess,
+    fetchFeedContestDetailFailure,
+    fetchFeedContestDetailRequest,
+    fetchFeedContestDetailSuccess,
+    fetchFeedContestEntriesFailure,
+    fetchFeedContestStatsRequest,
+    fetchFeedContestStatsSuccess,
+    fetchFeedContestStatsFailure,
+    fetchFeedContestEntriesRequest,
+    fetchFeedContestEntriesSuccess,
+    fetchFeedContestsFailure,
+    fetchFeedContestsRequest,
+    fetchFeedContestsSuccess,
+    publishDraftFeedContestFailure,
+    publishDraftFeedContestRequest,
+    publishDraftFeedContestSuccess,
+    replaceDraftFeedContestFailure,
+    replaceDraftFeedContestRequest,
+    replaceDraftFeedContestSuccess,
+    replaceFeedContestEntryFailure,
+    replaceFeedContestEntryRequest,
+    replaceFeedContestEntrySuccess,
+    updateFeedContestFailure,
+    updateFeedContestRequest,
+    updateFeedContestSuccess,
+} from "../slices/feedContestSlice";
+
+type ApiErrorResponse = { message?: string };
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+    if (axios.isAxiosError<ApiErrorResponse>(error)) {
+        return error.response?.data?.message ?? fallback;
+    }
+    if (error instanceof Error) return error.message || fallback;
+    return fallback;
+};
+
+/**
+ * Both create endpoints store the organizer's IANA zone from this header, so
+ * every schedule string later renders in the zone the contest was authored in.
+ * The server falls back to UTC when it is missing or unresolvable.
+ */
+const timeZoneHeader = () => {
+    try {
+        const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return zone ? { "x-timezone": zone } : {};
+    } catch {
+        return {};
+    }
+};
+
+// GET /group/feed-contest/list/:section — the section path fixes the
+// lifecycle_status set AND the sort order server-side, so nothing but the group
+// scope and the page window travels on the query string. `/list/drafts` answers
+// 403 for a non-organizer; that is the expected reply, not an error to surface.
+function* handleFetchFeedContests(
+    action: PayloadAction<FetchFeedContestsPayload & { section: FeedContestSection }>
+): SagaIterator {
+    const { section, group_id, group_type, status, sort, page = 1, limit = 10 } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/list/${section}`,
+            {
+                params: {
+                    group_id,
+                    group_type,
+                    page,
+                    limit,
+                    // Ignored by the section routes; kept so the same handler can
+                    // serve the generic /list if it is ever wired up.
+                    ...(status ? { status } : {}),
+                    ...(sort ? { sort } : {}),
+                },
+            }
+        );
+        const payload = response.data as { data?: FeedContestListData };
+        if (!payload?.data) {
+            yield put(
+                fetchFeedContestsFailure({ section, error: "Failed to load Feed contests" })
+            );
+            return;
+        }
+        yield put(fetchFeedContestsSuccess({ section, data: payload.data }));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestsFailure({
+                section,
+                error: getErrorMessage(error, "Failed to load Feed contests"),
+            })
+        );
+    }
+}
+
+// POST /group/feed-contest/create — publishes straight to 'open', so the hosting
+// / League-tier active-contest limit is charged here. The body is forwarded
+// as-is: every rule (organizer authority, template/entry agreement, the slate
+// snapshot, timing) is enforced server-side, so nothing is re-validated here.
+function* handleCreateFeedContest(
+    action: PayloadAction<CreateFeedContestPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/feed-contest/create`,
+            action.payload,
+            { headers: timeZoneHeader() }
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: { contest?: FeedContest };
+        };
+        yield put(
+            createFeedContestSuccess({
+                contest: payload?.data?.contest ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            createFeedContestFailure(
+                getErrorMessage(error, "Failed to create the Feed contest")
+            )
+        );
+    }
+}
+
+// POST /group/feed-contest/create-draft — same payload and the same full
+// validation, but parks the contest in 'draft'. A draft is organizer-only and
+// does NOT consume an active-contest slot; the limit is charged at publish.
+function* handleCreateDraftFeedContest(
+    action: PayloadAction<CreateFeedContestPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/feed-contest/create-draft`,
+            action.payload,
+            { headers: timeZoneHeader() }
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: { contest?: FeedContest };
+        };
+        yield put(
+            createDraftFeedContestSuccess({
+                contest: payload?.data?.contest ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            createDraftFeedContestFailure(
+                getErrorMessage(error, "Failed to save the Feed contest draft")
+            )
+        );
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * Reopening a saved draft in the wizard. ONE write either way:
+ *
+ *   PUT /group/feed-contest/create-draft/:contest_id   save, still a draft
+ *   PUT /group/feed-contest/publish-draft/:contest_id  save AND publish
+ *
+ * Both take the SAME complete body the POST /create-draft path sends — they are
+ * whole-row REPLACEMENTS, not patches, because the organizer re-ran the wizard.
+ * Omitting a field resets it; only `id`, `group_id`, `created_by` and
+ * `created_at` survive. Publishing is one call rather than save-then-publish
+ * precisely so a half-applied edit cannot exist.
+ *
+ * DRAFTS ONLY. A published contest's mechanics, slate and timing are frozen —
+ * an entrant who accepted a slate must never find it swapped underneath them —
+ * so both answer 409 for anything live, and the copy-only /update is the last
+ * edit available. Publishing is also where the active-contest limit is charged;
+ * drafting is free.
+ * -------------------------------------------------------------------------- */
+function* handleSaveDraftFeedContest(
+    action: PayloadAction<ReplaceDraftFeedContestPayload>
+): SagaIterator {
+    const { contest_id, time_zone, publish, ...body } = action.payload;
+    const publishing = publish === true;
+    const path = publishing ? "publish-draft" : "create-draft";
+    // The draft's OWN zone, not the browser's: it is the zone every slate
+    // boundary in the draft was authored against, and the endpoint rewrites the
+    // row's `time_zone` from this header on every save.
+    const headers = time_zone ? { "x-timezone": time_zone } : timeZoneHeader();
+
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/${path}/${encodeURIComponent(contest_id)}`,
+            body,
+            { headers }
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: { contest?: FeedContest };
+        };
+        const contest = payload?.data?.contest ?? null;
+
+        yield put(
+            publishing
+                ? publishDraftFeedContestSuccess({ contest, message: payload?.message })
+                : replaceDraftFeedContestSuccess({ contest, message: payload?.message })
+        );
+    } catch (error: unknown) {
+        yield put(
+            publishing
+                ? publishDraftFeedContestFailure(
+                      getErrorMessage(error, "Failed to publish the Feed contest")
+                  )
+                : replaceDraftFeedContestFailure(
+                      getErrorMessage(error, "Failed to save the Feed contest draft")
+                  )
+        );
+    }
+}
+
+// GET /group/feed-contest/detail/:contest_id — the contest id is the WHOLE
+// request: group_id, group_type and context_type are all derived from the row
+// server-side. The reply adds `rules_text` + `eligible_games_json` on top of the
+// list columns, so the detail screen never has to merge two responses.
+//
+// Every failure the endpoint can express for a row this viewer may not read is a
+// 404 with the same wording (draft read by a member, foreign/deleted group,
+// malformed uuid, missing row). That is deliberate — do not try to distinguish
+// them, and never treat one as "deleted".
+function* handleFetchFeedContestDetail(
+    action: PayloadAction<FetchFeedContestDetailPayload>
+): SagaIterator {
+    const { contest_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/detail/${encodeURIComponent(contest_id)}`
+        );
+        const payload = response.data as { data?: FeedContestDetailData };
+        if (!payload?.data?.contest) {
+            yield put(fetchFeedContestDetailFailure("Failed to load this contest"));
+            return;
+        }
+        yield put(fetchFeedContestDetailSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestDetailFailure(
+                getErrorMessage(error, "Failed to load this contest")
+            )
+        );
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * The two organizer lifecycle writes. Both are `PUT /group/feed-contest/<verb>/
+ * :contest_id` with NO body — the contest id is the whole request, and the
+ * server derives the group, the context and the caller's authority from it.
+ *
+ * Both are idempotent: re-running either answers 200 with "already canceled" /
+ * "already archived" rather than an error. A contest that MOVED between the read
+ * and the write answers 409, which surfaces as an ordinary error toast — that is
+ * correct, since the screen's copy of the row is then stale.
+ * -------------------------------------------------------------------------- */
+type LifecycleResponse = { message?: string; data?: FeedContestLifecycleData };
+
+// PUT /cancel/:contest_id — flips the contest to 'canceled', withdraws every
+// participant still in the field and deletes their competitive picks.
+function* handleCancelFeedContest(
+    action: PayloadAction<FeedContestLifecycleActionPayload>
+): SagaIterator {
+    const { contest_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/cancel/${encodeURIComponent(contest_id)}`,
+            {}
+        );
+        const payload = response.data as LifecycleResponse;
+        yield put(
+            cancelFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            cancelFeedContestFailure(
+                getErrorMessage(error, "Failed to cancel the contest")
+            )
+        );
+    }
+}
+
+// PUT /archive/:contest_id — files a contest that already ended (canceled or
+// final) and settles its field to match which ending it was.
+function* handleArchiveFeedContest(
+    action: PayloadAction<FeedContestLifecycleActionPayload>
+): SagaIterator {
+    const { contest_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/archive/${encodeURIComponent(contest_id)}`,
+            {}
+        );
+        const payload = response.data as LifecycleResponse;
+        yield put(
+            archiveFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            archiveFeedContestFailure(
+                getErrorMessage(error, "Failed to archive the contest")
+            )
+        );
+    }
+}
+
+// PUT /update/:contest_id — member-facing COPY only (name / description /
+// rules_text), and a PARTIAL patch: keys left out are untouched. Sending copy
+// identical to what is stored is a no-op 200, so the form does not have to diff
+// before submitting. A real rules_text change mints a new rules_version, which
+// the reply flags — the screen has to tell the organizer that entrants must
+// re-accept. 409 means the copy froze (a member joined) or the contest moved.
+function* handleUpdateFeedContest(
+    action: PayloadAction<UpdateFeedContestPayload>
+): SagaIterator {
+    const { contest_id, ...patch } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/update/${encodeURIComponent(contest_id)}`,
+            patch
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: FeedContestUpdateData;
+        };
+        yield put(
+            updateFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            updateFeedContestFailure(
+                getErrorMessage(error, "Failed to update the contest")
+            )
+        );
+    }
+}
+
+// GET /group/feed-contest/entries/:contest_id — the field, readable by any
+// member of the group. The hidden-until-lock rule is enforced in the SERVER's
+// query, not in its response shaping: before the lock, other members' rows come
+// back with `pick: null` and only the caller's own entry carries detail. Never
+// re-derive that from the contest status — read `is_revealed` per row.
+function* handleFetchFeedContestEntries(
+    action: PayloadAction<FetchFeedContestEntriesPayload>
+): SagaIterator {
+    const { contest_id, page = 1, limit = 20 } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/entries/${encodeURIComponent(contest_id)}`,
+            { params: { page, limit } }
+        );
+        const payload = response.data as { data?: FeedContestEntriesData };
+        if (!payload?.data?.contest) {
+            yield put(fetchFeedContestEntriesFailure("Failed to load this contest's entries"));
+            return;
+        }
+        yield put(fetchFeedContestEntriesSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestEntriesFailure(
+                getErrorMessage(error, "Failed to load this contest's entries")
+            )
+        );
+    }
+}
+
+// GET /group/feed-contest/stats/:contest_id — the whole tally in one read, for
+// any member of the group. Unlike /entries this never pages and never grows
+// with the field, so the dashboard can call it once per contest.
+//
+// The COUNTS are public even while the picks behind them are hidden — knowing
+// that 12 people entered gives away none of what they picked — so this is safe
+// to read on a still-open contest. A draft answers 404 to everyone but its
+// organizer, same as the by-id detail read.
+function* handleFetchFeedContestStats(
+    action: PayloadAction<FetchFeedContestStatsPayload>
+): SagaIterator {
+    const { contest_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/stats/${encodeURIComponent(contest_id)}`
+        );
+        const payload = response.data as { data?: FeedContestStatsData };
+        // `counts` is the whole point of the read; a body without it is a
+        // shape we cannot render, so fail rather than commit a half-empty
+        // dashboard that would show every tile as zero.
+        if (!payload?.data?.contest || !payload.data.counts) {
+            yield put(fetchFeedContestStatsFailure("Failed to load this contest's stats"));
+            return;
+        }
+        yield put(fetchFeedContestStatsSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestStatsFailure(
+                getErrorMessage(error, "Failed to load this contest's stats")
+            )
+        );
+    }
+}
+
+// POST /group/feed-contest/enter/:contest_id — accepts the rules, joins and
+// submits the competitive combo in ONE call, so a member is never left opted in
+// with no entry. Nothing priced travels: the combined odds, the points and the
+// difficulty tier are all computed server-side from the legs' own American odds.
+//
+// NOT idempotent — a second POST answers 409 "You have already entered this
+// contest." The screen therefore disables its button on `entrySubmitLoading` on
+// top of the takeLatest below.
+//
+// One failure needs care: a 500 "Joined, but submitting your entry failed"
+// leaves the member joined with no entry. The recovery is to retry THIS call
+// (the participant gate admits 'opted_in'), never /replace-entry, which 404s
+// without an accepted entry to replace.
+function* handleEnterFeedContest(
+    action: PayloadAction<EnterFeedContestPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/feed-contest/enter/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as { message?: string; data?: EnterFeedContestData };
+        yield put(
+            enterFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        // Re-read the field so the caller's own receipt is the server's copy
+        // rather than the echo, and so `entered_count` moves.
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            enterFeedContestFailure(getErrorMessage(error, "Failed to submit your entry"))
+        );
+    }
+}
+
+// PUT /group/feed-contest/replace-entry/:contest_id — swaps the combo already
+// submitted for a different one, in place, while the contest is still open.
+// `rules_version` is optional here: the acceptance stored on the participant row
+// is what gets checked. Requires an existing 'entered' participation — 404
+// otherwise, which means /enter is the call that applies instead.
+function* handleReplaceFeedContestEntry(
+    action: PayloadAction<ReplaceFeedContestEntryPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/replace-entry/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: ReplaceFeedContestEntryData;
+        };
+        yield put(
+            replaceFeedContestEntrySuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            replaceFeedContestEntryFailure(
+                getErrorMessage(error, "Failed to replace your entry")
+            )
+        );
+    }
+}
+
+export default function* feedContestSaga(): SagaIterator {
+    // takeEvery, not takeLatest: the hub fires one request per section and they
+    // must not cancel each other.
+    yield takeEvery(fetchFeedContestsRequest.type, handleFetchFeedContests);
+    yield takeLatest(createFeedContestRequest.type, handleCreateFeedContest);
+    yield takeLatest(createDraftFeedContestRequest.type, handleCreateDraftFeedContest);
+    // One handler for both: same body, same shape of reply — only the path and
+    // which success action fires differ, and `publish` on the payload decides.
+    yield takeLatest(replaceDraftFeedContestRequest.type, handleSaveDraftFeedContest);
+    yield takeLatest(publishDraftFeedContestRequest.type, handleSaveDraftFeedContest);
+    // takeLatest: only one contest is on screen, so an abandoned read must never
+    // land after the one that replaced it.
+    yield takeLatest(fetchFeedContestDetailRequest.type, handleFetchFeedContestDetail);
+    // takeLatest, and the buttons are disabled while either runs — a second
+    // cancel is harmless server-side (idempotent) but must not race the first.
+    yield takeLatest(cancelFeedContestRequest.type, handleCancelFeedContest);
+    yield takeLatest(archiveFeedContestRequest.type, handleArchiveFeedContest);
+    yield takeLatest(updateFeedContestRequest.type, handleUpdateFeedContest);
+    // takeLatest: one contest's field is on screen at a time, and the "Show
+    // more" page and the post-write refetch are the same read — newest wins.
+    yield takeLatest(fetchFeedContestEntriesRequest.type, handleFetchFeedContestEntries);
+    // takeLatest: one contest's dashboard at a time, and the post-write refetch
+    // is the same read — the newest tally is the only correct one.
+    yield takeLatest(fetchFeedContestStatsRequest.type, handleFetchFeedContestStats);
+    // takeLatest, AND the submit button is disabled while either runs: unlike
+    // cancel/archive these are NOT idempotent, so a second in-flight write is a
+    // 409 rather than a harmless repeat.
+    yield takeLatest(enterFeedContestRequest.type, handleEnterFeedContest);
+    yield takeLatest(replaceFeedContestEntryRequest.type, handleReplaceFeedContestEntry);
+}

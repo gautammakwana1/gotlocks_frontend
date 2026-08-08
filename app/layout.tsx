@@ -3,8 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { APP_NAME, TAGLINE } from "@/lib/constants";
 import AppProviders from "./providers";
-import AppShell from "@/components/layout/AppShell";
-import SentryUserTracker from "@/components/sentry/SentryUserTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,8 +35,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} bg-[var(--app-bg)] text-[var(--app-text)] antialiased`}
       >
         <AppProviders>
-          <SentryUserTracker />
-          <AppShell>{children}</AppShell>
+          {children}
         </AppProviders>
       </body>
     </html>

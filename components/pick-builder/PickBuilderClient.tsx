@@ -38,6 +38,14 @@ type RootState = {
 
 type DestinationStep = "choose" | "leagues";
 
+type PickBuilderPageContentProps = {
+    compact?: boolean;
+    /** "drawer" drops the shell's sticky offset — inside a drawer there is no TopNav. */
+    surface?: "page" | "drawer";
+    /** Fired once a post lands, so a host drawer can close itself. */
+    onPostComplete?: () => void;
+};
+
 const normalizeSport = (sport?: string) => (sport ? sport.toUpperCase() : "NFL");
 
 const getRequiredSportKeys = (payload?: BuiltPickPayload | null) => {
@@ -79,7 +87,11 @@ const getPickStartTimes = (payload?: BuiltPickPayload | null) => {
     return singleStart ? [singleStart] : [];
 };
 
-const PickBuilderClientPage = () => {
+const PickBuilderClientPage = ({
+    compact = false,
+    surface = "page",
+    onPostComplete,
+}: PickBuilderPageContentProps = {}) => {
     const dispatch = useDispatch();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
@@ -133,6 +145,13 @@ const PickBuilderClientPage = () => {
         setAssignments({});
     }, []);
 
+    // Held in a ref so the success effect below keeps a stable dep list — a host
+    // passing an inline callback would otherwise re-run it and re-fire the toast.
+    const onPostCompleteRef = useRef(onPostComplete);
+    useEffect(() => {
+        onPostCompleteRef.current = onPostComplete;
+    }, [onPostComplete]);
+
     useEffect(() => {
         if (pickMessage && !pickLoader) {
             setToast({
@@ -148,6 +167,7 @@ const PickBuilderClientPage = () => {
             if (resetBuilderRef.current) {
                 resetBuilderRef.current();   // -> builder resetAfterPost -> onDraftPickChange(null)
                 closeDestination();          // nulls the ref + clears modal state
+                onPostCompleteRef.current?.();
             }
         }
         if (pickError && !pickLoader) {
@@ -367,6 +387,8 @@ const PickBuilderClientPage = () => {
     return (
         <div className="flex flex-col gap-6 text-white">
             <PickBuilderShell
+                compact={compact}
+                surface={surface}
                 context={{
                     mode: "standalone",
                     currentUser,

@@ -182,11 +182,11 @@ const AccountCreationPage = () => {
   }, []);
 
   const handleGoBack = useCallback(() => {
-    router.push("/landing-page");
+    router.push("/signin");
   }, [router]);
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-10">
 
       <button
         type="button"

@@ -10,6 +10,8 @@ import ProfileControls, {
     type TypeFilter,
 } from "./ProfileControls";
 import ProfileHeader from "./ProfileHeader";
+import { ProfileFilterDrawer } from "./ProfileFilterDrawer";
+import { ProfilePostComposerDrawer } from "./ProfilePostComposerDrawer";
 import { BlockedUsers, CurrentUser, FollowersList, FollowingsList, FollowRequest, Pick, PickReaction, PickResult, Picks, PickSliceState, PickType, Profile, ProgressState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { accpetFollowRequest, clearFollowUnfollowUserMessage, clearUpdateProfileMessage, declineFollowRequest, fetchFollowersListByIdRequest, fetchFollowingListByIdRequest, fetchFollowingListRequest, fetchFollowRequestListRequest, fetchMemberProfileRequest, fetchProfileBadgesRequest, fetchSentFollowRequestListRequest, followUnfollowUserRequest, resetProfile, updateProfilePictureRequest, updateProfilePublicOrPrivateRequest } from "@/lib/redux/slices/authSlice";
@@ -28,6 +30,8 @@ import { LeftChevronIcon } from "../ui/SvgIcons";
 import ProfileSkeleton from "../skeletons/profile/ProfileSkeleton";
 import { ProfileBadgeProgress } from "@/lib/profile/badges";
 import BadgesStrip from "./BadgesStrip";
+import { SIDE_DRAWER_DESKTOP_WIDTH } from "@/components/layout/sideDrawerSizing";
+import { SIDE_DRAWER_MOTION } from "@/components/ui/sideDrawerMotion";
 
 type ProfileViewProps = {
     targetUserId: string;
@@ -140,6 +144,10 @@ const ProfileView = ({
     const [showScrollTop, setShowScrollTop] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const [badgesOpen, setBadgesOpen] = useState(false);
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const [postComposerOpen, setPostComposerOpen] = useState(false);
+    const filterDrawerTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const postComposerTriggerRef = useRef<HTMLButtonElement | null>(null);
     // Pick id to scroll to / highlight, sourced from a `?pick=` deep link (e.g. the
     // weekly winners leaderboard's "biggest hit" cell).
     const [highlightPickId, setHighlightPickId] = useState<string | null>(null);
@@ -464,6 +472,30 @@ const ProfileView = ({
 
     const closeFollowPanel = useCallback(() => {
         setFollowPanelOpen(false);
+    }, []);
+
+    // Only one overlay at a time — each opener closes the others so the followers
+    // panel and badges panel can never sit behind a drawer's backdrop.
+    const openPostComposer = useCallback(() => {
+        setFollowPanelOpen(false);
+        setBadgesOpen(false);
+        setFilterDrawerOpen(false);
+        setPostComposerOpen(true);
+    }, []);
+
+    const closePostComposer = useCallback(() => {
+        setPostComposerOpen(false);
+    }, []);
+
+    const openFilterDrawer = useCallback(() => {
+        setFollowPanelOpen(false);
+        setBadgesOpen(false);
+        setPostComposerOpen(false);
+        setFilterDrawerOpen(true);
+    }, []);
+
+    const closeFilterDrawer = useCallback(() => {
+        setFilterDrawerOpen(false);
     }, []);
 
     useEffect(() => {
@@ -791,7 +823,6 @@ const ProfileView = ({
                     levelProgressPercent,
                     lifetimeXp: totalXp
                 }}
-                onShowScoringRules={() => setShowScoringModal(true)}
                 onFollowToggle={handleFollowToggle}
                 onAvatarChange={handleImageChange}
                 onRemoveAvatar={handleRemoveAvatar}
@@ -803,9 +834,14 @@ const ProfileView = ({
             />
             <div
                 ref={followPanelRef}
-                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[420px] border-l border-white/10 bg-neutral-950 shadow-2xl transition-all duration-300 ease-out ${followPanelOpen
-                    ? "translate-x-0 opacity-100"
-                    : "translate-x-full opacity-0 pointer-events-none"
+                data-profile-follow-drawer
+                role="dialog"
+                aria-label="Profile connections"
+                aria-hidden={!followPanelOpen}
+                inert={!followPanelOpen}
+                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[420px] border-l border-white/10 bg-neutral-950 shadow-2xl ${SIDE_DRAWER_DESKTOP_WIDTH.standard} ${SIDE_DRAWER_MOTION.panel} ${followPanelOpen
+                    ? SIDE_DRAWER_MOTION.open
+                    : `${SIDE_DRAWER_MOTION.closedRight} pointer-events-none`
                     }`}
             >
                 <div className="flex h-full flex-col">
@@ -915,9 +951,14 @@ const ProfileView = ({
 
             <div
                 ref={badgesPanelRef}
-                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[460px] border-l border-white/10 bg-neutral-950 shadow-2xl transition-all duration-300 ease-out ${badgesOpen
-                    ? "translate-x-0 opacity-100"
-                    : "translate-x-full opacity-0 pointer-events-none"
+                data-profile-badges-drawer
+                role="dialog"
+                aria-label="Profile badges"
+                aria-hidden={!badgesOpen}
+                inert={!badgesOpen}
+                className={`fixed inset-y-0 right-0 z-50 w-full max-w-[460px] border-l border-white/10 bg-neutral-950 shadow-2xl ${SIDE_DRAWER_DESKTOP_WIDTH.standard} ${SIDE_DRAWER_MOTION.panel} ${badgesOpen
+                    ? SIDE_DRAWER_MOTION.open
+                    : `${SIDE_DRAWER_MOTION.closedRight} pointer-events-none`
                     }`}
             >
                 <div className="flex h-full flex-col">
@@ -968,37 +1009,40 @@ const ProfileView = ({
                 </section>
             ) : (
                 <>
-                    <div className="space-y-4">
+                    <div className="space-y-0">
                         <ProfileControls
                             resultFilter={resultFilter}
                             typeFilter={typeFilter}
                             confidenceFilter={confidenceFilter}
                             sortOption={sortOption}
-                            variant="embedded"
-                            showPostLock={mode === "self"}
+                            filterDrawerOpen={filterDrawerOpen}
+                            filterDrawerTriggerRef={filterDrawerTriggerRef}
+                            scoringRulesOpen={showScoringModal}
+                            postComposerOpen={postComposerOpen}
+                            postComposerTriggerRef={postComposerTriggerRef}
+                            onOpenFilterDrawer={openFilterDrawer}
+                            onShowScoringRules={
+                                mode === "self" ? () => setShowScoringModal(true) : undefined
+                            }
+                            onOpenPostComposer={mode === "self" ? openPostComposer : undefined}
                             onResultChange={setResultFilter}
                             onTypeChange={setTypeFilter}
                             onConfidenceChange={setConfidenceFilter}
                             onSortChange={setSortOption}
                         />
-                        <div className="mt-4">
-                            <div className="-mx-5 h-px bg-white/10 sm:mx-0" />
-                            <div className="pt-4">
-                                <PostFeed
-                                    picks={visiblePicks}
-                                    totalCount={postPicks?.length ?? 0}
-                                    displayName={displayName}
-                                    mode={mode}
-                                    variant="embedded"
-                                    canDeletePick={canDeletePick}
-                                    onDeletePick={handleDeletePick}
-                                    lastItemRef={lastItemRef}
-                                    loading={postLoader}
-                                    onReaction={handleReaction}
-                                    highlightPickId={highlightPickId}
-                                />
-                            </div>
-                        </div>
+                        <PostFeed
+                            picks={visiblePicks}
+                            totalCount={postPicks?.length ?? 0}
+                            displayName={displayName}
+                            mode={mode}
+                            variant="embedded"
+                            canDeletePick={canDeletePick}
+                            onDeletePick={handleDeletePick}
+                            lastItemRef={lastItemRef}
+                            loading={postLoader}
+                            onReaction={handleReaction}
+                            highlightPickId={highlightPickId}
+                        />
                     </div>
                     <ScoringModal
                         open={showScoringModal}
@@ -1007,6 +1051,28 @@ const ProfileView = ({
                     />
                 </>
             )}
+
+            {mode === "self" ? (
+                <ProfilePostComposerDrawer
+                    open={postComposerOpen}
+                    onClose={closePostComposer}
+                    returnFocusRef={postComposerTriggerRef}
+                />
+            ) : null}
+
+            <ProfileFilterDrawer
+                open={filterDrawerOpen}
+                onClose={closeFilterDrawer}
+                returnFocusRef={filterDrawerTriggerRef}
+                resultFilter={resultFilter}
+                typeFilter={typeFilter}
+                confidenceFilter={confidenceFilter}
+                sortOption={sortOption}
+                onResultChange={setResultFilter}
+                onTypeChange={setTypeFilter}
+                onConfidenceChange={setConfidenceFilter}
+                onSortChange={setSortOption}
+            />
 
             {pendingUnfollowUserId && (
                 <div

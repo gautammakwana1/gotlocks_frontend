@@ -1,19 +1,25 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { Group, GroupObject } from "@/lib/interfaces/interfaces";
+import { ArenaState, Group, GroupObject, GroupType } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { clearJoinedGroupByInviteCodeMessage, fetchMyGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
+import { fetchArenaGroupsRequest } from "@/lib/redux/slices/arenaSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import ScoringModal from "../modals/ScoringModal";
 import { InfoIcon, MembersIcon, RightArrowIcon } from "../ui/SvgIcons";
 import GroupsTabSkeleton from "../skeletons/fantasy/GroupsTabSkeleton";
-import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
+import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel, PLAN_LIMITS } from "@/lib/groups/limits";
 import { groupPreviewKickerTextClassName, groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "../group/GroupPreviewChip";
 import InviteCodeCopy from "../group/InviteCodeCopy";
+import { getGroupPath } from "@/lib/utils/profileNavigation";
+import { getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
+import PlanMenuCard from "../billing/PlanMenuCard";
+import ProLifetimeUpgradeFlow from "../billing/ProLifetimeUpgradeFlow";
+import { useUserPlan } from "@/lib/plan/useUserPlan";
 
 type GroupSliceState = {
     group: {
@@ -28,34 +34,62 @@ type GroupSliceState = {
     message: string | null;
     hasMore: boolean;
     myGroups: GroupObject[] | null;
+    joinedGroup: { group_id: string; group_type?: GroupType } | null;
 };
 
 type RootState = {
     group: GroupSliceState;
+    arena: ArenaState;
 };
 
 type LeaguesTabVariant = "standalone" | "embedded";
 
 type GroupsTabProps = {
     variant?: LeaguesTabVariant;
+    scope?: "leagues" | "arenas";
 };
 
-const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
+const LeaguesTab = ({ variant = "standalone", scope = "leagues" }: GroupsTabProps) => {
     const router = useRouter();
     const dispatch = useDispatch();
+    const searchParams = useSearchParams();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
+    const userPlan = useUserPlan();
     const [page, setPage] = useState(1);
     const [joinCode, setJoinCode] = useState("");
     const [joinError, setJoinError] = useState<string | null>(null);
     const [joinOpen, setJoinOpen] = useState(false);
     const [showScoringModal, setShowScoringModal] = useState(false);
-    const { joinLoading, message, error, loading: groupLoading, myGroups, hasMore } = useSelector((state: RootState) => state.group);
+    const [proUpgradeOpen, setProUpgradeOpen] = useState(false);
+    const [proUpgradeIntent, setProUpgradeIntent] = useState<
+        "plan" | "create_league" | null
+    >(null);
+    const startGroupButtonRef = useRef<HTMLButtonElement>(null);
+    const planCardActionRef = useRef<HTMLButtonElement>(null);
+    const createLeagueIntentHandledRef = useRef(false);
+
+    const { joinLoading, message, error, loading: groupLoading, myGroups, hasMore, joinedGroup } = useSelector((state: RootState) => state.group);
+    const { arenaGroups, arenaGroupsLoading, arenaGroupsHasMore } = useSelector(
+        (state: RootState) => state.arena
+    );
+
+    // Scope-aware list source: the Leagues tab keeps reading the group slice
+    // exactly as before; the Arenas tab reads the arena slice, fed by the
+    // dedicated GET /group/arena endpoint (same response contract).
+    const isArenaScope = scope === "arenas";
+    const scopedGroups = isArenaScope ? arenaGroups : myGroups;
+    const scopedLoading = isArenaScope ? arenaGroupsLoading : groupLoading;
+    const scopedHasMore = isArenaScope ? arenaGroupsHasMore : hasMore;
 
     useEffect(() => {
         if (!currentUser) return;
-        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
-    }, [dispatch, currentUser]);
+        if (isArenaScope) {
+            dispatch(fetchArenaGroupsRequest({ page: 1, limit: 10 }));
+        } else {
+            dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+        }
+    }, [dispatch, currentUser, isArenaScope]);
 
     useEffect(() => {
         if (!joinLoading && message) {
@@ -66,7 +100,27 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 duration: 3000,
             });
             setPage(1);
-            dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+            // Cross-scope join: both lists are type-filtered, so a community
+            // of the other type can never appear in this tab. Open it directly
+            // instead of refreshing a list it won't be in. Only fires when the
+            // backend reports the joined type — otherwise fall through to the
+            // unchanged refresh path.
+            const joinedType = joinedGroup?.group_type;
+            if (
+                joinedGroup?.group_id &&
+                joinedType &&
+                (joinedType === "arena") !== isArenaScope
+            ) {
+                dispatch(clearJoinedGroupByInviteCodeMessage());
+                router.push(getGroupPath(joinedType, joinedGroup.group_id));
+                return;
+            }
+            // Refresh the list this tab is actually showing.
+            if (isArenaScope) {
+                dispatch(fetchArenaGroupsRequest({ page: 1, limit: 10 }));
+            } else {
+                dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+            }
         }
         if (!joinLoading && error) {
             setToast({
@@ -77,12 +131,12 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
             })
         }
         dispatch(clearJoinedGroupByInviteCodeMessage());
-    }, [setToast, dispatch, joinLoading, message, error, router]);
+    }, [setToast, dispatch, joinLoading, message, error, router, isArenaScope, joinedGroup]);
 
     const sortedGroups = useMemo(() => {
-        if (!Array.isArray(myGroups) || !myGroups.length) return [];
+        if (!Array.isArray(scopedGroups) || !scopedGroups.length) return [];
 
-        const groups = myGroups;
+        const groups = scopedGroups;
 
         if (!currentUser?.userId) return groups;
 
@@ -94,7 +148,28 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
         );
 
         return [...commissionerGroups, ...memberGroups];
-    }, [myGroups, currentUser?.userId]);
+    }, [scopedGroups, currentUser?.userId]);
+
+    const ownedLeagueCount = useMemo(
+        () => (currentUser ? sortedGroups.filter(g => g.created_by === currentUser.userId).length : 0),
+        [currentUser, sortedGroups]
+    );
+
+    const ownedLeagueLimit = currentUser
+        ? PLAN_LIMITS[userPlan ?? "free"].maxOwnedLeagues
+        : PLAN_LIMITS.free.maxOwnedLeagues;
+    const leagueLimitReached = ownedLeagueCount >= ownedLeagueLimit;
+    const planView = useMemo(
+        () =>
+            currentUser
+                ? getProLifetimePlanViewModel({
+                    plan: userPlan ?? currentUser.plan,
+                    offerKind: currentUser?.proLifetimeOfferKind,
+                    entitlement: currentUser?.proLifetimeEntitlement,
+                })
+                : null,
+        [currentUser]
+    );
 
     const openJoinModal = () => {
         setJoinOpen(true);
@@ -107,10 +182,91 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
         setJoinError(null);
     };
 
+    const openProUpgrade = (intent: "plan" | "create_league") => {
+        setProUpgradeIntent(intent);
+        setProUpgradeOpen(true);
+    };
+
+    const closeProUpgrade = () => {
+        const continueToLeagueCreation =
+            proUpgradeIntent === "create_league" && userPlan === "pro";
+        setProUpgradeOpen(false);
+        setProUpgradeIntent(null);
+        if (continueToLeagueCreation) {
+            router.push("/cag-form?type=league");
+        }
+    };
+
+    const handleStartGroup = () => {
+        if (scope === "arenas") {
+            router.push("/cag-form?type=arena");
+            return;
+        }
+        if (!currentUser) {
+            router.replace("/landing-page");
+            return;
+        }
+        if (!leagueLimitReached) {
+            router.push("/cag-form?type=league");
+            return;
+        }
+        if (userPlan === "free") {
+            setProUpgradeIntent("create_league");
+            setProUpgradeOpen(true);
+            return;
+        }
+        setToast({
+            id: Date.now(),
+            type: "error",
+            message: `Pro users can host up to ${ownedLeagueLimit} leagues.`,
+            duration: 3000
+        });
+    };
+
+    useEffect(() => {
+        if (
+            scope !== "leagues" ||
+            searchParams.get("intent") !== "create-league" ||
+            createLeagueIntentHandledRef.current ||
+            !currentUser
+        ) {
+            return;
+        }
+
+        createLeagueIntentHandledRef.current = true;
+        router.replace("/fantasy");
+        if (!leagueLimitReached) {
+            router.push("/cag-form?type=league");
+            return;
+        }
+        if (userPlan === "free") {
+            setProUpgradeIntent("create_league");
+            setProUpgradeOpen(true);
+            return;
+        }
+        setToast({
+            id: Date.now(),
+            type: "error",
+            message: `Pro users can host up to ${ownedLeagueLimit} leagues.`,
+            duration: 3000
+        });
+    }, [
+        currentUser,
+        userPlan,
+        leagueLimitReached,
+        ownedLeagueLimit,
+        router,
+        scope,
+        searchParams,
+        setToast,
+    ]);
+
     const actionButtonClassName =
-        "ui-accent-card group flex h-full w-full items-center justify-between gap-3 rounded-3xl border border-white/10 text-left shadow-sm transition";
+        "group flex h-full w-full items-center justify-between gap-3 rounded-3xl border border-white/10 bg-white/[0.045] text-left shadow-sm transition hover:border-white/20 hover:bg-white/[0.065]";
     const actionIconClassName =
-        "ui-accent-card-icon flex h-9 w-9 items-center justify-center sm:h-10 sm:w-10";
+        "flex h-9 w-9 items-center justify-center text-gray-300 transition-colors group-hover:text-white sm:h-10 sm:w-10";
+    const groupCardClassName =
+        "ui-accent-card relative flex h-full min-h-[128px] cursor-pointer flex-col rounded-[18px] border border-white/10 p-5 text-left shadow-lg shadow-black/25 transition sm:min-h-[136px] sm:p-6";
 
     const handleJoin = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -127,22 +283,48 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
     const handleLoadMore = () => {
         const nextPage = page + 1;
         setPage(nextPage);
-        dispatch(fetchMyGroupsRequest({ page: nextPage, limit: 10 }));
+        if (isArenaScope) {
+            dispatch(fetchArenaGroupsRequest({ page: nextPage, limit: 10 }));
+        } else {
+            dispatch(fetchMyGroupsRequest({ page: nextPage, limit: 10 }));
+        }
     };
 
-    if (groupLoading && (!myGroups || page === 1)) {
+    if (scopedLoading && (!scopedGroups || page === 1)) {
         return <GroupsTabSkeleton />
     }
 
     return (
         <div className={`flex flex-col gap-4 ${variant === "embedded" ? "" : "text-white"}`}>
+            <div>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">your communities</p>
+                <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">
+                    {scope === "arenas" ? "Arenas" : "Leagues"}
+                </h1>
+            </div>
             <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
                 <button
+                    ref={startGroupButtonRef}
                     type="button"
-                    onClick={() => router.push("/cag-form")}
+                    // Carry the tab's type into the create form so "Start a new
+                    // arena" doesn't open with League preselected.
+                    onClick={handleStartGroup}
                     className={`${actionButtonClassName} col-span-2 min-h-[88px] px-5 py-4 lg:col-span-1 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Start a new group</p>
+                    <span>
+                        <span className="block text-sm font-semibold text-white">
+                            {scope === "arenas" ? "Create a new arena" : "Start a new league"}
+                        </span>
+                        <span className="mt-1 block text-xs leading-5 text-gray-400">
+                            {scope === "arenas"
+                                ? "$50 one-time unlock required before creation."
+                                : leagueLimitReached
+                                    ? userPlan === "free"
+                                        ? "Upgrade to Pro to host more leagues."
+                                        : "You have reached the Pro hosting limit."
+                                    : `${ownedLeagueCount}/${ownedLeagueLimit} owned League slots used.`}
+                        </span>
+                    </span>
                     <span
                         className={actionIconClassName}
                         aria-hidden
@@ -155,7 +337,9 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={openJoinModal}
                     className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Join a group</p>
+                    <p className="text-sm font-semibold text-white">
+                        Join {scope === "arenas" ? "an arena" : "a league"}
+                    </p>
                     <span
                         className={actionIconClassName}
                         aria-hidden
@@ -168,17 +352,28 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                     onClick={() => setShowScoringModal(true)}
                     className={`${actionButtonClassName} min-h-[72px] px-4 py-3 sm:px-5 sm:py-4 lg:min-h-[88px]`}
                 >
-                    <p className="text-sm font-semibold text-white">Group scoring</p>
+                    <p className="text-sm font-semibold text-white">{scope === "arenas" ? "Arena" : "League"} scoring</p>
                     <span className={actionIconClassName} aria-hidden>
                         <InfoIcon />
                     </span>
                 </button>
             </div>
 
+            {scope === "leagues" && planView ? (
+                <PlanMenuCard
+                    planView={planView}
+                    ownedLeagueCount={ownedLeagueCount}
+                    ownedLeagueLimit={ownedLeagueLimit}
+                    onUpgrade={() => openProUpgrade("plan")}
+                    onViewDetails={() => router.push("/app-settings/plan")}
+                    actionRef={planCardActionRef}
+                />
+            ) : null}
+
             <div className="flex h-full flex-col gap-4">
                 {sortedGroups.length === 0 ? (
                     <p className="text-sm text-gray-300">
-                        no groups yet; start a League or join one with an invite code to get started.
+                        No {scope} yet; start one or join with an invite code to get started.
                     </p>
                 ) : (
                     sortedGroups.slice(0, 2).map((group) => {
@@ -188,15 +383,15 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 key={group.id}
                                 role="button"
                                 tabIndex={0}
-                                onClick={() => router.push(`/league/${group.id}`)}
+                                onClick={() => router.push(getGroupPath(group.group_type, group.id))}
                                 onKeyDown={(event) => {
                                     if (event.target !== event.currentTarget) return;
                                     if (event.key === "Enter" || event.key === " ") {
                                         event.preventDefault();
-                                        router.push(`/league/${group.id}`);
+                                        router.push(getGroupPath(group.group_type, group.id));
                                     }
                                 }}
-                                className="relative flex h-full min-h-[128px] cursor-pointer flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-5 text-left shadow-lg shadow-black/25 transition hover:border-sky-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70 sm:min-h-[136px] sm:p-6"
+                                className={groupCardClassName}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div
@@ -210,7 +405,13 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                         <span aria-hidden className="text-gray-600">
                                             ·
                                         </span>
-                                        <span className="text-gray-300">{isCommissioner ? "OWNER" : "MEMBER"}</span>
+                                        <span className="text-gray-300">
+                                            {isCommissioner
+                                                ? "OWNER"
+                                                : group.current_user_member?.role === "manager"
+                                                    ? "MANAGER"
+                                                    : "MEMBER"}
+                                        </span>
                                     </div>
                                     <InviteCodeCopy code={group?.invite_code} />
                                 </div>
@@ -250,15 +451,15 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                 key={group.id}
                                 role="button"
                                 tabIndex={0}
-                                onClick={() => router.push(`/league/${group.id}`)}
+                                onClick={() => router.push(getGroupPath(group.group_type, group.id))}
                                 onKeyDown={(event) => {
                                     if (event.target !== event.currentTarget) return;
                                     if (event.key === "Enter" || event.key === " ") {
                                         event.preventDefault();
-                                        router.push(`/league/${group.id}`);
+                                        router.push(getGroupPath(group.group_type, group.id));
                                     }
                                 }}
-                                className="relative flex h-full min-h-[128px] cursor-pointer flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-5 text-left shadow-lg shadow-black/25 transition hover:border-sky-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70 sm:min-h-[136px] sm:p-6"
+                                className={groupCardClassName}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div
@@ -272,7 +473,13 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                                         <span aria-hidden className="text-gray-600">
                                             ·
                                         </span>
-                                        <span className="text-gray-300">{isCommissioner ? "OWNER" : "MEMBER"}</span>
+                                        <span className="text-gray-300">
+                                            {isCommissioner
+                                                ? "OWNER"
+                                                : group.current_user_member?.role === "manager"
+                                                    ? "MANAGER"
+                                                    : "MEMBER"}
+                                        </span>
                                     </div>
                                     <InviteCodeCopy code={group?.invite_code} />
                                 </div>
@@ -303,15 +510,15 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 </div>
             )}
 
-            {hasMore && (
+            {scopedHasMore && (
                 <div className="flex justify-center pt-2">
                     <button
                         type="button"
                         onClick={handleLoadMore}
-                        disabled={groupLoading}
+                        disabled={scopedLoading}
                         className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-2.5 text-sm font-semibold text-gray-200 transition hover:border-emerald-400/50 hover:bg-emerald-500/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {groupLoading ? (
+                        {scopedLoading ? (
                             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                         ) : null}
                         Show more
@@ -367,6 +574,18 @@ const LeaguesTab = ({ variant = "standalone" }: GroupsTabProps) => {
                 onClose={() => setShowScoringModal(false)}
                 variant="league"
             />
+
+            {scope === "leagues" ? (
+                <ProLifetimeUpgradeFlow
+                    open={proUpgradeOpen}
+                    onClose={closeProUpgrade}
+                    returnFocusRef={
+                        proUpgradeIntent === "create_league"
+                            ? startGroupButtonRef
+                            : planCardActionRef
+                    }
+                />
+            ) : null}
         </div>
     );
 };

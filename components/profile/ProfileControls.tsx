@@ -1,318 +1,240 @@
 "use client";
 
-import { useIsMobile } from "@/lib/utils/helpers";
-import Link from "next/link";
-import { useEffect, useRef } from "react";
-import { CheckIcon, ChevronUpDownIcon } from "../ui/SvgIcons";
+import type { RefObject } from "react";
+import PostComposerIcon from "@/components/ui/PostComposerIcon";
+import {
+    CONFIDENCE_FILTER_OPTIONS,
+    PROFILE_FILTER_DEFAULTS,
+    RESULT_FILTER_OPTIONS,
+    SORT_OPTIONS,
+    TYPE_FILTER_OPTIONS,
+    getProfileFilterLabel,
+    type ConfidenceFilter,
+    type ResultFilter,
+    type SortOption,
+    type TypeFilter,
+} from "./profileFilters";
 
-export type ResultFilter = "all" | "win" | "loss" | "pending" | "void";
-export type TypeFilter = "all" | "straight" | "combo";
-export type ConfidenceFilter = "all" | "HIGH" | "MEDIUM" | "LOW";
-export type SortOption =
-    | "newest"
-    | "oldest"
-    | "highestXp"
-    | "mostLegs";
+export type {
+    ConfidenceFilter,
+    ResultFilter,
+    SortOption,
+    TypeFilter,
+} from "./profileFilters";
 
 type ProfileControlsProps = {
     resultFilter: ResultFilter;
     typeFilter: TypeFilter;
     confidenceFilter: ConfidenceFilter;
     sortOption: SortOption;
-    variant?: "card" | "embedded";
-    showPostLock?: boolean;
+    filterDrawerOpen?: boolean;
+    filterDrawerTriggerRef?: RefObject<HTMLButtonElement | null>;
+    scoringRulesOpen?: boolean;
+    postComposerOpen?: boolean;
+    postComposerTriggerRef?: RefObject<HTMLButtonElement | null>;
+    onShowScoringRules?: () => void;
+    onOpenFilterDrawer: () => void;
+    onOpenPostComposer?: () => void;
     onResultChange: (next: ResultFilter) => void;
     onTypeChange: (next: TypeFilter) => void;
     onConfidenceChange: (next: ConfidenceFilter) => void;
     onSortChange: (next: SortOption) => void;
 };
 
+type ActiveFilter = {
+    key: string;
+    label: string;
+    onRemove: () => void;
+};
+
+const FilterIcon = () => (
+    <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        className="h-5 w-5"
+    >
+        <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M8 15v4" />
+    </svg>
+);
+
+const ScoringIcon = () => (
+    <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5 shrink-0"
+    >
+        <path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+        <path d="M8 9h4M8 13h3M8 17h5" />
+        <circle cx="16" cy="11.5" r="1.5" />
+    </svg>
+);
+
+const RemoveIcon = () => (
+    <svg
+        aria-hidden
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        className="h-3.5 w-3.5"
+    >
+        <path d="m4 4 8 8M12 4l-8 8" />
+    </svg>
+);
+
 const ProfileControls = ({
     resultFilter,
     typeFilter,
     confidenceFilter,
     sortOption,
-    variant = "card",
-    showPostLock = false,
+    filterDrawerOpen = false,
+    filterDrawerTriggerRef,
+    scoringRulesOpen = false,
+    postComposerOpen = false,
+    postComposerTriggerRef,
+    onShowScoringRules,
+    onOpenFilterDrawer,
+    onOpenPostComposer,
     onResultChange,
     onTypeChange,
     onConfidenceChange,
     onSortChange,
 }: ProfileControlsProps) => {
-    const isMobile = useIsMobile();
-    const resultOptions: Array<{ value: ResultFilter; label: string }> = [
-        { value: "all", label: "All" },
-        { value: "win", label: "Wins" },
-        { value: "loss", label: "Losses" },
-        { value: "pending", label: "Pending" },
-        { value: "void", label: "Void" },
-    ];
-    const typeOptions: Array<{ value: TypeFilter; label: string }> = [
-        { value: "all", label: "All" },
-        { value: "straight", label: "Straight" },
-        { value: "combo", label: "Combo" },
-    ];
-    const confidenceOptions: Array<{ value: ConfidenceFilter; label: string }> = [
-        { value: "all", label: "All" },
-        { value: "HIGH", label: "High" },
-        { value: "MEDIUM", label: "Medium" },
-        { value: "LOW", label: "Low" },
-    ];
-    const sortOptions: Array<{ value: SortOption; label: string }> = [
-        { value: "newest", label: "Newest" },
-        { value: "oldest", label: "Oldest" },
-        { value: "highestXp", label: "Highest XP" },
-    ];
+    const activeFilters: ActiveFilter[] = [];
 
-    const hasActiveFilters =
-        resultFilter !== "all" ||
-        typeFilter !== "all" ||
-        confidenceFilter !== "all" ||
-        sortOption !== "newest";
-
-    const handleResultChange = (next: ResultFilter) => {
-        onResultChange(next);
-    };
-
-    const handleTypeChange = (next: TypeFilter) => {
-        onTypeChange(next);
-    };
-
-    const handleConfidenceChange = (next: ConfidenceFilter) => {
-        onConfidenceChange(next);
-    };
-
-    const handleSortChange = (next: SortOption) => {
-        onSortChange(next);
-    };
-
-    const handleReset = () => {
-        onResultChange("all");
-        onTypeChange("all");
-        onConfidenceChange("all");
-        onSortChange("newest");
-    };
-
-    const resultMenuRef = useRef<HTMLDetailsElement | null>(null);
-    const sortMenuRef = useRef<HTMLDetailsElement | null>(null);
-    const typeMenuRef = useRef<HTMLDetailsElement | null>(null);
-    const confidenceMenuRef = useRef<HTMLDetailsElement | null>(null);
-
-    useEffect(() => {
-        const handleClick = (event: MouseEvent) => {
-            const target = event.target as Node | null;
-            const menus = [
-                resultMenuRef.current,
-                sortMenuRef.current,
-                typeMenuRef.current,
-                confidenceMenuRef.current,
-            ].filter(Boolean) as HTMLDetailsElement[];
-
-            if (target && menus.some((menu) => menu.contains(target))) return;
-            menus.forEach((menu) => {
-                menu.open = false;
-            });
-        };
-
-        const handleEscape = (event: KeyboardEvent) => {
-            if (event.key !== "Escape") return;
-            const menus = [
-                resultMenuRef.current,
-                sortMenuRef.current,
-                typeMenuRef.current,
-                confidenceMenuRef.current,
-            ].filter(Boolean) as HTMLDetailsElement[];
-            menus.forEach((menu) => {
-                menu.open = false;
-            });
-        };
-
-        document.addEventListener("mousedown", handleClick);
-        document.addEventListener("keydown", handleEscape);
-        return () => {
-            document.removeEventListener("mousedown", handleClick);
-            document.removeEventListener("keydown", handleEscape);
-        };
-    }, [resultMenuRef, sortMenuRef, typeMenuRef, confidenceMenuRef]);
-
-    const handleMenuToggle = (current: HTMLDetailsElement) => {
-        if (!current.open) return;
-        const menus = [
-            resultMenuRef.current,
-            sortMenuRef.current,
-            typeMenuRef.current,
-            confidenceMenuRef.current,
-        ].filter(Boolean) as HTMLDetailsElement[];
-        menus.forEach((menu) => {
-            if (menu !== current) {
-                menu.open = false;
-            }
+    if (resultFilter !== PROFILE_FILTER_DEFAULTS.result) {
+        activeFilters.push({
+            key: "result",
+            label: `Result: ${getProfileFilterLabel(RESULT_FILTER_OPTIONS, resultFilter)}`,
+            onRemove: () => onResultChange(PROFILE_FILTER_DEFAULTS.result),
         });
+    }
+    if (typeFilter !== PROFILE_FILTER_DEFAULTS.type) {
+        activeFilters.push({
+            key: "type",
+            label: `Type: ${getProfileFilterLabel(TYPE_FILTER_OPTIONS, typeFilter)}`,
+            onRemove: () => onTypeChange(PROFILE_FILTER_DEFAULTS.type),
+        });
+    }
+    if (confidenceFilter !== PROFILE_FILTER_DEFAULTS.confidence) {
+        activeFilters.push({
+            key: "confidence",
+            label: `Confidence: ${getProfileFilterLabel(
+                CONFIDENCE_FILTER_OPTIONS,
+                confidenceFilter
+            )}`,
+            onRemove: () => onConfidenceChange(PROFILE_FILTER_DEFAULTS.confidence),
+        });
+    }
+    if (sortOption !== PROFILE_FILTER_DEFAULTS.sort) {
+        activeFilters.push({
+            key: "sort",
+            label: `Sort: ${getProfileFilterLabel(SORT_OPTIONS, sortOption)}`,
+            onRemove: () => onSortChange(PROFILE_FILTER_DEFAULTS.sort),
+        });
+    }
+
+    const removeFilter = (filter: ActiveFilter) => {
+        filter.onRemove();
+        window.requestAnimationFrame(() => filterDrawerTriggerRef?.current?.focus());
     };
-
-    const handleMenuSelect = <T extends string>(
-        menuRef: { current: HTMLDetailsElement | null },
-        onChange: (next: T) => void,
-        next: T
-    ) => {
-        onChange(next);
-        if (menuRef.current) {
-            menuRef.current.open = false;
-        }
-    };
-
-    const compactSelectClass =
-        "w-full appearance-none rounded-2xl border border-white/10 bg-white/5 px-1.5 py-1 pr-6 text-[10px] text-white sm:px-3 sm:py-2 sm:pr-8 sm:text-sm";
-
-    const dropdownSummaryClass = `${compactSelectClass} relative cursor-pointer list-none text-left [&::-webkit-details-marker]:hidden`;
-    const dropdownMenuClass =
-        "absolute left-0 right-0 z-30 mt-2 min-w-full rounded-2xl border border-white/10 bg-black/90 p-1 text-[9px] text-white shadow-lg backdrop-blur sm:text-[11px]";
-    const dropdownOptionClass =
-        "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left transition whitespace-nowrap";
-
-    const MenuSelect = <T extends string,>({
-        value,
-        options,
-        onChange,
-        menuRef,
-        ariaLabel,
-        iconClassName = "h-3 w-3 sm:h-4 sm:w-4",
-    }: {
-        value: T;
-        options: Array<{ value: T; label: string }>;
-        onChange: (next: T) => void;
-        menuRef: { current: HTMLDetailsElement | null };
-        ariaLabel: string;
-        iconClassName?: string;
-    }) => {
-        const selectedLabel =
-            options.find((option) => option.value === value)?.label ??
-            options[0]?.label ??
-            "All";
-
-        return (
-            <details
-                ref={menuRef}
-                className="relative w-full"
-                onToggle={(event) => {
-                    if (event.currentTarget.open) {
-                        handleMenuToggle(event.currentTarget);
-                    }
-                }}
-            >
-                <summary className={dropdownSummaryClass} aria-label={ariaLabel}>
-                    <span className="block truncate">{selectedLabel}</span>
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/70">
-                        <ChevronUpDownIcon className={iconClassName} />
-                    </span>
-                </summary>
-                <div role="listbox" aria-label={ariaLabel} className={dropdownMenuClass}>
-                    {options.map((option) => {
-                        const selected = option.value === value;
-                        return (
-                            <button
-                                key={option.value}
-                                type="button"
-                                role="option"
-                                aria-selected={selected}
-                                onClick={() => handleMenuSelect(menuRef, onChange, option.value)}
-                                className={`${dropdownOptionClass} ${selected ? "bg-white/15 text-white" : "text-gray-200 hover:bg-white/10"
-                                    }`}
-                            >
-                                <span>{option.label}</span>
-                                {selected && !isMobile ? (
-                                    <CheckIcon />
-                                ) : null}
-                            </button>
-                        );
-                    })}
-                </div>
-            </details>
-        );
-    };
-
-    const wrapperClass = `relative space-y-4 ${variant === "card"
-        ? "overflow-hidden rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-1)] p-5 shadow-[var(--shadow-soft)]"
-        : ""
-        }`;
+    const showProfileActions = Boolean(onShowScoringRules && onOpenPostComposer);
 
     return (
-        <section className={wrapperClass}>
-            <div className="relative space-y-4">
-                <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4" />
-                <div className="grid grid-cols-4 gap-1.5 sm:gap-3 md:gap-4">
-                    <div className="min-w-0 space-y-2 text-sm">
-                        <span className="block text-[9px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[11px]">
-                            Result
-                        </span>
-                        <MenuSelect
-                            ariaLabel="Result"
-                            value={resultFilter}
-                            options={resultOptions}
-                            onChange={handleResultChange}
-                            menuRef={resultMenuRef}
-                            iconClassName="h-3 w-3"
-                        />
-                    </div>
-                    <div className="min-w-0 space-y-2 text-sm">
-                        <span className="block text-[9px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[11px]">
-                            Sort by
-                        </span>
-                        <MenuSelect
-                            ariaLabel="Sort by"
-                            value={sortOption}
-                            options={sortOptions}
-                            onChange={handleSortChange}
-                            menuRef={sortMenuRef}
-                        />
-                    </div>
-                    <div className="min-w-0 space-y-2 text-sm">
-                        <span className="block text-[9px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[11px]">
-                            Type
-                        </span>
-                        <MenuSelect
-                            ariaLabel="Type"
-                            value={typeFilter}
-                            options={typeOptions}
-                            onChange={handleTypeChange}
-                            menuRef={typeMenuRef}
-                        />
-                    </div>
-                    <div className="min-w-0 space-y-2 text-sm">
-                        <span className="block text-[9px] uppercase tracking-wide text-[var(--text-secondary)] sm:text-[11px]">
-                            Confidence
-                        </span>
-                        <MenuSelect
-                            ariaLabel="Confidence"
-                            value={confidenceFilter}
-                            options={confidenceOptions}
-                            onChange={handleConfidenceChange}
-                            menuRef={confidenceMenuRef}
-                        />
-                    </div>
-                </div>
-                <div className={`flex items-center ${showPostLock ? "justify-between" : "justify-end"}`}>
-                    {showPostLock && (
-                        <Link
-                            href="/pick-builder?intent=post"
-                            className="inline-flex items-center text-[11px] font-semibold uppercase tracking-wide text-sky-200 transition hover:text-sky-100 md:text-sm"
-                        >
-                            post a pick &rarr;
-                        </Link>
-                    )}
+        <section
+            aria-label="Profile post controls"
+            className="-mx-5 border-y border-white/10 bg-black px-5 py-3 sm:-mx-6 sm:px-6"
+        >
+            <div
+                className={
+                    showProfileActions
+                        ? "grid grid-cols-3 items-center gap-1.5 sm:gap-3"
+                        : "flex items-center justify-end"
+                }
+            >
+                {onShowScoringRules ? (
                     <button
                         type="button"
-                        onClick={handleReset}
-                        disabled={!hasActiveFilters}
-                        className={`rounded-2xl border px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition md:px-3 md:py-2 md:text-sm ${hasActiveFilters
-                            ? "border-rose-400/40 bg-gradient-to-br from-rose-500/30 via-rose-400/10 to-black/40 text-rose-100 hover:border-rose-300/70 hover:text-white"
-                            : "border-white/10 bg-white/5 text-[var(--text-muted)] opacity-60"
-                            }`}
+                        onClick={onShowScoringRules}
+                        aria-haspopup="dialog"
+                        aria-expanded={scoringRulesOpen}
+                        className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/[0.04] px-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-200 transition-colors hover:border-white/30 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none sm:gap-2 sm:px-3.5 sm:text-xs sm:tracking-[0.1em]"
                     >
-                        Reset
+                        <span>Scoring</span>
+                        <ScoringIcon />
                     </button>
-                </div>
+                ) : null}
+
+                {onOpenPostComposer ? (
+                    <button
+                        ref={postComposerTriggerRef}
+                        type="button"
+                        onClick={onOpenPostComposer}
+                        aria-haspopup="dialog"
+                        aria-expanded={postComposerOpen}
+                        className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/[0.04] px-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-200 transition-colors hover:border-white/30 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none sm:gap-2 sm:px-3.5 sm:text-xs sm:tracking-[0.1em]"
+                    >
+                        <span>New post</span>
+                        <PostComposerIcon className="h-5 w-5" />
+                    </button>
+                ) : null}
+
+                <button
+                    ref={filterDrawerTriggerRef}
+                    type="button"
+                    onClick={onOpenFilterDrawer}
+                    aria-label={
+                        activeFilters.length
+                            ? `Filters, ${activeFilters.length} active`
+                            : "Filters"
+                    }
+                    aria-haspopup="dialog"
+                    aria-expanded={filterDrawerOpen}
+                    className={`relative inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 bg-white/[0.04] px-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-200 transition-colors hover:border-white/30 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transition-none sm:gap-2 sm:px-3.5 sm:text-xs sm:tracking-[0.1em] ${showProfileActions ? "w-full" : "w-auto"
+                        }`}
+                >
+                    <span>Filters</span>
+                    <FilterIcon />
+                    {activeFilters.length ? (
+                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-bold text-black shadow-sm shadow-black/60">
+                            {activeFilters.length}
+                        </span>
+                    ) : null}
+                </button>
             </div>
+
+            {activeFilters.length ? (
+                <div
+                    role="group"
+                    aria-label="Active post filters"
+                    className="mt-3 flex flex-wrap gap-2"
+                >
+                    {activeFilters.map((filter) => (
+                        <button
+                            key={filter.key}
+                            type="button"
+                            aria-label={`Remove ${filter.label} filter`}
+                            onClick={() => removeFilter(filter)}
+                            className="group inline-flex min-h-9 items-center gap-1.5 px-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:text-white focus-visible:underline focus-visible:decoration-white/50 focus-visible:underline-offset-4 motion-reduce:transition-none"
+                        >
+                            <span>{filter.label}</span>
+                            <span className="text-rose-400 transition-colors group-hover:text-rose-300 group-focus-visible:text-rose-300 motion-reduce:transition-none">
+                                <RemoveIcon />
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
         </section>
     );
 };

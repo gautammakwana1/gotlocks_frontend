@@ -50,6 +50,12 @@ const PostFeed = ({
         ? "rounded-3xl border border-[var(--border-soft)] bg-[var(--surface-1)] p-5 shadow-[var(--shadow-soft)]"
         : ""
         }`;
+    // Embedded in the profile page the rows bleed to the card edge to line up
+    // with ProfileHeader's -mx-5 sm:-mx-6; the standalone card stays inset.
+    const feedRowsClass =
+        variant === "embedded"
+            ? "-mx-5 divide-y divide-white/10 overflow-visible border-b border-white/10 sm:-mx-6"
+            : "-mx-5 divide-y divide-white/10 overflow-visible border-y border-white/10 sm:mx-0";
 
     return (
         <section className={wrapperClass}>
@@ -67,7 +73,7 @@ const PostFeed = ({
                 </div>
             ) : null}
 
-            <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+            <div className={feedRowsClass}>
                 {picks.map((pick, index) => (
                     <div
                         key={pick.id}
@@ -81,6 +87,7 @@ const PostFeed = ({
                             onDelete={onDeletePick}
                             onReaction={onReaction}
                             highlightPickId={highlightPickId}
+                            className={index % 2 === 1 ? "bg-white/[0.025]" : undefined}
                         />
                     </div>
                 ))}
@@ -101,11 +108,8 @@ const PostFeed = ({
                 )}
             </div>
             {showFooterCount ? (
-                <div>
-                    <div className="-mx-5 h-px bg-white/10 sm:mx-0" />
-                    <div className="mt-3 flex justify-end text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">
-                        {countLabel}
-                    </div>
+                <div className="flex justify-end text-[11px] uppercase tracking-[0.18em] text-[var(--text-secondary)]">
+                    {countLabel}
                 </div>
             ) : null}
         </section>

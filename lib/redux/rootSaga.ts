@@ -17,6 +17,10 @@ import socialSaga from "./sagas/socialSaga";
 import soccerSaga from "./sagas/soccerSaga";
 import contestSaga from "./sagas/contestSaga";
 import planSaga from "./sagas/planSaga";
+import arenaSaga from "./sagas/arenaSaga";
+import feedContestSaga from "./sagas/feedContestSaga";
+import feedContestScheduleSaga from "./sagas/feedContestScheduleSaga";
+import feedContestOddsSaga from "./sagas/feedContestOddsSaga";
 
 export default function* rootSaga() {
 	yield all([
@@ -38,5 +42,9 @@ export default function* rootSaga() {
 		fork(soccerSaga),
 		fork(contestSaga),
 		fork(planSaga),
+		fork(arenaSaga),
+		fork(feedContestSaga),
+		fork(feedContestScheduleSaga),
+		fork(feedContestOddsSaga),
 	]);
 }

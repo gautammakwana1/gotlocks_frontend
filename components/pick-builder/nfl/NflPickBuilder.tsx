@@ -2861,7 +2861,7 @@ export const NflPickBuilder = ({
         }
 
         return (
-            <div className="-mx-5 divide-y divide-white/10 sm:mx-0">
+            <div className="pick-builder-game-list -mx-5 divide-y divide-white/10 sm:mx-0">
                 {filteredGames.map((game) => {
                     const spreadAway = findMainTeamOdd(game, "Point Spread", game.away_team);
                     const spreadHome = findMainTeamOdd(game, "Point Spread", game.home_team);
@@ -2936,9 +2936,9 @@ export const NflPickBuilder = ({
                             </div>
 
                             <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
-                                <div className="w-full space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
+                                <div className="w-fit space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
                                     <div
-                                        className="grid gap-1 text-[10px] uppercase tracking-wide text-gray-500"
+                                        className="grid justify-end gap-1 text-[10px] uppercase tracking-wide text-gray-500"
                                         style={{
                                             gridTemplateColumns: "repeat(3, var(--table-chip-width))",
                                         }}
@@ -2948,7 +2948,7 @@ export const NflPickBuilder = ({
                                         <span className="text-center">Total</span>
                                     </div>
                                     <div
-                                        className="grid gap-1"
+                                        className="grid justify-end gap-1"
                                         style={{
                                             gridTemplateColumns: "repeat(3, var(--table-chip-width))",
                                         }}
@@ -2976,7 +2976,7 @@ export const NflPickBuilder = ({
                                         )}
                                     </div>
                                     <div
-                                        className="grid gap-1 -mt-3 sm:mt-0"
+                                        className="grid justify-end gap-1 -mt-3 sm:mt-0"
                                         style={{
                                             gridTemplateColumns: "repeat(3, var(--table-chip-width))",
                                         }}

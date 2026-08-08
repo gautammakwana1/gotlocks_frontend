@@ -58,12 +58,17 @@ function* handleCreateCheckoutSession(): SagaIterator {
             {}
         );
         const payload = response.data as { data?: { url?: string | null } };
-        yield put(createCheckoutSessionSuccess());
-
         const url = payload.data?.url;
-        if (url && typeof window !== "undefined") {
+        const redirecting = Boolean(url) && typeof window !== "undefined";
+
+        // `redirecting` keeps the confirm button disabled through the navigation —
+        // see createCheckoutSessionSuccess. Dispatched BEFORE the assignment below
+        // so the button is already latched when the browser starts unloading.
+        yield put(createCheckoutSessionSuccess({ redirecting }));
+
+        if (redirecting) {
             // Redirect the browser to Stripe's hosted checkout page.
-            window.location.href = url;
+            window.location.href = url as string;
         } else {
             // No URL means the user is already Pro (or nothing to pay) — refresh.
             yield put(fetchPlanOverviewRequest());

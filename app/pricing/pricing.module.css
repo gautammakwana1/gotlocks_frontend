@@ -1,0 +1,134 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 50% -8%, rgba(37, 99, 235, 0.18), transparent 36rem),
+    radial-gradient(circle at 92% 42%, rgba(14, 165, 233, 0.06), transparent 30rem),
+    #030303;
+}
+
+.publicHeader {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safeInline {
+  padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+  padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+}
+
+.skipLink:focus {
+  top: max(1rem, env(safe-area-inset-top, 0px));
+  left: max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.page::before {
+  position: absolute;
+  z-index: -2;
+  inset: 0 0 auto;
+  height: 48rem;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
+  background-size: 52px 52px;
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 90%);
+  pointer-events: none;
+}
+
+.heroGlow {
+  position: absolute;
+  z-index: -1;
+  top: -10rem;
+  left: 50%;
+  width: min(72rem, 115vw);
+  height: 30rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.13), transparent 68%);
+  filter: blur(18px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.heroAccent {
+  color: transparent;
+  background: linear-gradient(120deg, #f8fafc 2%, #bfdbfe 46%, #60a5fa 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.proCard {
+  background:
+    linear-gradient(145deg, rgba(14, 165, 233, 0.12), rgba(15, 23, 42, 0.44) 46%, rgba(255, 255, 255, 0.025)),
+    #07090d;
+  box-shadow: 0 24px 70px -48px rgba(56, 189, 248, 0.55);
+}
+
+.arenaCard {
+  background:
+    linear-gradient(145deg, rgba(139, 92, 246, 0.105), rgba(24, 18, 40, 0.34) 46%, rgba(255, 255, 255, 0.022)),
+    #070709;
+  box-shadow: 0 24px 70px -52px rgba(167, 139, 250, 0.45);
+}
+
+.planCarousel {
+  display: flex;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.planCarousel::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.planCarousel > article {
+  width: 100%;
+  min-width: 100%;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+@media (min-width: 640px) {
+  .safeInline {
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+  }
+}
+
+@media (min-width: 1024px) {
+  .safeInline {
+    padding-right: max(2rem, env(safe-area-inset-right, 0px));
+    padding-left: max(2rem, env(safe-area-inset-left, 0px));
+  }
+
+  .planCarousel {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+
+  .planCarousel > article {
+    width: auto;
+    min-width: 0;
+    flex: initial;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    scroll-behavior: auto;
+  }
+
+  .planCarousel {
+    scroll-behavior: auto;
+  }
+}

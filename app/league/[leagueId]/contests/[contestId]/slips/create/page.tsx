@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { formatDateTime } from "@/lib/utils/date";
@@ -9,7 +9,9 @@ import { DEFAULT_ELIGIBLE_WINDOW_DAYS } from "@/lib/utils/games";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { CreateSlipPayload, Group, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
+import { CreateSlipPayload, RootState } from "@/lib/interfaces/interfaces";
+import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
+import useScopedGroup from "@/lib/groups/useScopedGroup";
 import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
 import { clearCreateSlipMessage, createSlipRequest } from "@/lib/redux/slices/slipSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
@@ -21,26 +23,6 @@ type FormErrors = {
     sports?: string;
     pickDeadline?: string;
     windowDays?: string;
-};
-
-export type GroupDataShape = Group | { group?: Group | null } | null;
-
-const hasNestedGroup = (
-    value: GroupDataShape
-): value is { group?: Group | null } => {
-    return Boolean(value && typeof value === "object" && "group" in value);
-};
-
-const extractGroup = (data: GroupDataShape): Group | null => {
-    if (!data) {
-        return null;
-    }
-
-    if (hasNestedGroup(data)) {
-        return data.group ?? null;
-    }
-
-    return data;
 };
 
 const WINDOW_DAY_OPTIONS = [1, 2, 3, 4, 5];
@@ -59,9 +41,16 @@ const ContestSlipCreatePage = () => {
     const currentUser = useCurrentUser();
     const plan = useUserPlan();
 
-    const rawGroup = useSelector((state: GroupSelector) => state.group.group);
-    const group = useMemo(() => extractGroup(rawGroup as GroupDataShape), [rawGroup]);
-    const { contest } = useSelector((state: RootState) => state.contest);
+    // The group slot is single-tenant and shared with every other League and Arena
+    // screen, so reading it raw hands this page the PREVIOUSLY viewed group on the
+    // first commit after a navigation — and this page writes `group.id` into the
+    // created slip. useScopedGroup returns the record only when it is this league's.
+    const scopedLeague = useScopedGroup(leagueId);
+    const group = scopedLeague.group;
+    const { contest: rawContest } = useSelector((state: RootState) => state.contest);
+    // Same hazard, same fix, for the contest slot: checked during RENDER so the
+    // gates below can never judge this page against the last contest viewed.
+    const contest = rawContest?.id === contestId ? rawContest : null;
     const { slip, loading: slipLoading, message: slipMessage, error: slipError } = useSelector((state: RootState) => state.slip);
 
     const [name, setName] = useState("");
@@ -82,6 +71,11 @@ const ContestSlipCreatePage = () => {
 
     useEffect(() => {
         if (!leagueId || !currentUser || !contestId) return;
+        // This route used to lean on whatever group the screen before it had left in
+        // the shared slot. Now that the read is scoped to `leagueId`, the fetch has to
+        // be made here too — otherwise a direct load or refresh of this URL would sit
+        // at "loading" forever. Every sibling league route already does this.
+        dispatch(fetchGroupByIdRequest({ groupId: leagueId }));
         dispatch(fetchContestByIdRequest({ contest_id: contestId }));
     }, [contestId, leagueId, currentUser, dispatch]);
 
@@ -180,8 +174,14 @@ const ContestSlipCreatePage = () => {
     ]);
 
     const canManage = currentUser?.userId === contest?.created_by || currentUser?.userId === group?.created_by;
-    if (!canManage || !permission.allowed || contest?.status === "ARCHIVED") {
-        router.replace(`/league/${group?.id}/contests/${contest?.id}`);
+    // Hold the gate until both records for THIS url have actually landed. The group
+    // read is fail-closed now, so judging while it is still in flight would bounce
+    // every direct load of this page — and it would bounce it to a url built from an
+    // absent group and contest. The redirect target uses the URL's own ids for the
+    // same reason: those can never be stale or missing.
+    const isResolving = scopedLeague.status === "loading" || !contest;
+    if (!isResolving && (!canManage || !permission.allowed || contest?.status === "ARCHIVED")) {
+        router.replace(`/league/${leagueId}/contests/${contestId}`);
         return null;
     }
 

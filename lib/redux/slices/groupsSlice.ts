@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { setStoredPlan } from "@/lib/plan/planStorage";
+import { mergeGroupPage } from "@/lib/groups/pagination";
 import type {
 	CreateGroupPayload,
 	FetchGroupsParams,
@@ -32,6 +33,7 @@ import type {
 	MembersData,
 	FetchMyGroupsPayload,
 	GroupObject,
+	GroupType,
 	ChatMessage,
 	FetchGroupChatsPayload,
 	FetchGroupChatsResponse,
@@ -42,6 +44,11 @@ import type {
 	GroupCounts,
 	GroupOwnerPlan,
 	FetchGroupOwnerPlanPayload,
+	CreateGroupSuccessPayload,
+	CreateGroupFailurePayload,
+	CommunityGroupsPage,
+	JoinCommunityFailurePayload,
+	JoinedCommunity,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -62,6 +69,12 @@ type GroupState = {
 	leaveLoading: boolean;
 	error: string | null;
 	message: string | null;
+	// Create-scoped mirrors of loading/error/message/group. See createGroupRequest.
+	createLoading: boolean;
+	createError: string | null;
+	createErrorStatus: number | null;
+	createMessage: string | null;
+	createdGroup: Group | null;
 	deleteMessage: string | null;
 	leaveMessage: string | null;
 	hasMoreLeaderboard: boolean;
@@ -70,6 +83,39 @@ type GroupState = {
 	membersPagination?: PaginationMetadata;
 	hasMore: boolean;
 	myGroups: GroupObject[] | null;
+	// All the caller's groups (leagues + arenas) from GET /group — kept separate
+	// from myGroups (leagues-only) so the home page can list both without changing
+	// the Leagues-scoped consumers of myGroups.
+	allGroups: GroupObject[] | null;
+	allGroupsHasMore: boolean;
+	allGroupsLoading: boolean;
+	// League hub tabs. GET /group/owned-leagues is role='commissioner' only;
+	// GET /group/joined-leagues is every OTHER role. Two independently paged
+	// lists, each with its own page/hasMore/total — deliberately NOT one list
+	// partitioned client-side, which would make both tab counts wrong as soon as
+	// the first page didn't hold everything.
+	ownedLeagues: GroupObject[] | null;
+	ownedLeaguesLoading: boolean;
+	ownedLeaguesError: string | null;
+	ownedLeaguesHasMore: boolean;
+	ownedLeaguesTotal: number;
+	joinedLeagues: GroupObject[] | null;
+	joinedLeaguesLoading: boolean;
+	joinedLeaguesError: string | null;
+	joinedLeaguesHasMore: boolean;
+	joinedLeaguesTotal: number;
+	// POST /group/join-league. `joinLeagueCrossType` is set when the code resolved
+	// to an Arena (409) so the dialog can point at the Arenas tab instead of
+	// showing a dead-end error.
+	joinLeagueLoading: boolean;
+	joinLeagueError: string | null;
+	joinLeagueMessage: string | null;
+	joinLeagueCrossType: boolean;
+	joinLeagueNotFound: boolean;
+	joinedLeague: JoinedCommunity | null;
+	// The membership row returned by the last successful invite-code join, so
+	// the join UI can tell WHICH community (and type) was joined.
+	joinedGroup: { group_id: string; group_type?: GroupType } | null;
 	chatMessages: ChatMessage[] | null;
 	loadingChats: boolean;
 	chatsHasMore: boolean;
@@ -98,6 +144,11 @@ const initialState: GroupState = {
 	deleteLoading: false,
 	error: null,
 	message: null,
+	createLoading: false,
+	createError: null,
+	createErrorStatus: null,
+	createMessage: null,
+	createdGroup: null,
 	deleteMessage: null,
 	leaveLoading: false,
 	leaveMessage: null,
@@ -105,6 +156,26 @@ const initialState: GroupState = {
 	loadingMembers: false,
 	hasMore: false,
 	myGroups: null,
+	allGroups: null,
+	allGroupsHasMore: false,
+	allGroupsLoading: false,
+	ownedLeagues: null,
+	ownedLeaguesLoading: false,
+	ownedLeaguesError: null,
+	ownedLeaguesHasMore: false,
+	ownedLeaguesTotal: 0,
+	joinedLeagues: null,
+	joinedLeaguesLoading: false,
+	joinedLeaguesError: null,
+	joinedLeaguesHasMore: false,
+	joinedLeaguesTotal: 0,
+	joinLeagueLoading: false,
+	joinLeagueError: null,
+	joinLeagueMessage: null,
+	joinLeagueCrossType: false,
+	joinLeagueNotFound: false,
+	joinedLeague: null,
+	joinedGroup: null,
 	chatMessages: null,
 	loadingChats: false,
 	chatsHasMore: true,
@@ -121,36 +192,58 @@ const groupSlice = createSlice({
 	initialState,
 	reducers: {
 
+		// The create lifecycle owns dedicated fields on purpose. `state.loading` is
+		// written by a dozen other request triads and `state.error`/`message`/`group`
+		// by more still, so a background fetch settling mid-create used to flip this
+		// screen's button, toast a foreign error, or fabricate a success card out of
+		// a stale group plus somebody else's message.
 		createGroupRequest: (state, action: PayloadAction<CreateGroupPayload>) => {
 			void action;
-			state.loading = true;
-			state.error = null;
+			state.createLoading = true;
+			state.createError = null;
+			state.createErrorStatus = null;
+			state.createMessage = null;
+			state.createdGroup = null;
 		},
-		createGroupSuccess: (state, action) => {
-			state.loading = false;
-			state.group = action.payload?.data.group;
-			state.message = action.payload?.message;
+		createGroupSuccess: (state, action: PayloadAction<CreateGroupSuccessPayload>) => {
+			state.createLoading = false;
+			state.createdGroup = action.payload.group ?? null;
+			state.createMessage = action.payload.message ?? null;
 		},
-		createGroupFailure: (state, action) => {
-			state.loading = false;
-			state.error = action.payload;
+		createGroupFailure: (state, action: PayloadAction<CreateGroupFailurePayload>) => {
+			state.createLoading = false;
+			state.createError = action.payload.message;
+			state.createErrorStatus = action.payload.status ?? null;
 		},
-		clearCreateGroupMessage(state) {
-			state.error = null;
-			state.message = null;
+		// A full reset, not a message clear: `createdGroup` IS the success signal, so
+		// leaving it behind would latch a success screen onto the next mount.
+		resetCreateGroupState(state) {
+			state.createLoading = false;
+			state.createError = null;
+			state.createErrorStatus = null;
+			state.createMessage = null;
+			state.createdGroup = null;
 		},
 
 		fetchAllGroupsRequest: (state, action: PayloadAction<FetchGroupsParams | undefined>) => {
 			void action;
-			state.loading = true;
+			state.allGroupsLoading = true;
 			state.error = null;
 		},
-		fetchAllGroupsSuccess: (state, action) => {
-			state.loading = false;
-			state.group = action.payload;
+		fetchAllGroupsSuccess: (state, action: PayloadAction<{ groups: GroupObject[], page: number, hasMore: boolean }>) => {
+			state.allGroupsLoading = false;
+			const { groups, page, hasMore } = action.payload;
+			state.allGroupsHasMore = hasMore;
+			if (page === 1) {
+				state.allGroups = groups;
+			} else {
+				const existingIds = new Set(state.allGroups?.map(g => g.id) || []);
+				const newUnique = groups.filter(g => !existingIds.has(g.id));
+				state.allGroups = [...(state.allGroups || []), ...newUnique];
+			}
 		},
 		fetchAllGroupFailure: (state, action) => {
-			state.loading = false;
+			state.allGroupsLoading = false;
 			state.error = action.payload;
 		},
 		clearFetchAllGroupMessage(state) {
@@ -184,8 +277,105 @@ const groupSlice = createSlice({
 			state.message = null;
 		},
 
-		fetchGroupByIdRequest: (state, action: PayloadAction<FetchGroupByIdPayload | undefined>) => {
+		// ---- League hub tabs (MVP2) -------------------------------------------
+		// GET /group/owned-leagues — the "Hosting" tab.
+		fetchOwnedLeaguesRequest: (state, action: PayloadAction<FetchMyGroupsPayload | undefined>) => {
 			void action;
+			state.ownedLeaguesLoading = true;
+			state.ownedLeaguesError = null;
+		},
+		fetchOwnedLeaguesSuccess: (state, action: PayloadAction<CommunityGroupsPage>) => {
+			const { groups, page, hasMore, total } = action.payload;
+			state.ownedLeaguesLoading = false;
+			state.ownedLeaguesHasMore = hasMore;
+			state.ownedLeaguesTotal = total;
+			state.ownedLeagues =
+				page === 1 ? groups : mergeGroupPage(state.ownedLeagues, groups);
+		},
+		fetchOwnedLeaguesFailure: (state, action: PayloadAction<string>) => {
+			state.ownedLeaguesLoading = false;
+			state.ownedLeaguesError = action.payload;
+		},
+
+		// GET /group/joined-leagues — the "Participating" tab.
+		fetchJoinedLeaguesRequest: (state, action: PayloadAction<FetchMyGroupsPayload | undefined>) => {
+			void action;
+			state.joinedLeaguesLoading = true;
+			state.joinedLeaguesError = null;
+		},
+		fetchJoinedLeaguesSuccess: (state, action: PayloadAction<CommunityGroupsPage>) => {
+			const { groups, page, hasMore, total } = action.payload;
+			state.joinedLeaguesLoading = false;
+			state.joinedLeaguesHasMore = hasMore;
+			state.joinedLeaguesTotal = total;
+			state.joinedLeagues =
+				page === 1 ? groups : mergeGroupPage(state.joinedLeagues, groups);
+		},
+		fetchJoinedLeaguesFailure: (state, action: PayloadAction<string>) => {
+			state.joinedLeaguesLoading = false;
+			state.joinedLeaguesError = action.payload;
+		},
+
+		// POST /group/join-league. Scoped to this flow instead of reusing
+		// `joinLoading`/`error`/`message`, which a dozen other triads also write —
+		// the hub polls these to decide whether to navigate, so a foreign write
+		// would push the user into an unrelated group.
+		joinLeagueRequest: (state, action: PayloadAction<InviteCodePayload>) => {
+			void action;
+			state.joinLeagueLoading = true;
+			state.joinLeagueError = null;
+			state.joinLeagueMessage = null;
+			state.joinLeagueCrossType = false;
+			state.joinLeagueNotFound = false;
+			state.joinedLeague = null;
+		},
+		joinLeagueSuccess: (state, action: PayloadAction<{ message?: string | null; group?: JoinedCommunity | null }>) => {
+			state.joinLeagueLoading = false;
+			state.joinLeagueMessage = action.payload.message ?? "League joined successfully.";
+			state.joinedLeague = action.payload.group ?? null;
+		},
+		joinLeagueFailure: (state, action: PayloadAction<JoinCommunityFailurePayload>) => {
+			state.joinLeagueLoading = false;
+			state.joinLeagueError = action.payload.message;
+			// A DEFINITE wrong-tab answer: 409 carrying the other type. `already a
+			// member` is also a 409 but carries no group_type, so it can't match.
+			//
+			// The server does not send this yet — joinLeagueByInviteCode collapses
+			// JOIN_GROUP_OUTCOME.wrongType into the same 404 as an unknown code,
+			// discarding the group_type the RPC already returns. Kept because the
+			// wiring is correct the moment that controller returns 409 + data.group_type.
+			state.joinLeagueCrossType =
+				action.payload.status === 409 && action.payload.group_type === "arena";
+			// Until then, 404 is ambiguous: it means "no League has this code", which
+			// covers both a typo AND a valid Arena code. `notFound` drives a hedged
+			// prompt that offers the Arena tab without claiming the code is bogus.
+			state.joinLeagueNotFound = action.payload.status === 404;
+		},
+		clearJoinLeagueState(state) {
+			state.joinLeagueLoading = false;
+			state.joinLeagueError = null;
+			state.joinLeagueMessage = null;
+			state.joinLeagueCrossType = false;
+			state.joinLeagueNotFound = false;
+			state.joinedLeague = null;
+		},
+
+		fetchGroupByIdRequest: (state, action: PayloadAction<FetchGroupByIdPayload | undefined>) => {
+			// Drop the previously loaded group as soon as a DIFFERENT one is asked for.
+			// Without this the old record stayed readable for the whole in-flight window,
+			// and consumers that BRANCH on it acted on the wrong group: the League page
+			// guards with `group.group_type === "arena"` and would router.replace to
+			// `/arena/${group.id}` — the PREVIOUS arena's id — before the League it was
+			// asked for ever arrived. Arena ids legitimately land in this slice (the
+			// arena contest-create and plan pages both fetch by id), so the stale value
+			// is an arena often enough for that redirect to fire.
+			//
+			// Scoped to an id CHANGE so a same-group refetch keeps its row on screen and
+			// does not flash a skeleton.
+			const requestedGroupId = action.payload?.groupId;
+			if (requestedGroupId && state.group?.id !== requestedGroupId) {
+				state.group = null;
+			}
 			state.loading = true;
 			state.error = null;
 		},
@@ -211,6 +401,7 @@ const groupSlice = createSlice({
 			state.joinLoading = false;
 			state.group = action.payload;
 			state.message = action.payload?.message;
+			state.joinedGroup = action.payload?.data?.group ?? null;
 		},
 		joinedGroupByInviteCodeFailure: (state, action) => {
 			state.joinLoading = false;
@@ -219,6 +410,7 @@ const groupSlice = createSlice({
 		clearJoinedGroupByInviteCodeMessage(state) {
 			state.error = null;
 			state.message = null;
+			state.joinedGroup = null;
 		},
 
 		removeGroupMemberRequest: (state, action: PayloadAction<MemberModificationPayload>) => {
@@ -706,11 +898,21 @@ export const {
 	createGroupRequest,
 	createGroupSuccess,
 	createGroupFailure,
-	clearCreateGroupMessage,
+	resetCreateGroupState,
 	fetchAllGroupsRequest,
 	fetchAllGroupsSuccess,
 	fetchAllGroupFailure,
 	clearFetchAllGroupMessage,
+	fetchOwnedLeaguesRequest,
+	fetchOwnedLeaguesSuccess,
+	fetchOwnedLeaguesFailure,
+	fetchJoinedLeaguesRequest,
+	fetchJoinedLeaguesSuccess,
+	fetchJoinedLeaguesFailure,
+	joinLeagueRequest,
+	joinLeagueSuccess,
+	joinLeagueFailure,
+	clearJoinLeagueState,
 	fetchGroupByIdRequest,
 	fetchGroupByIdSuccess,
 	fetchGroupByIdFailure,

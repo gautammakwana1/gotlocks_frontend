@@ -8,7 +8,6 @@ export type GroupLimits = {
 
 export type PlanLimits = {
     maxOwnedLeagues: number;
-    maxOwnedArenas: number;
 };
 
 export const FREE_LEAGUE_LIMITS: GroupLimits = {
@@ -34,11 +33,9 @@ export const LEAGUE_FEED_CONTEST_LIMITS: Record<HostingTier, number> = {
 export const PLAN_LIMITS: Record<UserPlan, PlanLimits> = {
     free: {
         maxOwnedLeagues: 2,
-        maxOwnedArenas: 0,
     },
     pro: {
         maxOwnedLeagues: 5,
-        maxOwnedArenas: 3,
     },
 };
 
@@ -121,6 +118,59 @@ export const normalizeLeagueSettings = (
                 league.max_active_contests > 0
                 ? league.max_active_contests
                 : limits.maxActiveContests,
+    };
+};
+
+/** Every League ceiling a given user plan grants. See getLeaguePlanCapacity. */
+export type LeaguePlanCapacity = {
+    /** The plan these numbers describe, after normalization. */
+    plan: UserPlan;
+    /** Hosting tier a League created on this plan is stamped with. */
+    hostingTier: HostingTier;
+    /** Leagues this plan may own (own = created_by the user). */
+    maxOwnedLeagues: number;
+    /** Regular members per League. */
+    maxMembers: number;
+    /** Active standard Slip contests per League. */
+    maxSlipContests: number;
+    /** Active Feed contests per League — a separate, independent allowance. */
+    maxFeedContests: number;
+    /** Standard + Feed combined, matching getCombinedContestCapacityLabel. */
+    maxTotalContests: number;
+};
+
+/**
+ * All League capacity ceilings for a user plan, in one call.
+ *
+ *   const { maxOwnedLeagues, maxMembers } = getLeaguePlanCapacity(user.plan);
+ *
+ * Accepts a raw/unknown plan string so callers can pass an API value straight
+ * through; anything that is not "pro" normalizes to "free".
+ *
+ * IMPORTANT — these are the defaults a plan GRANTS, not what an existing League
+ * has. Per-League ceilings key off the League's own `hosting_tier`, which is
+ * stamped from the owner's plan at creation (getLimitsForCreatedGroup) and does
+ * not change if the owner's plan changes later. A League row can also carry
+ * stored `max_members` / `max_active_contests` that override these. To render an
+ * existing League's capacity, use normalizeLeagueSettings(league) instead.
+ *
+ * Arenas are a separate product with their own hosting tiers and are not covered
+ * here — see getGroupLimits("arena", …) and the Arena hosting catalogue.
+ */
+export const getLeaguePlanCapacity = (plan?: string | null): LeaguePlanCapacity => {
+    const normalizedPlan = normalizeUserPlan(plan);
+    const hostingTier: HostingTier = normalizedPlan === "pro" ? "pro" : "free";
+    const limits = getGroupLimits("league", hostingTier);
+    const maxFeedContests = LEAGUE_FEED_CONTEST_LIMITS[hostingTier];
+
+    return {
+        plan: normalizedPlan,
+        hostingTier,
+        maxOwnedLeagues: PLAN_LIMITS[normalizedPlan].maxOwnedLeagues,
+        maxMembers: limits.maxMembers,
+        maxSlipContests: limits.maxActiveContests,
+        maxFeedContests,
+        maxTotalContests: limits.maxActiveContests + maxFeedContests,
     };
 };
 
@@ -296,40 +346,55 @@ export const getActiveContestCountsLabel = (league: LeagueSettingsInput, contest
     return `${contestsCounts}/${settings.max_active_contests} active contests`;
 };
 
-export const canCreateGroup = (
-    user: CurrentUser | undefined,
-    groupType: GroupType,
-    arenaCount: number,
-    leagueCount: number,
-): { allowed: true } | { allowed: false; error: string } => {
-    if (!user) {
+/**
+ * Owned-league caps mirrored from the backend's ONLY enforced create limit
+ * (groupController.createGroup: free plan && ownedLeagues >= 3 -> 403). Pro is
+ * unlimited. PLAN_LIMITS above encodes a different, older policy (2/5) whose only
+ * remaining consumer is canTransferGroupOwnership — do not merge the two without
+ * re-checking that function.
+ */
+export const FREE_MAX_OWNED_LEAGUES = 3;
+export const PRO_MAX_OWNED_LEAGUES: number | null = null; // unlimited
+
+export type CreateGroupGate =
+    | { allowed: true }
+    | { allowed: false; reason: "signed_out" | "league_limit"; error: string };
+
+/**
+ * Object param on purpose: the old positional signature was
+ * (user, groupType, arenaCount, leagueCount) — arena BEFORE league, the reverse of
+ * how /group/my-groups-counts reads — so transposing them failed silently.
+ */
+export const canCreateGroup = ({
+    signedIn,
+    plan,
+    groupType,
+    ownedLeagueCount,
+}: {
+    signedIn: boolean;
+    plan: UserPlan;
+    groupType: GroupType;
+    ownedLeagueCount: number;
+}): CreateGroupGate => {
+    if (!signedIn) {
         return {
             allowed: false,
+            reason: "signed_out",
             error: groupType === "arena" ? "Sign in to create an Arena." : "Sign in to create a league.",
         };
     }
 
-    const plan = normalizeUserPlan(user.plan);
+    // Arenas are intentionally uncapped on the client: the server enforces no arena
+    // limit, and the only number on the books (PLAN_LIMITS.free.maxOwnedArenas = 0,
+    // backend-side) would block the very $50 purchase this flow exists to sell.
     if (groupType === "arena") {
-        if (plan !== "pro") {
-            return { allowed: false, error: "Upgrade to Pro to create an Arena." };
-        }
-        if (arenaCount >= PLAN_LIMITS.pro.maxOwnedArenas) {
-            return { allowed: false, error: "Founding Pro includes up to 3 Arenas." };
-        }
         return { allowed: true };
     }
 
-    if (plan === "free") {
-        const maxOwnedLeagues = PLAN_LIMITS.free.maxOwnedLeagues;
-        if (leagueCount >= maxOwnedLeagues) {
-            return { allowed: false, error: "Free users can host up to 3 leagues." };
-        }
+    const limit = plan === "pro" ? PRO_MAX_OWNED_LEAGUES : FREE_MAX_OWNED_LEAGUES;
+    if (limit !== null && ownedLeagueCount >= limit) {
+        return { allowed: false, reason: "league_limit", error: `Free users can host up to ${limit} leagues.` };
     }
-
-    // if (getOwnedLeagueCount(leagues, user.userId) >= getOwnedLeagueLimit(plan)) {
-    //     return { allowed: false, error: getOwnedLeagueLimitError(plan) };
-    // }
 
     return { allowed: true };
 };
@@ -394,12 +459,6 @@ export const canTransferGroupOwnership = ({
     const recipientPlan = normalizeUserPlan(recipient.plan);
 
     if (groupType === "arena") {
-        if (recipientPlan !== "pro") {
-            return { allowed: false, error: "Upgrade to Pro to own this group." };
-        }
-        if (getOwnedArenaCount(leagues, recipient.userId, league.id) >= PLAN_LIMITS.pro.maxOwnedArenas) {
-            return { allowed: false, error: "Founding Pro includes up to 3 Arenas." };
-        }
         return { allowed: true };
     }
 

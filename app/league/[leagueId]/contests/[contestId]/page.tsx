@@ -477,7 +477,7 @@ const ContestDetailPage = () => {
             <header className="-mx-5 border-b border-white/10 pl-5 pr-2 pb-3 sm:mx-0 sm:px-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <BackButton
-                        fallback={`/league/${league.id}`}
+                        fallback={`/league/${league.id}?tab=contests`}
                         preferFallback
                         className="shrink-0 py-1"
                     />
@@ -632,7 +632,7 @@ const ContestDetailPage = () => {
                                             <p className="mt-2 text-xs text-amber-200/80">
                                                 Badge points stay at the Free default. {" "}
                                                 <Link
-                                                    href="/app-settings/plan"
+                                                    href="/fantasy"
                                                     className="font-semibold text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition hover:text-amber-100"
                                                 >
                                                     Upgrade to Pro to customize points.

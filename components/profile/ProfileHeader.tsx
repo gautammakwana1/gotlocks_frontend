@@ -58,7 +58,6 @@ type ProfileHeaderProps = {
     record: ProfileHeaderRecord;
     stats: ProfileHeaderStats;
     progress: ProfileHeaderProgress;
-    onShowScoringRules: () => void;
     onFollowToggle: () => void;
     onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onRemoveAvatar: () => void;
@@ -179,7 +178,6 @@ const ProfileHeader = ({
     record,
     stats,
     progress,
-    onShowScoringRules,
     onFollowToggle,
     onAvatarChange,
     onRemoveAvatar,
@@ -310,17 +308,23 @@ const ProfileHeader = ({
 
     return (
         <header className="relative overflow-visible -mx-5 bg-black sm:-mx-6">
-            <div className="relative px-5 pt-2 pb-5 sm:px-6 sm:pt-3 sm:pb-6">
+            <div className="relative px-5 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6">
                 <div className="relative">
                     <div className="pointer-events-none absolute -inset-y-2 inset-x-0 rounded-[18px] bg-gradient-to-br from-slate-950/80 via-slate-900/65 to-blue-900/35 ring-1 ring-white/10 sm:-inset-y-3">
                         <div className="absolute inset-[1px] rounded-[17px] bg-gradient-to-b from-white/10 via-white/5 to-black/70" />
                         <div className="absolute inset-0 rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_55%)]" />
                     </div>
                     <div className="relative px-4 py-2 sm:px-5">
-                        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,240px)]">
-                            <div className="flex flex-col">
+                        {/* At lg the badge rail gets a guaranteed 320-360px track so its
+                            medallions can lay out as two rows of four, and the player column
+                            gains gutters that centre the hairline divider in a 4rem channel. */}
+                        <div
+                            data-profile-header-layout
+                            className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]"
+                        >
+                            <div data-profile-player-panel className="flex flex-col lg:pl-4 lg:pr-8">
                                 {/* Identity */}
-                                <div className="relative -mx-4 flex items-center gap-3 border-b border-white/10 px-4 pb-2 sm:-mx-5 sm:px-5 lg:mr-0">
+                                <div className="relative -mx-4 flex items-center gap-3 border-b border-white/10 px-4 pb-2 sm:-mx-5 sm:px-5 lg:mx-0 lg:px-0">
                                     {showFollowerStats && (
                                         <span
                                             className={`absolute right-4 top-0 rounded-full px-2 py-0.5 text-[9px] font-semibold lowercase tracking-[0.12em] sm:right-5 ${user.is_public
@@ -407,20 +411,22 @@ const ProfileHeader = ({
                                                 <FollowerStats
                                                     followers={stats.followers}
                                                     following={stats.following}
-                                                    className="sm:flex sm:gap-3 sm:text-[11px] sm:tracking-[0.18em] sm:mt-2"
+                                                    className="text-[11px] tracking-[0.16em]"
                                                     onFollowersClick={onFollowersClick}
                                                     onFollowingClick={onFollowingClick}
                                                     showStats={showStats}
                                                 />
                                             )}
-                                            {renderFollowControls("lg:absolute lg:bottom-2 lg:right-5")}
+                                            {/* right-0, not right-5: the identity row drops its
+                                                sm:px-5 padding at lg via lg:px-0. */}
+                                            {renderFollowControls("lg:absolute lg:bottom-2 lg:right-0")}
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Stats */}
                                 {showRightSummary && (
-                                    <div className="-mx-4 space-y-2.5 border-b border-white/10 px-4 py-3 sm:-mx-5 sm:px-5 lg:mr-0 lg:border-b-0">
+                                    <div className="-mx-4 space-y-2.5 border-b border-white/10 px-4 py-3 sm:-mx-5 sm:px-5 lg:mx-0 lg:border-b-0 lg:px-0">
                                         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                                             {showStats && (
                                                 <span className="text-xl font-bold uppercase leading-none tracking-wide text-white sm:text-2xl">
@@ -447,18 +453,9 @@ const ProfileHeader = ({
                                                         style={{ width: `${progress.levelProgressPercent}%` }}
                                                     />
                                                 </div>
-                                                <div className="flex items-start justify-between gap-3">
-                                                    {isSelf ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={onShowScoringRules}
-                                                            className="text-[11px] font-semibold lowercase tracking-wide text-sky-300 underline decoration-sky-300/40 transition hover:text-sky-200"
-                                                        >
-                                                            scoring rules
-                                                        </button>
-                                                    ) : (
-                                                        <span />
-                                                    )}
+                                                {/* The scoring-rules trigger now lives in ProfileControls, next to
+                                                    New post and Filters — the header keeps only the XP readout. */}
+                                                <div className="flex items-start justify-end gap-3">
                                                     <div className="text-right text-[10px] uppercase leading-tight tracking-wide text-sky-100/75">
                                                         {showNumericProgress && (
                                                             <p>{progress.xpRemaining} XP to next</p>
@@ -477,7 +474,7 @@ const ProfileHeader = ({
                                 )}
                             </div>
 
-                            <div className="pt-3 lg:relative lg:pt-0 lg:pl-6">
+                            <div data-profile-badge-panel className="pt-3 lg:relative lg:pt-0 lg:pl-8">
                                 <div
                                     aria-hidden
                                     className="hidden lg:absolute lg:-top-4 lg:-bottom-4 lg:left-0 lg:block lg:w-px lg:bg-white/10"
@@ -496,7 +493,10 @@ const ProfileHeader = ({
                                                 {earnedBadgeCount} earned
                                             </span>
                                         </div>
-                                        <div className={`flex flex-wrap items-center gap-2 lg:gap-3`}>
+                                        <div
+                                            data-profile-badge-grid
+                                            className="flex flex-wrap items-center gap-2 lg:grid lg:grid-cols-4 lg:place-items-center lg:gap-x-5 lg:gap-y-3"
+                                        >
                                             {(badges ?? []).slice(0, 8).map((badge) => (
                                                 <ProfileBadgeIcon
                                                     key={badge.definition.id}
@@ -507,7 +507,10 @@ const ProfileHeader = ({
                                                 />
                                             ))}
                                         </div>
-                                        <span className="flex justify-end text-sky-200 transition group-hover:text-sky-100">
+                                        <span className="flex items-center justify-end gap-2 text-sky-200 transition group-hover:text-sky-100">
+                                            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.14em] lg:inline">
+                                                view all
+                                            </span>
                                             <svg
                                                 aria-hidden
                                                 viewBox="0 0 24 24"
@@ -530,7 +533,7 @@ const ProfileHeader = ({
                                                 coming soon
                                             </span>
                                         </div>
-                                        <div className="flex flex-wrap gap-2">
+                                        <div className="flex flex-wrap gap-2 lg:grid lg:grid-cols-4 lg:place-items-center lg:gap-x-5 lg:gap-y-3">
                                             {BADGE_PLACEHOLDERS.map((label, index) => (
                                                 <div
                                                     key={`${label}-${index}`}

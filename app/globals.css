@@ -44,6 +44,375 @@
   }
 }
 
+/* Shared app-shell and dock geometry, scoped to the AppShell root so public
+   marketing pages (which render outside it) are never affected. Every
+   --app-dock-* value here is consumed by components/layout/BottomDock.module.css. */
+[data-app-scale="desktop"] {
+  --app-header-height: 77px;
+  --app-dock-frame-width: 100%;
+  --app-dock-scale: 1;
+  --app-dock-offset: 0px;
+  --app-dock-gutter: 0px;
+  --app-dock-tab-height: calc(64px + env(safe-area-inset-bottom));
+  --app-dock-tab-safe-padding: env(safe-area-inset-bottom);
+  --app-dock-frame-height: calc(4.75rem + env(safe-area-inset-bottom));
+  --app-dock-clearance: calc(4.75rem + env(safe-area-inset-bottom));
+  --app-dock-open-max-height: calc(100dvh - 6rem);
+  --app-dock-page-padding: 9rem;
+  --app-dock-builder-padding: calc(6rem + env(safe-area-inset-bottom));
+}
+
+/* Tablets retain the compact, centered dock treatment. */
+@media (min-width: 640px) and (max-width: 1023px) {
+  [data-app-scale="desktop"] {
+    --app-dock-frame-width: 25.625rem;
+    --app-dock-scale: 1.45;
+    --app-dock-offset: 0.75rem;
+    --app-dock-gutter: 1.5rem;
+    --app-dock-tab-height: 70px;
+    --app-dock-tab-safe-padding: 0px;
+    --app-dock-frame-height: 4.875rem;
+    --app-dock-clearance: 7.81875rem;
+    --app-dock-open-max-height: calc(68.9655dvh - 4.13793rem);
+    --app-dock-builder-padding: calc(8rem + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * Scale application surfaces at desktop widths without changing the public
+ * marketing pages or any layout below Tailwind's 1024px `lg` breakpoint.
+ * Redefining the Tailwind v4 theme tokens on the AppShell scope lets existing
+ * utility classes grow together instead of requiring one-off changes
+ * throughout dense screens. --container-7xl is deliberately left at its
+ * default: it is the hard outer bound, not a scaled value.
+ */
+@media (min-width: 1024px) {
+  [data-app-scale="desktop"] {
+    --app-header-height: 87px;
+    --spacing: 0.28125rem;
+
+    --container-xs: 22.5rem;
+    --container-sm: 27rem;
+    --container-md: 31.5rem;
+    --container-lg: 36rem;
+    --container-xl: 40.5rem;
+    --container-2xl: 47.25rem;
+    --container-3xl: 54rem;
+    --container-4xl: 63rem;
+    --container-5xl: 72rem;
+    --container-7xl: 80rem;
+
+    --text-xs: 0.8125rem;
+    --text-xs--line-height: 1.125rem;
+    --text-sm: 1rem;
+    --text-sm--line-height: 1.40625rem;
+    --text-base: 1.125rem;
+    --text-base--line-height: 1.6875rem;
+    --text-lg: 1.25rem;
+    --text-lg--line-height: 1.96875rem;
+    --text-xl: 1.4375rem;
+    --text-xl--line-height: 1.96875rem;
+    --text-2xl: 1.6875rem;
+    --text-2xl--line-height: 2.25rem;
+    --text-3xl: 2.125rem;
+    --text-3xl--line-height: 2.53125rem;
+    --text-4xl: 2.5rem;
+    --text-4xl--line-height: 2.8125rem;
+
+    --radius-sm: 0.28125rem;
+    --radius-md: 0.421875rem;
+    --radius-lg: 0.5625rem;
+    --radius-xl: 0.84375rem;
+    --radius-2xl: 1.125rem;
+    --radius-3xl: 1.6875rem;
+    --app-dock-page-padding: 10.125rem;
+  }
+
+  /* Arbitrary pixel font sizes bypass the token scale, so bump them directly. */
+  [data-app-scale="desktop"] [class~="text-[6px]"] {
+    font-size: 8px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[7px]"] {
+    font-size: 9px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[8px]"] {
+    font-size: 10px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[9px]"] {
+    font-size: 11px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[10px]"] {
+    font-size: 12px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[11px]"] {
+    font-size: 13px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[12px]"] {
+    font-size: 14px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[13px]"] {
+    font-size: 15px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[14px]"] {
+    font-size: 16px;
+  }
+
+  [data-app-scale="desktop"] [class~="text-[15px]"] {
+    font-size: 17px;
+  }
+
+  /* Responsive literal utilities must follow base literals at desktop sizes. */
+  [data-app-scale="desktop"] [class~="sm:text-[6px]"] {
+    font-size: 8px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[7px]"] {
+    font-size: 9px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[8px]"] {
+    font-size: 10px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[9px]"] {
+    font-size: 11px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[10px]"] {
+    font-size: 12px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[11px]"] {
+    font-size: 13px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[12px]"] {
+    font-size: 14px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[13px]"] {
+    font-size: 15px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[14px]"] {
+    font-size: 16px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-[15px]"] {
+    font-size: 17px;
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-xs"] {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-sm"] {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-base"] {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-lg"] {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-xl"] {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-2xl"] {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-3xl"] {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="sm:text-4xl"] {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[6px]"] {
+    font-size: 8px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[7px]"] {
+    font-size: 9px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[8px]"] {
+    font-size: 10px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[9px]"] {
+    font-size: 11px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[10px]"] {
+    font-size: 12px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[11px]"] {
+    font-size: 13px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[12px]"] {
+    font-size: 14px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[13px]"] {
+    font-size: 15px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[14px]"] {
+    font-size: 16px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-[15px]"] {
+    font-size: 17px;
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-xs"] {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-sm"] {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-base"] {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-lg"] {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-xl"] {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-2xl"] {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-3xl"] {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="md:text-4xl"] {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-xs"] {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-sm"] {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-base"] {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-lg"] {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-xl"] {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-2xl"] {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-3xl"] {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="lg:text-4xl"] {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+}
+
+@media (min-width: 1280px) {
+  [data-app-scale="desktop"] [class~="xl:text-xs"] {
+    font-size: var(--text-xs);
+    line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-sm"] {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-base"] {
+    font-size: var(--text-base);
+    line-height: var(--tw-leading, var(--text-base--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-lg"] {
+    font-size: var(--text-lg);
+    line-height: var(--tw-leading, var(--text-lg--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-xl"] {
+    font-size: var(--text-xl);
+    line-height: var(--tw-leading, var(--text-xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-2xl"] {
+    font-size: var(--text-2xl);
+    line-height: var(--tw-leading, var(--text-2xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-3xl"] {
+    font-size: var(--text-3xl);
+    line-height: var(--tw-leading, var(--text-3xl--line-height));
+  }
+
+  [data-app-scale="desktop"] [class~="xl:text-4xl"] {
+    font-size: var(--text-4xl);
+    line-height: var(--tw-leading, var(--text-4xl--line-height));
+  }
+}
+
 /* Hide the fixed bottom MainTabBar for the whole time the Chat tab is open
    (GroupChatTab sets data-chat-open while mounted) so the conversation gets the
    full height. Removed when leaving the tab, so other screens keep the bar. */
@@ -71,6 +440,18 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* Keep the app viewport width stable when routes gain or lose a vertical
+   scrollbar so the fixed navigation does not shift between tabs. */
+html:has([data-app-scale="desktop"]) {
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 1024px) {
+  html:has([data-app-scale="desktop"]) {
+    overflow-y: scroll;
+  }
 }
 
 *,
@@ -263,6 +644,28 @@ body {
   min-height: 260px;
 }
 
+/* The entrance a workspace tab panel plays when it becomes the active tab. */
+@keyframes workspaceTabIn {
+  from {
+    opacity: 0.7;
+    transform: translate3d(0, 5px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.workspace-tab-panel {
+  animation: workspaceTabIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tab-panel {
+    animation: none;
+  }
+}
+
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -283,20 +686,22 @@ body {
 }
 
 .ui-accent-card {
+  border-color: rgb(86, 100, 120);
+  background-clip: padding-box;
   background-image: linear-gradient(135deg,
       rgba(59, 130, 246, 0.2),
       rgba(15, 23, 42, 0.62) 54%,
       rgba(0, 0, 0, 0.28));
-  box-shadow: 0 18px 46px -28px rgba(59, 130, 246, 0.2);
+  box-shadow: none;
 }
 
 .ui-accent-card:hover {
-  border-color: rgba(125, 211, 252, 0.62);
+  border-color: rgba(86, 100, 120);
   background-image: linear-gradient(135deg,
       rgba(59, 130, 246, 0.28),
       rgba(15, 23, 42, 0.66) 54%,
       rgba(0, 0, 0, 0.3));
-  box-shadow: 0 18px 46px -24px rgba(59, 130, 246, 0.42);
+  box-shadow: none;
 }
 
 .ui-accent-card-icon {

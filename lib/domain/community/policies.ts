@@ -1,4 +1,6 @@
 import type {
+    ArenaHostingLimits,
+    ArenaHostingTier,
     ArenaMembership,
     ArenaOwnershipTransfer,
     CompetitivePick,
@@ -6,6 +8,28 @@ import type {
     PickVersion,
     StructuredFeedContest,
 } from "./types";
+
+/**
+ * Static operating limits per Arena hosting tier. `custom` is contact-only, so its
+ * limits are negotiated rather than fixed and are reported as null.
+ */
+export function getArenaHostingLimits(tier: ArenaHostingTier): ArenaHostingLimits {
+    switch (tier) {
+        case "arena_50":
+            return { participatingMemberLimit: 50, managerLimit: 2, activeContestLimit: 6 };
+        case "arena_100":
+            return { participatingMemberLimit: 100, managerLimit: 3, activeContestLimit: 10 };
+        case "arena_250_plus":
+            return { participatingMemberLimit: 250, managerLimit: 4, activeContestLimit: 15 };
+        case "custom":
+        default:
+            return {
+                participatingMemberLimit: null,
+                managerLimit: null,
+                activeContestLimit: null,
+            };
+    }
+}
 
 export type DomainDecision =
     | { allowed: true }

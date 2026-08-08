@@ -57,6 +57,7 @@ export function EmbedStage({
 }: EmbedStageProps) {
     const [time, setTime] = useState(0);
     const [scale, setScale] = useState(1);
+    const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const rafRef = useRef<number | null>(null);
     const lastTsRef = useRef<number | null>(null);
@@ -69,12 +70,37 @@ export function EmbedStage({
             setScale(Math.max(0.05, s));
         };
         measure();
+
+        if (typeof ResizeObserver === "undefined") {
+            window.addEventListener("resize", measure);
+            return () => window.removeEventListener("resize", measure);
+        }
+
         const ro = new ResizeObserver(measure);
         ro.observe(el);
         return () => ro.disconnect();
     }, [width, height]);
 
     useEffect(() => {
+        if (typeof window.matchMedia !== "function") return;
+
+        const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+        const updateMotionPreference = () => setPrefersReducedMotion(mediaQuery.matches);
+
+        updateMotionPreference();
+        mediaQuery.addEventListener("change", updateMotionPreference);
+        return () => mediaQuery.removeEventListener("change", updateMotionPreference);
+    }, []);
+
+    useEffect(() => {
+        if (
+            prefersReducedMotion ||
+            typeof window.requestAnimationFrame !== "function" ||
+            typeof window.cancelAnimationFrame !== "function"
+        ) {
+            return;
+        }
+
         lastTsRef.current = null;
         const step = (ts: number) => {
             if (lastTsRef.current == null) lastTsRef.current = ts;
@@ -85,16 +111,20 @@ export function EmbedStage({
                 if (next >= duration) next = next % duration;
                 return next;
             });
-            rafRef.current = requestAnimationFrame(step);
+            rafRef.current = window.requestAnimationFrame(step);
         };
-        rafRef.current = requestAnimationFrame(step);
+        rafRef.current = window.requestAnimationFrame(step);
         return () => {
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            if (rafRef.current) window.cancelAnimationFrame(rafRef.current);
             lastTsRef.current = null;
         };
-    }, [duration, speed]);
+    }, [duration, prefersReducedMotion, speed]);
 
-    const ctxValue = useMemo(() => ({ time, duration }), [time, duration]);
+    const visibleTime = prefersReducedMotion ? duration * 0.6 : time;
+    const ctxValue = useMemo(
+        () => ({ time: visibleTime, duration }),
+        [duration, visibleTime],
+    );
 
     return (
         <div

@@ -276,7 +276,7 @@ const SlipResultsPage = () => {
     const isFinalized = isSlipFinal(activeSlip);
     const contestPath = contest?.id
         ? `/league/${group.id}/contests/${contest.id}`
-        : `/league/${group.id}`;
+        : `/league/${group.id}?tab=contests`;
     const fallbackPath = fallbackFromQuery ?? contestPath;
     const isCommissioner = group.created_by === currentUser.userId;
     const canDeleteSlip = isCommissioner;

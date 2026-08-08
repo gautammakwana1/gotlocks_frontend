@@ -7,6 +7,8 @@ const initialState: PlanState = {
     loading: false,
     error: null,
     message: null,
+    checkoutLoading: false,
+    checkoutError: null,
     transactions: [],
     transactionsLoading: false,
     transactionsError: null,
@@ -63,14 +65,32 @@ const planSlice = createSlice({
         // the backend webhook after payment, then picked up via plan overview.
         createCheckoutSessionRequest: (state) => {
             state.loading = true;
+            state.checkoutLoading = true;
+            state.checkoutError = null;
             state.error = null;
         },
-        createCheckoutSessionSuccess: (state) => {
+        // `redirecting` says whether the browser is on its way to Stripe. When it
+        // is, checkoutLoading deliberately STAYS true: the saga is about to assign
+        // window.location, and re-enabling the confirm button for those few frames
+        // would let an impatient second tap open a second Checkout Session.
+        // The no-URL branch (already Pro, nothing to pay) never navigates, so it
+        // must release the button or the screen is stuck disabled.
+        createCheckoutSessionSuccess: (
+            state,
+            action: PayloadAction<{ redirecting: boolean } | undefined>
+        ) => {
             state.loading = false;
+            if (!action.payload?.redirecting) state.checkoutLoading = false;
         },
         createCheckoutSessionFailure: (state, action: PayloadAction<string>) => {
             state.loading = false;
+            state.checkoutLoading = false;
+            state.checkoutError = action.payload;
             state.error = action.payload;
+        },
+        clearCheckoutError(state) {
+            state.checkoutLoading = false;
+            state.checkoutError = null;
         },
 
         // Paginated payment transaction history. Replace on page 1, append + de-dupe
@@ -114,6 +134,7 @@ export const {
     createCheckoutSessionRequest,
     createCheckoutSessionSuccess,
     createCheckoutSessionFailure,
+    clearCheckoutError,
     fetchTransactionsRequest,
     fetchTransactionsSuccess,
     fetchTransactionsFailure,

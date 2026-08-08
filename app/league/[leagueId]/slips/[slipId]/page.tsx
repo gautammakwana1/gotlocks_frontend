@@ -341,7 +341,7 @@ const SlipDetailsPage = () => {
                 router.replace(
                     contest?.id
                         ? `/league/${params.leagueId}/contests/${contest.id}`
-                        : `/league/${params.leagueId}`
+                        : `/league/${params.leagueId}?tab=contests`
                 );
             } else {
                 router.replace('/fantasy');
@@ -454,7 +454,7 @@ const SlipDetailsPage = () => {
     useEffect(() => {
         if (!group || !isSlipFinal(slip)) return;
         if (!slip) {
-            router.replace(`/league/${group.id}`);
+            router.replace(`/league/${group.id}?tab=contests`);
             return;
         }
         if (group.id && slip?.id) {
@@ -943,7 +943,7 @@ const SlipDetailsPage = () => {
                             fallback={
                                 contest?.id
                                     ? `/league/${group.id}/contests/${contest.id}`
-                                    : `/league/${group.id}`
+                                    : `/league/${group.id}?tab=contests`
                             }
                             preferFallback
                             className="self-start"
@@ -1604,7 +1604,7 @@ const SlipDetailsPage = () => {
                                                     </p>
                                                     {isTimeLocked && !hasProScoringControls && (
                                                         <Link
-                                                            href="/app-settings/plan"
+                                                            href="/fantasy"
                                                             className="inline-flex text-xs font-semibold text-amber-200 transition hover:text-amber-100"
                                                         >
                                                             Upgrade to Pro for manual Slip Point controls

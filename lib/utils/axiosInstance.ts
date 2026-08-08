@@ -84,8 +84,16 @@ axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
         config.headers = new axios.AxiosHeaders();
     }
     if (token) {
-        config.headers["X-Timezone"] = timezone;
-        config.headers.Authorization = `Bearer ${token}`;
+        // The browser's zone is the FALLBACK, not an override. A caller may pin
+        // an explicit one — re-saving a Feed contest draft replays the zone the
+        // draft was authored in — and a raw `config.headers["X-Timezone"] = …`
+        // would win regardless of casing: axios has already stored the caller's
+        // key as an own property, and the adapter's case-insensitive normalise
+        // folds the two together with the LAST write winning.
+        if (!config.headers.has("x-timezone")) {
+            config.headers.set("X-Timezone", timezone);
+        }
+        config.headers.set("Authorization", `Bearer ${token}`);
     }
 
     const baseURL =

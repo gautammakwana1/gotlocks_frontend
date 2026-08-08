@@ -1,11 +1,12 @@
 "use client";
 
 import { Pick, PickReaction, PickResult, PickType } from "@/lib/interfaces/interfaces";
-import { LOSING_POST_CARD_TONE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
+import { LOSING_POST_CARD_TONE, NEUTRAL_POST_CARD_SURFACE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
 import { formatDateTime } from "@/lib/utils/date";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useEffect, useRef, useState } from "react";
+import PostReactionButtons from "../social/PostReactionButtons";
 
 type PostCardProps = {
     pick: Pick;
@@ -15,6 +16,7 @@ type PostCardProps = {
     onDelete: (pickId: string) => void;
     onReaction: (reaction: PickReaction, pickId: string) => void;
     highlightPickId?: string | null;
+    className?: string;
 };
 
 const resultTone = (result: PickResult) => {
@@ -107,7 +109,14 @@ const WinningHeaderArt = () => (
     />
 );
 
-const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: PostCardProps) => {
+const PostCard = ({
+    pick,
+    canDelete,
+    onDelete,
+    onReaction,
+    highlightPickId,
+    className = "",
+}: PostCardProps) => {
     const [collapsed, setCollapsed] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const [isHighlighted, setIsHighlighted] = useState(false);
@@ -246,8 +255,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
         <div
             ref={cardRef}
             id={`pick-${pick.id}`}
-            className={`scroll-mt-24 py-4 transition-colors duration-500 
-                ${isHighlighted ? "bg-amber-400/10" : ""}`}
+            className={`scroll-mt-24 py-4 transition-colors duration-500 ${isHighlighted ? "bg-amber-400/10" : className}`.trim()}
         >
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 sm:px-6">
                 <div className="felx items-center">
@@ -264,7 +272,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
                                 {oddsCopy}
                             </span>
                         )}
-                        <button
+                        {/* <button
                             type="button"
                             onClick={() => onReaction("up", pick.id)}
                             aria-pressed={upActive}
@@ -285,7 +293,13 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
                         >
                             <span aria-hidden="true">{DOWN_TRIANGLE}</span>
                             <span className="tabular-nums text-[11px]">{down}</span>
-                        </button>
+                        </button> */}
+                        <PostReactionButtons
+                            up={up}
+                            down={down}
+                            userReaction={userReaction}
+                            onReaction={(reaction) => onReaction(reaction, pick.id)}
+                        />
                     </div>
                     {showResultChip && (
                         <span
@@ -361,8 +375,7 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
                                 </span>
                             </div>
                             <div
-                                className={`w-full h-full flex-1 rounded-xl sm:max-h-[65px] border border-white/10 bg-white/[0.04] p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""
-                                    }`}
+                                className={`w-full flex-1 rounded-xl border border-white/10 ${NEUTRAL_POST_CARD_SURFACE} p-2.5 shadow-[inset_0_0_10px_rgba(15,23,42,0.2)] ${showComboLegs ? "sm:flex-none" : ""}`}
                             >
                                 <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                                     confidence
@@ -375,12 +388,12 @@ const PostCard = ({ pick, canDelete, onDelete, onReaction, highlightPickId }: Po
 
                         <div
                             className={`relative order-1 flex-1 overflow-hidden rounded-xl border p-3 sm:order-2 ${isWinningPost
-                                ? WINNING_POST_CARD_TONE
+                                ? `${WINNING_POST_CARD_TONE} ${NEUTRAL_POST_CARD_SURFACE}`
                                 : isLosingPost
-                                    ? LOSING_POST_CARD_TONE
+                                    ? `${LOSING_POST_CARD_TONE} ${NEUTRAL_POST_CARD_SURFACE}`
                                     : isPendingPost
                                         ? PENDING_POST_CARD_TONE
-                                        : "border-white/10 bg-white/[0.04] shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]"
+                                        : `border-white/10 ${NEUTRAL_POST_CARD_SURFACE} shadow-[inset_0_0_10px_rgba(15,23,42,0.2)]`
                                 }`}
                         >
                             {isWinningPost && <WinningHeaderArt />}

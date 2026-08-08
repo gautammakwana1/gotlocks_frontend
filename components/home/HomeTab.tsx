@@ -1,21 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { getLevelProgress } from "@/lib/utils/progression";
 import { AppNotification, CurrentUser, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
-import { clearJoinedGroupByInviteCodeMessage, fetchMyGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchMyTutorialProgressRequest, fetchProgressByUserIdRequest, updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { clearAllNotificationRequest, fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
 import NotificationsFeed from "./NotificationFeed";
-import { getProfilePath } from "@/lib/utils/profileNavigation";
+import { getGroupPath, getProfilePath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
 import { MembersIcon, RightArrowIcon, SlipIcon, TrashIcon } from "../ui/SvgIcons";
 import OnboardingModal from "../modals/OnboardingModal";
@@ -26,6 +25,19 @@ import HomeTabSkeleton from "../skeletons/home/HomeTabSkeleton";
 import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
 import { groupPreviewKickerTextClassName, groupPreviewMetaTextClassName, GroupTypeMetaLabel } from "../group/GroupPreviewChip";
 import InviteCodeCopy from "../group/InviteCodeCopy";
+import Link from "next/link";
+import PickBuilderClientPage from "../pick-builder/PickBuilderClient";
+
+// Hub preview card tones — leagues read sky/navy, arenas read violet, so the two
+// group kinds are distinguishable at a glance in the same carousel.
+const previewCardBaseClassName =
+    "group/card relative flex min-h-[152px] flex-col overflow-hidden rounded-[22px] border p-5 text-left shadow-lg shadow-black/25 transition hover:-translate-y-0.5 sm:min-h-[164px] sm:p-6 motion-reduce:transform-none motion-reduce:transition-none";
+
+const leaguePreviewCardToneClassName =
+    "border-sky-200/15 bg-[linear-gradient(145deg,rgba(14,42,67,0.82),rgba(8,15,27,0.98))] hover:border-sky-200/30 hover:shadow-sky-950/30 focus-within:border-sky-200/35";
+
+const arenaPreviewCardToneClassName =
+    "border-violet-300/15 bg-[linear-gradient(145deg,rgba(64,34,105,0.88),rgba(10,10,24,0.98))] hover:border-violet-300/30 hover:shadow-violet-950/30 focus-within:border-violet-200/35";
 
 type GroupSliceState = {
     group: {
@@ -41,6 +53,9 @@ type GroupSliceState = {
     message: string | null;
     hasMore: boolean;
     myGroups: GroupObject[] | null;
+    allGroups: GroupObject[] | null;
+    allGroupsHasMore: boolean;
+    allGroupsLoading: boolean;
 };
 
 type GroupRootState = {
@@ -58,12 +73,6 @@ type ActionDefinition = {
 };
 
 type ActivityTab = "posts" | "notifications";
-
-type StatDefinition = {
-    label: string;
-    value: string;
-    highlight?: boolean;
-};
 
 const TwoLineActionLabel = ({
     top,
@@ -127,20 +136,6 @@ const ActionCard = ({
     </button>
 );
 
-const StatCard = ({ stat }: { stat: StatDefinition }) => (
-    <div className="flex flex-col gap-1">
-        <p className="text-[9px] uppercase tracking-[0.16em] text-gray-400 sm:text-[11px] sm:tracking-[0.2em]">
-            {stat.label}
-        </p>
-        <p
-            className={`text-lg font-semibold sm:text-2xl ${stat.highlight ? "text-blue-200" : "text-white"
-                }`}
-        >
-            {stat.value}
-        </p>
-    </div>
-);
-
 const HomeTab = () => {
     const router = useRouter();
     const dispatch = useAppDispatch();
@@ -156,6 +151,12 @@ const HomeTab = () => {
     const resetTimeoutRef = useRef<number | null>(null);
     const resumeTimeoutRef = useRef<number | null>(null);
     const isCarouselPausedRef = useRef(false);
+    // The carousel container node kept in STATE: the div is destroyed and
+    // recreated around the HomeTabSkeleton early-return, and effects keyed
+    // only on orderedGroups.length miss that swap (a ref flipping null → node
+    // re-runs nothing). State re-fires the carousel effects exactly when the
+    // real container (re)mounts, so the scroll listener always lands on it.
+    const [leagueCarouselEl, setLeagueCarouselEl] = useState<HTMLDivElement | null>(null);
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
     const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
     const [page, setPage] = useState(1);
@@ -163,12 +164,19 @@ const HomeTab = () => {
     const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
+    const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const notificationCloseRef = useRef<HTMLButtonElement | null>(null);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
-    const { joinLoading, message, error, hasMore: myGroupsHasMore, myGroups, loading: groupLoading } = useSelector((state: GroupRootState) => state.group);
+    // Home lists ALL the user's communities (leagues + arenas) via fetchAllGroups;
+    // aliased to the existing local names so the rest of the component is unchanged.
+    const { joinLoading, message, error, allGroupsHasMore: myGroupsHasMore, allGroups: myGroups, allGroupsLoading: groupLoading } = useSelector((state: GroupRootState) => state.group);
     const { postPicks, loading: pickLoader, message: pickMessage, hasMore } = useSelector((state: RootState) => state.pick);
-    const { progress, picksCount, slipsCount, hasSeenIntro, loading: progressLoading } = useSelector((state: RootState) => state.progress);
+    // The hub no longer renders the level bar / stat tiles, so only the intro
+    // flags and the loading gate are read here. The progress fetch below still
+    // hydrates the slice for the screens that do show those numbers.
+    const { hasSeenIntro, loading: progressLoading } = useSelector((state: RootState) => state.progress);
     const { notification } = useSelector((state: RootState) => state.notifications);
     const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
@@ -189,7 +197,7 @@ const HomeTab = () => {
 
     useEffect(() => {
         if (!currentUserId) return;
-        dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+        dispatch(fetchAllGroupsRequest({ page: 1, limit: 10 }));
         dispatch(fetchNotificationListRequest({}));
         fetchData(1);
         dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
@@ -254,7 +262,7 @@ const HomeTab = () => {
                 duration: 3000,
             });
             setGroupPage(1);
-            dispatch(fetchMyGroupsRequest({ page: 1, limit: 10 }));
+            dispatch(fetchAllGroupsRequest({ page: 1, limit: 10 }));
         }
         if (!joinLoading && error) {
             setToast({
@@ -271,15 +279,8 @@ const HomeTab = () => {
         if (groupLoading || !myGroupsHasMore) return;
         const nextGroupPage = groupPage + 1;
         setGroupPage(nextGroupPage);
-        dispatch(fetchMyGroupsRequest({ page: nextGroupPage, limit: 10 }));
+        dispatch(fetchAllGroupsRequest({ page: nextGroupPage, limit: 10 }));
     }, [groupLoading, myGroupsHasMore, groupPage, dispatch]);
-
-    const { level, xpIntoLevel, xpToNext } = getLevelProgress(
-        progress?.lifetime_xp ?? 0
-    );
-    const xpLevelRatio = Math.min(1, xpIntoLevel / xpToNext);
-
-    const winRate = picksCount?.win && picksCount?.total ? (picksCount.win / picksCount.total * 100) : 0;
 
     const sortedGroups = useMemo(() => {
         if (!Array.isArray(myGroups) || !myGroups.length) return [];
@@ -336,6 +337,13 @@ const HomeTab = () => {
         closeJoinModal();
     };
 
+    // Stable callback ref: keeps leagueCarouselRef in sync for the imperative
+    // helpers below while publishing the node into state for the effects.
+    const setLeagueCarouselNode = useCallback((node: HTMLDivElement | null) => {
+        leagueCarouselRef.current = node;
+        setLeagueCarouselEl(node);
+    }, []);
+
     const jumpCarouselToIndex = useCallback((targetIndex: number, distance?: number) => {
         const container = leagueCarouselRef.current;
         if (!container) return;
@@ -367,7 +375,7 @@ const HomeTab = () => {
     );
 
     useEffect(() => {
-        const container = leagueCarouselRef.current;
+        const container = leagueCarouselEl;
         if (!container || orderedGroups.length === 0) return;
 
         const alignToMiddle = () => {
@@ -385,10 +393,10 @@ const HomeTab = () => {
 
         const rafId = window.requestAnimationFrame(alignToMiddle);
         return () => window.cancelAnimationFrame(rafId);
-    }, [carouselGroups.length, orderedGroups.length, jumpCarouselToIndex]);
+    }, [leagueCarouselEl, carouselGroups.length, orderedGroups.length, jumpCarouselToIndex]);
 
     useEffect(() => {
-        const container = leagueCarouselRef.current;
+        const container = leagueCarouselEl;
         if (!container) return;
 
         const handleScroll = () => {
@@ -431,10 +439,10 @@ const HomeTab = () => {
             }
             container.removeEventListener("scroll", handleScroll);
         };
-    }, [orderedGroups.length, jumpCarouselToIndex]);
+    }, [leagueCarouselEl, orderedGroups.length, jumpCarouselToIndex]);
 
     useEffect(() => {
-        const container = leagueCarouselRef.current;
+        const container = leagueCarouselEl;
         if (!container || orderedGroups.length <= 1) return;
 
         let intervalId: number | null = null;
@@ -535,7 +543,7 @@ const HomeTab = () => {
             container.removeEventListener("touchend", handleTouchEnd);
             container.removeEventListener("touchcancel", handleTouchCancel);
         };
-    }, [orderedGroups.length]);
+    }, [leagueCarouselEl, orderedGroups.length]);
 
     const maxVisibleDots = 5;
     const total = orderedGroups.length;
@@ -577,15 +585,34 @@ const HomeTab = () => {
         [router]
     );
 
+    const handleCloseNotificationPopup = () => {
+        dispatch(markNotificationReadRequest({}));
+        setNotificationsOpen(false);
+    };
+
     const unreadNotifications = useMemo(
         () => notifications.filter((notification) => !notification.is_read).length,
         [notifications]
     );
 
     useEffect(() => {
-        if (activityTab !== "notifications" || !currentUserId || unreadNotifications === 0) return;
+        if (!notificationsOpen || !currentUserId || unreadNotifications === 0) return;
         dispatch(markNotificationReadRequest({}));
-    }, [activityTab, currentUserId, unreadNotifications, dispatch]);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        notificationCloseRef.current?.focus();
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") setNotificationsOpen(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+        // Keyed on notificationsOpen — it used to key on the (now dead) activityTab
+        // state, so opening the drawer never re-ran this and the body-scroll lock,
+        // Escape handler and focus move all silently no-oped.
+    }, [notificationsOpen, currentUserId, unreadNotifications, dispatch]);
 
     const handleClearAll = useCallback(() => {
         dispatch(clearAllNotificationRequest({}));
@@ -599,60 +626,6 @@ const HomeTab = () => {
         dispatch(updateTutorialProgressRequest({ tutorial_key: "home" }));
     };
 
-    const stats: StatDefinition[] = [
-        {
-            label: "Groups",
-            value: String(sortedGroups.length),
-        },
-        {
-            label: "Active slips",
-            value: String(slipsCount?.open_slip ?? 0),
-        },
-        {
-            label: "Post wins",
-            value: String(picksCount?.win ?? 0),
-            highlight: true,
-        },
-        {
-            label: "Post win rate",
-            value: `${winRate.toFixed(1)}%`,
-        },
-    ];
-
-    const quickActions: ActionDefinition[] = [
-        {
-            id: "create",
-            label: <TwoLineActionLabel top="Start a" bottom="group" />,
-            href: "/cag-form",
-            description: "Start a new league",
-            featured: true,
-            onClick: () => router.push("/cag-form"),
-            icon: (
-                <MembersIcon className="h-3.5 w-3.5 overflow-visible sm:h-4 sm:w-4" />
-            ),
-        },
-        {
-            id: "join",
-            label: <TwoLineActionLabel top="Join a" bottom="group" />,
-            href: "/fantasy",
-            description: "Join a league by invitation code",
-            onClick: openJoinModal,
-            icon: (
-                <RightArrowIcon />
-            ),
-        },
-        {
-            id: "builder",
-            label: <TwoLineActionLabel top="Build a" bottom="post" />,
-            description: "Spin up a new post or slip pick.",
-            href: "/pick-builder",
-            onClick: () => router.push("/pick-builder"),
-            icon: (
-                <SlipIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" stroke="currentColor" fill="none" strokeWidth="1.5" aria-hidden={true} />
-            ),
-        },
-    ];
-
     const isInitialLoading = groupLoading || progressLoading;
 
     if (isInitialLoading) {
@@ -660,139 +633,132 @@ const HomeTab = () => {
     }
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6">
-            <section className="-mx-2 -mt-3 relative overflow-hidden rounded-[18px] border border-white/10 p-4 shadow-2xl shadow-black/40 animate-[homeFadeUp_0.7s_ease-out_both] sm:mx-0 sm:mt-0 sm:p-6 lg:p-8">
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-950/90 via-black/84 to-blue-950/16"
-                />
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-gradient-to-b from-white/7 via-black/32 via-62% to-black/86"
-                />
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_52%)]"
-                />
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute inset-[1px] rounded-[17px] bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025)_16%,transparent_34%)]"
-                />
-                <div className="relative z-10 flex flex-col gap-5 sm:gap-6 lg:gap-8">
-                    <div className="grid gap-3 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:items-center sm:gap-4">
-                        <div className="max-w-xl">
-                            <h1 className="mt-2 text-2xl font-extrabold leading-tight text-white sm:mt-3 sm:text-3xl lg:text-4xl">
-                                <span className="block">Welcome back,</span>
-                                <span
-                                    className="allow-caps block text-transparent bg-clip-text"
-                                    style={displayNameGradientStyle}
-                                >
-                                    {storedUser?.username ?? "Member"}
-                                </span>
-                            </h1>
-                        </div>
-                        <div className="w-full lg:max-w-none lg:justify-self-start">
-                            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-gray-400 sm:text-xs sm:tracking-[0.2em]">
-                                <span>Level {level}</span>
-                                <span>
-                                    {xpIntoLevel}/{xpToNext} XP
-                                </span>
-                            </div>
-                            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10 sm:mt-3 sm:h-2">
-                                <div
-                                    className="h-full rounded-full bg-gradient-to-r from-sky-300 to-blue-500"
-                                    style={{ width: `${Math.round(xpLevelRatio * 100)}%` }}
-                                />
-                            </div>
-                        </div>
+        <div className="flex flex-col">
+            <section className="relative -mx-5 overflow-hidden bg-[#050505] px-5 pb-5 pt-4 sm:-mx-6 sm:px-6 sm:pb-6 sm:pt-5 lg:pb-8 lg:pt-6">
+                <button
+                    type="button"
+                    onClick={() => setNotificationsOpen(true)}
+                    aria-label={`Open notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ""}`}
+                    aria-expanded={notificationsOpen}
+                    className="absolute right-5 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/35 text-gray-200 backdrop-blur transition hover:border-sky-300/50 hover:text-white sm:right-6 sm:top-6 lg:right-8 lg:top-8"
+                >
+                    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+                        <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M10 21h4" strokeLinecap="round" />
+                    </svg>
+                    {unreadNotifications > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-sky-400 ring-2 ring-slate-950" />
+                    )}
+                </button>
+                <div className="relative z-10 flex flex-col gap-4 sm:gap-5 lg:gap-6">
+                    <div className="max-w-xl pr-12">
+                        <h1 className="text-3xl font-black leading-tight tracking-tight text-white sm:text-4xl">
+                            <span className="block">Welcome back,</span>
+                            <span className="allow-caps block text-sky-100">
+                                {storedUser?.username ?? "Member"}
+                            </span>
+                        </h1>
                     </div>
-                    <div className="border-t border-white/10 pt-3 sm:pt-4">
-                        <div className="grid w-full grid-cols-4 gap-2 sm:gap-6">
-                            {stats.map((stat) => (
-                                <StatCard key={stat.label} stat={stat} />
-                            ))}
-                        </div>
-                    </div>
-                    <div className="border-t border-white/10 pt-4 sm:pt-6">
-                        <div className="mb-3 flex items-center justify-between gap-3 sm:mb-4">
+                    <div className="-mx-5 border-t border-white/10 px-5 pt-4 sm:-mx-6 sm:px-6 sm:pt-6">
+                        <div className="mb-3 sm:mb-4">
                             <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 sm:text-xs sm:tracking-[0.24em]">
                                 Your groups
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => router.push("/fantasy")}
-                                className="text-[9px] font-semibold tracking-[0.14em] text-gray-200 transition hover:text-white sm:text-[11px]"
-                            >
-                                manage
-                            </button>
                         </div>
                         {sortedGroups.length === 0 ? (
                             <div className="rounded-[18px] border border-dashed border-white/20 bg-white/5 p-4 text-[11px] text-gray-300 sm:p-5 sm:text-sm">
-                                You are not in any groups yet. Start one to get the vibe going.
+                                You are not in any groups yet. Start one and bring your crew together.
                             </div>
                         ) : (
                             <>
                                 <div className="sm:hidden">
                                     <div
-                                        ref={leagueCarouselRef}
-                                        className="scrollbar-hide flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory"
+                                        ref={setLeagueCarouselNode}
+                                        className="scrollbar-hide flex gap-3 overflow-x-auto px-0.5 scroll-px-0.5 scroll-smooth snap-x snap-mandatory"
                                     >
-                                        {carouselGroups.map((group, index) => (
-                                            <div
-                                                key={`${group.id}-${index}`}
-                                                role="button"
-                                                tabIndex={0}
-                                                onClick={() => router.push(`/league/${group.id}`)}
-                                                onKeyDown={(event) => {
-                                                    if (event.target !== event.currentTarget) return;
-                                                    if (event.key === "Enter" || event.key === " ") {
-                                                        event.preventDefault();
-                                                        router.push(`/league/${group.id}`);
-                                                    }
-                                                }}
-                                                className="relative flex min-h-[8.25rem] min-w-full cursor-pointer snap-center flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-4 text-left shadow-lg shadow-black/25 transition hover:border-blue-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70"
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
+                                        {carouselGroups.map((group, index) => {
+                                            const isClone =
+                                                orderedGroups.length > 1 &&
+                                                (index < orderedGroups.length ||
+                                                    index >= orderedGroups.length * 2);
+                                            const isArena = group.group_type === "arena";
+
+                                            return (
+                                                <div
+                                                    key={`${group.id}-${index}`}
+                                                    aria-hidden={isClone}
+                                                    className={`${previewCardBaseClassName} min-w-full snap-center ${isArena
+                                                        ? arenaPreviewCardToneClassName
+                                                        : leaguePreviewCardToneClassName
+                                                        }`}
+                                                >
                                                     <div
-                                                        className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
-                                                    >
-                                                        <GroupTypeMetaLabel
-                                                            group={group}
-                                                            ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
-                                                            textClassName={groupPreviewKickerTextClassName}
+                                                        aria-hidden
+                                                        className={`pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full blur-2xl transition motion-reduce:transition-none ${isArena
+                                                            ? "bg-violet-400/[0.1] group-hover/card:bg-violet-400/[0.15]"
+                                                            : "bg-sky-400/[0.08] group-hover/card:bg-sky-400/[0.13]"
+                                                            }`}
+                                                    />
+                                                    <Link
+                                                        href={getGroupPath(group.group_type, group.id)}
+                                                        tabIndex={isClone ? -1 : undefined}
+                                                        aria-label={`Open ${group.name}`}
+                                                        className={`absolute inset-0 rounded-[22px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${isArena
+                                                            ? "focus-visible:outline-violet-300"
+                                                            : "focus-visible:outline-sky-300"
+                                                            }`}
+                                                    />
+                                                    <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+                                                        <div
+                                                            className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
+                                                        >
+                                                            <GroupTypeMetaLabel
+                                                                group={group}
+                                                                ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
+                                                                textClassName={groupPreviewKickerTextClassName}
+                                                                showTitle={false}
+                                                            />
+                                                            <span aria-hidden className="text-gray-600">
+                                                                ·
+                                                            </span>
+                                                            <span className="text-gray-300">
+                                                                {group.created_by === currentUserId ? "OWNER" : "MEMBER"}
+                                                            </span>
+                                                        </div>
+                                                        <InviteCodeCopy
+                                                            code={group?.invite_code}
+                                                            accent={isArena ? "arena" : "league"}
+                                                            tabIndex={isClone ? -1 : undefined}
+                                                            className={`text-right ${isArena ? "text-violet-100" : ""}`}
                                                         />
-                                                        <span aria-hidden className="text-gray-600">
-                                                            ·
-                                                        </span>
-                                                        <span className="text-gray-300">
-                                                            {group.created_by === currentUserId ? "OWNER" : "MEMBER"}
+                                                    </div>
+                                                    <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 items-center py-4">
+                                                        <h3
+                                                            className={`allow-caps line-clamp-2 break-words bg-clip-text text-xl font-extrabold leading-tight text-transparent sm:text-2xl ${isArena
+                                                                ? "bg-gradient-to-r from-white via-violet-100 to-fuchsia-200"
+                                                                : ""
+                                                                }`}
+                                                            style={isArena ? undefined : displayNameGradientStyle}
+                                                        >
+                                                            {group.name}
+                                                        </h3>
+                                                    </div>
+                                                    <div
+                                                        className={`pointer-events-none relative z-10 flex flex-wrap gap-2 ${isArena ? "text-gray-400" : "text-gray-500"
+                                                            } ${groupPreviewMetaTextClassName}`}
+                                                    >
+                                                        <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                                        <span>
+                                                            {getCombinedContestCapacityLabel(
+                                                                group,
+                                                                [],
+                                                                []
+                                                            )}
                                                         </span>
                                                     </div>
-                                                    <InviteCodeCopy code={group?.invite_code} />
                                                 </div>
-                                                <div className="flex min-w-0 flex-1 items-center py-3">
-                                                    <h3
-                                                        className="allow-caps line-clamp-2 break-words text-xl font-extrabold leading-tight text-transparent bg-clip-text"
-                                                        style={displayNameGradientStyle}
-                                                    >
-                                                        {group.name}
-                                                    </h3>
-                                                </div>
-                                                <div
-                                                    className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
-                                                >
-                                                    <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                                    {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
-                                                    <span>
-                                                        {getCombinedContestCapacityLabel(
-                                                            group,
-                                                            [],
-                                                            []
-                                                        )}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                     {orderedGroups.length > 1 && (
                                         <div className="mt-3 flex items-center justify-center gap-2">
@@ -824,62 +790,83 @@ const HomeTab = () => {
                                     )}
                                 </div>
                                 <div className="hidden sm:grid sm:grid-cols-2 sm:gap-4">
-                                    {orderedGroups.slice(0, 2).map((group) => (
-                                        <div
-                                            key={group.id}
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => router.push(`/league/${group.id}`)}
-                                            onKeyDown={(event) => {
-                                                if (event.target !== event.currentTarget) return;
-                                                if (event.key === "Enter" || event.key === " ") {
-                                                    event.preventDefault();
-                                                    router.push(`/league/${group.id}`);
-                                                }
-                                            }}
-                                            className="relative flex min-h-[9rem] cursor-pointer flex-col rounded-[18px] border border-white/10 bg-white/[0.045] p-5 text-left shadow-lg shadow-black/25 transition hover:border-blue-400/50 hover:bg-white/[0.065] focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300/70"
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
+                                    {orderedGroups.slice(0, 2).map((group) => {
+                                        const isArena = group.group_type === "arena";
+
+                                        return (
+                                            <div
+                                                key={group.id}
+                                                className={`${previewCardBaseClassName} ${isArena
+                                                    ? arenaPreviewCardToneClassName
+                                                    : leaguePreviewCardToneClassName
+                                                    }`}
+                                            >
                                                 <div
-                                                    className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
-                                                >
-                                                    <GroupTypeMetaLabel
-                                                        group={group}
-                                                        ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
-                                                        textClassName={groupPreviewKickerTextClassName}
+                                                    aria-hidden
+                                                    className={`pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full blur-2xl transition motion-reduce:transition-none ${isArena
+                                                        ? "bg-violet-400/[0.1] group-hover/card:bg-violet-400/[0.15]"
+                                                        : "bg-sky-400/[0.08] group-hover/card:bg-sky-400/[0.13]"
+                                                        }`}
+                                                />
+                                                <Link
+                                                    href={getGroupPath(group.group_type, group.id)}
+                                                    aria-label={`Open ${group.name}`}
+                                                    className={`absolute inset-0 rounded-[22px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${isArena
+                                                        ? "focus-visible:outline-violet-300"
+                                                        : "focus-visible:outline-sky-300"
+                                                        }`}
+                                                />
+                                                <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+                                                    <div
+                                                        className={`flex min-w-0 flex-wrap items-center gap-1.5 text-gray-400 ${groupPreviewKickerTextClassName}`}
+                                                    >
+                                                        <GroupTypeMetaLabel
+                                                            group={group}
+                                                            ownerPlan={group.hosting_tier === "pro" ? "pro" : "free"}
+                                                            textClassName={groupPreviewKickerTextClassName}
+                                                            // Dead inside pointer-events-none — see carousel card.
+                                                            showTitle={false}
+                                                        />
+                                                        <span aria-hidden className="text-gray-600">
+                                                            ·
+                                                        </span>
+                                                        <span className="text-gray-300">
+                                                            {group.created_by === currentUserId ? "OWNER" : "MEMBER"}
+                                                        </span>
+                                                    </div>
+                                                    <InviteCodeCopy
+                                                        code={group?.invite_code}
+                                                        accent={isArena ? "arena" : "league"}
+                                                        className={`text-right ${isArena ? "text-violet-100" : ""}`}
                                                     />
-                                                    <span aria-hidden className="text-gray-600">
-                                                        ·
-                                                    </span>
-                                                    <span className="text-gray-300">
-                                                        {group.created_by === currentUserId ? "OWNER" : "MEMBER"}
+                                                </div>
+                                                <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 items-center py-4">
+                                                    <h3
+                                                        className={`allow-caps line-clamp-2 break-words bg-clip-text text-xl font-extrabold leading-tight text-transparent sm:text-2xl ${isArena
+                                                            ? "bg-gradient-to-r from-white via-violet-100 to-fuchsia-200"
+                                                            : ""
+                                                            }`}
+                                                        style={isArena ? undefined : displayNameGradientStyle}
+                                                    >
+                                                        {group.name}
+                                                    </h3>
+                                                </div>
+                                                <div
+                                                    className={`pointer-events-none relative z-10 flex flex-wrap gap-2 ${isArena ? "text-gray-400" : "text-gray-500"
+                                                        } ${groupPreviewMetaTextClassName}`}
+                                                >
+                                                    <span>{getGroupCapacityLabel(group, group.member_count)}</span>
+                                                    <span>
+                                                        {getCombinedContestCapacityLabel(
+                                                            group,
+                                                            [],
+                                                            []
+                                                        )}
                                                     </span>
                                                 </div>
-                                                <InviteCodeCopy code={group?.invite_code} />
                                             </div>
-                                            <div className="flex min-w-0 flex-1 items-center py-4">
-                                                <h3
-                                                    className="allow-caps line-clamp-2 break-words text-xl font-extrabold leading-tight text-transparent bg-clip-text"
-                                                    style={displayNameGradientStyle}
-                                                >
-                                                    {group.name}
-                                                </h3>
-                                            </div>
-                                            <div
-                                                className={`flex flex-wrap gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
-                                            >
-                                                <span>{getGroupCapacityLabel(group, group.member_count)}</span>
-                                                {/* <span>{getActiveContestCountsLabel(group, group.active_contest)}</span> */}
-                                                <span>
-                                                    {getCombinedContestCapacityLabel(
-                                                        group,
-                                                        [],
-                                                        []
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </>
                         )}
@@ -888,144 +875,123 @@ const HomeTab = () => {
             </section>
 
             <section
-                className="-mx-2 grid grid-cols-3 gap-2 animate-[homeFadeUp_0.7s_ease-out_both] sm:mx-0 sm:gap-4"
-                style={{ animationDelay: "0.1s" }}
+                className="-mx-5 border-t border-white/10 px-5 pt-3 sm:-mx-6 sm:px-6 sm:pt-3.5"
+                aria-label="Build a post"
             >
-                {quickActions.map((action) => (
-                    <ActionCard
-                        key={action.id}
-                        action={action}
-                        locked={actionsLocked}
-                        onLockedTap={handleLockedActionTap}
-                    />
-                ))}
+                <div className="mb-1 flex items-center justify-between gap-4">
+                    <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">
+                        pick builder
+                    </p>
+                    <span className="text-[10px] uppercase tracking-[0.16em] text-sky-200/70">
+                        live lines
+                    </span>
+                </div>
+                <Suspense fallback={null}>
+                    <PickBuilderClientPage compact />
+                </Suspense>
             </section>
 
-            <section
-                className="animate-[homeFadeUp_0.7s_ease-out_both]"
-                style={{ animationDelay: "0.15s" }}
-            >
-                <div className="space-y-4">
-                    <div className="-mx-5 sm:mx-0">
-                        <div className="h-px w-full bg-white/10" />
-                        <div className="px-5 sm:px-0">
-                            <div className="mt-2 flex items-center justify-between gap-5">
-                                <div className="flex items-center gap-5">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActivityTab("posts")}
-                                        className={`text-[11px] tracking-[0.24em] transition ${activityTab === "posts"
-                                            ? "text-white"
-                                            : "text-gray-400 hover:text-white"
-                                            }`}
-                                    >
-                                        recent posts
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActivityTab("notifications")}
-                                        className={`inline-flex items-center gap-2 text-[11px] tracking-[0.24em] transition ${activityTab === "notifications"
-                                            ? "text-white"
-                                            : "text-gray-400 hover:text-white"
-                                            }`}
-                                    >
-                                        <span>notifications</span>
-                                        {unreadNotifications > 0 ? (
-                                            <span className="rounded-full border border-blue-300/40 bg-blue-500/15 px-1.5 py-0.5 text-[9px] tracking-normal text-blue-100">
-                                                {unreadNotifications}
-                                            </span>
-                                        ) : null}
-                                    </button>
-                                </div>
-                                {activityTab === "notifications" && notifications.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={handleClearAll}
-                                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-gray-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white sm:text-[10px] sm:tracking-[0.18em]"
-                                    >
-                                        <TrashIcon className={`h-3 w-3 shrink-0`} />
-                                        <span>clear all</span>
-                                    </button>
-                                )}
-                            </div>
+            <div className={`fixed inset-0 z-50 ${notificationsOpen ? "pointer-events-auto" : "pointer-events-none"}`} aria-hidden={!notificationsOpen}>
+                <button
+                    type="button"
+                    aria-label="Close notifications"
+                    tabIndex={notificationsOpen ? 0 : -1}
+                    onClick={handleCloseNotificationPopup}
+                    className={`absolute inset-0 bg-black/65 backdrop-blur-sm transition-opacity ${notificationsOpen ? "opacity-100" : "opacity-0"}`}
+                />
+                <aside
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="notifications-drawer-title"
+                    className={`absolute inset-y-0 left-0 right-0 flex max-w-none flex-col bg-slate-950 shadow-2xl transition-transform duration-300 sm:left-auto sm:w-full sm:max-w-md sm:border-l sm:border-white/10 ${notificationsOpen ? "translate-x-0" : "translate-x-full"}`}
+                >
+                    <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">activity</p>
+                            <h2 id="notifications-drawer-title" className="mt-1 text-lg font-semibold text-white">Notifications</h2>
                         </div>
+                        <button ref={notificationCloseRef} type="button" onClick={handleCloseNotificationPopup} aria-label="Close notifications" tabIndex={notificationsOpen ? 0 : -1} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-xl text-gray-300 transition hover:bg-white/10 hover:text-white">×</button>
                     </div>
-
-                    {activityTab === "posts" ? (
-                        <FeedList
-                            items={postPicks}
-                            currentUserId={currentUserId}
-                            onReaction={handleReaction}
-                            onViewProfile={handleViewProfile}
-                            showReactions={true}
-                            showTopBorder={true}
-                            loading={pickLoader}
-                            lastItemRef={lastItemRef}
-                            emptyCopy="There are no pending public posts at the moment."
-                        />
-                    ) : (
+                    <div className="flex items-center justify-end border-b border-white/10 px-5 py-2 sm:px-6">
+                        {notificationsOpen && notifications.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleClearAll}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-gray-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white sm:text-[10px] sm:tracking-[0.18em]"
+                            >
+                                <TrashIcon className={`h-3 w-3 shrink-0`} />
+                                <span>clear all</span>
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
                         <NotificationsFeed
                             onOpenProfile={handleViewProfile}
                             onOpenGroup={handleOpenGroup}
                         />
-                    )}
-                </div>
-            </section>
+                    </div>
+                </aside>
+            </div >
+
             <OnboardingModal
                 open={!hasSeenWelcomeIntro}
                 steps={WELCOME_TUTORIAL}
                 onClose={handleCompleteWelcomeIntro}
                 finalCtaLabel="finish"
             />
-            {joinOpen && (
-                <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">
-                    <form onSubmit={handleJoin} className="space-y-4 text-center">
-                        <div className="space-y-1">
-                            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">
-                                join a league or Arena
-                            </p>
-                            <p className="text-lg font-semibold text-white">Enter invite code</p>
-                        </div>
-                        <input
-                            type="text"
-                            value={joinCode}
-                            onChange={(event) => {
-                                let value = event.target.value;
-                                value = value.replace(/\D/g, "").slice(0, 5);
-                                setJoinCode(value);
-                                setJoinError(null);
-                            }}
-                            maxLength={5}
-                            inputMode="numeric"
-                            placeholder="invite code"
-                            autoFocus
-                            className="ui-input-accent w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition"
-                        />
-                        {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
-                        <div className="flex justify-center gap-3">
-                            <button
-                                type="button"
-                                onClick={closeJoinModal}
-                                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed"
-                                disabled={!joinCode || joinCode.length !== 5}
-                            >
-                                Join
-                            </button>
-                        </div>
-                    </form>
-                </ModalShell>
-            )}
+            {
+                joinOpen && (
+                    <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">
+                        <form onSubmit={handleJoin} className="space-y-4 text-center">
+                            <div className="space-y-1">
+                                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">
+                                    join a league or Arena
+                                </p>
+                                <p className="text-lg font-semibold text-white">Enter invite code</p>
+                            </div>
+                            <input
+                                type="text"
+                                value={joinCode}
+                                onChange={(event) => {
+                                    let value = event.target.value;
+                                    value = value.replace(/\D/g, "").slice(0, 5);
+                                    setJoinCode(value);
+                                    setJoinError(null);
+                                }}
+                                maxLength={5}
+                                inputMode="numeric"
+                                placeholder="invite code"
+                                autoFocus
+                                className="ui-input-accent w-full rounded-2xl border border-white/15 bg-black/60 px-4 py-2.5 text-base sm:text-sm text-white outline-none transition"
+                            />
+                            {joinError && <p className="text-xs font-semibold text-red-200">{joinError}</p>}
+                            <div className="flex justify-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeJoinModal}
+                                    className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/30 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="ui-accent-button rounded-xl px-4 py-2 text-sm font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed"
+                                    disabled={!joinCode || joinCode.length !== 5}
+                                >
+                                    Join
+                                </button>
+                            </div>
+                        </form>
+                    </ModalShell>
+                )
+            }
 
-            {showScrollTop && (
-                <ScrollUpButton scrollToTop={scrollToTop} />
-            )}
-        </div>
+            {
+                showScrollTop && (
+                    <ScrollUpButton scrollToTop={scrollToTop} />
+                )
+            }
+        </div >
     );
 };
 

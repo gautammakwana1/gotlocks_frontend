@@ -10,8 +10,18 @@ import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { useDispatch, useSelector } from "react-redux";
 import { useToast } from "@/lib/state/ToastContext";
 import { clearLeaveGroupMessage, fetchGroupMembersByGroupIdRequest } from "@/lib/redux/slices/groupsSlice";
+import useScopedGroup from "@/lib/groups/useScopedGroup";
 import { useRouter } from "next/navigation";
 import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
+import {
+    getMemberDirectoryAvatarClassName,
+    MemberDirectorySearch,
+    MemberDirectoryViewToggle,
+    memberDirectoryGridClassName,
+    memberDirectoryListClassName,
+    type MemberDirectoryAccent,
+    type MemberDirectoryView,
+} from "../community/MemberDirectoryControls";
 
 export type MemberRole = "commissioner" | "member";
 
@@ -31,6 +41,7 @@ type Props = {
     onLeaveGroup?: () => void;
     leavingGroup?: boolean;
     groupId: string;
+    accent?: MemberDirectoryAccent;
 };
 
 type ActionState = {
@@ -131,7 +142,7 @@ const MemberCard = ({
     const showActions = showPromote || showLeave || Boolean(state?.error);
 
     return (
-        <div className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-blue-500/14 via-blue-500/8 to-slate-950/15 bg-clip-padding p-4 shadow-sm transition hover:border-sky-300/35">
+        <div role="listitem" className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-blue-500/14 via-blue-500/8 to-slate-950/15 bg-clip-padding p-4 shadow-sm transition hover:border-sky-300/35">
             {showRemove && (
                 <button
                     type="button"
@@ -192,6 +203,120 @@ const MemberCard = ({
     );
 };
 
+// Compact row used by the "List" view. Same actions as the card, laid out
+// horizontally so more members fit on screen.
+const MemberRow = ({
+    member,
+    currentUserId,
+    isCommissioner,
+    accent,
+    state,
+    onRemove,
+    onLeave,
+    onPromote,
+    disableRemove,
+    disablePromote,
+    showRemove,
+    showPromote,
+    showLeave,
+    leavingGroup,
+}: {
+    member: MemberWithRole;
+    currentUserId: string | undefined;
+    isCommissioner: boolean;
+    accent: MemberDirectoryAccent;
+    state?: ActionState;
+    onRemove: () => void;
+    onLeave: () => void;
+    onPromote: () => void;
+    disableRemove: boolean | undefined;
+    disablePromote: boolean | undefined;
+    showRemove: boolean;
+    showPromote: boolean;
+    showLeave: boolean;
+    leavingGroup?: boolean;
+}) => {
+    const displayName = formatDisplayName(member.profiles?.username);
+    const memberProfileImage = generateProfileImageUrl(member.profiles?.profile_image);
+
+    return (
+        <div role="listitem" className="flex items-center gap-3 py-3">
+            <Link
+                href={
+                    member.user_id && currentUserId
+                        ? getProfilePath(member.user_id, currentUserId)
+                        : "#"
+                }
+                className={getMemberDirectoryAvatarClassName(accent, "list")}
+                aria-label={`View ${displayName || "member"} profile`}
+            >
+                {memberProfileImage ? (
+                    <Image
+                        src={memberProfileImage}
+                        alt="Profile image"
+                        width={40}
+                        height={40}
+                        className="h-full w-full object-cover"
+                        draggable={false}
+                        onDragStart={(e) => e.preventDefault()}
+                        unoptimized
+                    />
+                ) : (
+                    <UserIcon className="h-5 w-5 text-white/80" />
+                )}
+            </Link>
+
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">
+                    {displayName || "Member"}
+                </p>
+                {isCommissioner ? (
+                    <p className="mt-0.5 text-[9px] font-semibold lowercase tracking-[0.16em] text-amber-200">
+                        owner
+                    </p>
+                ) : null}
+                {state?.error ? (
+                    <p className="mt-0.5 text-xs text-red-300">{state.error}</p>
+                ) : null}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+                {showPromote && (
+                    <button
+                        type="button"
+                        disabled={disablePromote}
+                        onClick={onPromote}
+                        className="ui-accent-button rounded-lg px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {state?.promoting ? "transferring..." : "transfer"}
+                    </button>
+                )}
+                {showLeave && (
+                    <button
+                        type="button"
+                        onClick={onLeave}
+                        disabled={leavingGroup}
+                        className="rounded-lg border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-white transition hover:border-red-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {leavingGroup ? "Leaving..." : "Leave"}
+                    </button>
+                )}
+                {showRemove && (
+                    <button
+                        type="button"
+                        onClick={onRemove}
+                        disabled={disableRemove}
+                        aria-label="Remove member"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold text-gray-300 transition hover:border-red-400/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        X
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export const ModifyMembers = ({
     currentUser,
     onRemoveMember,
@@ -199,18 +324,26 @@ export const ModifyMembers = ({
     onLeaveGroup,
     leavingGroup,
     groupId,
+    accent = "league",
 }: Props) => {
     const router = useRouter();
     const { setToast } = useToast();
     const dispatch = useDispatch();
     const [actionState, setActionState] = useState<Record<string, ActionState>>({});
+    const [view, setView] = useState<MemberDirectoryView>("cards");
+    const [search, setSearch] = useState("");
     const [pendingAction, setPendingAction] = useState<
         { member: MemberWithRole; kind: "remove" | "promote" | "leave" } | null
     >(null);
     const [confirming, setConfirming] = useState(false);
 
     const { members: groupMembers, loadingMembers, membersPagination, leaveLoading, leaveMessage } = useSelector((state: GroupSelector) => state.group);
-    const group = useSelector((state: GroupSelector) => state.group.group);
+    // Only ever read the shared group slot when the record is the one `groupId`
+    // asked for. This component is mounted by a group screen and is only used for
+    // the owner check below, so a leftover record from the previously viewed group
+    // would silently crown the wrong member "owner" on the first commit after a
+    // navigation. See useScopedGroup for why `loading` cannot cover that commit.
+    const { group } = useScopedGroup(groupId);
 
     useEffect(() => {
         if (!groupId) return;
@@ -257,6 +390,17 @@ export const ModifyMembers = ({
             isOwner: member.user_id === group?.created_by,
         }));
     }, [groupMembers, group?.created_by]);
+
+    // Members arrive server-paginated, so this filters the pages already loaded.
+    // Add a `search` param to GET /group/members/:group_id to search the full set.
+    const visibleMembers = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+        if (!normalizedSearch) return displayMembers;
+
+        return displayMembers.filter((member) =>
+            (member.profiles?.username ?? "").toLowerCase().includes(normalizedSearch)
+        );
+    }, [displayMembers, search]);
 
     const canManage = useMemo(() => {
         const source = groupMembers && groupMembers.length > 0 ? groupMembers : [];
@@ -357,56 +501,86 @@ export const ModifyMembers = ({
         return <MembersSkeleton />;
     }
 
+    const renderMember = (member: MemberWithRole) => {
+        const state = member?.user_id ? actionState[member?.user_id] : {};
+        const isCommissioner = member.role === "commissioner";
+        const isOwner = Boolean(member.isOwner ?? isCommissioner);
+        const isSelf = member.user_id === currentUser?.userId;
+
+        const disableRemove = !canManage || isOwner || isSelf;
+        const disablePromote = !canManage || isCommissioner;
+        const showRemove = canManage && !isOwner && !isSelf && !isCommissioner;
+        const showPromote = canManage && !isCommissioner;
+        const showLeave = !canManage && isSelf && Boolean(onLeaveGroup);
+
+        const requestRemove = () => {
+            if (disableRemove) return;
+            setPendingAction({ member, kind: "remove" });
+        };
+
+        const requestPromote = () => {
+            if (disablePromote) return;
+            setPendingAction({ member, kind: "promote" });
+        };
+
+        const requestLeave = () => {
+            if (!showLeave) return;
+            setPendingAction({ member, kind: "leave" });
+        };
+
+        const shared = {
+            member,
+            currentUserId: currentUser?.userId,
+            isCommissioner,
+            state,
+            onRemove: requestRemove,
+            onLeave: requestLeave,
+            onPromote: requestPromote,
+            disableRemove,
+            disablePromote,
+            showRemove,
+            showPromote,
+            showLeave,
+            leavingGroup,
+        };
+
+        return view === "cards" ? (
+            <MemberCard key={member.id} {...shared} />
+        ) : (
+            <MemberRow key={member.id} accent={accent} {...shared} />
+        );
+    };
+
     return (
         <section className="space-y-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {displayMembers.map((member) => {
-                    const state = member?.user_id ? actionState[member?.user_id] : {};
-                    const isCommissioner = member.role === "commissioner";
-                    const isOwner = Boolean(member.isOwner ?? isCommissioner);
-                    const isSelf = member.user_id === currentUser?.userId;
-
-                    const disableRemove = !canManage || isOwner || isSelf;
-                    const disablePromote = !canManage || isCommissioner;
-                    const showRemove = canManage && !isOwner && !isSelf && !isCommissioner;
-                    const showPromote = canManage && !isCommissioner;
-                    const showLeave = !canManage && isSelf && Boolean(onLeaveGroup);
-
-                    const requestRemove = () => {
-                        if (disableRemove) return;
-                        setPendingAction({ member, kind: "remove" });
-                    };
-
-                    const requestPromote = () => {
-                        if (disablePromote) return;
-                        setPendingAction({ member, kind: "promote" });
-                    };
-
-                    const requestLeave = () => {
-                        if (!showLeave) return;
-                        setPendingAction({ member, kind: "leave" });
-                    };
-
-                    return (
-                        <MemberCard
-                            key={member.id}
-                            member={member}
-                            currentUserId={currentUser?.userId}
-                            isCommissioner={isCommissioner}
-                            state={state}
-                            onRemove={requestRemove}
-                            onLeave={requestLeave}
-                            onPromote={requestPromote}
-                            disableRemove={disableRemove}
-                            disablePromote={disablePromote}
-                            showRemove={showRemove}
-                            showPromote={showPromote}
-                            showLeave={showLeave}
-                            leavingGroup={leavingGroup}
-                        />
-                    );
-                })}
+            <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
+                <MemberDirectorySearch
+                    search={search}
+                    onSearchChange={setSearch}
+                    accent={accent}
+                    searchLabel="Search members"
+                    embedded
+                />
+                <MemberDirectoryViewToggle view={view} onViewChange={setView} embedded />
             </div>
+
+            {visibleMembers.length ? (
+                <div
+                    role="list"
+                    aria-label={view === "cards" ? "Member cards" : "Member list"}
+                    className={
+                        view === "cards"
+                            ? memberDirectoryGridClassName
+                            : memberDirectoryListClassName
+                    }
+                >
+                    {visibleMembers.map(renderMember)}
+                </div>
+            ) : (
+                <div className="rounded-xl border border-dashed border-white/15 bg-black/30 p-6 text-sm text-gray-500">
+                    No members match your search.
+                </div>
+            )}
 
             {pendingAction && (
                 <div

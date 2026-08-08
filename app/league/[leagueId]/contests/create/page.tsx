@@ -64,7 +64,7 @@ const CreateContestPage = () => {
 
     useEffect(() => {
         if (group && currentUser && !permission.allowed) {
-            router.replace(`/league/${group.id}`);
+            router.replace(`/league/${group.id}?tab=contests`);
         }
     }, [currentUser, group, permission.allowed, router]);
 
@@ -173,7 +173,7 @@ const CreateContestPage = () => {
 
     return (
         <div className="flex flex-col gap-6 pb-10">
-            <BackButton fallback={`/league/${group.id}`} preferFallback />
+            <BackButton fallback={`/league/${group.id}?tab=contests`} preferFallback />
             <header className="space-y-2 border-b border-white/10 pb-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     {group.name}

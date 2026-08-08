@@ -77,7 +77,7 @@ const SlipAddPickPage = () => {
             return;
         }
         if (!slip) {
-            router.replace(`/league/${group.id}`);
+            router.replace(`/league/${group.id}?tab=contests`);
             return;
         }
         if (!canView) {

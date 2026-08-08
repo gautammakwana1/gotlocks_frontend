@@ -6,6 +6,7 @@ import ConfidenceDropdown from "../../ui/ConfidenceDropdown";
 import { useEffect } from "react";
 import { extractPickLine } from "@/lib/utils/pickDescription";
 import { ChevronUpDownIcon } from "../../ui/SvgIcons";
+import dockStyles from "../../layout/BottomDock.module.css";
 
 export type ReviewSheetItem = {
   id: string;
@@ -235,54 +236,70 @@ export function PickReviewSheet({
     <>
       {isOpen && (
         <div
-          className="fixed inset-x-0 top-0 bottom-[calc(0.75rem+4.5rem)] z-30 bg-black/70 sm:bottom-[calc(0.75rem+4.875rem)] md:bottom-[calc(0.75rem+4.875rem*1.45)]"
+          data-pick-review-backdrop
+          className={`${dockStyles.dockClearance} fixed inset-x-0 top-0 z-30 bg-black/70`}
           role="presentation"
           onClick={() => onOpenChange(false)
           }
         />
       )}
 
-      <div className="fixed inset-x-0 bottom-3 z-30 flex justify-center px-5 sm:px-6" >
-        <div className="relative w-[360px] sm:w-[390px] md:origin-bottom md:scale-[1.45]" >
+      <div
+        data-pick-review-dock
+        className={`${dockStyles.viewportAnchor} ${dockStyles.dockPosition} ${dockStyles.dockGutter} fixed z-30 flex justify-center`}
+      >
+        <div className={`${dockStyles.scaledFrame} relative`} >
           <div
-            className={
-              `rounded-3xl sheet-rounded border border-b-0 border-white/10 bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] shadow-[0_-12px_40px_rgba(0,0,0,0.55)] backdrop-blur ${confirmationVariant === "post"
-                ? "pb-[9rem] sm:pb-[9.75rem]"
-                : "pb-[4.5rem] sm:pb-[4.875rem]"
+            data-pick-review-surface
+            data-pick-review-open={isOpen}
+            data-pick-review-variant={confirmationVariant}
+            className={`rounded-3xl sheet-rounded border-x-0 border-t border-white/10 shadow-[0_-12px_40px_rgba(0,0,0,0.55)] sm:border sm:border-b-0 ${isOpen
+              ? "bg-[#080a0f]"
+              : "bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] backdrop-blur"
+              } ${confirmationVariant === "post" && isOpen
+                ? dockStyles.postSheetActionClearance
+                : dockStyles.sheetSurfaceClearance
               } ${isOpen
-                ? "max-h-[calc(100dvh-6rem)] overflow-y-auto sheet-scroll md:max-h-[calc((100dvh-6rem)*0.689655)]"
+                ? `${dockStyles.openSheetViewport} overflow-y-auto sheet-scroll`
                 : "overflow-hidden"
-              }`
-            }
+              }`}
           >
             <button
               type="button"
               onClick={() => onOpenChange(!isOpen)}
               className={`flex w-full items-center justify-between gap-3 px-4 py-4 text-left ${isOpen
-                ? "sticky top-0 z-10 bg-gradient-to-b from-black/80 via-black/60 to-black/20 backdrop-blur"
-                : ""
+                ? "sticky top-0 z-10 bg-[#080a0f]"
+                : "min-h-[72px] sm:min-h-0"
                 }`}
             >
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs uppercase tracking-wide text-gray-400" >
                   {resolvedSheetHeaderLabel}
                 </p>
-                {
-                  isOpen &&
-                  (hasMultiSelection ? (
-                    <p className="mt-1 text-sm font-semibold text-white" >
-                      {multiSelectionCount} picks selected
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-sm font-semibold text-white" >
-                      {singleSelectionSummary}
-                    </p>
-                  ))
-                }
+                <p className="mt-1 text-sm font-semibold text-white">
+                  {hasMultiSelection
+                    ? `${multiSelectionCount} picks selected`
+                    : singleSelectionSummary}
+                </p>
               </div>
-              < span className="text-gray-400" >
-                <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isOpen ? "" : "rotate-180"}`} />
-              </span>
+              <div className="flex shrink-0 items-center gap-3">
+                {!isOpen &&
+                  hasMultiSelection &&
+                  !comboHasInvalidSelections &&
+                  comboOddsLabel && (
+                    <div className="text-right">
+                      <span className="block text-[11px] font-semibold text-slate-100">
+                        {comboOddsLabel}
+                      </span>
+                      <span className="mt-0.5 block text-[9px] uppercase tracking-wide text-slate-400">
+                        combo odds
+                      </span>
+                    </div>
+                  )}
+                <span className="text-gray-400">
+                  <ChevronUpDownIcon direction={isOpen ? "down" : "up"} />
+                </span>
+              </div>
             </button>
 
             {isOpen && (
@@ -794,8 +811,11 @@ export function PickReviewSheet({
               </div>
             )}
           </div>
-          {confirmationVariant === "post" && (
-            <div className="absolute inset-x-0 bottom-[4.5rem] border border-b-0 border-white/10 bg-black/80 px-4 py-3 backdrop-blur sm:bottom-[4.875rem]">
+          {confirmationVariant === "post" && isOpen && (
+            <div
+              data-pick-review-action
+              className={`${dockStyles.sheetActionOffset} absolute inset-x-0 z-20 border border-b-0 border-white/10 bg-[#080a0f] px-4 py-3`}
+            >
               <button
                 type="button"
                 onClick={() =>

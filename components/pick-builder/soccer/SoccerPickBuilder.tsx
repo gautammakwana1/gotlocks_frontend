@@ -235,7 +235,7 @@ type Props = {
 const LEAGUE_LABELS: Record<string, string> = {
     "England Premier League": "Premier League",
     "Germany Bundesliga": "Bundesliga",
-    "FIFA World Cup": "FIFA World Cup",
+    "FIFA World Cup": "World Cup",
 };
 
 const SOCCER_LEAGUE_ORDER = [
@@ -3002,7 +3002,7 @@ export const SoccerPickBuilder = ({
                                 </p>
                             </div>
                         ) : (
-                            <div className="-mx-5 overflow-y-auto scrollbar-hide sm:mx-0">
+                            <div className="pick-builder-game-list -mx-5 overflow-y-auto scrollbar-hide sm:mx-0">
                                 {groupedGames.map((section) => (
                                     <section
                                         key={section.leagueName}
@@ -3079,7 +3079,7 @@ export const SoccerPickBuilder = ({
                                                         className="py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
                                                     >
                                                         <div
-                                                            className="grid items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
+                                                            className="grid justify-end items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
                                                             style={{
                                                                 gridTemplateColumns:
                                                                     "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -3092,7 +3092,7 @@ export const SoccerPickBuilder = ({
                                                         </div>
 
                                                         <div
-                                                            className="grid gap-1"
+                                                            className="grid justify-end gap-1"
                                                             style={{
                                                                 gridTemplateColumns:
                                                                     "minmax(0,1fr) repeat(3, var(--table-chip-width))",

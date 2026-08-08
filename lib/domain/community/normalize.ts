@@ -35,6 +35,9 @@ import type {
     PickVersionKind,
     SelectionGrade,
     SelectionSnapshot,
+    StaffFeedPost,
+    StaffFeedPostAuthorRole,
+    StaffFeedPostKind,
     StructuredFeedContest,
     StructuredPickStatus,
 } from "./types";
@@ -318,6 +321,8 @@ export function normalizeArenaUnlock(
             status: "locked",
             permanent: false,
             source: null,
+            amountCents: null,
+            currency: null,
             purchasedByUserId: null,
             unlockedAt: null,
             simulatedPaymentReference: null,
@@ -339,6 +344,11 @@ export function normalizeArenaUnlock(
         status: "unlocked",
         permanent: true,
         source: unlockSource,
+        amountCents:
+            unlockSource === "legacy_grandfathered"
+                ? 0
+                : nonNegativeInteger(source.amountCents, 5000),
+        currency: "USD",
         purchasedByUserId:
             unlockSource === "legacy_grandfathered"
                 ? null
@@ -391,7 +401,13 @@ export function hostingLimitsForTier(
 
 function addUtcMonth(value: string): string {
     const date = new Date(value);
+    const originalDay = date.getUTCDate();
+    date.setUTCDate(1);
     date.setUTCMonth(date.getUTCMonth() + 1);
+    const lastDay = new Date(
+        Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+    ).getUTCDate();
+    date.setUTCDate(Math.min(originalDay, lastDay));
     return date.toISOString();
 }
 
@@ -458,15 +474,37 @@ export function normalizeArenaHosting(
         defaults.legacyExistingArena === true ||
         unlock?.includedMonthConsumed === true ||
         booleanValue(source.includedMonthConsumed, !withinIncludedPeriod && unlocked);
+    const scheduledTier = (
+        ["arena_50", "arena_100", "arena_250_plus", "custom"] as const
+    ).includes(source.scheduledTier as ArenaHostingTier)
+        ? (source.scheduledTier as ArenaHostingTier)
+        : null;
     return {
         arenaId: nonEmptyString(source.arenaId, defaults.arenaId ?? unlock?.arenaId ?? UNKNOWN_ARENA_ID),
         tier,
         status: unlocked ? status : "not_started",
         limits: hostingLimitsForTier(tier, source.limits),
         billingMode: "simulated",
-        periodStartsAt: nullableIsoDateTime(source.periodStartsAt),
-        periodEndsAt: nullableIsoDateTime(source.periodEndsAt),
-        paidThroughAt: nullableIsoDateTime(source.paidThroughAt ?? source.periodEndsAt),
+        monthlyAmountCents:
+            tier === "arena_50"
+                ? nonNegativeInteger(source.monthlyAmountCents, status === "included_month" ? 0 : 1000)
+                : tier === "arena_100"
+                    ? nonNegativeInteger(source.monthlyAmountCents, 2000)
+                    : tier === "arena_250_plus"
+                        ? nonNegativeInteger(source.monthlyAmountCents, 4000)
+                        : null,
+        simulatedPaymentReference: nullableString(source.simulatedPaymentReference),
+        activatedAt: nullableIsoDateTime(source.activatedAt),
+        scheduledTier,
+        periodStartsAt:
+            nullableIsoDateTime(source.periodStartsAt) ??
+            (status === "included_month" ? includedMonthStartsAt : null),
+        periodEndsAt:
+            nullableIsoDateTime(source.periodEndsAt) ??
+            (status === "included_month" ? includedMonthEndsAt : null),
+        paidThroughAt:
+            nullableIsoDateTime(source.paidThroughAt ?? source.periodEndsAt) ??
+            (status === "included_month" ? includedMonthEndsAt : null),
         includedMonthStartsAt,
         includedMonthEndsAt,
         includedMonthConsumed,
@@ -779,7 +817,7 @@ export function normalizePickVersion(
         pickId: nonEmptyString(source.pickId, defaults.pickId ?? "legacy:pick"),
         kind: enumValue(
             source.kind,
-            ["community_pick", "competitive_pick", "pickem_card"] as const,
+            ["community_pick", "competitive_pick", "pickem_card", "staff_pick"] as const,
             defaults.kind ?? "community_pick",
         ),
         versionNumber,
@@ -911,6 +949,96 @@ export function normalizeCompetitivePick(
         finalizedAt: nullableIsoDateTime(source.finalizedAt),
         withdrawnAt: nullableIsoDateTime(source.withdrawnAt),
         disqualifiedAt: nullableIsoDateTime(source.disqualifiedAt),
+    };
+}
+
+function normalizeStaffFeedPostKind(value: unknown): StaffFeedPostKind {
+    const normalized =
+        typeof value === "string"
+            ? value.trim().toLowerCase().replace(/[\s-]+/g, "_")
+            : value;
+    return enumValue(
+        normalized,
+        [
+            "general",
+            "announcement",
+            "contest_reminder",
+            "venue_promotion",
+            "reward_instructions",
+            "contest_results",
+            "external_link",
+            "staff_pick",
+        ] as const,
+        "general",
+    );
+}
+
+function normalizeStaffFeedPostAuthorRole(
+    value: unknown,
+    context: CommunityContext,
+): StaffFeedPostAuthorRole {
+    const normalized =
+        typeof value === "string"
+            ? value.trim().toLowerCase().replace(/[\s-]+/g, "_")
+            : value;
+    if (context.type === "league_feed") return "league_commissioner";
+    if (normalized === "manager" || normalized === "arena_manager") return "arena_manager";
+    if (normalized === "owner" || normalized === "arena_owner") return "arena_owner";
+    return enumValue(
+        normalized,
+        ["arena_owner", "arena_manager"] as const,
+        "arena_owner",
+    );
+}
+
+export function normalizeStaffFeedPost(
+    value: unknown,
+    defaults: {
+        id?: string;
+        context?: CommunityContext;
+        authorUserId?: string;
+    } & NormalizationOptions = {},
+): StaffFeedPost {
+    const source = record(value);
+    const now = normalizedNow(defaults);
+    const id = nonEmptyString(source.id, defaults.id ?? "legacy:staff-feed-post");
+    const context = normalizeContext(source.context ?? source, defaults.context);
+    const kind = normalizeStaffFeedPostKind(source.kind ?? source.postKind ?? source.type);
+    const parsedDeletedAt = nullableIsoDateTime(source.deletedAt);
+    const deletedAt =
+        parsedDeletedAt ?? (source.status === "deleted" ? now : null);
+    const createdAt = isoDateTime(source.createdAt ?? source.publishedAt, now);
+    const versionIds = kind === "staff_pick" ? stringArray(source.versionIds) : [];
+    const currentVersionId =
+        kind === "staff_pick"
+            ? nonEmptyString(source.currentVersionId, `${id}:version:1`)
+            : null;
+    if (currentVersionId && !versionIds.includes(currentVersionId)) {
+        versionIds.push(currentVersionId);
+    }
+    return {
+        id,
+        context,
+        authorUserId: nonEmptyString(
+            firstDefined(source, ["authorUserId", "userId", "createdByUserId", "createdBy"]),
+            defaults.authorUserId ?? UNKNOWN_USER_ID,
+        ),
+        authorRole: normalizeStaffFeedPostAuthorRole(
+            source.authorRole ?? source.staffRole ?? source.role,
+            context,
+        ),
+        kind,
+        status: deletedAt || source.status === "deleted" ? "deleted" : "published",
+        title: nullableString(source.title),
+        body: nullableString(source.body ?? source.content ?? source.text) ?? "",
+        externalUrl: normalizeHttpUrl(source.externalUrl ?? source.url),
+        contestId: nullableString(source.contestId),
+        currentVersionId,
+        versionIds,
+        isPinned: booleanValue(source.isPinned ?? source.pinned, false),
+        createdAt,
+        updatedAt: isoDateTime(source.updatedAt, createdAt),
+        deletedAt,
     };
 }
 
@@ -1485,6 +1613,9 @@ export function normalizeCommunityDomainState(
     const competitivePicks = collection(source, "competitivePicks").map((item, index) =>
         normalizeCompetitivePick(item, { id: `competitive-pick:${index + 1}`, now }),
     );
+    const staffFeedPosts = collection(source, "staffFeedPosts", "staffPosts").map((item, index) =>
+        normalizeStaffFeedPost(item, { id: `staff-feed-post:${index + 1}`, now }),
+    );
     const pickemCards = collection(source, "pickemCards").map((item, index) =>
         normalizePickemCard(item, { id: `pickem-card:${index + 1}`, now }),
     );
@@ -1569,6 +1700,7 @@ export function normalizeCommunityDomainState(
         pickVersions,
         communityPicks,
         competitivePicks,
+        staffFeedPosts,
         pickemCards,
         communityPointClaims,
         communityPointLedger,

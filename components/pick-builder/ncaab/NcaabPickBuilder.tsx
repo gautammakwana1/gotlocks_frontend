@@ -3428,7 +3428,7 @@ export const NcaabPickBuilder = ({
                                 )}
                             </div>
                         ) : (
-                            <div className="-mx-5 divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
+                            <div className="pick-builder-game-list -mx-5 divide-y divide-white/10 overflow-y-auto scrollbar-hide sm:mx-0">
                                 {filteredGames.map((game) => {
                                     const spreadAway = findMainTeamOdd(
                                         game,
@@ -3497,7 +3497,7 @@ export const NcaabPickBuilder = ({
                                             className="py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px]"
                                         >
                                             <div
-                                                className="grid items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
+                                                className="grid justify-end items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
                                                 style={{
                                                     gridTemplateColumns:
                                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -3510,7 +3510,7 @@ export const NcaabPickBuilder = ({
                                             </div>
 
                                             <div
-                                                className="grid items-stretch gap-1"
+                                                className="grid justify-end items-stretch gap-1"
                                                 style={{
                                                     gridTemplateColumns:
                                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
@@ -3564,7 +3564,7 @@ export const NcaabPickBuilder = ({
                                             </div>
 
                                             <div
-                                                className="grid items-stretch gap-1 -mt-2 sm:mt-0"
+                                                className="grid justify-end items-stretch gap-1 -mt-2 sm:mt-0"
                                                 style={{
                                                     gridTemplateColumns:
                                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",

@@ -1,10 +1,11 @@
 "use client";
 
+import LeagueHub from "@/components/leagues/LeagueHub";
 import OnboardingModal from "@/components/modals/OnboardingModal";
-import LeaguesTab from "@/components/profile/GroupsTab";
 import { RootState } from "@/lib/interfaces/interfaces";
 import { GROUP_TUTORIAL } from "@/lib/onboarding/tutorials";
 import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
+import { Suspense } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 const FantasyPage = () => {
@@ -16,15 +17,21 @@ const FantasyPage = () => {
     }
 
     return (
-        <>
-            <LeaguesTab />
+        <Suspense
+            fallback={
+                <div className="text-sm text-gray-400" role="status">
+                    Preparing Leagues…
+                </div>
+            }
+        >
+            <LeagueHub />
             <OnboardingModal
                 open={hasSeenWelcomeIntro && !hasSeenGroupIntro}
                 steps={GROUP_TUTORIAL}
                 onClose={handleCompleteLeagueIntro}
                 finalCtaLabel="finish"
             />
-        </>
+        </Suspense >
     )
 };
 

@@ -54,7 +54,7 @@ The primary flow is:
 
 `landing -> account creation -> onboarding -> home -> League`
 
-Within a League, the prototype exposes picks, leaderboards, Slips, chat, and feed-oriented experiences. Home provides League creation and joining flows and links to every League the current user belongs to.
+Within a League, the prototype exposes picks, leaderboards, Slips, chat, and feed-oriented experiences. The Leagues page provides capacity-aware League creation, joining, and the contextual Pro Lifetime upgrade. The separate Arenas page starts a `$50` simulated paid-creation flow; no Arena identity, membership, invite code, unlock, or hosting record is committed until that simulated payment succeeds.
 
 ## Local development
 

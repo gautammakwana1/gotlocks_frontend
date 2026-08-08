@@ -28,9 +28,16 @@ type AvatarProps = {
     size?: number;
     hue?: number;
     ring?: boolean;
+    ringColor?: string;
 };
 
-export function Avatar({ initials = "SR", size = 32, hue = 220, ring = false }: AvatarProps) {
+export function Avatar({
+    initials = "SR",
+    size = 32,
+    hue = 220,
+    ring = false,
+    ringColor = BRAND,
+}: AvatarProps) {
     return (
         <div
             style={{
@@ -47,7 +54,7 @@ export function Avatar({ initials = "SR", size = 32, hue = 220, ring = false }: 
                 fontSize: size * 0.4,
                 letterSpacing: "-0.01em",
                 flexShrink: 0,
-                boxShadow: ring ? `0 0 0 2px ${BRAND}, 0 0 0 4px ${APP_BG}` : "none",
+                boxShadow: ring ? `0 0 0 2px ${ringColor}, 0 0 0 4px ${APP_BG}` : "none",
             }}
         >
             {initials}

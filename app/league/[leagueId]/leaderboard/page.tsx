@@ -9,7 +9,7 @@ const LeagueLeaderboardRedirectPage = () => {
 
     useEffect(() => {
         if (!params.leagueId) return;
-        router.replace(`/league/${params.leagueId}`);
+        router.replace(`/league/${params.leagueId}?tab=leaderboard`);
     }, [params.leagueId, router]);
 
     return null;
