@@ -53,8 +53,8 @@ import type { FeedContestAccent } from "./FeedContestDetail";
 
 const accentClassesFor = (accent: FeedContestAccent) =>
     accent === "arena"
-        ? { textSoft: "text-violet-200", checkbox: "accent-violet-400" }
-        : { textSoft: "text-sky-200", checkbox: "accent-sky-400" };
+        ? { textSoft: "text-violet-200" }
+        : { textSoft: "text-sky-200" };
 
 /**
  * The ONLY status `/replace-entry` accepts. `gateParticipantForReplace` refuses
@@ -269,6 +269,12 @@ export const FeedContestEntryShell = ({
             ),
         [ownEntry]
     );
+    /**
+     * The MVP's `replacingExistingEntry` — an accepted entry that the builder
+     * below is about to edit in place. It suppresses the receipt, so the screen
+     * never shows the same entry twice.
+     */
+    const replacingExistingEntry = Boolean(ownEntry && hasAcceptedEntry && canBuildEntry);
 
     /* ---------- Report the write once ---------- */
     useEffect(() => {
@@ -357,7 +363,9 @@ export const FeedContestEntryShell = ({
     return (
         <div className={`flex flex-col gap-5 pb-10 ${accent === "arena" ? "arena-theme" : ""}`}>
             <BackButton fallback={`${detailHref}?tab=entries`} preferFallback />
-            <header className="border-b border-white/10 pb-5">
+            {/* No bottom rule under the header any more — the MVP lets the builder
+                section's own top border be the first line on the page. */}
+            <header className="pb-5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
                     {scoped?.group?.name ?? "Contest"} · Contest entry
                 </p>
@@ -368,37 +376,6 @@ export const FeedContestEntryShell = ({
                     Entries lock {formatContestDateTime(contest.locks_at)} in your local time.
                 </p>
             </header>
-
-            {needsRulesAcceptance ? (
-                <section
-                    aria-label="Accept contest rules"
-                    className="-mx-5 border-y border-white/10 px-5 py-5 sm:-mx-6 sm:px-6"
-                >
-                    <p
-                        className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${accentClasses.textSoft}`}
-                    >
-                        Rules version {contest.rules_version}
-                    </p>
-                    <h2 className="mt-1 text-lg font-semibold text-white">
-                        Review before submitting
-                    </h2>
-                    <div className="mt-4 whitespace-pre-wrap border-l-2 border-white/15 pl-4 text-sm leading-6 text-gray-300">
-                        {contest.rules_text}
-                    </div>
-                    <label className="mt-4 flex items-start gap-3 text-sm leading-6 text-gray-200">
-                        <input
-                            type="checkbox"
-                            checked={rulesAccepted}
-                            onChange={(event) => setRulesAccepted(event.target.checked)}
-                            className={`mt-1 h-4 w-4 ${accentClasses.checkbox}`}
-                        />
-                        <span>
-                            I accept the current rules. I will join this contest only when my
-                            complete entry is submitted.
-                        </span>
-                    </label>
-                </section>
-            ) : null}
 
             {feedback ? (
                 <p
@@ -413,12 +390,16 @@ export const FeedContestEntryShell = ({
                 </p>
             ) : null}
 
-            {ownEntry ? (
+            {/* Hidden while the member is REPLACING it: the builder below opens
+                pre-loaded with these same legs, so the MVP no longer shows the
+                receipt and the editor for one entry at the same time. It returns
+                once the window closes and the entry is read-only. */}
+            {ownEntry && !replacingExistingEntry ? (
                 <section
                     aria-label="Accepted entry receipt"
-                    className="rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-5"
+                    className="rounded-2xl border border-white/10 bg-black/25 p-5"
                 >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-100/70">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
                         Accepted entry receipt
                     </p>
                     {/* The same feed card the Entries tab shows, as the MVP does —
@@ -498,11 +479,16 @@ export const FeedContestEntryShell = ({
                             // control in two places, and feeding the derived value
                             // here renders it pre-ticked and un-untickable whenever
                             // the member's stored acceptance is already current.
+                            // The rules themselves ride along now: the MVP moved
+                            // the whole review into the sheet, so this is where a
+                            // joiner reads them before ticking.
                             rulesAcceptance: needsRulesAcceptance
                                 ? {
                                       accepted: rulesAccepted,
                                       onAcceptedChange: setRulesAccepted,
-                                      label: "I accept the current rules and want to join with this complete entry.",
+                                      label: "I accept the current rules for this complete entry.",
+                                      rulesText: contest.rules_text,
+                                      rulesVersion: contest.rules_version,
                                   }
                                 : undefined,
                             onSubmit: handleSubmit,

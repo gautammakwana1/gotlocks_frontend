@@ -21,6 +21,7 @@ import arenaReducer from "./slices/arenaSlice";
 import feedContestReducer from "./slices/feedContestSlice";
 import feedContestScheduleReducer from "./slices/feedContestScheduleSlice";
 import feedContestOddsReducer from "./slices/feedContestOddsSlice";
+import memberCardReducer from "./slices/memberCardSlice";
 
 const appReducer = combineReducers({
 	user: authReducer,
@@ -45,6 +46,7 @@ const appReducer = combineReducers({
 	feedContest: feedContestReducer,
 	feedContestSchedule: feedContestScheduleReducer,
 	feedContestOdds: feedContestOddsReducer,
+	memberCard: memberCardReducer,
 });
 
 export const rootReducer: Reducer = (state: ReturnType<typeof appReducer> | undefined, action: AnyAction) => {

@@ -62,6 +62,14 @@ export type ContestBuilderContext = {
         accepted: boolean;
         onAcceptedChange: (accepted: boolean) => void;
         label?: string;
+        /**
+         * The rules themselves, rendered inline above the checkbox. The MVP moved
+         * the rules review INTO the review sheet — the entry screen no longer
+         * carries a separate "Review before submitting" section above the
+         * builder, so this is the only place a joiner reads them.
+         */
+        rulesText?: string;
+        rulesVersion?: string;
     };
     /**
      * The legs already accepted, when this is a replacement. Matched back to the
@@ -1309,23 +1317,44 @@ export const ContestPickBuilder = ({
                                     ))}
                                 </div>
 
+                                {/* Full-bleed rules band, as the MVP now renders it:
+                                    the version line, the rules themselves, then the
+                                    acceptance tick — one block instead of a bare
+                                    checkbox referring to rules shown elsewhere. */}
                                 {context.rulesAcceptance ? (
-                                    <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-xs leading-5 text-gray-200">
-                                        <input
-                                            type="checkbox"
-                                            checked={context.rulesAcceptance.accepted}
-                                            onChange={(event) =>
-                                                context.rulesAcceptance?.onAcceptedChange(
-                                                    event.target.checked
-                                                )
-                                            }
-                                            className="mt-0.5 h-4 w-4 shrink-0 accent-sky-400"
-                                        />
-                                        <span>
-                                            {context.rulesAcceptance.label ??
-                                                "I reviewed and accept the current contest rules."}
-                                        </span>
-                                    </label>
+                                    <section
+                                        data-contest-review-rules
+                                        aria-label="Contest rules review"
+                                        className="-mx-4 mt-4 border-b border-white/10 px-4 py-4 text-xs leading-5 text-gray-200"
+                                    >
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                            Contest rules
+                                            {context.rulesAcceptance.rulesVersion
+                                                ? ` · Version ${context.rulesAcceptance.rulesVersion}`
+                                                : ""}
+                                        </p>
+                                        {context.rulesAcceptance.rulesText ? (
+                                            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-300">
+                                                {context.rulesAcceptance.rulesText}
+                                            </p>
+                                        ) : null}
+                                        <label className="mt-3 flex cursor-pointer items-start gap-3">
+                                            <input
+                                                type="checkbox"
+                                                checked={context.rulesAcceptance.accepted}
+                                                onChange={(event) =>
+                                                    context.rulesAcceptance?.onAcceptedChange(
+                                                        event.target.checked
+                                                    )
+                                                }
+                                                className="mt-0.5 h-4 w-4 shrink-0 accent-sky-400"
+                                            />
+                                            <span>
+                                                {context.rulesAcceptance.label ??
+                                                    "I reviewed and accept the current contest rules."}
+                                            </span>
+                                        </label>
+                                    </section>
                                 ) : null}
 
                                 {actionMessage ? (

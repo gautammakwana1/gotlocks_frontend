@@ -142,7 +142,7 @@ const ContestPageSkeleton = () => {
   return (
     <div className="flex flex-col gap-2 pb-10">
       {/* Header Skeleton — mirrors the real header (back button + meta pills, then league / contest title) */}
-      <header className="-mx-5 border-b border-white/10 pl-5 pr-2 pb-3 sm:mx-0 sm:px-0 animate-pulse">
+      <header className="-mx-5 pb-4 pl-5 pr-2 sm:mx-0 sm:px-0 animate-pulse">
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Back button */}
           <div className="flex shrink-0 items-center gap-1.5 py-1">
@@ -163,22 +163,22 @@ const ContestPageSkeleton = () => {
         </div>
       </header>
 
-      {/* Tabs Skeleton — mirrors the equal-fraction tab row */}
-      <section className="-mx-5 -mt-1 border-b border-white/10 px-5 sm:mx-0 sm:px-0 animate-pulse">
+      {/* Tabs Skeleton — mirrors the equal-fraction folder-tab row */}
+      <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0 animate-pulse">
         <div
-          className="relative grid w-full gap-1 py-1"
+          className="grid w-full items-end gap-1"
           style={{ gridTemplateColumns: `repeat(${TAB_COUNT}, minmax(0, 1fr))` }}
         >
-          {/* Active tab indicator */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.06]"
-            style={{ width: `calc(100% / ${TAB_COUNT})` }}
-          />
           {Array.from({ length: TAB_COUNT }).map((_, i) => (
             <div
               key={i}
-              className="relative z-10 flex h-9 min-w-0 items-center justify-center px-2"
+              className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 sm:px-3 ${
+                // The first tab stands in for the active one, so the loading
+                // state shows the same notched folder as the real strip.
+                i === 0
+                  ? "border-white/10 bg-black after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']"
+                  : "border-transparent bg-black"
+              }`}
             >
               <div className="h-3 w-10 rounded bg-white/10 sm:w-14" />
             </div>

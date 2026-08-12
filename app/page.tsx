@@ -156,7 +156,7 @@ export default function PublicHomePage() {
             <div className="flex items-center gap-1 sm:gap-2">
               <Link
                 href="/signin"
-                className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-xl px-1.5 text-[13px] font-semibold text-slate-200 transition hover:bg-white/[0.06] hover:text-white sm:min-h-12 sm:px-4 sm:text-base"
+                className="inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl px-1 text-[13px] font-semibold text-sky-300 transition hover:bg-sky-400/[0.08] hover:text-sky-100 sm:min-h-12 sm:px-4 sm:text-base"
               >
                 Sign In
               </Link>

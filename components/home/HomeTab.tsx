@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import { useRouter } from "next/navigation";
 import FeedList from "@/components/social/FeedList";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { AppNotification, CurrentUser, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
+import { CurrentUser, Group, GroupObject, GroupSummary, PickReaction, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -12,11 +12,9 @@ import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroup
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import { fetchMyTutorialProgressRequest, fetchProgressByUserIdRequest, updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { clearAllNotificationRequest, fetchNotificationListRequest, markNotificationReadRequest } from "@/lib/redux/slices/notificationSlice";
-import NotificationsFeed from "./NotificationFeed";
-import { getGroupPath, getProfilePath } from "@/lib/utils/profileNavigation";
+import { getGroupPath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
-import { MembersIcon, RightArrowIcon, SlipIcon, TrashIcon } from "../ui/SvgIcons";
+import { MembersIcon, RightArrowIcon, SlipIcon } from "../ui/SvgIcons";
 import OnboardingModal from "../modals/OnboardingModal";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
 import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
@@ -158,14 +156,11 @@ const HomeTab = () => {
     // real container (re)mounts, so the scroll listener always lands on it.
     const [leagueCarouselEl, setLeagueCarouselEl] = useState<HTMLDivElement | null>(null);
     const [activeLeagueIndex, setActiveLeagueIndex] = useState(0);
-    const [notifications, setNotificaitons] = useState<AppNotification[]>([]);
     const [page, setPage] = useState(1);
     const [groupPage, setGroupPage] = useState(1);
     const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
-    const [notificationsOpen, setNotificationsOpen] = useState(false);
-    const notificationCloseRef = useRef<HTMLButtonElement | null>(null);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
@@ -177,7 +172,6 @@ const HomeTab = () => {
     // flags and the loading gate are read here. The progress fetch below still
     // hydrates the slice for the screens that do show those numbers.
     const { hasSeenIntro, loading: progressLoading } = useSelector((state: RootState) => state.progress);
-    const { notification } = useSelector((state: RootState) => state.notifications);
     const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
     const actionsLocked = !hasSeenGroupIntro;
@@ -198,7 +192,6 @@ const HomeTab = () => {
     useEffect(() => {
         if (!currentUserId) return;
         dispatch(fetchAllGroupsRequest({ page: 1, limit: 10 }));
-        dispatch(fetchNotificationListRequest({}));
         fetchData(1);
         dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
         dispatch(fetchMyTutorialProgressRequest());
@@ -214,12 +207,6 @@ const HomeTab = () => {
     useEffect(() => {
         setShowOnboarding(!hasSeenIntro);
     }, [hasSeenIntro]);
-
-    useEffect(() => {
-        if (Array.isArray(notification)) {
-            setNotificaitons(notification)
-        };
-    }, [notification]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -571,53 +558,6 @@ const HomeTab = () => {
         }
     };
 
-    const handleViewProfile = useCallback(
-        (userId: string) => {
-            router.push(getProfilePath(userId, currentUserId));
-        },
-        [currentUserId, router]
-    );
-
-    const handleOpenGroup = useCallback(
-        (groupId: string) => {
-            router.push(`/league/${groupId}`);
-        },
-        [router]
-    );
-
-    const handleCloseNotificationPopup = () => {
-        dispatch(markNotificationReadRequest({}));
-        setNotificationsOpen(false);
-    };
-
-    const unreadNotifications = useMemo(
-        () => notifications.filter((notification) => !notification.is_read).length,
-        [notifications]
-    );
-
-    useEffect(() => {
-        if (!notificationsOpen || !currentUserId || unreadNotifications === 0) return;
-        dispatch(markNotificationReadRequest({}));
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        notificationCloseRef.current?.focus();
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setNotificationsOpen(false);
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => {
-            document.body.style.overflow = previousOverflow;
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-        // Keyed on notificationsOpen — it used to key on the (now dead) activityTab
-        // state, so opening the drawer never re-ran this and the body-scroll lock,
-        // Escape handler and focus move all silently no-oped.
-    }, [notificationsOpen, currentUserId, unreadNotifications, dispatch]);
-
-    const handleClearAll = useCallback(() => {
-        dispatch(clearAllNotificationRequest({}));
-    }, [dispatch]);
-
     const handleCompleteWelcomeIntro = () => {
         // setShowOnboarding(false);
         // if (!hasSeenIntro) {
@@ -635,26 +575,16 @@ const HomeTab = () => {
     return (
         <div className="flex flex-col">
             <section className="relative -mx-5 overflow-hidden bg-[#050505] px-5 pb-5 pt-4 sm:-mx-6 sm:px-6 sm:pb-6 sm:pt-5 lg:pb-8 lg:pt-6">
-                <button
-                    type="button"
-                    onClick={() => setNotificationsOpen(true)}
-                    aria-label={`Open notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ""}`}
-                    aria-expanded={notificationsOpen}
-                    className="absolute right-5 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/35 text-gray-200 backdrop-blur transition hover:border-sky-300/50 hover:text-white sm:right-6 sm:top-6 lg:right-8 lg:top-8"
-                >
-                    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
-                        <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M10 21h4" strokeLinecap="round" />
-                    </svg>
-                    {unreadNotifications > 0 && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-sky-400 ring-2 ring-slate-950" />
-                    )}
-                </button>
                 <div className="relative z-10 flex flex-col gap-4 sm:gap-5 lg:gap-6">
-                    <div className="max-w-xl pr-12">
-                        <h1 className="text-3xl font-black leading-tight tracking-tight text-white sm:text-4xl">
-                            <span className="block">Welcome back,</span>
-                            <span className="allow-caps block text-sky-100">
+                    {/* The greeting reads as one baseline-aligned line at `lg` and
+                        stacks below it; the handle carries the silver display
+                        gradient rather than the flat sky tint it used to. */}
+                    <div className="max-w-xl lg:max-w-none">
+                        <h1 className="flex flex-col items-start gap-1.5 leading-none lg:flex-row lg:items-baseline lg:gap-3 lg:whitespace-nowrap">
+                            <span className="text-xl font-semibold tracking-[-0.02em] text-white/55 sm:text-2xl">
+                                welcome back,
+                            </span>
+                            <span className="allow-caps bg-[linear-gradient(105deg,#c4ccd7_0%,#8795a7_52%,#4b607a_100%)] bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
                                 {storedUser?.username ?? "Member"}
                             </span>
                         </h1>
@@ -890,48 +820,6 @@ const HomeTab = () => {
                     <PickBuilderClientPage compact />
                 </Suspense>
             </section>
-
-            <div className={`fixed inset-0 z-50 ${notificationsOpen ? "pointer-events-auto" : "pointer-events-none"}`} aria-hidden={!notificationsOpen}>
-                <button
-                    type="button"
-                    aria-label="Close notifications"
-                    tabIndex={notificationsOpen ? 0 : -1}
-                    onClick={handleCloseNotificationPopup}
-                    className={`absolute inset-0 bg-black/65 backdrop-blur-sm transition-opacity ${notificationsOpen ? "opacity-100" : "opacity-0"}`}
-                />
-                <aside
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="notifications-drawer-title"
-                    className={`absolute inset-y-0 left-0 right-0 flex max-w-none flex-col bg-slate-950 shadow-2xl transition-transform duration-300 sm:left-auto sm:w-full sm:max-w-md sm:border-l sm:border-white/10 ${notificationsOpen ? "translate-x-0" : "translate-x-full"}`}
-                >
-                    <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
-                        <div>
-                            <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400">activity</p>
-                            <h2 id="notifications-drawer-title" className="mt-1 text-lg font-semibold text-white">Notifications</h2>
-                        </div>
-                        <button ref={notificationCloseRef} type="button" onClick={handleCloseNotificationPopup} aria-label="Close notifications" tabIndex={notificationsOpen ? 0 : -1} className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 text-xl text-gray-300 transition hover:bg-white/10 hover:text-white">×</button>
-                    </div>
-                    <div className="flex items-center justify-end border-b border-white/10 px-5 py-2 sm:px-6">
-                        {notificationsOpen && notifications.length > 0 && (
-                            <button
-                                type="button"
-                                onClick={handleClearAll}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-gray-400 transition hover:border-white/20 hover:bg-white/10 hover:text-white sm:text-[10px] sm:tracking-[0.18em]"
-                            >
-                                <TrashIcon className={`h-3 w-3 shrink-0`} />
-                                <span>clear all</span>
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-                        <NotificationsFeed
-                            onOpenProfile={handleViewProfile}
-                            onOpenGroup={handleOpenGroup}
-                        />
-                    </div>
-                </aside>
-            </div >
 
             <OnboardingModal
                 open={!hasSeenWelcomeIntro}

@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSlipContestPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, PickState, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, SlipContestPicksData, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 
 const initialState: PickState = {
     pick: null,
@@ -16,6 +16,9 @@ const initialState: PickState = {
     deleteMessage: null,
     hasMore: true,
     globalLeaderboardLoading: false,
+    slipContestPicks: null,
+    slipContestPicksLoading: false,
+    slipContestPicksError: null,
 };
 
 const pickSlice = createSlice({
@@ -418,6 +421,61 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
+        /* --------------------------------------------------------------------
+         * GET /pick/slip-contest-picks — the group's Slip (Fantasy) contest
+         * picks. Public to the group from the moment they are made, so unlike a
+         * Feed contest entry there is no reveal rule to honour here.
+         * ------------------------------------------------------------------ */
+        fetchSlipContestPicksRequest: (
+            state,
+            action: PayloadAction<FetchSlipContestPicksPayload>
+        ) => {
+            // Single-tenant: the previous group's rows go at REQUEST time, so a
+            // group switch cannot paint the wrong league's picks mid-flight.
+            if (state.slipContestPicks && state.slipContestPicks.group.id !== action.payload.group_id) {
+                state.slipContestPicks = null;
+            }
+            state.slipContestPicksLoading = true;
+            state.slipContestPicksError = null;
+        },
+        fetchSlipContestPicksSuccess: (
+            state,
+            action: PayloadAction<SlipContestPicksData>
+        ) => {
+            const incoming = action.payload;
+            const page = incoming?.pagination?.page ?? 1;
+
+            state.slipContestPicksLoading = false;
+            state.slipContestPicksError = null;
+
+            if (
+                page <= 1 ||
+                !state.slipContestPicks ||
+                state.slipContestPicks.group.id !== incoming.group.id
+            ) {
+                state.slipContestPicks = incoming;
+                return;
+            }
+            const seen = new Set(state.slipContestPicks.picks.map((row) => row.id));
+            state.slipContestPicks = {
+                ...incoming,
+                picks: [
+                    ...state.slipContestPicks.picks,
+                    ...incoming.picks.filter((row) => !seen.has(row.id)),
+                ],
+            };
+        },
+        fetchSlipContestPicksFailure: (state, action: PayloadAction<string>) => {
+            state.slipContestPicksLoading = false;
+            state.slipContestPicksError = action.payload;
+            state.slipContestPicks = null;
+        },
+        clearSlipContestPicks: (state) => {
+            state.slipContestPicks = null;
+            state.slipContestPicksLoading = false;
+            state.slipContestPicksError = null;
+        },
+
         replaceOrCreatePostablePickRequest: (state, action: PayloadAction<ReplaceOrCreatePostablePickPayload>) => {
             void action;
             state.loading = true;
@@ -552,6 +610,10 @@ export const {
     fetchAllContestsPicksSuccess,
     fetchAllContestsPicksFailure,
     clearFetchAllContestsPicksMessage,
+    fetchSlipContestPicksRequest,
+    fetchSlipContestPicksSuccess,
+    fetchSlipContestPicksFailure,
+    clearSlipContestPicks,
     replaceOrCreatePostablePickRequest,
     replaceOrCreatePostablePickSuccess,
     replaceOrCreatePostablePickFailure,

@@ -645,6 +645,19 @@ export type UpdateBadgeSettingsPayload = {
     settings: ContestBadgeSettings;
 };
 
+/**
+ * The free-plan half of badge management: the master switch plus which badges
+ * count. Carries no point fields at all, so `PATCH /contest/toggle-badges`
+ * cannot move a value the caller's plan may not change — that is why a Free
+ * commissioner uses this instead of `update-badge-settings`.
+ */
+export type ToggleContestBadgesPayload = {
+    contest_id: string;
+    enabled: boolean;
+    /** Omit to leave the current badge selection untouched. */
+    badge_ids?: string[];
+};
+
 export type ResetBadgeSettingsPayload = {
     contest_id: string;
 };
@@ -1182,6 +1195,15 @@ export type PickState = {
     deleteMessage: string | null;
     hasMore: boolean;
     globalLeaderboardLoading: boolean;
+    /**
+     * GET /pick/slip-contest-picks — the group's Slip (Fantasy) contest picks,
+     * for the League Feed tab. Its own loading/error pair rather than the shared
+     * `loading`/`error` above: the Feed reads this alongside several other lists,
+     * and a shared flag would make any one of them flicker the whole tab.
+     */
+    slipContestPicks: SlipContestPicksData | null;
+    slipContestPicksLoading: boolean;
+    slipContestPicksError: string | null;
 };
 
 export type MarkLockPayload = Record<string, unknown>;
@@ -2153,6 +2175,60 @@ export type FeedContestLifecycleData = {
     archived_from?: string;
 };
 
+/* ----------------------------------------------------------------------------
+ * DELETE /group/feed-contest/delete/:contest_id — organizer only, BOTH surfaces.
+ *
+ * Not cancel and not archive: those file a contest the group can still read,
+ * this removes it and everything hanging off it. There is no soft delete and no
+ * undo — `feed_contests` has no `deleted_at` and its lifecycle enum has no
+ * 'deleted' label — so the id 404s forever afterwards.
+ *
+ * EVERY lifecycle status is deletable, including 'final' and 'archived'. What
+ * keeps it safe is the write ORDER, not a status allow-list: a live contest is
+ * shut to new entries first (compare-and-swapped, so a concurrent cancel or the
+ * lock cron cannot be overwritten — that race is the 409 "Contest state changed.
+ * Please retry."), the contest row goes LAST, and the entrant notices are sent
+ * only once it is really gone.
+ * -------------------------------------------------------------------------- */
+export type DeleteFeedContestPayload = {
+    contest_id: string;
+    /**
+     * OPTIONAL server-side — the endpoint deletes without one. It is appended to
+     * the fixed system line in every entrant's notification, trimmed, and capped
+     * at 280 characters (longer is a 400). Our deletion drawer requires one
+     * anyway: a member whose entry vanishes is otherwise told nothing about why.
+     *
+     * Note there is NO confirmation-name field. The typed `DELETE <name>` phrase
+     * is a client-side guard only, so nothing but the drawer enforces it.
+     */
+    organizer_note?: string;
+};
+
+export type DeleteFeedContestData = {
+    /**
+     * The row is GONE, so its identity is echoed back instead of the record —
+     * there is nothing left to merge into `detail`, and anything still holding
+     * this id should drop it.
+     */
+    contest_id: string;
+    group_id: string;
+    context_type: string;
+    name: string;
+    /**
+     * How many entrants were notified. Withdrawn and disqualified members are
+     * excluded — they already left and were told at the time — so deleting an
+     * already-canceled contest legitimately reports 0.
+     */
+    entrants_notified: number;
+    /** What the purge actually removed, per table. */
+    participants_deleted?: number;
+    picks_deleted?: number;
+    reactions_deleted?: number;
+    notifications_deleted?: number;
+    /** Contest-results staff posts are soft-deleted, not purged. */
+    staff_posts_retired?: number;
+};
+
 /**
  * PUT /group/feed-contest/update/:contest_id — organizer only, member-facing
  * COPY only. Mechanics, slate and timing are frozen for good, and the copy
@@ -2363,6 +2439,185 @@ export type FetchFeedContestEntriesPayload = {
     limit?: number;
 };
 
+/* ----------------------------------------------------------------------------
+ * GET /group/feed-contest/leaderboard/:contest_id — the STANDINGS. Any member of
+ * the group; a draft stays organizer-only like every other by-id read.
+ *
+ * The sibling of /entries, and not a substitute for it: that one answers what
+ * everyone picked, this one where they stand. It reads `contest_leaderboard`,
+ * whose row is seeded when a member enters and later ranked and scored by a
+ * settlement job.
+ *
+ * `limit` is clamped to 1..100 server-side (default 20).
+ * -------------------------------------------------------------------------- */
+export type FetchFeedContestLeaderboardPayload = {
+    contest_id: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FeedContestStandingRow = {
+    /** The contest_leaderboard row id — NOT the pick or the user. */
+    id: string;
+    is_own: boolean;
+    /**
+     * NULL until a settlement job ranks the field. Render position from the
+     * ARRAY ORDER while the envelope's `is_ranked` is false — the server has
+     * already ordered the rows (rank asc nulls last, then points desc, then
+     * entered_at asc, then id).
+     */
+    rank: number | null;
+    /** Degrades to `{ id }` when the profiles embed came back empty. */
+    member: { id: string; username?: string | null; profile_image?: string | null };
+    /** Zero for everyone until the contest settles. Never hidden. */
+    contest_points: number | null;
+    correct_picks: number | null;
+    /**
+     * Both WITHHELD as null until the contest locks, for everyone but the
+     * viewer's own row — the price and the leg count are exactly what a rival
+     * would read the field early to learn. Null here means "not visible yet",
+     * never "no value"; `is_entry_revealed` on the row says which.
+     */
+    total_picks: number | null;
+    combo_odds: number | null;
+    is_entry_revealed: boolean;
+    pick_id: string | null;
+    participant_id: string | null;
+    achievement_id: string | null;
+    /** TRUE once an organizer reversed this row's confirmed award. */
+    is_points_reverse: boolean | null;
+    entered_at: string;
+    updated_at: string;
+};
+
+export type FeedContestLeaderboardData = {
+    contest: {
+        id: string;
+        name: string;
+        context_type: string;
+        template: string;
+        entry_model: string;
+        lifecycle_status: ContestLifecycleStatus;
+        locks_at: string;
+        winning_places: number;
+        finalized_at: string | null;
+    };
+    group: { id: string; name: string; group_type: string };
+    viewer: { role: string | null; is_organizer: boolean };
+    /**
+     * Whether the board carries a real ORDER yet — i.e. whether ANY row has a
+     * non-null rank. False means nothing has settled it, so `rank` must not be
+     * printed and position comes from the array.
+     */
+    is_ranked: boolean;
+    /** Contest-level: is OTHER members' entry shape on this response at all. */
+    is_entry_revealed: boolean;
+    /** `contest.locks_at` while hidden, null once revealed. */
+    reveal_at: string | null;
+    /**
+     * The viewer's own line, read separately so it is present whatever page it
+     * really falls on — a member deep in a large field should not have to walk
+     * the board to find themselves. NULL when they never entered.
+     */
+    my_standing: FeedContestStandingRow | null;
+    standings: FeedContestStandingRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+/* ----------------------------------------------------------------------------
+ * GET /pick/slip-contest-picks — every pick across ONE GROUP's Slip (Fantasy)
+ * contests. League-only, since Slip contests are.
+ *
+ * NOT hidden until anything: `summary.is_revealed` is stated as `true` on every
+ * response, and `pick` is always populated. A Slip contest's picks are public to
+ * the group from the moment they are made, which is why this has no sibling of
+ * the Feed contest reveal rules.
+ * -------------------------------------------------------------------------- */
+export type FetchSlipContestPicksPayload = {
+    group_id: string;
+    contest_id?: string;
+    slip_id?: string;
+    user_id?: string;
+    /** Comma-joined slip lifecycle statuses. */
+    status?: string;
+    slip_type?: string;
+    result?: string;
+    page?: number;
+    limit?: number;
+};
+
+export type SlipContestPickRow = {
+    /** The pick id. */
+    id: string;
+    is_own: boolean;
+    member: {
+        id: string;
+        username?: string | null;
+        full_name?: string | null;
+        profile_image?: string | null;
+    };
+    contest: {
+        id: string;
+        name: string;
+        description?: string | null;
+        status?: string | null;
+        starts_at?: string | null;
+        ends_at?: string | null;
+        badges_enabled?: boolean | null;
+        archived_at?: string | null;
+    } | null;
+    slip: {
+        id: string;
+        name?: string | null;
+        index?: number | null;
+        contest_number?: number | null;
+        status?: string | null;
+        slip_type?: string | null;
+        archived?: boolean | null;
+        is_graded?: boolean | null;
+        pick_deadline_at?: string | null;
+        results_deadline_at?: string | null;
+        finalized_at?: string | null;
+    } | null;
+    submitted_at: string;
+    updated_at: string;
+    /** Always present on this surface — never null. */
+    pick: FeedContestEntryPick;
+};
+
+export type SlipContestPicksData = {
+    group: { id: string; name: string; group_type: string };
+    viewer: { role: string | null };
+    filters: {
+        contest_id: string | null;
+        slip_id: string | null;
+        user_id: string | null;
+        statuses: string[] | null;
+        slip_type: string | null;
+        result: string | null;
+    };
+    summary: {
+        total_picks: number;
+        /** NULL only when the count query itself failed — never silently 0. */
+        my_picks: number | null;
+        is_revealed: boolean;
+    };
+    picks: SlipContestPickRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
 export type FeedContestEntryRow = {
     /** The pick id. */
     id: string;
@@ -2412,6 +2667,73 @@ export type FeedContestEntriesData = {
         entered_count: number;
     };
     entries: FeedContestEntryRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+/* ----------------------------------------------------------------------------
+ * GET /group/feed-contest/picks — every competitive pick across ONE GROUP's Feed
+ * contests, for BOTH surfaces.
+ *
+ * The group-wide sibling of /entries/:contest_id, and the one a FEED wants: a
+ * page mixes contests, so hidden-until-lock is decided per row rather than per
+ * response. `is_revealed` says whether THIS row's `pick` is populated;
+ * `contest_revealed` says whether its contest has locked. They differ for the
+ * caller's own entry in a still-open contest — visible to them, hidden to
+ * everyone else.
+ * -------------------------------------------------------------------------- */
+export type FetchFeedContestPicksPayload = {
+    group_id: string;
+    group_type: string;
+    /** Narrow to one contest. Omitted for the group feed. */
+    contest_id?: string;
+    user_id?: string;
+    /** Comma-joined `lifecycle_status` values; defaults to every published one. */
+    status?: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FeedContestPickRow = {
+    /** The pick id. */
+    id: string;
+    is_own: boolean;
+    /** Is `pick` populated on THIS row — own entry, or a locked contest. */
+    is_revealed: boolean;
+    /** Has this row's contest locked. FALSE while it is still taking entries. */
+    contest_revealed: boolean;
+    member: { id: string; username?: string | null; profile_image?: string | null };
+    contest: {
+        id: string;
+        name: string;
+        template: string;
+        entry_model: string;
+        lifecycle_status: ContestLifecycleStatus;
+        locks_at: string;
+        /** `locks_at` while hidden, null once revealed. */
+        reveal_at: string | null;
+    } | null;
+    submitted_at: string;
+    updated_at: string;
+    pick: FeedContestEntryPick | null;
+};
+
+export type FeedContestPicksData = {
+    group: { id: string; name: string; group_type: string };
+    context_type: string;
+    viewer: { role: string | null; is_organizer: boolean };
+    filters: {
+        contest_id: string | null;
+        user_id: string | null;
+        statuses: string[];
+    };
+    summary: { revealed_count: number; hidden_count: number };
+    picks: FeedContestPickRow[];
     pagination: {
         page: number;
         limit: number;
@@ -3111,6 +3433,7 @@ export type RootState = {
     feedContest: FeedContestState;
     feedContestSchedule: FeedContestScheduleState;
     feedContestOdds: FeedContestOddsState;
+    memberCard: MemberCardState;
 };
 
 export type UpdateGroupPayload = {
@@ -4790,4 +5113,190 @@ export type LeaguePickCandidate = {
 export type PostDestinationGroups = {
     profilePayloads: BuiltPickPayload[];
     leagueCandidates: LeaguePickCandidate[];
+};
+/* ----------------------------------------------------------------------------
+ * MEMBER CARD — one member's record inside ONE group.
+ *
+ * Five reads back this screen, and none of them takes the surface as a
+ * parameter except the achievements one: the four /group/* endpoints derive
+ * league-vs-arena from the group row itself, so the card renders from the same
+ * calls on both. `applies.fantasy` on the stats payload is what says which
+ * halves of `totals` the group actually has — an Arena runs no slip contests,
+ * so its slip figures come back NULL rather than 0 (0 would claim the member
+ * scored nothing where the truth is the surface does not exist for them).
+ * -------------------------------------------------------------------------- */
+
+/** GET /group/member-stats?group_id=&user_id= */
+export type GroupMemberStatsPayload = {
+    group_id: string;
+    /** Whose record. Omit for the caller's own. */
+    user_id?: string;
+};
+
+export type GroupMemberStatsData = {
+    group: { id: string; name: string; group_type: string };
+    viewer: { role: string | null; is_self: boolean };
+    member: {
+        id: string;
+        username: string | null;
+        profile_image: string | null;
+        /** NULL + is_member false is the member who has LEFT; their record survives. */
+        role: string | null;
+        is_member: boolean;
+    };
+    /** Which halves of `totals` this group has, so the card hides a section
+     *  rather than inferring it from a NULL. */
+    applies: { fantasy: boolean; feed_contest: boolean };
+    totals: {
+        /** NULL on an Arena — it has no contests -> slips tree at all. */
+        slip_points: number | null;
+        slips_entered: number | null;
+        slip_picks: number | null;
+        /** BANKED by finalization. */
+        feed_contest_points: number;
+        /** RIDING on unresolved contests. Deliberately not added into the above. */
+        feed_contest_points_in_play: number;
+        feed_contests_entered: number;
+        achievements: number;
+        community_picks: number;
+    };
+};
+
+/** Shared by all three member-picks tabs. */
+export type GroupMemberPicksPayload = {
+    group_id: string;
+    user_id?: string;
+    page?: number;
+    limit?: number;
+};
+
+/** GET /group/member-picks/community — a `picks` row with no feed_contest_id. */
+export type GroupMemberCommunityPickRow = {
+    id: string;
+    is_own: boolean;
+    member: {
+        id: string;
+        username?: string | null;
+        full_name?: string | null;
+        profile_image?: string | null;
+    };
+    submitted_at: string;
+    updated_at: string;
+    /** Always present — a community pick is published the moment it is posted. */
+    pick: Pick;
+    reactions: { up?: number; down?: number; mine?: PickReaction | null };
+};
+
+export type GroupMemberCommunityPicksData = {
+    group: { id: string; name: string; group_type: string };
+    viewer: { role: string | null; is_self: boolean };
+    filters: { user_id: string | null };
+    summary: { total_picks: number; is_revealed: boolean };
+    picks: GroupMemberCommunityPickRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+/* ----------------------------------------------------------------------------
+ * GET /group/feed-contest/achievements — one member's trophy case across a
+ * group. The ONLY member-card read that still takes `group_type`, because it is
+ * mounted under the feed-contest router rather than the group one.
+ * -------------------------------------------------------------------------- */
+export type FeedContestAchievementType =
+    | "CHAMPION"
+    | "RUNNER_UP"
+    | "PODIUM_FINISH"
+    | "TOP_FIVE";
+
+export type FeedContestAchievementsPayload = {
+    group_id: string;
+    group_type: FeedGroupType;
+    user_id?: string;
+    page?: number;
+    limit?: number;
+};
+
+export type FeedContestAchievementRow = {
+    id: string;
+    is_own: boolean;
+    type: FeedContestAchievementType | string;
+    /** The enum already spelled for a screen, so no client maps it itself. */
+    label: string;
+    placement: number;
+    final_score: number | null;
+    contest_template: string | null;
+    context_type: string;
+    awarded_at: string;
+    contest: {
+        id: string;
+        name?: string;
+        template?: string;
+        entry_model?: string;
+        lifecycle_status?: ContestLifecycleStatus;
+        winning_places?: number;
+        locks_at?: string;
+        finalized_at?: string | null;
+    };
+};
+
+export type FeedContestAchievementsData = {
+    group: { id: string; name: string; group_type: string };
+    context_type: string;
+    viewer: { role: string | null; is_organizer: boolean; is_self: boolean };
+    member: {
+        id: string;
+        username: string | null;
+        profile_image: string | null;
+        role: string | null;
+        is_member: boolean;
+    };
+    filters: { user_id: string; types: string[] | null; sort: string };
+    /** The WHOLE case, never the page and never the ?type= filter. */
+    summary: {
+        total: number;
+        by_type: Record<string, number>;
+        /** NULL when they have won nothing — never 0, which would read as a placement. */
+        best_placement: number | null;
+    };
+    achievements: FeedContestAchievementRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+/**
+ * One screen, five reads — so they share a slice rather than a flag each. Every
+ * field is scoped to the (group, member) pair the card was opened for; the
+ * component clears the whole slot on mount so a previous member's record can
+ * never paint under a new name.
+ */
+export type MemberCardState = {
+    stats: GroupMemberStatsData | null;
+    statsLoading: boolean;
+    statsError: string | null;
+
+    slipPicks: SlipContestPicksData | null;
+    slipPicksLoading: boolean;
+    slipPicksError: string | null;
+
+    communityPicks: GroupMemberCommunityPicksData | null;
+    communityPicksLoading: boolean;
+    communityPicksError: string | null;
+
+    feedContestPicks: FeedContestPicksData | null;
+    feedContestPicksLoading: boolean;
+    feedContestPicksError: string | null;
+
+    achievements: FeedContestAchievementsData | null;
+    achievementsLoading: boolean;
+    achievementsError: string | null;
 };

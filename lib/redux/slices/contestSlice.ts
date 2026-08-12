@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { ArchiveContestByIdPayload, Contests, ContestState, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
+import type { ArchiveContestByIdPayload, Contests, ContestState, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, ToggleContestBadgesPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
 
 const initialState: ContestState = {
     contest: null,
@@ -208,6 +208,25 @@ const contestsSlice = createSlice({
             state.message = null;
         },
 
+        toggleContestBadgesRequest: (state, action: PayloadAction<ToggleContestBadgesPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        toggleContestBadgesSuccess: (state, action) => {
+            state.loading = false;
+            state.message = action.payload.message;
+            state.contest = action.payload.data.contest;
+        },
+        toggleContestBadgesFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearToggleContestBadgesMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
         resetBadgeSettingsRequest: (state, action: PayloadAction<ResetBadgeSettingsPayload | undefined>) => {
             void action;
             state.loading = true;
@@ -303,6 +322,10 @@ export const {
     updateBadgeSettingsSuccess,
     updateBadgeSettingsFailure,
     clearUpdateBadgeSettingsMessage,
+    toggleContestBadgesRequest,
+    toggleContestBadgesSuccess,
+    toggleContestBadgesFailure,
+    clearToggleContestBadgesMessage,
     resetBadgeSettingsRequest,
     resetBadgeSettingsSuccess,
     resetBadgeSettingsFailure,

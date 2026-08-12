@@ -44,12 +44,18 @@ export const structuredFeedRecordMatchesFilter = (
     record: StructuredFeedRecord,
     filter: StructuredFeedFilter,
 ) => {
-    if (filter === "all") return true;
-    if (filter === "community") return record.kind === "community_pick";
-    if (filter === "competitive") return record.kind === "competitive_pick";
-    if (filter === "staff") {
-        return record.kind === "staff_pick" || record.kind === "staff_announcement";
+    // "Community" is the MVP's catch-all for everything the group posts to
+    // itself. It has to cover Staff Picks and announcements as well as member
+    // picks: with the "All" and "Staff" chips gone, any kind left out here is
+    // reachable from NO chip and disappears from the Feed entirely.
+    if (filter === "community") {
+        return (
+            record.kind === "community_pick" ||
+            record.kind === "staff_pick" ||
+            record.kind === "staff_announcement"
+        );
     }
+    if (filter === "competitive") return record.kind === "competitive_pick";
     // "standings" renders its own panel instead of a record list.
     return false;
 };

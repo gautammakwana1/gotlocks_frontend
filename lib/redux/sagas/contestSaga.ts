@@ -4,8 +4,8 @@ import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { ArchiveContestByIdPayload, BadgeAward, BadgeDefinition, Contest, Contests, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsPaginationPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
-import { archiveContestByIdFailure, archiveContestByIdRequest, archiveContestByIdSuccess, createContestFailure, createContestRequest, createContestSuccess, deleteContestByIdFailure, deleteContestByIdRequest, deleteContestByIdSuccess, excludeContestMemberFailure, excludeContestMemberRequest, excludeContestMemberSuccess, fetchActiveContestsFailure, fetchActiveContestsRequest, fetchActiveContestsSuccess, fetchArchivedContestsFailure, fetchArchivedContestsRequest, fetchArchivedContestsSuccess, fetchBadgeAwardsByContestIdFailure, fetchBadgeAwardsByContestIdRequest, fetchBadgeAwardsByContestIdSuccess, fetchContestByIdFailure, fetchContestByIdRequest, fetchContestByIdSuccess, recalculateStadingsFailure, recalculateStadingsRequest, recalculateStadingsSuccess, resetBadgeSettingsFailure, resetBadgeSettingsRequest, resetBadgeSettingsSuccess, updateBadgeSettingsFailure, updateBadgeSettingsRequest, updateBadgeSettingsSuccess, updateContestFailure, updateContestRequest, updateContestSuccess } from "../slices/contestSlice";
+import type { ArchiveContestByIdPayload, BadgeAward, BadgeDefinition, Contest, Contests, CreateContestPayload, DeleteContestByIdPayload, ExcludeContestMemberPayload, FetchBadgeAwardsByContestIdPayload, FetchContestByIdPayload, FetchContestsPaginationPayload, FetchContestsParams, RecalculateStadingsPayload, ResetBadgeSettingsPayload, ToggleContestBadgesPayload, UpdateBadgeSettingsPayload, UpdateContestPayload } from "@/lib/interfaces/interfaces";
+import { archiveContestByIdFailure, archiveContestByIdRequest, archiveContestByIdSuccess, createContestFailure, createContestRequest, createContestSuccess, deleteContestByIdFailure, deleteContestByIdRequest, deleteContestByIdSuccess, excludeContestMemberFailure, excludeContestMemberRequest, excludeContestMemberSuccess, fetchActiveContestsFailure, fetchActiveContestsRequest, fetchActiveContestsSuccess, fetchArchivedContestsFailure, fetchArchivedContestsRequest, fetchArchivedContestsSuccess, fetchBadgeAwardsByContestIdFailure, fetchBadgeAwardsByContestIdRequest, fetchBadgeAwardsByContestIdSuccess, fetchContestByIdFailure, fetchContestByIdRequest, fetchContestByIdSuccess, recalculateStadingsFailure, recalculateStadingsRequest, recalculateStadingsSuccess, resetBadgeSettingsFailure, resetBadgeSettingsRequest, resetBadgeSettingsSuccess, toggleContestBadgesFailure, toggleContestBadgesRequest, toggleContestBadgesSuccess, updateBadgeSettingsFailure, updateBadgeSettingsRequest, updateBadgeSettingsSuccess, updateContestFailure, updateContestRequest, updateContestSuccess } from "../slices/contestSlice";
 
 type ApiErrorResponse = {
     message?: string;
@@ -172,6 +172,26 @@ function* handleUpdateBadgeSettingsByContestId(action: PayloadAction<UpdateBadge
     }
 };
 
+/**
+ * The free-plan write path. `update-badge-settings` refuses any body that would
+ * MOVE a point value on a non-Pro plan, so a Free commissioner flipping the
+ * master switch has to go through this endpoint — it carries no point fields,
+ * and the server rebuilds the next settings from the contest's current ones.
+ */
+function* handleToggleContestBadges(action: PayloadAction<ToggleContestBadgesPayload | undefined>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.patch,
+            `${API_BASE_URL}/contest/toggle-badges`,
+            action.payload
+        );
+        const payload = response.data as { data?: { contest: Contest }, message: string };
+        yield put(toggleContestBadgesSuccess(payload));
+    } catch (error: unknown) {
+        yield put(toggleContestBadgesFailure(getErrorMessage(error, "Badge update failed!")));
+    }
+};
+
 function* handleResetBadgeSettingsByContestId(action: PayloadAction<ResetBadgeSettingsPayload | undefined>): SagaIterator {
     try {
         const response: AxiosResponse<unknown> = yield call(
@@ -227,6 +247,7 @@ export default function* contestSaga() {
     yield takeLatest(excludeContestMemberRequest.type, handleExcludeContestMember);
     yield takeLatest(fetchBadgeAwardsByContestIdRequest.type, handleFetchBadgeAwardsByContestId);
     yield takeLatest(updateBadgeSettingsRequest.type, handleUpdateBadgeSettingsByContestId);
+    yield takeLatest(toggleContestBadgesRequest.type, handleToggleContestBadges);
     yield takeLatest(resetBadgeSettingsRequest.type, handleResetBadgeSettingsByContestId);
     yield takeLatest(recalculateStadingsRequest.type, handleRecalculateStadings);
     yield takeLatest(deleteContestByIdRequest.type, handleDeleteContestById);

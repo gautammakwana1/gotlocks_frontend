@@ -41,6 +41,9 @@ export type PickCardContestStanding =
     | { status: "final"; rank: number }
     | { status: "unranked"; rank: null };
 
+/** Which builder produced the entry — names the card header in the MVP. */
+export type FeedContestEntryFormat = "general_combo" | "sunday_pickem";
+
 export type PickCardPresentation =
     | { kind: "ordinary" }
     | { kind: "slip_contest"; contestHref: string; contestName: string }
@@ -49,7 +52,14 @@ export type PickCardPresentation =
         contestHref: string;
         contestName: string;
         contextualPointsLabel: "League Points" | "Arena Points";
-        standing: PickCardContestStanding;
+        /**
+         * Optional here, unlike the MVP: the group Feed's `/picks` read carries
+         * no rank, and an entry that has never been ranked is exactly what
+         * `standing: undefined` means on this surface.
+         */
+        standing?: PickCardContestStanding;
+        /** Defaults to General Combo when the source cannot say. */
+        entryFormat?: FeedContestEntryFormat;
     };
 
 export type PickCardContentProps = {
@@ -152,23 +162,43 @@ const WinningHeaderArt = () => (
     />
 );
 
+/**
+ * The contest an entry belongs to, NAMED in the link — the MVP's current header:
+ * "Fantasy Contest Entry - April NBA Playoffs ↗". It replaced the bare
+ * "Slip Contest Entry" / "Feed Contest Entry" labels, which said nothing useful
+ * in a feed that mixes contests.
+ *
+ * `items-start` + a wrapping label, not `items-center` on one line: a contest
+ * name is arbitrary length and the arrow has to stay pinned to the first line.
+ */
 const ContestEntryHeader = ({
     presentation,
     className = "",
 }: {
     presentation: Exclude<PickCardPresentation, { kind: "ordinary" }>;
     className?: string;
-}) => (
-    <Link
-        data-feed-contest-entry-link
-        href={presentation.contestHref}
-        aria-label={`View ${presentation.contestName} contest`}
-        className={`inline-flex min-h-6 items-center gap-1 rounded-md font-semibold uppercase tracking-wide text-slate-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${className}`.trim()}
-    >
-        {presentation.kind === "slip_contest" ? "Slip Contest Entry" : "Feed Contest Entry"}
-        <span aria-hidden="true">↗</span>
-    </Link>
-);
+}) => {
+    const entryFormat =
+        presentation.kind === "feed_contest" ? presentation.entryFormat : undefined;
+    const label =
+        presentation.kind === "slip_contest"
+            ? `Fantasy Contest Entry - ${presentation.contestName}`
+            : entryFormat === "sunday_pickem"
+                ? `Feed Contest Pick’em Entry - ${presentation.contestName}`
+                : `Feed Contest General Combo Entry - ${presentation.contestName}`;
+
+    return (
+        <Link
+            data-feed-contest-entry-link
+            data-feed-entry-format={entryFormat}
+            href={presentation.contestHref}
+            className={`inline-flex min-h-6 min-w-0 items-start gap-1 text-left font-semibold uppercase tracking-wide text-slate-300 transition hover:text-white focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${className}`.trim()}
+        >
+            <span className="min-w-0 break-words">{label}</span>
+            <span aria-hidden="true" className="shrink-0">↗</span>
+        </Link>
+    );
+};
 
 export const getPickCardOddsCopy = (pick: Pick) => pick.odds_bracket ?? PLACEHOLDER;
 
@@ -274,20 +304,23 @@ export const PickCardContent = ({
             : pick.result === "loss"
                 ? "border-rose-400/40 bg-gradient-to-br from-rose-500/30 via-rose-400/10 to-black/40"
                 : `border-white/10 ${NEUTRAL_POST_CARD_SURFACE}`;
+    // Absent on the group Feed, where the picks read carries no rank — an entry
+    // with no standing yet reads "Pending", the same as one awaiting its first
+    // grade.
+    const contestStanding = isFeedContest ? presentation.standing : undefined;
     const standingCopy = isFeedContest
-        ? presentation.standing.status === "live" || presentation.standing.status === "final"
-            ? `#${presentation.standing.rank}`
-            : presentation.standing.status === "unranked"
+        ? contestStanding?.status === "live" || contestStanding?.status === "final"
+            ? `#${contestStanding.rank}`
+            : contestStanding?.status === "unranked"
                 ? "Unranked"
                 : "Pending"
         : null;
-    const standingHelper = isFeedContest
-        ? presentation.standing.status === "live"
+    const standingHelper =
+        contestStanding?.status === "live"
             ? "Live"
-            : presentation.standing.status === "final"
+            : contestStanding?.status === "final"
                 ? "Final"
-                : null
-        : null;
+                : null;
     const confidenceLabel = pick.confidence ? pick.confidence.toLowerCase() : null;
     const confidenceTone =
         confidenceLabel === "high"

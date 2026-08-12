@@ -13,17 +13,18 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import { ContestBadgeCategory, ContestBadgeSettings, GroupSelector, Leaderboard, LeaderboardList, RootState, Slip } from "@/lib/interfaces/interfaces";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchLeaderboardRequest } from "@/lib/redux/slices/groupsSlice";
-import { archiveContestByIdRequest, clearArchiveContestByIdMessage, clearDeleteContestByIdMessage, deleteContestByIdRequest, excludeContestMemberRequest, fetchBadgeAwardsByContestIdRequest, fetchContestByIdRequest, resetBadgeSettingsRequest, updateBadgeSettingsRequest, updateContestRequest } from "@/lib/redux/slices/contestSlice";
+import { archiveContestByIdRequest, clearArchiveContestByIdMessage, clearDeleteContestByIdMessage, deleteContestByIdRequest, excludeContestMemberRequest, fetchBadgeAwardsByContestIdRequest, fetchContestByIdRequest, resetBadgeSettingsRequest, toggleContestBadgesRequest, updateBadgeSettingsRequest, updateContestRequest } from "@/lib/redux/slices/contestSlice";
 import { fetchAllFinalizedSlipsRequest, fetchAllOpenSlipsRequest, fetchAllReviewSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import LeaderboardGrid from "@/components/leaderboard/LeaderboardGrid";
 import LeaderboardSkeleton from "@/components/skeletons/leagues/LeaderboardSkeleton";
 import PlayersSkeleton from "@/components/skeletons/leagues/contest/PlayersSkeleton";
 import BadgesSkeleton from "@/components/skeletons/leagues/contest/BadgeAwardSkeleton";
-import { DEFAULT_BADGE_POINTS, getAppliedBadgeSettings, getBadgePointValue, getDefaultEnabledBadgeIds } from "@/lib/contests/badges";
+import { getAppliedBadgeSettings, getBadgePointValue, getDefaultEnabledBadgeIds } from "@/lib/contests/badges";
 import ContestPageSkeleton from "@/components/skeletons/leagues/ContestPageSkeleton";
 import { BadgeIcon } from "@/components/badges/BadgeIcon";
 import { canUseProLeagueScoringControls, isContestInLeague } from "@/lib/permissions/leaguePermissions";
 import { useUserPlan } from "@/lib/plan/useUserPlan";
+import { getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
 
 const CONTEST_TABS = [
     { id: "standings", label: "Standings" },
@@ -35,6 +36,28 @@ const CONTEST_TABS = [
 
 type ContestTabId = (typeof CONTEST_TABS)[number]["id"];
 const contestSportLabels = (sports: string[]) => (sports.length > 1 ? ["Multi"] : sports);
+
+/** The three beats of Capture the Badge, rendered as the hero's step rail. */
+const BADGE_JOURNEY_STEPS = [
+    {
+        number: "01",
+        title: "Win qualifying picks",
+        description: "Finalized picks build your mark for each badge.",
+    },
+    {
+        number: "02",
+        title: "Own the best mark",
+        description: "Beat the leader to take the badge. Ties leave it with the holder.",
+    },
+    {
+        number: "03",
+        title: "Score the bonus",
+        description: "The current holder adds that badge's points to the standings.",
+    },
+] as const;
+
+const getBadgeCategoryLabel = (category: string) =>
+    category === "generic" ? "All sports" : category.toUpperCase();
 
 const generateDeleteCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -268,10 +291,6 @@ const ContestDetailPage = () => {
         if (tab.id === "badges") return Boolean(appliedBadgeSettings?.enabled) || canManage;
         return true;
     });
-    const activeContestTabIndex = Math.max(
-        0,
-        visibleTabs.findIndex((tab) => tab.id === activeContestTab)
-    );
 
     useEffect(() => {
         if (
@@ -286,6 +305,34 @@ const ContestDetailPage = () => {
 
     const isArchived = contest.status === "ARCHIVED";
     const hasOpenSlips = ((openSlips?.length ?? 0) + (reviewSlips?.length ?? 0)) > 0;
+
+    // Managers see every badge they could switch on; players only see the ones
+    // already in play, so the same list drives the board and both hero counters.
+    const badgeListDefinitions = (canManage ? manageableBadgeDefinitions : badgeDefinitions) ?? [];
+    const visibleBadgeIds = new Set(badgeListDefinitions.map((definition) => definition.id));
+    const activeBadgeCount = canManage
+        ? badgeDraft?.enabled
+            ? badgeListDefinitions.filter((definition) =>
+                badgeDraft.enabledBadgeIds.includes(definition.id)
+            ).length
+            : 0
+        : badgeDefinitions?.length ?? 0;
+    const capturedBadgeCount = (badgeAwards ?? []).filter((award) =>
+        visibleBadgeIds.has(award.definition.id)
+    ).length;
+    // A single-sport contest tints the medallions with that league's colour;
+    // multi-sport contests stay on the generic amber tint.
+    const badgeTintSport = contest.sports?.length === 1 ? contest.sports[0] : null;
+    // Account-level plan, not the locally stored one `canCustomizeBadgePoints`
+    // reads — this only supplies the offer name/price shown in the upsell.
+    const proPlanView = getProLifetimePlanViewModel({
+        plan: currentUser.plan,
+        offerKind: currentUser.proLifetimeOfferKind,
+        entitlement: currentUser.proLifetimeEntitlement,
+    });
+    const badgeUpgradeHref = `/app-settings/plan/league/upgrade?intent=customize-badges&leagueId=${encodeURIComponent(
+        leagueId
+    )}&contestId=${encodeURIComponent(contestId)}`;
 
     const handleSlipSelect = (slipId?: string) => {
         if (!league || !slipId) return;
@@ -401,17 +448,24 @@ const ContestDetailPage = () => {
     };
 
     const persistBadgeSettings = () => {
-        if (!badgeDraft) return;
-        if (badgeDraft && contest.id) {
+        if (!badgeDraft || !contest.id) return;
+
+        if (canCustomizeBadgePoints) {
             dispatch(updateBadgeSettingsRequest({
                 contest_id: contest.id,
-                settings: canCustomizeBadgePoints
-                    ? badgeDraft
-                    : {
-                        ...badgeDraft,
-                        defaultPoints: DEFAULT_BADGE_POINTS,
-                        badgePointOverrides: {},
-                    },
+                settings: badgeDraft,
+            }));
+        } else {
+            // Enable/disable and badge selection are free; only point VALUES are
+            // Pro. `update-badge-settings` rejects a body that would move a point
+            // value on a non-Pro plan, so posting the whole draft here — even with
+            // points forced back to the default — would 403 the switches this plan
+            // owns and quietly wipe values a Pro commissioner had set. The toggle
+            // endpoint carries no point fields at all, so neither can happen.
+            dispatch(toggleContestBadgesRequest({
+                contest_id: contest.id,
+                enabled: badgeDraft.enabled,
+                badge_ids: badgeDraft.enabledBadgeIds,
             }));
         }
         setShowBadgeSaveConfirm(false);
@@ -474,7 +528,7 @@ const ContestDetailPage = () => {
 
     return (
         <div className="flex flex-col gap-2 pb-10">
-            <header className="-mx-5 border-b border-white/10 pl-5 pr-2 pb-3 sm:mx-0 sm:px-0">
+            <header className="-mx-5 pb-4 pl-5 pr-2 sm:mx-0 sm:px-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <BackButton
                         fallback={`/league/${league.id}?tab=contests`}
@@ -503,19 +557,11 @@ const ContestDetailPage = () => {
                 </div>
             </header>
 
-            <section className="-mx-5 -mt-1 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
+            <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0">
                 <div
-                    className="relative grid w-full gap-1 py-1"
+                    className="grid w-full items-end gap-1"
                     style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}
                 >
-                    <span
-                        aria-hidden
-                        className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.08] transition-transform duration-300 ease-out"
-                        style={{
-                            width: `calc(100% / ${visibleTabs.length})`,
-                            transform: `translateX(${activeContestTabIndex * 100}%)`,
-                        }}
-                    />
                     {visibleTabs.map((tab) => {
                         const isActive = activeContestTab === tab.id;
                         return (
@@ -523,7 +569,9 @@ const ContestDetailPage = () => {
                                 key={tab.id}
                                 type="button"
                                 onClick={() => setActiveContestTab(tab.id)}
-                                className={`relative z-10 flex h-9 min-w-0 items-center justify-center px-2 text-center text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:text-xs ${isActive ? "text-white" : "text-gray-400 hover:text-white"
+                                className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 text-center text-sm font-semibold transition-colors duration-200 ease-out sm:px-3 motion-reduce:transition-none ${isActive
+                                    ? "border-white/10 bg-black text-sky-100 after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']"
+                                    : "border-transparent bg-black text-gray-400 hover:border-white/10 hover:text-white"
                                     }`}
                             >
                                 <span className="truncate">{tab.label}</span>
@@ -611,137 +659,311 @@ const ContestDetailPage = () => {
                     {badgeLoading ? (
                         <BadgesSkeleton />
                     ) : (
-                        <section className="space-y-6">
-                            <div className="space-y-4">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
-                                            Capture the badge
-                                        </h2>
-                                        <p className="mt-1 max-w-3xl text-xs text-gray-500">
-                                            Capture badges by owning the best mark in a contest. Badge points count toward the standings, and another player has to beat your mark to take the badge.
-                                        </p>
-                                        {canManage && (
-                                            <p className="mt-2 text-xs text-gray-600">
-                                                {hasFinalizedSlips
-                                                    ? "Saving badge changes after scoring starts updates badge awards and leaderboard standings."
-                                                    : "Badge changes apply immediately until the first contest slip is finalized."}
+                        <section className="space-y-7 sm:space-y-8">
+                            <div className="relative overflow-hidden rounded-[28px] border border-sky-300/20 bg-[linear-gradient(145deg,rgba(14,165,233,0.16),rgba(15,23,42,0.72)_48%,rgba(0,0,0,0.92))] shadow-[0_24px_70px_rgba(2,132,199,0.12)]">
+                                <div
+                                    aria-hidden
+                                    className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-sky-400/15 blur-3xl"
+                                />
+                                <div className="relative grid gap-6 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-10 lg:p-8">
+                                    <div className="flex flex-col items-start gap-4 sm:flex-row sm:gap-5">
+                                        <BadgeIcon
+                                            category="generic"
+                                            sport={badgeTintSport}
+                                            alt="Capture the Badge medallion"
+                                            className="h-16 w-16 sm:h-20 sm:w-20"
+                                            priority
+                                        />
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">
+                                                Contest challenge
                                             </p>
-                                        )}
-                                        {canManage && !canCustomizeBadgePoints && (
-                                            <p className="mt-2 text-xs text-amber-200/80">
-                                                Badge points stay at the Free default. {" "}
-                                                <Link
-                                                    href="/fantasy"
-                                                    className="font-semibold text-amber-200 underline decoration-amber-200/40 underline-offset-2 transition hover:text-amber-100"
-                                                >
-                                                    Upgrade to Pro to customize points.
-                                                </Link>
+                                            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                                                Capture the Badge
+                                            </h2>
+                                            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base sm:leading-7">
+                                                Every badge rewards a different kind of winning. Set the strongest
+                                                qualifying mark, hold off the field, and add the badge bonus to your
+                                                contest score.
                                             </p>
-                                        )}
+                                        </div>
                                     </div>
+
+                                    <dl className="grid grid-cols-2 divide-x divide-white/10 border-t border-white/10 pt-5 lg:min-w-64 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+                                        <div className="pr-4">
+                                            <dt className="text-xs font-medium text-slate-400">Active badges</dt>
+                                            <dd className="mt-1 text-2xl font-semibold text-white">{activeBadgeCount}</dd>
+                                        </div>
+                                        <div className="pl-4">
+                                            <dt className="text-xs font-medium text-slate-400">Captured now</dt>
+                                            <dd className="mt-1 text-2xl font-semibold text-white">{capturedBadgeCount}</dd>
+                                        </div>
+                                    </dl>
                                 </div>
 
-                                {canManage && badgeDraft && (
-                                    <div className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 lg:grid-cols-[1fr_auto]">
-                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_11rem]">
-                                            <div className="flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-black/25 px-4 py-3">
-                                                <div>
-                                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-300">
-                                                        Badge system
-                                                    </p>
-                                                    <p className="mt-1 text-xs text-gray-500">
-                                                        Turn Capture the Badge on or off for this contest.
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setBadgeDraft((current) => {
-                                                            if (!current) return current;
-
-                                                            const enabled = !current.enabled;
-
-                                                            return {
-                                                                ...current,
-                                                                enabled,
-                                                                enabledBadgeIds:
-                                                                    enabled && current.enabledBadgeIds.length === 0
-                                                                        ? getDefaultEnabledBadgeIds(contest)
-                                                                        : current.enabledBadgeIds,
-                                                            };
-                                                        })
-                                                    }
-                                                    aria-pressed={badgeDraft.enabled}
-                                                    className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full border transition-all duration-300 ${badgeDraft.enabled
-                                                        ? "border-sky-300/60 bg-sky-500/30"
-                                                        : "border-white/15 bg-black/60"
-                                                        }`}
-                                                >
-                                                    <span
-                                                        className={`absolute h-5 w-5 rounded-full bg-white shadow-md transition-all duration-300 ${badgeDraft.enabled ? "left-6" : "left-1"}`}
-                                                    />
-                                                </button>
+                                <ol className="relative grid border-t border-white/10 bg-black/20 sm:grid-cols-3 sm:divide-x sm:divide-white/10">
+                                    {BADGE_JOURNEY_STEPS.map((step) => (
+                                        <li key={step.number} className="flex gap-3 px-5 py-4 sm:px-6 sm:py-5">
+                                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-300/30 bg-sky-500/10 text-xs font-semibold text-sky-100">
+                                                {step.number}
+                                            </span>
+                                            <div>
+                                                <p className="text-sm font-semibold text-white">{step.title}</p>
+                                                <p className="mt-1 text-xs leading-5 text-slate-400">
+                                                    {step.description}
+                                                </p>
                                             </div>
-                                            <label className="block rounded-lg border border-white/10 bg-black/25 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                                Default points
-                                                {canCustomizeBadgePoints ? (
-                                                    <NumberInput
-                                                        min={0}
-                                                        max={1000}
-                                                        value={badgeDraft.defaultPoints}
-                                                        onValueChange={(nextPoints) =>
-                                                            setBadgeDraft((current) =>
-                                                                current
-                                                                    ? {
-                                                                        ...current,
-                                                                        defaultPoints: nextPoints,
-                                                                    }
-                                                                    : current
-                                                            )
-                                                        }
-                                                        className="mt-2 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
-                                                    />
-                                                ) : (
-                                                    <div className="mt-2 flex items-center justify-between rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-sm normal-case text-white">
-                                                        <span>+{DEFAULT_BADGE_POINTS}</span>
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-                                                            Free default
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </label>
+                                        </li>
+                                    ))}
+                                </ol>
+                            </div>
+
+                            {canManage && badgeDraft && (
+                                <section
+                                    aria-labelledby="badge-controls-title"
+                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035]"
+                                >
+                                    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 px-5 py-5 sm:px-6">
+                                        <div>
+                                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">
+                                                Commissioner controls
+                                            </p>
+                                            <h3 id="badge-controls-title" className="mt-1 text-xl font-semibold text-white">
+                                                Shape the badge race
+                                            </h3>
+                                            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                                                Choose what is in play, then save once. {hasFinalizedSlips
+                                                    ? "Because scoring has started, saving will recalculate badge holders and standings."
+                                                    : "Changes take effect immediately until the first contest slip is finalized."}
+                                            </p>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                        <span
+                                            className={`inline-flex min-h-8 items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${badgeDraft.enabled
+                                                ? "border-emerald-300/25 bg-emerald-500/10 text-emerald-100"
+                                                : "border-white/10 bg-white/[0.03] text-slate-400"
+                                                }`}
+                                        >
+                                            <span
+                                                aria-hidden
+                                                className={`h-2 w-2 rounded-full ${badgeDraft.enabled ? "bg-emerald-300" : "bg-slate-600"
+                                                    }`}
+                                            />
+                                            {badgeDraft.enabled ? "Badge play on" : "Badge play off"}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-white/10">
+                                        <div className="flex items-center justify-between gap-5 border-b border-white/10 px-5 py-5 sm:border-b-0 sm:px-6">
+                                            <div>
+                                                <p className="text-base font-semibold text-white">Badge system</p>
+                                                <p className="mt-1 text-sm leading-5 text-slate-400">
+                                                    Turn the entire badge challenge on or off.
+                                                </p>
+                                            </div>
                                             <button
                                                 type="button"
-                                                onClick={handleSaveBadgeSettings}
-                                                className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200"
+                                                onClick={() =>
+                                                    setBadgeDraft((current) => {
+                                                        if (!current) return current;
+
+                                                        const enabled = !current.enabled;
+
+                                                        return {
+                                                            ...current,
+                                                            enabled,
+                                                            enabledBadgeIds:
+                                                                enabled && current.enabledBadgeIds.length === 0
+                                                                    ? getDefaultEnabledBadgeIds(contest)
+                                                                    : current.enabledBadgeIds,
+                                                        };
+                                                    })
+                                                }
+                                                aria-label={badgeDraft.enabled ? "Turn badge play off" : "Turn badge play on"}
+                                                aria-pressed={badgeDraft.enabled}
+                                                className={`relative h-11 w-[72px] shrink-0 rounded-full border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200 ${badgeDraft.enabled
+                                                    ? "border-sky-300/60 bg-sky-500/35"
+                                                    : "border-white/15 bg-black/60"
+                                                    }`}
                                             >
-                                                Save settings
+                                                <span
+                                                    className={`absolute top-1.5 h-8 w-8 rounded-full bg-white shadow-md transition-all ${badgeDraft.enabled ? "left-[34px]" : "left-1.5"}`}
+                                                />
                                             </button>
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-5 px-5 py-5 sm:px-6">
+                                            <div>
+                                                <p className="text-base font-semibold text-white">Default badge value</p>
+                                                <p className="mt-1 text-sm leading-5 text-slate-400">
+                                                    Used unless a badge has its own value.
+                                                </p>
+                                            </div>
+                                            {canCustomizeBadgePoints ? (
+                                                <label className="shrink-0">
+                                                    <span className="sr-only">Default badge points</span>
+                                                    <span className="flex min-h-11 items-center rounded-xl border border-white/15 bg-black/45 px-3 focus-within:border-sky-300/70">
+                                                        <span className="mr-1 text-lg text-sky-200">+</span>
+                                                        <NumberInput
+                                                            min={0}
+                                                            max={1000}
+                                                            value={badgeDraft.defaultPoints}
+                                                            onValueChange={(nextPoints) =>
+                                                                setBadgeDraft((current) =>
+                                                                    current
+                                                                        ? {
+                                                                            ...current,
+                                                                            defaultPoints: nextPoints,
+                                                                        }
+                                                                        : current
+                                                                )
+                                                            }
+                                                            className="w-16 bg-transparent text-xl font-semibold text-white outline-none"
+                                                        />
+                                                        <span className="text-xs text-slate-400">pts</span>
+                                                    </span>
+                                                </label>
+                                            ) : (
+                                                <div className="shrink-0 text-right">
+                                                    <p className="text-2xl font-semibold text-white">+{badgeDraft.defaultPoints}</p>
+                                                    <p className="text-xs font-medium text-amber-200">Fixed on Free</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col-reverse gap-3 border-t border-white/10 bg-black/15 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                                        <p className="text-xs leading-5 text-slate-500">
+                                            Enable/disable controls are included on Free. Pro is only required to change
+                                            point values.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={handleResetBadgeSettings}
-                                                className="rounded-lg border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-white/25"
+                                                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-white/25 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                                             >
                                                 Reset all
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveBadgeSettings}
+                                                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-sky-300/50 bg-sky-500/25 px-5 py-2 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+                                            >
+                                                Save settings
+                                            </button>
                                         </div>
                                     </div>
-                                )}
+                                </section>
+                            )}
+
+                            {canManage && !canCustomizeBadgePoints && (
+                                <aside
+                                    aria-labelledby="badge-pro-title"
+                                    className="relative overflow-hidden rounded-3xl border border-sky-300/25 bg-[linear-gradient(135deg,rgba(14,165,233,0.14),rgba(30,41,59,0.48)_52%,rgba(0,0,0,0.8))] p-5 sm:p-6"
+                                >
+                                    <div
+                                        aria-hidden
+                                        className="pointer-events-none absolute -bottom-24 -left-12 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl"
+                                    />
+                                    <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(310px,0.8fr)] lg:gap-10">
+                                        <div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="rounded-full border border-sky-200/25 bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-100">
+                                                    {proPlanView.offer.name}
+                                                </span>
+                                                <span className="text-sm font-semibold text-white">
+                                                    {proPlanView.offer.priceLabel} once
+                                                </span>
+                                            </div>
+                                            <h3 id="badge-pro-title" className="mt-4 text-xl font-semibold text-white sm:text-2xl">
+                                                Set the score, badge by badge.
+                                            </h3>
+                                            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base sm:leading-7">
+                                                On Free, you can turn badge play on or off and choose which badges
+                                                count — only the point values stay locked. Pro Lifetime unlocks a
+                                                custom contest default and individual values for any contest you
+                                                organize.
+                                            </p>
+                                            <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-sky-100">
+                                                <li className="flex items-center gap-2">
+                                                    <span aria-hidden>✓</span> Permanent account unlock
+                                                </li>
+                                                <li className="flex items-center gap-2">
+                                                    <span aria-hidden>✓</span> No League subscription
+                                                </li>
+                                                <li className="flex items-center gap-2">
+                                                    <span aria-hidden>✓</span> Applies to every League you own
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        <div className="border-t border-white/10 pt-5 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
+                                            <p className="text-sm font-semibold text-white">What happens next</p>
+                                            <ol className="mt-3 space-y-3 text-sm leading-5 text-slate-300">
+                                                <li className="flex gap-3">
+                                                    <span className="font-semibold text-sky-200">1</span>
+                                                    Review the one-time price and everything Pro includes.
+                                                </li>
+                                                <li className="flex gap-3">
+                                                    <span className="font-semibold text-sky-200">2</span>
+                                                    Confirm the unlock. Pro activates as soon as payment clears.
+                                                </li>
+                                                <li className="flex gap-3">
+                                                    <span className="font-semibold text-sky-200">3</span>
+                                                    Return here and edit the default or any badge value.
+                                                </li>
+                                            </ol>
+                                            <Link
+                                                href={badgeUpgradeHref}
+                                                className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-sky-200/55 bg-sky-500/25 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
+                                            >
+                                                Review {proPlanView.offer.priceLabel} one-time upgrade
+                                                <span aria-hidden className="ml-2">→</span>
+                                            </Link>
+                                            <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                One-time payment. No subscription and nothing to renew.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </aside>
+                            )}
+
+                            <div className="flex flex-wrap items-end justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">
+                                        Badge board
+                                    </p>
+                                    <h3 className="mt-1 text-xl font-semibold text-white sm:text-2xl">
+                                        {canManage ? "Choose what is in play" : "The marks to beat"}
+                                    </h3>
+                                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                                        {canManage
+                                            ? "Include the challenges that fit this contest. Point changes are saved with the rest of your badge settings."
+                                            : "See who holds each active badge and the mark needed to take it."}
+                                    </p>
+                                </div>
+                                <p className="text-sm font-medium text-slate-300">
+                                    <span className="text-white">{activeBadgeCount}</span> of {badgeListDefinitions.length} active
+                                </p>
                             </div>
 
                             {!canManage && !appliedBadgeSettings?.enabled ? (
-                                <div className="rounded-lg border border-white/10 bg-black/40 p-5 text-sm text-gray-400">
-                                    Badge play is off for this contest.
+                                <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.025] px-5 py-10 text-center sm:px-8">
+                                    <p className="text-lg font-semibold text-white">Badge play is off</p>
+                                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-400">
+                                        The commissioner has not enabled Capture the Badge for this contest.
+                                    </p>
+                                </div>
+                            ) : badgeListDefinitions.length === 0 ? (
+                                <div className="rounded-3xl border border-dashed border-white/15 bg-white/[0.025] px-5 py-10 text-center sm:px-8">
+                                    <p className="text-lg font-semibold text-white">No eligible badges yet</p>
+                                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-400">
+                                        Badges appear here when this contest has an eligible sport or qualifying activity.
+                                    </p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                    {(canManage
-                                        ? manageableBadgeDefinitions ?? []
-                                        : badgeDefinitions ?? []
-                                    ).map((definition) => {
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                    {badgeListDefinitions.map((definition) => {
                                         const award = (badgeAwards ?? []).find(
                                             (candidate) => candidate.definition.id === definition.id
                                         );
@@ -751,117 +973,155 @@ const ContestDetailPage = () => {
                                             : Boolean(appliedBadgeSettings?.enabled);
                                         const badgeEnabledForDraft = canManage ? draftEnabled : true;
                                         const cardDisabled = canManage && (!badgeSystemEnabled || !badgeEnabledForDraft);
+                                        // A Free commissioner cannot edit point values, but the
+                                        // values they cannot edit are still the contest's real
+                                        // ones — saving through the toggle endpoint leaves them
+                                        // untouched — so never show the built-in default here.
                                         const displayedPoints =
                                             canManage && badgeDraft
-                                                ? canCustomizeBadgePoints
-                                                    ? getBadgePointValue(badgeDraft, definition.id)
-                                                    : DEFAULT_BADGE_POINTS
+                                                ? getBadgePointValue(badgeDraft, definition.id)
                                                 : appliedBadgeSettings
                                                     ? getBadgePointValue(appliedBadgeSettings, definition.id)
                                                     : 0;
                                         const hasOverride =
                                             badgeDraft?.badgePointOverrides[definition.id] !== undefined;
+                                        const holderName = award?.profile?.username ?? "Member";
 
                                         return (
-                                            <div
+                                            <article
                                                 key={definition.id}
-                                                className={`rounded-xl border bg-gradient-to-br from-white/[0.08] via-white/[0.04] to-white/[0.02] p-4 transition ${definition.display.borderClass} ${definition.display.glowClass} ${cardDisabled ? "opacity-55" : ""}`}
+                                                className={`relative flex min-h-full flex-col overflow-hidden rounded-3xl border bg-[linear-gradient(145deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025)_55%,rgba(0,0,0,0.35))] p-5 transition sm:p-6 ${definition.display.borderClass} ${definition.display.glowClass}`}
                                             >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="flex min-w-0 gap-3">
+                                                <div
+                                                    aria-hidden
+                                                    className={`pointer-events-none absolute -right-14 -top-16 h-40 w-40 rounded-full bg-white/[0.04] blur-2xl ${cardDisabled ? "opacity-30" : ""
+                                                        }`}
+                                                />
+                                                <div className="relative flex items-start gap-4 sm:gap-5">
+                                                    <span className={cardDisabled ? "opacity-45 grayscale" : ""}>
                                                         <BadgeIcon
                                                             category={definition.category as ContestBadgeCategory}
-                                                            tinted={false}
+                                                            sport={badgeTintSport}
                                                             alt={definition.name}
-                                                            className="h-10 w-10"
+                                                            className="h-16 w-16"
                                                         />
-                                                        <div className="min-w-0">
-                                                            <p className={`text-sm font-semibold ${definition.display.toneClass}`}>
+                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                                            <h4 className="text-lg font-semibold leading-tight text-white sm:text-xl">
                                                                 {definition.name}
-                                                            </p>
-                                                            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                                                {definition.category} · {definition.display.subtitle}
-                                                            </p>
-                                                            <p className="mt-1 text-xs text-gray-500">
-                                                                {definition.description}
-                                                            </p>
+                                                            </h4>
+                                                            <span className="shrink-0 text-sm font-semibold text-sky-100">
+                                                                +{displayedPoints} pts
+                                                            </span>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex shrink-0 flex-col items-end gap-2">
-                                                        <span className="rounded-full bg-white/[0.08] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-sky-100">
-                                                            +{displayedPoints}
-                                                        </span>
-                                                        {canManage && badgeDraft && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    setBadgeDraft((current) => {
-                                                                        if (!current) return current;
-                                                                        const ids = new Set(current.enabledBadgeIds);
-                                                                        if (ids.has(definition.id)) ids.delete(definition.id);
-                                                                        else ids.add(definition.id);
-                                                                        return { ...current, enabledBadgeIds: Array.from(ids) };
-                                                                    })
-                                                                }
-                                                                className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${draftEnabled
-                                                                    ? "border-sky-300/40 text-sky-100"
-                                                                    : "border-white/10 text-gray-500"
-                                                                    }`}
-                                                            >
-                                                                {draftEnabled ? "on" : "off"}
-                                                            </button>
-                                                        )}
+                                                        <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.12em] ${definition.display.toneClass}`}>
+                                                            {getBadgeCategoryLabel(definition.category)} · {definition.display.subtitle}
+                                                        </p>
+                                                        <p className="mt-3 text-sm leading-6 text-slate-300">
+                                                            {definition.description}
+                                                        </p>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-4 space-y-2 rounded-md border border-white/10 bg-black/30 px-3 py-2">
+                                                {canManage && badgeDraft && (
+                                                    <div className="relative mt-5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setBadgeDraft((current) => {
+                                                                    if (!current) return current;
+                                                                    const ids = new Set(current.enabledBadgeIds);
+                                                                    if (ids.has(definition.id)) ids.delete(definition.id);
+                                                                    else ids.add(definition.id);
+                                                                    return { ...current, enabledBadgeIds: Array.from(ids) };
+                                                                })
+                                                            }
+                                                            disabled={!badgeSystemEnabled}
+                                                            aria-label={`${draftEnabled ? "Exclude" : "Include"} ${definition.name} badge`}
+                                                            aria-pressed={draftEnabled}
+                                                            className={`inline-flex min-h-11 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200 disabled:cursor-not-allowed disabled:opacity-45 ${draftEnabled
+                                                                ? "border-sky-300/40 bg-sky-500/10 text-sky-50"
+                                                                : "border-white/10 bg-black/20 text-slate-400 hover:border-white/20 hover:text-white"
+                                                                }`}
+                                                        >
+                                                            <span
+                                                                aria-hidden
+                                                                className={`flex h-5 w-5 items-center justify-center rounded-full border text-xs ${draftEnabled
+                                                                    ? "border-sky-200/50 bg-sky-400/20 text-sky-100"
+                                                                    : "border-white/15 text-transparent"
+                                                                    }`}
+                                                            >
+                                                                ✓
+                                                            </span>
+                                                            {!badgeSystemEnabled
+                                                                ? "System off"
+                                                                : draftEnabled
+                                                                    ? "Included"
+                                                                    : "Excluded"}
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                <div className="relative mt-5 border-t border-white/10 pt-4">
                                                     {award ? (
                                                         <>
-                                                            <div className="flex items-center justify-between gap-3">
-                                                                <span className="truncate text-sm font-semibold text-white">
-                                                                    {award.profile?.username ?? "Member"}
-                                                                </span>
-                                                                <span className="shrink-0 text-xs text-gray-400">
-                                                                    {award.valueLabel}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-[11px] text-gray-500">
-                                                                Mark to beat: {award.markToBeatLabel}
+                                                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                                                Current holder
                                                             </p>
-                                                            <p className="text-[11px] text-gray-600">
-                                                                Tied the mark, but ties do not capture the badge.
+                                                            <div className="mt-2 flex items-baseline justify-between gap-3">
+                                                                <p className="min-w-0 truncate text-base font-semibold text-white">
+                                                                    {holderName}
+                                                                </p>
+                                                                <p className="shrink-0 text-sm font-semibold text-sky-100">
+                                                                    {award.valueLabel}
+                                                                </p>
+                                                            </div>
+                                                            <p className="mt-2 text-sm leading-5 text-slate-400">
+                                                                Beat {award.markToBeatLabel} to take it. A tie leaves the badge with
+                                                                the current holder.
                                                             </p>
                                                         </>
                                                     ) : (
-                                                        <p className="text-xs text-gray-500">
-                                                            No holder yet. Be the first to capture it.
-                                                        </p>
+                                                        <>
+                                                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                                                                Unclaimed
+                                                            </p>
+                                                            <p className="mt-2 text-sm leading-6 text-slate-400">
+                                                                No qualifying mark yet. Be the first player to capture it.
+                                                            </p>
+                                                        </>
                                                     )}
                                                 </div>
 
                                                 {canManage && canCustomizeBadgePoints && badgeDraft && (
-                                                    <div className="mt-4 grid grid-cols-[1fr_auto] items-end gap-2 border-t border-white/10 pt-3">
-                                                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                                            Points
-                                                            <NumberInput
-                                                                min={0}
-                                                                max={1000}
-                                                                value={displayedPoints}
-                                                                onValueChange={(nextPoints) =>
-                                                                    setBadgeDraft((current) =>
-                                                                        current
-                                                                            ? {
-                                                                                ...current,
-                                                                                badgePointOverrides: {
-                                                                                    ...current.badgePointOverrides,
-                                                                                    [definition.id]: nextPoints,
-                                                                                },
-                                                                            }
-                                                                            : current
-                                                                    )
-                                                                }
-                                                                className="mt-1 w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
-                                                            />
+                                                    <div className="relative mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-white/10 pt-4">
+                                                        <label className="block">
+                                                            <span className="text-xs font-medium text-slate-400">Badge value</span>
+                                                            <span className="mt-1 flex min-h-11 w-32 items-center rounded-xl border border-white/15 bg-black/35 px-3 focus-within:border-sky-300/70">
+                                                                <span className="mr-1 text-sky-200">+</span>
+                                                                <NumberInput
+                                                                    min={0}
+                                                                    max={1000}
+                                                                    value={displayedPoints}
+                                                                    aria-label={`${definition.name} points`}
+                                                                    onValueChange={(nextPoints) =>
+                                                                        setBadgeDraft((current) =>
+                                                                            current
+                                                                                ? {
+                                                                                    ...current,
+                                                                                    badgePointOverrides: {
+                                                                                        ...current.badgePointOverrides,
+                                                                                        [definition.id]: nextPoints,
+                                                                                    },
+                                                                                }
+                                                                                : current
+                                                                        )
+                                                                    }
+                                                                    className="w-full bg-transparent text-base font-semibold text-white outline-none"
+                                                                />
+                                                                <span className="text-xs text-slate-500">pts</span>
+                                                            </span>
                                                         </label>
                                                         <button
                                                             type="button"
@@ -874,13 +1134,14 @@ const ContestDetailPage = () => {
                                                                 })
                                                             }
                                                             disabled={!hasOverride}
-                                                            className="rounded-lg border border-white/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-300 transition hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+                                                            aria-label={`Use default points for ${definition.name}`}
+                                                            className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-slate-300 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35"
                                                         >
-                                                            Reset
+                                                            Use default
                                                         </button>
                                                     </div>
                                                 )}
-                                            </div>
+                                            </article>
                                         );
                                     })}
                                 </div>

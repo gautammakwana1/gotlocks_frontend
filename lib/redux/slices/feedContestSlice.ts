@@ -1,19 +1,25 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type {
     CreateFeedContestPayload,
+    DeleteFeedContestData,
+    DeleteFeedContestPayload,
     EnterFeedContestData,
     EnterFeedContestPayload,
     FeedContest,
     FeedContestDetailData,
     FeedContestEntriesData,
+    FeedContestLeaderboardData,
     FeedContestLifecycleActionPayload,
     FeedContestLifecycleData,
     FeedContestListData,
+    FeedContestPicksData,
     FeedContestSection,
     FeedContestStatsData,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
     FetchFeedContestEntriesPayload,
+    FetchFeedContestLeaderboardPayload,
+    FetchFeedContestPicksPayload,
     FetchFeedContestStatsPayload,
     FetchFeedContestsPayload,
     ReplaceDraftFeedContestPayload,
@@ -85,6 +91,23 @@ export type FeedContestState = {
     archiveError: string | null;
 
     /**
+     * DELETE /delete/:contest_id — permanent, and the ONLY write here that
+     * cannot be folded back into `detail`, because the row it described no
+     * longer exists. Its own flags rather than the lifecycle trio above: the
+     * deletion drawer awaits this outcome to decide whether to close or to keep
+     * the organizer on the confirm step, so it must not observe a cancel's.
+     *
+     * `deletedContestId` is the receipt the screen navigates away on, and the
+     * key the section lists are purged by.
+     */
+    deleteLoading: boolean;
+    deleteMessage: string | null;
+    deleteError: string | null;
+    deletedContestId: string | null;
+    /** Echoed so the success toast can say how many members were told. */
+    deletedEntrantsNotified: number;
+
+    /**
      * The copy edit. Kept apart from cancel/archive because it is driven from a
      * DIFFERENT screen (the edit route), which owns its own success navigation.
      */
@@ -103,6 +126,28 @@ export type FeedContestState = {
     entries: FeedContestEntriesData | null;
     entriesLoading: boolean;
     entriesError: string | null;
+
+    /**
+     * GET /leaderboard/:contest_id — the standings board. Its own slot next to
+     * `entries` because it is a DIFFERENT table and a different question: that
+     * one answers what everyone picked, this one where they stand. Same
+     * single-tenant rule — read it through a `leaderboard.contest.id ===
+     * contestId` check, because one commit showing another contest's board
+     * would attribute scores to the wrong people.
+     */
+    leaderboard: FeedContestLeaderboardData | null;
+    leaderboardLoading: boolean;
+    leaderboardError: string | null;
+
+    /**
+     * GET /picks — every competitive pick across the GROUP's Feed contests, for
+     * the group Feed tab. Its own slot next to `entries` because it is scoped to
+     * a group rather than a contest, and a page of it mixes contests: each row
+     * decides its own hidden-until-lock state.
+     */
+    groupPicks: FeedContestPicksData | null;
+    groupPicksLoading: boolean;
+    groupPicksError: string | null;
 
     /**
      * GET /stats/:contest_id — the whole tally in one read, in its own slot for
@@ -144,6 +189,29 @@ const mergeDetailContest = (
     state.detail.contest = { ...state.detail.contest, ...incoming };
 };
 
+/**
+ * Drops a deleted contest from every section list. The hub renders from these
+ * cached lists on the way back from the detail screen — BEFORE its own refetch
+ * lands — so without this the organizer watches the contest they just deleted
+ * sit there for a beat. `total` is the server's count for the section, so it is
+ * decremented too, or "Show more" would promise a page that no longer exists.
+ */
+const removeContestFromSections = (
+    state: FeedContestState,
+    contestId: string
+) => {
+    for (const section of Object.values(state.sections)) {
+        if (!section.contests) continue;
+        const remaining = section.contests.filter(
+            (contest) => contest.id !== contestId
+        );
+        if (remaining.length === section.contests.length) continue;
+        const removed = section.contests.length - remaining.length;
+        section.contests = remaining;
+        section.total = Math.max(0, section.total - removed);
+    }
+};
+
 const initialState: FeedContestState = {
     sections: {
         open: emptySection(),
@@ -170,6 +238,11 @@ const initialState: FeedContestState = {
     archiveLoading: false,
     archiveMessage: null,
     archiveError: null,
+    deleteLoading: false,
+    deleteMessage: null,
+    deleteError: null,
+    deletedContestId: null,
+    deletedEntrantsNotified: 0,
     updateLoading: false,
     updateMessage: null,
     updateError: null,
@@ -177,6 +250,12 @@ const initialState: FeedContestState = {
     entries: null,
     entriesLoading: false,
     entriesError: null,
+    leaderboard: null,
+    leaderboardLoading: false,
+    leaderboardError: null,
+    groupPicks: null,
+    groupPicksLoading: false,
+    groupPicksError: null,
     stats: null,
     statsLoading: false,
     statsError: null,
@@ -393,6 +472,14 @@ const feedContestSlice = createSlice({
             state.archiveLoading = false;
             state.archiveMessage = null;
             state.archiveError = null;
+            // Also dropped here for the case the screen leaves WITHOUT deleting:
+            // a reply that lands after the organizer navigated away has nobody
+            // to report to, and its receipt must not outlive the screen.
+            state.deleteLoading = false;
+            state.deleteMessage = null;
+            state.deleteError = null;
+            state.deletedContestId = null;
+            state.deletedEntrantsNotified = 0;
             state.updateLoading = false;
             state.updateMessage = null;
             state.updateError = null;
@@ -449,6 +536,59 @@ const feedContestSlice = createSlice({
             state.cancelError = null;
             state.archiveMessage = null;
             state.archiveError = null;
+        },
+
+        /* --------------------------------------------------------------------
+         * DELETE /delete/:contest_id — permanent. Unlike cancel and archive
+         * there is no updated row to merge: the contest is gone, so the reply
+         * only identifies what was removed.
+         * ------------------------------------------------------------------ */
+        deleteFeedContestRequest: (
+            state,
+            action: PayloadAction<DeleteFeedContestPayload>
+        ) => {
+            void action;
+            state.deleteLoading = true;
+            state.deleteMessage = null;
+            state.deleteError = null;
+            // Cleared so the screen's outcome effect cannot read a PREVIOUS
+            // delete's receipt as this one's and navigate away early.
+            state.deletedContestId = null;
+            state.deletedEntrantsNotified = 0;
+        },
+        deleteFeedContestSuccess: (
+            state,
+            action: PayloadAction<{
+                /** Echoed from the request — the reply's own id is preferred. */
+                contest_id: string;
+                data: DeleteFeedContestData | null;
+                message?: string;
+            }>
+        ) => {
+            const contestId =
+                action.payload.data?.contest_id ?? action.payload.contest_id;
+            state.deleteLoading = false;
+            state.deleteMessage = action.payload.message ?? "Contest deleted.";
+            state.deletedContestId = contestId;
+            state.deletedEntrantsNotified =
+                action.payload.data?.entrants_notified ?? 0;
+            removeContestFromSections(state, contestId);
+            // `detail` / `entries` / `stats` are deliberately NOT cleared here.
+            // The detail screen navigates away on this receipt and its unmount
+            // already drops all three; blanking them now would only swap the
+            // contest for a loading skeleton for the frame before it routes.
+        },
+        deleteFeedContestFailure: (state, action: PayloadAction<string>) => {
+            state.deleteLoading = false;
+            state.deleteError = action.payload;
+        },
+        /** Cleared once the screen has reported the outcome, so it toasts once. */
+        clearFeedContestDeleteState: (state) => {
+            state.deleteLoading = false;
+            state.deleteMessage = null;
+            state.deleteError = null;
+            state.deletedContestId = null;
+            state.deletedEntrantsNotified = 0;
         },
 
         updateFeedContestRequest: (
@@ -528,6 +668,115 @@ const feedContestSlice = createSlice({
             state.entriesLoading = false;
             state.entriesError = action.payload;
             state.entries = null;
+        },
+
+        /* --------------------------------------------------------------------
+         * The standings — GET /group/feed-contest/leaderboard/:contest_id.
+         * Paginated the same way the field is, and dropped on the same
+         * single-tenant id check.
+         * ------------------------------------------------------------------ */
+        fetchFeedContestLeaderboardRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestLeaderboardPayload>
+        ) => {
+            if (state.leaderboard?.contest?.id !== action.payload.contest_id) {
+                state.leaderboard = null;
+            }
+            state.leaderboardLoading = true;
+            state.leaderboardError = null;
+        },
+        fetchFeedContestLeaderboardSuccess: (
+            state,
+            action: PayloadAction<FeedContestLeaderboardData>
+        ) => {
+            const incoming = action.payload;
+            const page = incoming?.pagination?.page ?? 1;
+
+            state.leaderboardLoading = false;
+            state.leaderboardError = null;
+
+            // Page 1 replaces; later pages append (Show more), de-duped by the
+            // contest_leaderboard row id so a refetch overlapping the previous
+            // window cannot list the same member twice. `my_standing` and the
+            // reveal flags always come from the NEWEST reply, since a later page
+            // can land after the contest locked.
+            if (
+                page <= 1 ||
+                !state.leaderboard ||
+                state.leaderboard.contest.id !== incoming.contest.id
+            ) {
+                state.leaderboard = incoming;
+                return;
+            }
+            const seen = new Set(state.leaderboard.standings.map((row) => row.id));
+            state.leaderboard = {
+                ...incoming,
+                standings: [
+                    ...state.leaderboard.standings,
+                    ...incoming.standings.filter((row) => !seen.has(row.id)),
+                ],
+            };
+        },
+        fetchFeedContestLeaderboardFailure: (state, action: PayloadAction<string>) => {
+            state.leaderboardLoading = false;
+            state.leaderboardError = action.payload;
+            state.leaderboard = null;
+        },
+        /** Dropped when the detail screen unmounts, like `entries` and `stats`. */
+        clearFeedContestLeaderboard: (state) => {
+            state.leaderboard = null;
+            state.leaderboardLoading = false;
+            state.leaderboardError = null;
+        },
+
+        /* --------------------------------------------------------------------
+         * The group's competitive picks — GET /group/feed-contest/picks.
+         * ------------------------------------------------------------------ */
+        fetchFeedContestPicksRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestPicksPayload>
+        ) => {
+            // Single-tenant, like every other slot here: switching groups drops
+            // the previous one's rows at REQUEST time, so a League feed can never
+            // paint an Arena's entries during the in-flight window.
+            if (state.groupPicks && state.groupPicks.group.id !== action.payload.group_id) {
+                state.groupPicks = null;
+            }
+            state.groupPicksLoading = true;
+            state.groupPicksError = null;
+        },
+        fetchFeedContestPicksSuccess: (
+            state,
+            action: PayloadAction<FeedContestPicksData>
+        ) => {
+            const incoming = action.payload;
+            const page = incoming?.pagination?.page ?? 1;
+
+            state.groupPicksLoading = false;
+            state.groupPicksError = null;
+
+            if (page <= 1 || !state.groupPicks || state.groupPicks.group.id !== incoming.group.id) {
+                state.groupPicks = incoming;
+                return;
+            }
+            const seen = new Set(state.groupPicks.picks.map((row) => row.id));
+            state.groupPicks = {
+                ...incoming,
+                picks: [
+                    ...state.groupPicks.picks,
+                    ...incoming.picks.filter((row) => !seen.has(row.id)),
+                ],
+            };
+        },
+        fetchFeedContestPicksFailure: (state, action: PayloadAction<string>) => {
+            state.groupPicksLoading = false;
+            state.groupPicksError = action.payload;
+            state.groupPicks = null;
+        },
+        clearFeedContestPicks: (state) => {
+            state.groupPicks = null;
+            state.groupPicksLoading = false;
+            state.groupPicksError = null;
         },
 
         /* --------------------------------------------------------------------
@@ -674,6 +923,10 @@ export const {
     archiveFeedContestRequest,
     archiveFeedContestSuccess,
     archiveFeedContestFailure,
+    deleteFeedContestRequest,
+    deleteFeedContestSuccess,
+    deleteFeedContestFailure,
+    clearFeedContestDeleteState,
     clearFeedContestLifecycleMessage,
     updateFeedContestRequest,
     updateFeedContestSuccess,
@@ -682,6 +935,14 @@ export const {
     fetchFeedContestEntriesRequest,
     fetchFeedContestEntriesSuccess,
     fetchFeedContestEntriesFailure,
+    fetchFeedContestLeaderboardRequest,
+    fetchFeedContestLeaderboardSuccess,
+    fetchFeedContestLeaderboardFailure,
+    clearFeedContestLeaderboard,
+    fetchFeedContestPicksRequest,
+    fetchFeedContestPicksSuccess,
+    fetchFeedContestPicksFailure,
+    clearFeedContestPicks,
     fetchFeedContestStatsRequest,
     fetchFeedContestStatsSuccess,
     fetchFeedContestStatsFailure,

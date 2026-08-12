@@ -268,6 +268,14 @@ export type FeedContestEntriesPanelProps = {
     opensAtLabel?: string | null;
     /** Rendered under the caller's own receipt — the "build entry" CTA. */
     action?: React.ReactNode;
+    /**
+     * The JOIN call to action, for a viewer with no participation row yet.
+     * Set, it takes over the header: the kicker reads "Entry status", the title
+     * drops its tone tint, and this link sits on the header's right edge instead
+     * of the pill button under the receipt. That is the MVP's split — someone
+     * who has not joined is being invited, not shown a record.
+     */
+    joinAction?: React.ReactNode;
 };
 
 export const FeedContestEntriesPanel = ({
@@ -286,6 +294,7 @@ export const FeedContestEntriesPanel = ({
     opensAtLabel = null,
     accent = "league",
     action,
+    joinAction,
 }: FeedContestEntriesPanelProps) => {
     const [staffEntryView, setStaffEntryView] = useState<EntryView>("mine");
 
@@ -440,25 +449,41 @@ export const FeedContestEntriesPanel = ({
             >
             {showReceipt ? (
             <article className="px-5 py-5 sm:px-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                            Your entry
-                        </p>
-                        <h2
-                            className={`mt-1 font-semibold ${participantToneTextClass(
-                                participantState.tone,
-                                accent
-                            )}`}
-                        >
-                            {participantState.title}
-                        </h2>
-                    </div>
+                <div
+                    data-entry-join-state={joinAction ? "available" : undefined}
+                    className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3"
+                >
+                    {joinAction ? (
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                                Entry status
+                            </p>
+                            <h2 className="mt-1 text-base font-semibold text-white">
+                                {participantState.title}
+                            </h2>
+                        </div>
+                    ) : (
+                        <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                                Your entry
+                            </p>
+                            <h2
+                                className={`mt-1 font-semibold ${participantToneTextClass(
+                                    participantState.tone,
+                                    accent
+                                )}`}
+                            >
+                                {participantState.title}
+                            </h2>
+                        </div>
+                    )}
                     {ownRow?.entered_at ? (
                         <span className="text-xs text-gray-500">
                             Received {formatContestDateTime(ownRow.entered_at)}
                         </span>
-                    ) : null}
+                    ) : (
+                        joinAction ?? null
+                    )}
                 </div>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
                     {participantState.body}
@@ -495,8 +520,12 @@ export const FeedContestEntriesPanel = ({
                 ) : null}
 
                 {/* Right-aligned, as the MVP now places it — the CTA sits at the
-                    end of the receipt rather than under its left edge. */}
-                {action ? <div className="mt-4 flex justify-end">{action}</div> : null}
+                    end of the receipt rather than under its left edge. Never
+                    alongside `joinAction`: the MVP renders this pill only for a
+                    viewer who is already in the contest. */}
+                {action && !joinAction ? (
+                    <div className="mt-4 flex justify-end">{action}</div>
+                ) : null}
             </article>
             ) : null}
 

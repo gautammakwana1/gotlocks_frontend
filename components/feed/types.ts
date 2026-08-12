@@ -22,15 +22,15 @@ export type StructuredFeedCapabilities = {
 };
 
 /**
+ * Two record filters, matching the MVP: "community" is everything the group
+ * posts to itself (member picks, Staff Picks, announcements) and "competitive"
+ * is contest entries. There is deliberately no "all" — the MVP opens on
+ * Community and every record is reachable from one of the two.
+ *
  * `standings` is not a record filter — it swaps the feed body for the caller's
  * standings node, and the chip only renders when such a node is supplied.
  */
-export type StructuredFeedFilter =
-    | "all"
-    | "community"
-    | "competitive"
-    | "staff"
-    | "standings";
+export type StructuredFeedFilter = "community" | "competitive" | "standings";
 export type StructuredFeedComposerMode =
     | "community_pick"
     | "competitive_pick"
@@ -169,12 +169,18 @@ export type StructuredFeedProps = {
     /** Resolves "view profile" links on pick cards to self vs other. */
     currentUserId?: string;
     /**
-     * Reactions on Feed records. Both must be supplied for the buttons to render
-     * — the Arena/League feed endpoints don't return reaction counts yet, so the
-     * cards deliberately draw without them rather than showing empty tallies.
+     * Reactions on Feed records. Both must be supplied for the buttons to render,
+     * and the summary is resolved PER RECORD: returning null means "this kind
+     * carries no reaction data", which draws the card without the buttons rather
+     * than with a permanently-zero tally. Announcements aren't `picks` rows at
+     * all and contest entries arrive without counts, so only Community Picks
+     * answer with a summary today.
      */
     onReaction?: (recordId: string, reaction: PickReaction) => void;
-    getPickReactionSummary?: (recordId: string, userId?: string) => PickReactionSummary;
+    getPickReactionSummary?: (
+        recordId: string,
+        userId?: string,
+    ) => PickReactionSummary | null;
     onSubmit: (
         submission: StructuredFeedSubmission,
     ) => StructuredFeedSubmitResponse | Promise<StructuredFeedSubmitResponse>;

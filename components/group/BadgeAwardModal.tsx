@@ -56,13 +56,24 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                 <button
                     type="button"
                     onClick={() => setFlipped((prev) => !prev)}
-                    aria-label={flipped ? "Show badge icon" : "Show badge details"}
+                    // The badge's point value is only on the back face, so the
+                    // label carries it — a screen reader user should not have to
+                    // flip the card to learn what the badge is worth.
+                    aria-label={
+                        flipped
+                            ? `Show badge icon. ${definition.name} badge value: +${award.points} Slip Points.`
+                            : "Show badge details"
+                    }
                     className="block w-full cursor-pointer bg-transparent [perspective:1200px]"
                 >
                     <div
+                        data-badge-flip-card
                         className={`relative aspect-square w-full transition-transform duration-500 [transform-style:preserve-3d] ${flipped ? "[transform:rotateY(-180deg)]" : ""}`}
                     >
+                        {/* Front: name + icon */}
                         <div
+                            data-badge-face="front"
+                            aria-hidden={flipped}
                             className={`absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/90 to-black/90 p-6 [backface-visibility:hidden] ${tint.glowClass}`}
                         >
                             <h3 className={`text-center text-xl font-semibold ${tint.textClass}`}>
@@ -80,7 +91,10 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                             </span>
                         </div>
 
+                        {/* Back: label + description */}
                         <div
+                            data-badge-face="back"
+                            aria-hidden={!flipped}
                             className={`absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/95 to-black/95 p-6 text-center [backface-visibility:hidden] [transform:rotateY(-180deg)] ${tint.glowClass}`}
                         >
                             {definition.display.subtitle && (
@@ -89,6 +103,22 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                                 </p>
                             )}
                             <p className="text-sm leading-relaxed text-slate-200">{definition.description}</p>
+                            {/* What the badge is actually worth — the MVP added
+                                this row so the back face answers "and?" */}
+                            <div
+                                data-badge-award-points
+                                className="mt-1 flex w-full items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.055] px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                            >
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                    Badge value
+                                </span>
+                                <span className={`whitespace-nowrap text-lg font-bold tabular-nums ${tint.textClass}`}>
+                                    +{award.points}
+                                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                                        Slip Points
+                                    </span>
+                                </span>
+                            </div>
                             <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-wide text-white/35">
                                 tap to flip ⇄
                             </span>

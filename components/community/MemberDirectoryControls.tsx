@@ -8,6 +8,17 @@ export const memberDirectoryGridClassName =
 
 export const memberDirectoryListClassName = "divide-y divide-white/10";
 
+/**
+ * The square member tile used by the "Cards" view on both surfaces. Owning the
+ * accent here is what keeps a League tile blue and an Arena tile violet without
+ * either caller restating the gradient.
+ */
+export const getMemberDirectoryCardClassName = (accent: MemberDirectoryAccent) =>
+    `relative flex aspect-square w-full flex-col rounded-2xl border bg-clip-padding p-4 shadow-sm transition ${accent === "arena"
+        ? "border-violet-200/10 bg-gradient-to-b from-violet-500/15 via-violet-500/[0.09] to-slate-950/20 hover:border-violet-300/35"
+        : "border-sky-200/10 bg-gradient-to-b from-blue-500/15 via-blue-500/[0.09] to-slate-950/20 hover:border-sky-300/35"
+    }`;
+
 export const getMemberDirectoryAvatarClassName = (
     accent: MemberDirectoryAccent,
     size: "card" | "list"

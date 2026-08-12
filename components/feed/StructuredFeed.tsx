@@ -16,9 +16,10 @@ import type {
     StructuredFeedRecord,
 } from "./types";
 
-const POST_FILTERS: readonly { id: StructuredFeedFilter; label: string }[] = [
-    { id: "all", label: "All" },
-    { id: "community", label: "Posts" },
+// The MVP's two record chips, plus Standings when the host supplies that node.
+// There is no "All": Community already carries every non-contest record.
+const FEED_FILTERS: readonly { id: StructuredFeedFilter; label: string }[] = [
+    { id: "community", label: "Community" },
     { id: "competitive", label: "Contest Entries" },
 ];
 
@@ -43,7 +44,7 @@ export const StructuredFeed = ({
     selectionOptions,
     contestOptions = [],
     communityPickWindow,
-    initialFilter = "all",
+    initialFilter = "community",
     standings,
     currentUserId,
     onReaction,
@@ -59,7 +60,7 @@ export const StructuredFeed = ({
     className = "",
 }: StructuredFeedProps) => {
     const [filter, setFilter] = useState<StructuredFeedFilter>(
-        initialFilter === "standings" && !standings ? "all" : initialFilter
+        initialFilter === "standings" && !standings ? "community" : initialFilter
     );
     const [search, setSearch] = useState("");
     const [composerOpen, setComposerOpen] = useState(false);
@@ -77,8 +78,8 @@ export const StructuredFeed = ({
         capabilities.canCreateStaffPost;
 
     const filterOptions = standings
-        ? [...POST_FILTERS, { id: "standings" as const, label: "Standings" }]
-        : POST_FILTERS;
+        ? [...FEED_FILTERS, { id: "standings" as const, label: "Standings" }]
+        : FEED_FILTERS;
 
     const visibleRecords = useMemo(
         () =>
@@ -92,6 +93,24 @@ export const StructuredFeed = ({
     );
 
     const showStandings = filter === "standings" && Boolean(standings);
+    // The Contest Entries chip counts entries, not posts — same wording as the MVP.
+    const isContestEntries = filter === "competitive";
+    const resultCountLabel = isContestEntries
+        ? visibleRecords.length === 1
+            ? "entry"
+            : "entries"
+        : visibleRecords.length === 1
+            ? "post"
+            : "posts";
+    // With no "All" chip the empty copy has to name the view the organizer is
+    // actually looking at, or an empty Contest Entries tab reads as an empty Feed.
+    const emptyTitle = normalizedSearch
+        ? isContestEntries
+            ? "No matching contest entries"
+            : "No matching community posts"
+        : isContestEntries
+            ? "No contest entries to show yet"
+            : emptyMessage;
 
     return (
         <section aria-label={`${context.name} Feed`} className={className}>
@@ -165,7 +184,7 @@ export const StructuredFeed = ({
                     </div>
                     {filter !== "standings" ? (
                         <p aria-live="polite" className="text-xs text-gray-500">
-                            {visibleRecords.length} {visibleRecords.length === 1 ? "post" : "posts"}
+                            {visibleRecords.length} {resultCountLabel}
                         </p>
                     ) : null}
                 </div>
@@ -212,10 +231,8 @@ export const StructuredFeed = ({
             ) : (
                 <div className="-mx-5 border-t border-white/10 px-5 pt-5 sm:mx-0 sm:px-0">
                     <div className="rounded-2xl border border-dashed border-white/15 bg-black/25 p-6">
-                        <p className="font-semibold text-white">
-                            {normalizedSearch || filter !== "all" ? "No matching Feed posts" : emptyMessage}
-                        </p>
-                        {normalizedSearch || filter !== "all" ? (
+                        <p className="font-semibold text-white">{emptyTitle}</p>
+                        {normalizedSearch ? (
                             <p className="mt-2 text-sm text-gray-500">
                                 Try another search or switch the Feed filter.
                             </p>

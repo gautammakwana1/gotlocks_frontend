@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
@@ -14,21 +14,25 @@ import { useToast } from "@/lib/state/ToastContext";
 import type {
     FeedContest,
     FeedContestGameSnapshot,
-    FeedContestStatsData,
     RootState,
 } from "@/lib/interfaces/interfaces";
 import {
-    archiveFeedContestRequest,
-    cancelFeedContestRequest,
+    clearFeedContestDeleteState,
     clearFeedContestDetail,
     clearFeedContestEntries,
-    clearFeedContestLifecycleMessage,
+    clearFeedContestLeaderboard,
     clearFeedContestStats,
+    deleteFeedContestRequest,
     fetchFeedContestDetailRequest,
     fetchFeedContestEntriesRequest,
+    fetchFeedContestLeaderboardRequest,
     fetchFeedContestStatsRequest,
 } from "@/lib/redux/slices/feedContestSlice";
+import ContestDeletionDrawer, {
+    type ContestDeletionResult,
+} from "./ContestDeletionDrawer";
 import FeedContestEntriesPanel from "./FeedContestEntriesPanel";
+import FeedContestStandingsPanel from "./FeedContestStandingsPanel";
 
 /* ----------------------------------------------------------------------------
  * The Feed contest DETAIL screen, ported from the MVP's StructuredContestDetail
@@ -38,18 +42,28 @@ import FeedContestEntriesPanel from "./FeedContestEntriesPanel";
  * so the two arena-only facts below stay behind a `context_type` check rather
  * than being deleted.
  *
- * Ported: the header, the four-tab strip, and all four panels. STANDINGS carries
- * the real tally from `GET /group/feed-contest/stats/:contest_id`; its ranked
- * leaderboard is deliberately a "coming soon" card, because no endpoint returns
- * a per-entrant rank/score anywhere in the backend yet.
+ * Ported: the header, the four-tab strip, and all four panels. STANDINGS reads
+ * TWO endpoints — `GET .../stats/:contest_id` for the header count, which never
+ * grows with the field, and `GET .../leaderboard/:contest_id` for the board
+ * itself, which does and is therefore paged on its own.
  *
- * Note the MVP's split, which this follows: the counts live in STANDINGS and the
- * organizer's contest copy lives in SETTINGS — the old "Contest configuration"
- * band at the top of ENTRIES held both and is gone.
+ * Note where the MVP puts each count, which this follows: STANDINGS shows only a
+ * compact PARTICIPANTS figure in its header (or "N ranked · N entries" once the
+ * field is public), and the ENTRIES tab owns "N submitted" on its Accepted
+ * entries header. The old two-up Participants / Valid entries block that lived
+ * in Standings is gone, as is the "Contest configuration" band that used to
+ * head ENTRIES — the organizer's contest copy lives in SETTINGS.
  *
- * Live organizer writes: cancel and archive (`PUT /group/feed-contest/
- * {cancel,archive}/:contest_id`) and the copy edit (`PUT .../update/…`, on its
- * own route behind the Edit link). Reverse-award is still a stub. See TODO(api).
+ * SETTINGS follows the MVP's newer, quieter shape: a one-line "Contest
+ * information" summary (the name/description/rules dump moved out — Details
+ * already renders all three), Automatic settlement and Award corrections as
+ * collapsed <details>, and a destructive Delete contest row that opens the
+ * three-step ContestDeletionDrawer. Cancel and archive are gone here for the
+ * same reason they are gone from the MVP: deletion replaced them.
+ *
+ * Live organizer writes: the copy edit (`PUT .../update/…`, on its own route
+ * behind the Edit link) and the permanent delete (`DELETE .../delete/…`, behind
+ * the drawer). Reverse-award is still a stub — see TODO(api).
  * -------------------------------------------------------------------------- */
 
 export type FeedContestAccent = "league" | "arena";
@@ -184,45 +198,23 @@ const DETAIL_TABS: readonly DetailTab[] = [
 ];
 
 /**
- * The MVP's Standings counts — the two numbers it shows and no others
- * (StructuredContestDetail.tsx:4883-4913). Everything else the stats endpoint
- * returns is deliberately not rendered here.
+ * One finalized standing whose confirmed award the organizer may still reverse.
+ * The MVP derives this from the standings rows joined against the community
+ * point ledger; here it is the shape the Award corrections list reads, waiting
+ * on both endpoints. See the TODO(api) beside `awardCorrectionRows`.
  */
-const ContestCountsSection = ({
-    stats,
-    participantLimit,
-}: {
-    stats: FeedContestStatsData;
-    participantLimit?: number | null;
-}) => (
-    <dl
-        aria-label="Contest participation progress"
-        className="mt-5 grid grid-cols-2 border-y border-white/10"
-    >
-        <div className="py-4 pr-4">
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                Participants
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-white">
-                {stats.counts.participants.active}
-            </dd>
-            <p className="mt-1 text-xs text-gray-500">
-                {participantLimit === null || participantLimit === undefined
-                    ? "No participant limit"
-                    : `of ${participantLimit} spots filled`}
-            </p>
-        </div>
-        <div className="border-l border-white/10 py-4 pl-4">
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                Valid entries
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold tabular-nums text-white">
-                {stats.counts.entries.total}
-            </dd>
-            <p className="mt-1 text-xs text-gray-500">Complete entries accepted</p>
-        </div>
-    </dl>
-);
+type AwardCorrectionRow = {
+    entryId: string;
+    userId: string;
+    userName: string;
+    rank: number;
+    /** The contest's contextual point value for this rank. */
+    points: number;
+    /** The award actually landed in the ledger. */
+    awarded: boolean;
+    /** A reversal was already recorded against it. */
+    reversed: boolean;
+};
 
 export type FeedContestDetailProps = {
     contestId: string;
@@ -270,23 +262,41 @@ export const FeedContestDetail = ({
     const {
         detail,
         detailError,
-        cancelLoading,
-        cancelMessage,
-        cancelError,
-        archiveLoading,
-        archiveMessage,
-        archiveError,
+        deleteLoading,
+        deleteError,
+        deletedContestId,
+        deletedEntrantsNotified,
         entries,
         entriesLoading,
         entriesError,
+        leaderboard,
+        leaderboardLoading,
+        leaderboardError,
         stats,
         statsError,
     } = useSelector((state: RootState) => state.feedContest);
     // The MVP's inline action result line, rendered above the panels.
     const [feedback, setFeedback] = useState<string>();
-    /** The user whose confirmed award the reversal dialog is open for. */
+    /** The standing row whose inline reversal form is open, keyed by user id. */
     const [reversalTarget, setReversalTarget] = useState<string>();
     const [reversalReason, setReversalReason] = useState("");
+    /** Which page of the standings board has been asked for. "Show more" bumps it. */
+    const [standingsPage, setStandingsPage] = useState(1);
+    const [deletionDrawerOpen, setDeletionDrawerOpen] = useState(false);
+    // Focus returns to the row's own button when the drawer closes, so a
+    // keyboard organizer is not dropped back at the top of the panel.
+    const deletionTriggerRef = useRef<HTMLButtonElement>(null);
+    /*
+     * The drawer awaits ONE promise per submit and decides from its result
+     * whether to close or to hold the organizer on the confirm step with the
+     * error inline. Redux answers asynchronously, so the resolver is parked here
+     * and settled by the outcome effect below — the alternative, resolving
+     * optimistically at dispatch time, would close the drawer on a 409 and lose
+     * both the message and the phrase they typed.
+     */
+    const deleteResolverRef = useRef<
+        ((result: ContestDeletionResult) => void) | null
+    >(null);
 
     useEffect(() => {
         if (!contestId) return;
@@ -297,38 +307,67 @@ export const FeedContestDetail = ({
     // is dropped on the way out — otherwise the next contest opened renders this
     // one's name, slate and rules until its own read lands. The entries slot has
     // the same problem and a sharper consequence: it would show another
-    // contest's field, including who entered. `stats` is the third such slot:
-    // left behind, the next contest's Standings tab opens on THIS contest's
-    // numbers until its own read lands.
+    // contest's field, including who entered. `stats` and `leaderboard` are the
+    // same again: left behind, the next contest's Standings tab opens on THIS
+    // contest's numbers and board until its own reads land.
     useEffect(() => () => {
         dispatch(clearFeedContestDetail());
         dispatch(clearFeedContestEntries());
         dispatch(clearFeedContestStats());
+        dispatch(clearFeedContestLeaderboard());
     }, [dispatch]);
 
-    // ONE place reports both organizer writes — the inline status line and a
-    // toast — then clears the slice message so a later re-render cannot toast
-    // the same outcome twice. The updated contest row was already merged into
-    // `detail` by the reducer, so the buttons re-gate themselves from state.
+    /*
+     * ONE place reports the delete: it settles the drawer's pending promise,
+     * toasts, clears the slice message so a re-render cannot report twice, and
+     * on success routes back — the contest this screen is built on no longer
+     * exists, so staying here would 404 on the next read.
+     *
+     * The `deletedContestId === contestId` guard is what makes a receipt left
+     * behind by an abandoned delete harmless: it belongs to another contest and
+     * is ignored rather than navigating this one away.
+     */
     useEffect(() => {
-        const failure = cancelError ?? archiveError;
-        const success = cancelMessage ?? archiveMessage;
-        if (!failure && !success) return;
-        const message = failure ?? success ?? "";
-        setFeedback(message);
+        if (deleteLoading) return;
+        const failed = Boolean(deleteError);
+        const succeeded = Boolean(deletedContestId && deletedContestId === contestId);
+        if (!failed && !succeeded) return;
+
+        const resolve = deleteResolverRef.current;
+        deleteResolverRef.current = null;
+
+        if (failed) {
+            const message = deleteError ?? "Failed to delete the contest";
+            resolve?.({ success: false, error: message });
+            setFeedback(message);
+            setToast({ id: Date.now(), type: "error", message, duration: 4000 });
+            dispatch(clearFeedContestDeleteState());
+            return;
+        }
+
+        resolve?.({ success: true });
         setToast({
             id: Date.now(),
-            type: failure ? "error" : "success",
-            message,
-            duration: failure ? 4000 : 3000,
+            type: "success",
+            message:
+                deletedEntrantsNotified === 0
+                    ? "Contest deleted. No entrants needed a notification."
+                    : `Contest deleted. ${deletedEntrantsNotified} ${deletedEntrantsNotified === 1 ? "entrant" : "entrants"
+                    } notified.`,
+            duration: 3000,
         });
-        dispatch(clearFeedContestLifecycleMessage());
+        dispatch(clearFeedContestDeleteState());
+        setDeletionDrawerOpen(false);
+        router.replace(backHref);
     }, [
-        cancelError,
-        cancelMessage,
-        archiveError,
-        archiveMessage,
+        backHref,
+        contestId,
+        deleteError,
+        deleteLoading,
+        deletedContestId,
+        deletedEntrantsNotified,
         dispatch,
+        router,
         setToast,
     ]);
 
@@ -401,6 +440,30 @@ export const FeedContestDetail = ({
         if (!lifecycleStatus || lifecycleStatus === "draft") return;
         dispatch(fetchFeedContestStatsRequest({ contest_id: contestId }));
     }, [activeTab, contestId, dispatch, lifecycleStatus]);
+
+    /*
+     * The board itself. A SECOND read alongside the tally rather than one call:
+     * the counts never grow with the size of the field and the board does, so
+     * "Show more" pages this one without re-reading the numbers.
+     *
+     * `standingsPage` is reset whenever the contest changes, so a board opened
+     * three pages deep does not ask the next contest for page 4 — which would
+     * come back empty and read as "no standings".
+     */
+    useEffect(() => {
+        setStandingsPage(1);
+    }, [contestId]);
+
+    useEffect(() => {
+        if (activeTab !== "standings" || !contestId) return;
+        if (!lifecycleStatus || lifecycleStatus === "draft") return;
+        dispatch(
+            fetchFeedContestLeaderboardRequest({
+                contest_id: contestId,
+                page: standingsPage,
+            })
+        );
+    }, [activeTab, contestId, dispatch, lifecycleStatus, standingsPage]);
 
     const setDetailTab = (tab: DetailTab) => {
         if (!availableTabs.includes(tab)) return;
@@ -494,6 +557,52 @@ export const FeedContestDetail = ({
                     ? "Finalized"
                     : phase[0].toUpperCase() + phase.slice(1);
     const isArenaContest = scoped?.context_type === "arena";
+
+    /* ---------- Standings tab: the header summary ----------
+     *
+     * The MVP moved the counts apart: the ENTRIES tab owns "N submitted" (our
+     * entries panel already prints it, from `summary.entered_count`) and
+     * Standings keeps only a compact right-aligned figure in its header. The old
+     * two-up Participants / Valid entries block is gone from both.
+     */
+    const isFrozenFinal = phase === "finalized";
+    const standingsPhase = isFrozenFinal
+        ? "final"
+        : entriesArePublic
+            ? "live"
+            : "preview";
+    const scopedLeaderboard =
+        leaderboard?.contest?.id === contestId ? leaderboard : null;
+    // Rows ON THE BOARD, not rows on this page — the board is paginated and the
+    // header is reporting the size of the field.
+    const standingsRowCount = scopedLeaderboard?.pagination.total ?? 0;
+    // The MVP's ladder. Its "Live standings" rung is gated on the field being
+    // public as well as on having rows: `contest_leaderboard` is seeded the
+    // moment a member enters, so a pre-lock board is a preview, not a scoreboard.
+    // The draft rung is ours — the MVP has no draft phase on this screen.
+    const standingsTitle =
+        phase === "draft"
+            ? "Standings unlock after publish"
+            : isFrozenFinal
+                ? "Final standings"
+                : entriesArePublic && standingsRowCount
+                    ? "Live standings"
+                    : entriesArePublic
+                        ? "Live standings are settling"
+                        : "Standings preview";
+    /*
+     * The MVP prints ONE number under both labels, because over there a member
+     * is not a participant until they hold an entry. This backend splits the
+     * two, so each label gets the field it actually names: `active` is what
+     * `participant_count` and the capacity denominator mean, and `entries.total`
+     * is what "entries" means.
+     */
+    const standingsParticipantCount = scopedStats?.counts.participants.active ?? 0;
+    const standingsEntryCount = scopedStats?.counts.entries.total ?? 0;
+    // A draft is never counted and an error has nothing to count, so the figure
+    // skeletons only while a real read is genuinely in flight.
+    const standingsCountsPending =
+        phase !== "draft" && !statsError && !scopedStats;
 
     /*
      * The MVP's entry-view policy. Arena staff who opted their own contest in to
@@ -634,54 +743,88 @@ export const FeedContestDetail = ({
         : entryParticipantStatus === "entered"
             ? "Replace entry"
             : "Build contest entry";
+    /**
+     * The MVP's `canJoin` — the entry window is open and this viewer holds no
+     * participation row at all. It routes the CTA to the header's inline arrow
+     * link instead of the pill under the receipt, and reframes the section from
+     * "Your entry" (a record) to "Entry status" (an invitation).
+     */
+    const canJoinContest = canEnterContest && !entryParticipation;
 
     /* ---------- Settings tab: derived state + the organizer writes ---------- */
 
-    // A finalized contest is immutable, and neither stamp can be undone.
-    const canCancelContest = phase !== "finalized" && !canceled && !archived;
-    // Archiving is the terminal move, so it needs a settled contest first.
-    const canArchiveContest = (phase === "finalized" || canceled) && !archived;
+    /*
+     * The one-line status under "Contest information". The MVP has a fourth
+     * branch — "Read only · locked after the first accepted entry" — that is
+     * omitted here for the same reason `canEditContest` omits its clause: no
+     * response tells us whether anyone has opted in yet, and printing that
+     * sentence beside a still-live Edit link would contradict itself.
+     * TODO(api): with `viewer.can_edit` on the detail response, restore it.
+     */
+    const contestInformationSummary = canEditContest
+        ? "Name, description, and rules can still be updated until the first entry is accepted."
+        : phase === "finalized"
+            ? "Read only · finalized contest setup stays fixed."
+            : !writable
+                ? "Read only in the current Arena state."
+                : "Read only in the current contest phase.";
+
+    const settlementStatus =
+        phase === "finalized"
+            ? "Completed automatically"
+            : phase === "locked"
+                ? "Settling automatically"
+                : `Locks ${formatContestDateTime(contest.locks_at)}`;
+
     const autoVoidAt = contest.expected_ends_at
         ? new Date(
             Date.parse(contest.expected_ends_at) + AUTO_VOID_GRACE_MS
         ).toISOString()
         : null;
 
-    // Cancel and archive move the SAME row, so either in flight locks both
-    // buttons. That, plus `takeLatest`, is what keeps a double-click from firing
-    // two writes; the endpoints are idempotent, but a second request would still
-    // race the first's reply.
-    const lifecycleBusy = cancelLoading || archiveLoading;
+    /*
+     * The MVP builds these from the finalized standings joined against the
+     * community point ledger — which award landed for whom, and which was
+     * already reversed. Neither read exists here yet, so the list is empty and
+     * the section renders its own awaiting-data note. Wiring is to fill this
+     * array; every row below already reads from it.
+     * TODO(api): needs the finalized standings (rank / points per entrant) and
+     * the point ledger for this contest.
+     */
+    const awardCorrectionRows: AwardCorrectionRow[] = [];
+    const reversibleAwardCount = awardCorrectionRows.filter(
+        (row) => writable && row.awarded && !row.reversed && row.points > 0
+    ).length;
+    const reversedAwardCount = awardCorrectionRows.filter(
+        (row) => row.reversed
+    ).length;
+    const awardCorrectionSummary = !awardCorrectionRows.length
+        ? "Confirmed awards appear here once the standings read lands."
+        : reversibleAwardCount > 0
+            ? `${reversibleAwardCount} ${reversibleAwardCount === 1 ? "award" : "awards"
+            } available to reverse`
+            : reversedAwardCount === awardCorrectionRows.length
+                ? `${reversedAwardCount} ${reversedAwardCount === 1 ? "award" : "awards"
+                } reversed`
+                : `${awardCorrectionRows.length} confirmed ${awardCorrectionRows.length === 1 ? "award" : "awards"
+                }`;
 
-    const handleCancelContest = () => {
-        if (!canCancelContest || !writable || lifecycleBusy) return;
-        if (
-            !window.confirm(
-                "Cancel this contest? Active participation and entries will be withdrawn. This cannot be undone."
-            )
-        ) {
-            return;
-        }
-        dispatch(cancelFeedContestRequest({ contest_id: contest.id }));
-    };
-
-    const handleArchiveContest = () => {
-        if (!canArchiveContest || !writable || lifecycleBusy) return;
-        dispatch(archiveFeedContestRequest({ contest_id: contest.id }));
-    };
+    // The MVP counts distinct entrants for the deletion notice. `participant_count`
+    // is this backend's nearest equivalent — it already excludes withdrawn and
+    // disqualified rows — and the Standings read refines it once that tab has run.
+    const entrantCount =
+        scopedStats?.counts?.participants?.active ?? contest.participant_count ?? 0;
 
     // TODO(api): still a STUB — a whole-award audit reversal for one finalized
     // standing row has no endpoint. Everything around it is final: wiring is to
-    // replace the notImplemented() line with the dispatch. It is also currently
-    // unreachable, since the row list that opens this dialog needs the standings
-    // read (see the Finalized award corrections section below).
-    const handleReverseAward = () => {
-        const userId = reversalTarget;
+    // replace the message below with the dispatch. It is also currently
+    // unreachable, since the rows that open this form need the standings read.
+    const handleReverseAward = (userId: string) => {
         if (!userId || !writable) return;
         const reason = reversalReason.trim();
         // Kept client-side even though the endpoint will re-check it: an award
-        // reversal with no audit reason is the one thing this dialog exists to
-        // prevent, and the dialog stays open until one is written.
+        // reversal with no audit reason is the one thing this form exists to
+        // prevent, and it stays open until one is written.
         if (!reason) {
             setFeedback("Add an audit reason before reversing an award.");
             return;
@@ -695,6 +838,42 @@ export const FeedContestDetail = ({
         setReversalTarget(undefined);
         setReversalReason("");
     };
+
+    /*
+     * DELETE /group/feed-contest/delete/:contest_id. The drawer will not call
+     * this unless the organizer typed `DELETE <name>` exactly and acknowledged
+     * the impact — the server has no confirmation-name field, so that phrase is
+     * enforced here and nowhere else.
+     *
+     * The returned promise is settled by the outcome effect above, not here:
+     * the drawer stays on its confirm step, with its button spinning, until the
+     * server actually answers. `organizer_note` is optional to the endpoint and
+     * required by the drawer, so it is always present by the time we get here.
+     */
+    const handleDeleteContest = (organizerNote: string) =>
+        new Promise<ContestDeletionResult>((resolve) => {
+            if (!writable) {
+                resolve({
+                    success: false,
+                    error: "This contest cannot be changed in the current Arena state.",
+                });
+                return;
+            }
+            // Defensive: the drawer serialises its own submits, so a second
+            // resolver can only appear if that guard ever regresses. Settle the
+            // orphan rather than dropping it, or its drawer hangs forever.
+            deleteResolverRef.current?.({
+                success: false,
+                error: "That deletion was superseded. Try again.",
+            });
+            deleteResolverRef.current = resolve;
+            dispatch(
+                deleteFeedContestRequest({
+                    contest_id: contest.id,
+                    organizer_note: organizerNote,
+                })
+            );
+        });
 
     return (
         <div className="flex flex-col gap-2 pb-10">
@@ -920,92 +1099,87 @@ export const FeedContestDetail = ({
                     role="tabpanel"
                     aria-labelledby="contest-tab-standings"
                     aria-label="Contest standings"
-                    className="rounded-2xl border border-white/10 bg-black/25 p-5"
+                    data-standings-layout="responsive-list"
+                    data-standings-phase={standingsPhase}
+                    className="space-y-4"
                 >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                                Standings
-                            </p>
-                            {/* The MVP's heading ladder, minus its two ranked
-                                branches: with no ranking read there are never any
-                                standing rows, so it always resolves to one of
-                                these three. */}
-                            <h2 className="mt-1 font-semibold text-white">
-                                {phase === "draft"
-                                    ? "Standings unlock after publish"
-                                    : entriesArePublic
-                                        ? "Live standings are settling"
-                                        : "Standings preview"}
-                            </h2>
-                        </div>
-                        {scopedStats && !scopedStats.contest.is_revealed ? (
-                            <span className="rounded-full border border-amber-300/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100">
-                                Picks hidden until lock
-                            </span>
-                        ) : null}
-                    </div>
-
-                    {phase === "draft" ? (
-                        <p className="mt-4 text-sm leading-6 text-gray-500">
-                            Publish this contest to start counting participants and entries.
-                        </p>
-                    ) : statsError ? (
-                        <p role="alert" className="mt-4 text-sm leading-6 text-rose-200">
-                            {statsError}
-                        </p>
-                    ) : !scopedStats ? (
-                        // The tally is one read with no partial state, so the whole
-                        // block skeletons rather than flashing zeros that would read
-                        // as "nobody entered".
-                        <div
-                            aria-hidden="true"
-                            className="mt-5 grid grid-cols-2 border-y border-white/10"
-                        >
-                            {[0, 1].map((key) => (
-                                <div
-                                    key={key}
-                                    className={key === 0 ? "py-4 pr-4" : "border-l border-white/10 py-4 pl-4"}
-                                >
-                                    <div className="h-3 w-20 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="mt-2 h-7 w-10 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="mt-2 h-3 w-24 animate-pulse rounded bg-white/[0.04]" />
+                    <header className="flex items-start justify-between gap-3">
+                        <h2 className="min-w-0 text-lg font-semibold text-white">
+                            {standingsTitle}
+                        </h2>
+                        <div className="shrink-0">
+                            {standingsCountsPending ? (
+                                // One read with no partial state, so the figure
+                                // skeletons rather than flashing a zero that would
+                                // read as "nobody entered".
+                                <div aria-hidden="true" className="text-right">
+                                    <div className="ml-auto h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" />
+                                    <div className="ml-auto mt-1.5 h-4 w-12 animate-pulse rounded bg-white/[0.06]" />
                                 </div>
-                            ))}
+                            ) : !entriesArePublic ? (
+                                <dl
+                                    aria-label="Contest participation progress"
+                                    data-standings-summary
+                                    className="text-right"
+                                >
+                                    <div>
+                                        <dt className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                            Participants
+                                        </dt>
+                                        <dd className="mt-0.5 flex items-baseline justify-end gap-1 text-sm font-semibold tabular-nums text-white sm:text-base">
+                                            <span>{standingsParticipantCount}</span>
+                                            {participantLimit !== null &&
+                                                participantLimit !== undefined ? (
+                                                <span className="text-[10px] font-medium text-gray-500">
+                                                    / {participantLimit}
+                                                </span>
+                                            ) : null}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            ) : (
+                                <div className="text-right">
+                                    {!isFrozenFinal ? (
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
+                                            Live points
+                                        </p>
+                                    ) : null}
+                                    <p
+                                        className={`${isFrozenFinal ? "" : "mt-1"} text-xs tabular-nums text-gray-500`}
+                                    >
+                                        {standingsRowCount} ranked · {standingsEntryCount}{" "}
+                                        {standingsEntryCount === 1 ? "entry" : "entries"}
+                                    </p>
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <ContestCountsSection
-                            stats={scopedStats}
-                            participantLimit={participantLimit}
-                        />
-                    )}
+                    </header>
 
-                    {/* The leaderboard half needs a per-entrant standings read
-                        (rank, score, result) that no endpoint returns yet — see
-                        the MISSING API note in the handover. */}
-                    <section
-                        aria-labelledby="standings-leaderboard-heading"
-                        className="mt-6"
-                    >
-                        <h3
-                            id="standings-leaderboard-heading"
-                            className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-300"
-                        >
-                            Leaderboard
-                        </h3>
-                        <div className="mt-3 rounded-xl border border-dashed border-white/15 bg-black/25 px-4 py-5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                                Coming soon
-                            </p>
-                            <p className="mt-2 font-semibold text-white">
-                                Ranked standings are on the way
-                            </p>
-                            <p className="mt-1 text-sm leading-6 text-gray-500">
-                                Live points while the contest is Locked, then the frozen
-                                final table once it settles.
-                            </p>
+                    {/* The MVP's pre-lock frame carries this chip; here it sits above
+                        the board, because the header slot it used to occupy is now
+                        taken by the participant count. */}
+                    {scopedLeaderboard && !scopedLeaderboard.is_entry_revealed ? (
+                        <div className="flex justify-end">
+                            <span className="rounded-full border border-white/10 bg-black/25 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                                Pre-lock · entry details hidden
+                            </span>
                         </div>
-                    </section>
+                    ) : null}
+
+                    <FeedContestStandingsPanel
+                        leaderboard={scopedLeaderboard}
+                        loading={leaderboardLoading}
+                        error={leaderboardError}
+                        isDraft={phase === "draft"}
+                        isFrozenFinal={isFrozenFinal}
+                        entriesArePublic={entriesArePublic}
+                        winningPlaces={contest.winning_places ?? 3}
+                        pointsLabel={isArenaContest ? "Arena points" : "League points"}
+                        template={contest.template}
+                        currentUserId={currentUser?.userId}
+                        accent={accent}
+                        onShowMore={() => setStandingsPage((page) => page + 1)}
+                    />
                 </section>
             ) : null}
 
@@ -1039,7 +1213,7 @@ export const FeedContestDetail = ({
                                 opensInFuture ? formatContestDateTime(contest.opens_at) : null
                             }
                             action={
-                                entryHref && canEnterContest ? (
+                                entryHref && canEnterContest && !canJoinContest ? (
                                     <Link
                                         href={entryHref}
                                         className="inline-flex rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-black transition hover:bg-gray-200"
@@ -1048,53 +1222,23 @@ export const FeedContestDetail = ({
                                     </Link>
                                 ) : null
                             }
+                            joinAction={
+                                entryHref && canJoinContest ? (
+                                    <Link
+                                        href={entryHref}
+                                        className={`group inline-flex shrink-0 items-center gap-2 py-0.5 text-sm font-semibold transition hover:text-white ${accentClasses.textStrong}`}
+                                    >
+                                        <span>{entryCtaLabel}</span>
+                                        <span
+                                            aria-hidden
+                                            className="text-base leading-none transition-transform group-hover:translate-x-1"
+                                        >
+                                            →
+                                        </span>
+                                    </Link>
+                                ) : null
+                            }
                         />
-                    </div>
-                </section>
-            ) : null}
-
-            {reversalTarget ? (
-                <section
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="reverse-award-title"
-                    className="rounded-2xl border border-red-300/25 bg-red-500/10 p-5"
-                >
-                    <h2 id="reverse-award-title" className="font-semibold text-red-100">
-                        Reverse the confirmed award
-                    </h2>
-                    <p className="mt-2 text-sm leading-6 text-red-100/75">
-                        This creates a whole-award audit reversal. There is no manual
-                        point amount or rank control.
-                    </p>
-                    <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.1em] text-red-100/80">
-                        Audit reason
-                        <textarea
-                            rows={3}
-                            value={reversalReason}
-                            onChange={(event) => setReversalReason(event.target.value)}
-                            className="mt-2 w-full rounded-xl border border-red-300/25 bg-black/40 px-4 py-3 text-sm normal-case text-white outline-none focus:border-red-200/60"
-                        />
-                    </label>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            onClick={handleReverseAward}
-                            disabled={!reversalReason.trim() || !writable}
-                            className="rounded-xl bg-red-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-black disabled:opacity-40"
-                        >
-                            Confirm reversal
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setReversalTarget(undefined);
-                                setReversalReason("");
-                            }}
-                            className="rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold text-gray-200"
-                        >
-                            Cancel
-                        </button>
                     </div>
                 </section>
             ) : null}
@@ -1107,195 +1251,277 @@ export const FeedContestDetail = ({
                     aria-label="Settings"
                     className="workspace-tab-panel -mx-5 divide-y divide-white/10 pt-1 sm:-mx-6"
                 >
+                    {/* The name / description / rules dump the MVP used to print
+                        here is gone with it: all three already render in Details,
+                        and Settings now says only whether they can still change. */}
                     <section
                         aria-label="Contest information"
-                        className="space-y-4 px-5 py-7 sm:px-6"
+                        className="px-5 py-6 sm:px-6"
                     >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="max-w-3xl">
-                                <h2 className="text-base font-semibold text-white">
+                        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <div className="min-w-0 max-w-3xl">
+                                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-white">
                                     Contest information
                                 </h2>
-                                <p className="mt-1 text-sm leading-6 text-gray-500">
-                                    Manage the member-facing contest name, description, and
-                                    rules.
+                                <p className="mt-1 text-xs leading-5 text-gray-500">
+                                    {contestInformationSummary}
                                 </p>
                             </div>
                             {canEditContest && editHref ? (
                                 <Link
                                     href={editHref}
-                                    className={`inline-flex shrink-0 rounded-xl border px-4 py-2.5 text-xs font-semibold transition ${accentClasses.borderedLink}`}
+                                    className={`ml-auto inline-flex min-h-10 shrink-0 items-center rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${accentClasses.borderedLink}`}
                                 >
-                                    {phase === "draft"
-                                        ? "Edit draft"
-                                        : "Edit name, description & rules"}
+                                    {phase === "draft" ? "Edit draft" : "Edit details"}
                                 </Link>
-                            ) : null}
+                            ) : (
+                                <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                    Read only
+                                </span>
+                            )}
                         </div>
+                    </section>
 
-                        <dl className="-mx-5 divide-y divide-white/10 sm:-mx-6">
-                            {[
-                                ["Contest name", contest.name],
-                                ["Description", contest.description || "No description"],
-                                ["Rules", contest.rules_text],
-                            ].map(([label, value]) => (
-                                <div
-                                    key={label}
-                                    className="grid gap-1 px-5 py-3 first:pt-0 last:pb-0 sm:grid-cols-[9rem_1fr] sm:gap-6 sm:px-6"
+                    <details
+                        aria-label="Automatic settlement policy"
+                        className="group px-5 sm:px-6"
+                    >
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+                            <span className="min-w-0">
+                                <span className="block text-sm font-semibold uppercase tracking-[0.12em] text-white">
+                                    Automatic settlement
+                                </span>
+                                <span className="mt-1 block text-xs leading-5 text-gray-500">
+                                    {settlementStatus}
+                                </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-3">
+                                <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                    {archived ? "Archived" : canceled ? "Canceled" : phase}
+                                </span>
+                                <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 16 16"
+                                    className="h-4 w-4 text-gray-500 transition-transform duration-200 group-open:rotate-180"
                                 >
+                                    <path
+                                        d="m4 6 4 4 4-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="1.5"
+                                    />
+                                </svg>
+                            </span>
+                        </summary>
+                        <div className="-mx-5 border-t border-white/10 sm:-mx-6">
+                            <p className="px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
+                                Provider results update live standings after lock. The contest
+                                settles after its last included matchup is final, with
+                                unresolved selections handled by the provider grace policy.
+                            </p>
+                            <dl className="divide-y divide-white/10 border-t border-white/10">
+                                <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
                                     <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
-                                        {label}
-                                        {label === "Rules" ? (
-                                            // The MVP's rules_version is a self-describing
-                                            // string ("rules-v1"); ours is a bare integer,
-                                            // so it gets the word to read as a version.
-                                            <span className="mt-0.5 block font-normal normal-case tracking-normal text-gray-600">
-                                                Version {contest.rules_version}
-                                            </span>
-                                        ) : null}
+                                        Locks
                                     </dt>
-                                    <dd className="whitespace-pre-wrap text-sm leading-6 text-gray-200">
-                                        {value}
+                                    <dd className="text-sm text-gray-200 sm:text-right">
+                                        {formatContestDateTime(contest.locks_at)}
                                     </dd>
                                 </div>
-                            ))}
-                        </dl>
-
-                        {!canEditContest ? (
-                            <p className="text-xs leading-5 text-gray-500">
-                                Contest information can no longer be edited.
-                            </p>
-                        ) : null}
-                    </section>
-
-                    <section
-                        aria-label="Automatic settlement policy"
-                        className="space-y-4 px-5 py-7 sm:px-6"
-                    >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="max-w-3xl">
-                                <h2 className="text-base font-semibold text-white">
-                                    Automatic settlement
-                                </h2>
-                                <p className="mt-1 text-sm leading-6 text-gray-500">
-                                    Provider results update live standings while Locked. The
-                                    contest settles after its last included matchup is final,
-                                    and unresolved selections are handled by the provider
-                                    grace policy.
-                                </p>
-                            </div>
-                            <span
-                                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.09em] ${accentClasses.lifecycleCurrent}`}
-                            >
-                                {archived ? "Archived" : canceled ? "Canceled" : phase}
-                            </span>
+                                <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
+                                    <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
+                                        Settlement
+                                    </dt>
+                                    <dd className="text-sm text-gray-200 sm:text-right">
+                                        After the last included matchup is final
+                                    </dd>
+                                </div>
+                                <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
+                                    <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
+                                        Auto-void cutoff
+                                    </dt>
+                                    <dd className="text-sm text-gray-200 sm:text-right">
+                                        {formatContestDateTime(autoVoidAt)}
+                                    </dd>
+                                </div>
+                            </dl>
                         </div>
-                        <dl className="-mx-5 divide-y divide-white/10 sm:-mx-6">
-                            <div className="flex flex-col gap-1 px-5 py-3 first:pt-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
-                                <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
-                                    Locks
-                                </dt>
-                                <dd className="text-sm text-gray-200 sm:text-right">
-                                    {formatContestDateTime(contest.locks_at)}
-                                </dd>
-                            </div>
-                            <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
-                                <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
-                                    Settlement
-                                </dt>
-                                <dd className="text-sm text-gray-200 sm:text-right">
-                                    After the last included matchup is final
-                                </dd>
-                            </div>
-                            <div className="flex flex-col gap-1 px-5 py-3 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
-                                <dt className="text-[10px] font-semibold uppercase tracking-[0.09em] text-gray-500">
-                                    Auto-void cutoff
-                                </dt>
-                                <dd className="text-sm text-gray-200 sm:text-right">
-                                    {formatContestDateTime(autoVoidAt)}
-                                </dd>
-                            </div>
-                        </dl>
-                    </section>
+                    </details>
 
-                    {/* The MVP lists one row per finalized standing, each with its own
-                        "Reverse award" button. The rows come from the standings read,
-                        which does not exist yet — the section, its copy and the whole
-                        reversal dialog are here so wiring is: map the rows and call
-                        setReversalTarget(row.user_id).
-                        `!canceled` because a contest that was CALLED OFF and then
-                        archived reads as the finalized phase but never had awards —
-                        the MVP hides this section the same way, via its empty rows.
-                        TODO(api): needs the finalized standings + the point ledger
-                        (which awards landed, which were already reversed). */}
+                    {/* The MVP drops this disclosure entirely when it has no rows.
+                        We keep it on a finalized contest so the organizer is told
+                        WHY it is empty — the standings + ledger reads it maps over
+                        do not exist yet (see the TODO(api) on awardCorrectionRows).
+                        `!canceled` because a contest that was called off and then
+                        archived reads as the finalized phase but never had awards. */}
                     {phase === "finalized" && !canceled ? (
-                        <section
-                            aria-label="Finalized award corrections"
-                            className="space-y-4 px-5 py-7 sm:px-6"
+                        <details
+                            aria-label="Award corrections"
+                            className="group px-5 sm:px-6"
                         >
-                            <div>
-                                <h2 className="text-base font-semibold text-white">
-                                    Finalized award corrections
-                                </h2>
-                                <p className="mt-1 text-sm leading-6 text-gray-500">
-                                    Corrections create an auditable whole-award reversal. Rank
-                                    and point values remain immutable.
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-semibold uppercase tracking-[0.12em] text-white">
+                                        Award corrections
+                                    </span>
+                                    <span className="mt-1 block text-xs leading-5 text-gray-500">
+                                        {awardCorrectionSummary}
+                                    </span>
+                                </span>
+                                <svg
+                                    aria-hidden="true"
+                                    viewBox="0 0 16 16"
+                                    className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                >
+                                    <path
+                                        d="m4 6 4 4 4-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="1.5"
+                                    />
+                                </svg>
+                            </summary>
+                            <div className="-mx-5 border-t border-white/10 sm:-mx-6">
+                                <p className="px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
+                                    A correction reverses the full confirmed award and creates a
+                                    permanent audit record. Rank and point values cannot be
+                                    edited.
                                 </p>
+                                {awardCorrectionRows.length ? (
+                                    <ul className="divide-y divide-white/10 border-t border-white/10">
+                                        {awardCorrectionRows.map((row) => (
+                                            <li key={row.entryId} className="px-5 py-4 sm:px-6">
+                                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-white">
+                                                            {row.userName}
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-gray-500">
+                                                            #{row.rank} · {row.points} confirmed points
+                                                            {row.reversed ? " · reversed" : ""}
+                                                        </p>
+                                                    </div>
+                                                    {writable &&
+                                                        row.awarded &&
+                                                        !row.reversed &&
+                                                        row.points > 0 ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setReversalTarget(row.userId);
+                                                                setReversalReason("");
+                                                            }}
+                                                            className="ml-auto rounded-lg border border-red-300/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-200 transition hover:bg-red-500/10"
+                                                        >
+                                                            Reverse award
+                                                        </button>
+                                                    ) : null}
+                                                </div>
+                                                {reversalTarget === row.userId ? (
+                                                    <section
+                                                        aria-labelledby="reverse-award-title"
+                                                        className="mt-4 border-t border-white/10 pt-4"
+                                                    >
+                                                        <h3
+                                                            id="reverse-award-title"
+                                                            className="text-sm font-semibold text-red-100"
+                                                        >
+                                                            Reverse {row.userName}’s {row.points}-point
+                                                            award?
+                                                        </h3>
+                                                        <p className="mt-1 text-xs leading-5 text-gray-500">
+                                                            This creates a permanent whole-award reversal.
+                                                            Rank and point values cannot be changed.
+                                                        </p>
+                                                        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400">
+                                                            Audit reason
+                                                            <textarea
+                                                                autoFocus
+                                                                rows={3}
+                                                                value={reversalReason}
+                                                                onChange={(event) =>
+                                                                    setReversalReason(event.target.value)
+                                                                }
+                                                                className="mt-2 w-full rounded-lg border border-white/15 bg-black/30 px-3.5 py-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-red-200/50"
+                                                            />
+                                                        </label>
+                                                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setReversalTarget(undefined);
+                                                                    setReversalReason("");
+                                                                }}
+                                                                className="min-h-10 rounded-lg px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleReverseAward(row.userId)}
+                                                                disabled={!reversalReason.trim()}
+                                                                className="min-h-10 rounded-lg bg-red-100 px-3.5 py-2 text-xs font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
+                                                            >
+                                                                Confirm reversal
+                                                            </button>
+                                                        </div>
+                                                    </section>
+                                                ) : null}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="border-t border-white/10 px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
+                                        Confirmed awards appear here once the standings read
+                                        lands.
+                                    </p>
+                                )}
                             </div>
-                            <p className="rounded-xl border border-dashed border-white/15 bg-black/25 px-4 py-3 text-sm leading-6 text-gray-500">
-                                Confirmed awards appear here once the standings read lands.
-                            </p>
-                        </section>
+                        </details>
                     ) : null}
 
-                    <section
-                        aria-label="Contest actions"
-                        className="space-y-4 px-5 py-7 sm:px-6"
-                    >
-                        <div>
-                            <h2
-                                className={`text-base font-semibold ${canCancelContest ? "text-red-200" : "text-white"}`}
-                            >
-                                Contest actions
-                            </h2>
-                            <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-                                {archived
-                                    ? "This contest is archived in community history."
-                                    : canArchiveContest
-                                        ? "Move this contest into community history while preserving its results and audit records."
-                                        : "Canceling withdraws active participation and entries. This action cannot be undone."}
-                            </p>
-                        </div>
-
-                        {canCancelContest || canArchiveContest ? (
-                            <div className="flex flex-wrap gap-2">
-                                {canCancelContest ? (
-                                    <button
-                                        type="button"
-                                        disabled={!writable || lifecycleBusy}
-                                        aria-busy={cancelLoading}
-                                        onClick={handleCancelContest}
-                                        className="rounded-xl border border-red-300/30 bg-red-500/10 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-40"
-                                    >
-                                        {cancelLoading ? "Canceling…" : "Cancel contest"}
-                                    </button>
-                                ) : null}
-                                {canArchiveContest ? (
-                                    <button
-                                        type="button"
-                                        disabled={!writable || lifecycleBusy}
-                                        aria-busy={archiveLoading}
-                                        onClick={handleArchiveContest}
-                                        className={`rounded-xl border px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] transition disabled:cursor-not-allowed disabled:opacity-40 ${accentClasses.actionButton}`}
-                                    >
-                                        {archiveLoading ? "Archiving…" : "Archive contest"}
-                                    </button>
-                                ) : null}
+                    <section aria-label="Delete contest" className="px-5 py-6 sm:px-6">
+                        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                            <div className="min-w-0 max-w-3xl">
+                                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-red-200">
+                                    Delete contest
+                                </h2>
+                                <p className="mt-1 text-xs leading-5 text-gray-500">
+                                    {phase === "finalized"
+                                        ? "Permanent · entrants are notified and awarded points are reversed."
+                                        : "Permanent · the contest and its entries are removed, and entrants are notified."}
+                                </p>
                             </div>
-                        ) : null}
+                            <button
+                                ref={deletionTriggerRef}
+                                type="button"
+                                onClick={() => setDeletionDrawerOpen(true)}
+                                className="ml-auto inline-flex min-h-10 shrink-0 items-center rounded-lg border border-red-300/35 px-3.5 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/10"
+                            >
+                                Delete contest
+                            </button>
+                        </div>
                     </section>
                 </section>
             ) : null}
+
+            <ContestDeletionDrawer
+                open={deletionDrawerOpen}
+                onClose={() => setDeletionDrawerOpen(false)}
+                returnFocusRef={deletionTriggerRef}
+                contestName={contest.name}
+                communityName={contextName}
+                phaseLabel={phaseLabel}
+                entrantCount={entrantCount}
+                reversesAwards={phase === "finalized"}
+                organizerHandle={currentUser?.username ?? ""}
+                onDelete={handleDeleteContest}
+                accent={accent}
+            />
         </div>
     );
 };

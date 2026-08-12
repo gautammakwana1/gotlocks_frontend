@@ -62,6 +62,24 @@ const outlineToneClassNames: Record<CommunityHubTone, string> = {
     arena: "focus-visible:outline-violet-300",
 };
 
+/**
+ * Arena names run violet→fuchsia; League names use the shared white/silver
+ * `displayNameGradientStyle`. Two mechanisms because they are two different
+ * gradients — the arena one is a plain Tailwind background with no text-shadow
+ * or extra letter-spacing, so it cannot be expressed as a tone of the inline
+ * style. Applying one to the other tone is the bug this pair exists to prevent;
+ * see the same split on the Home page cards.
+ */
+const nameToneClassNames: Record<CommunityHubTone, string> = {
+    league: "",
+    arena: "bg-gradient-to-r from-white via-violet-100 to-fuchsia-200",
+};
+
+const metaToneClassNames: Record<CommunityHubTone, string> = {
+    league: "text-gray-500",
+    arena: "text-gray-400",
+};
+
 export const CommunityHubCard = ({
     group,
     tone,
@@ -73,7 +91,7 @@ export const CommunityHubCard = ({
 }) => (
     <article
         data-community-card={group.id}
-        className={`group/card relative flex min-h-[152px] overflow-hidden rounded-[22px] border p-5 shadow-lg shadow-black/25 transition hover:-translate-y-0.5 sm:min-h-[164px] sm:p-6 motion-reduce:transform-none motion-reduce:transition-none ${cardToneClassNames[tone]}`}
+        className={`group/card relative flex min-h-[152px] overflow-hidden rounded-[22px] border p-5 shadow-lg shadow-black/25 transition hover:-translate-y-0.5 sm:min-h-[164px] sm:p-6 lg:min-h-[185px] motion-reduce:transform-none motion-reduce:transition-none ${cardToneClassNames[tone]}`}
     >
         <div
             aria-hidden
@@ -111,15 +129,15 @@ export const CommunityHubCard = ({
 
             <div className="flex min-w-0 flex-1 items-center py-4">
                 <h3
-                    className="allow-caps line-clamp-2 break-words bg-clip-text text-xl font-extrabold leading-tight text-transparent sm:text-2xl"
-                    style={displayNameGradientStyle}
+                    className={`allow-caps line-clamp-2 break-words bg-clip-text text-xl font-extrabold leading-tight text-transparent sm:text-2xl ${nameToneClassNames[tone]}`}
+                    style={tone === "arena" ? undefined : displayNameGradientStyle}
                 >
                     {group.name}
                 </h3>
             </div>
 
             <div
-                className={`flex flex-wrap items-center gap-2 text-gray-500 ${groupPreviewMetaTextClassName}`}
+                className={`flex flex-wrap items-center gap-2 ${metaToneClassNames[tone]} ${groupPreviewMetaTextClassName}`}
             >
                 <span>{getGroupCapacityLabel(group, getMemberOccupancy(group))}</span>
                 <span>{getCombinedContestCapacityLabel(group, [], [])}</span>

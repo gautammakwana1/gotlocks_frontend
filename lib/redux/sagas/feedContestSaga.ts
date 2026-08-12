@@ -6,19 +6,25 @@ import type { SagaIterator } from "redux-saga";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type {
     CreateFeedContestPayload,
+    DeleteFeedContestData,
+    DeleteFeedContestPayload,
     EnterFeedContestData,
     EnterFeedContestPayload,
     FeedContest,
     FeedContestDetailData,
     FeedContestEntriesData,
+    FeedContestLeaderboardData,
     FeedContestLifecycleActionPayload,
     FeedContestLifecycleData,
     FeedContestListData,
+    FeedContestPicksData,
     FeedContestStatsData,
     FeedContestSection,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
     FetchFeedContestEntriesPayload,
+    FetchFeedContestLeaderboardPayload,
+    FetchFeedContestPicksPayload,
     FetchFeedContestStatsPayload,
     FetchFeedContestsPayload,
     ReplaceDraftFeedContestPayload,
@@ -36,6 +42,9 @@ import {
     createDraftFeedContestFailure,
     createDraftFeedContestRequest,
     createDraftFeedContestSuccess,
+    deleteFeedContestFailure,
+    deleteFeedContestRequest,
+    deleteFeedContestSuccess,
     createFeedContestFailure,
     createFeedContestRequest,
     createFeedContestSuccess,
@@ -51,6 +60,12 @@ import {
     fetchFeedContestStatsFailure,
     fetchFeedContestEntriesRequest,
     fetchFeedContestEntriesSuccess,
+    fetchFeedContestLeaderboardFailure,
+    fetchFeedContestLeaderboardRequest,
+    fetchFeedContestLeaderboardSuccess,
+    fetchFeedContestPicksRequest,
+    fetchFeedContestPicksSuccess,
+    fetchFeedContestPicksFailure,
     fetchFeedContestsFailure,
     fetchFeedContestsRequest,
     fetchFeedContestsSuccess,
@@ -361,6 +376,52 @@ function* handleArchiveFeedContest(
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * DELETE /delete/:contest_id — permanent, and the one write here that is NOT
+ * idempotent in the forgiving sense the other two are: a repeat answers 409
+ * "This contest has already been deleted." rather than a cheerful 200, because
+ * the first request owns the entrant notices and a second must not claim them.
+ * That is why the drawer's submit button is disabled while this runs, on top of
+ * takeLatest.
+ *
+ * The body carries ONLY `organizer_note`, and axios needs it under `data` for a
+ * DELETE — passing it as the second argument the way put/post do would send it
+ * as the request CONFIG and silently drop the note, costing every entrant the
+ * explanation. The server treats the note as optional; the drawer does not.
+ *
+ * There is no `contest` in the reply to merge anywhere: the row is gone, so the
+ * response only identifies what was removed and how many people were told.
+ * -------------------------------------------------------------------------- */
+function* handleDeleteFeedContest(
+    action: PayloadAction<DeleteFeedContestPayload>
+): SagaIterator {
+    const { contest_id, organizer_note } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.delete,
+            `${API_BASE_URL}/group/feed-contest/delete/${encodeURIComponent(contest_id)}`,
+            { data: organizer_note ? { organizer_note } : {} }
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: DeleteFeedContestData;
+        };
+        yield put(
+            deleteFeedContestSuccess({
+                contest_id,
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            deleteFeedContestFailure(
+                getErrorMessage(error, "Failed to delete the contest")
+            )
+        );
+    }
+}
+
 // PUT /update/:contest_id — member-facing COPY only (name / description /
 // rules_text), and a PARTIAL patch: keys left out are untouched. Sending copy
 // identical to what is stored is a no-op 200, so the form does not have to diff
@@ -421,6 +482,95 @@ function* handleFetchFeedContestEntries(
         yield put(
             fetchFeedContestEntriesFailure(
                 getErrorMessage(error, "Failed to load this contest's entries")
+            )
+        );
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * GET /group/feed-contest/leaderboard/:contest_id — the standings, readable by
+ * any member of the group. The sibling of /entries and not a substitute for it:
+ * that one reads `picks` and answers what everyone selected, this one reads
+ * `contest_leaderboard` and answers where they stand.
+ *
+ * Two envelope flags decide how the board may be RENDERED, and neither can be
+ * re-derived from the contest status:
+ *   - `is_ranked` — false until a settlement job fills in `rank`, and every row
+ *     sits at NULL until then. While false, position comes from the ARRAY ORDER,
+ *     which the server has already sorted (rank asc nulls last → points desc →
+ *     entered_at asc → id asc).
+ *   - `is_entry_revealed` — before the lock, `combo_odds` and `total_picks` come
+ *     back NULL for everyone but the viewer's own row, exactly as /entries
+ *     withholds legs[]. Null there means "not visible yet", never "no value".
+ * -------------------------------------------------------------------------- */
+function* handleFetchFeedContestLeaderboard(
+    action: PayloadAction<FetchFeedContestLeaderboardPayload>
+): SagaIterator {
+    const { contest_id, page = 1, limit = 20 } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/leaderboard/${encodeURIComponent(contest_id)}`,
+            { params: { page, limit } }
+        );
+        const payload = response.data as { data?: FeedContestLeaderboardData };
+        if (!payload?.data?.contest) {
+            yield put(
+                fetchFeedContestLeaderboardFailure("Failed to load these standings")
+            );
+            return;
+        }
+        yield put(fetchFeedContestLeaderboardSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestLeaderboardFailure(
+                getErrorMessage(error, "Failed to load these standings")
+            )
+        );
+    }
+}
+
+/*
+ * GET /group/feed-contest/picks — every competitive pick across the GROUP's Feed
+ * contests, which is what the Feed TAB lists. The group-wide sibling of
+ * /entries/:contest_id and the reason a League feed can show contest entries at
+ * all: this route serves both surfaces, while /group/arena/contest-picks/* is
+ * Arena-only.
+ *
+ * A page MIXES contests, so hidden-until-lock is a per-ROW fact here: read each
+ * row's `is_revealed`, never the envelope.
+ */
+function* handleFetchFeedContestPicks(
+    action: PayloadAction<FetchFeedContestPicksPayload>
+): SagaIterator {
+    const { group_id, group_type, contest_id, user_id, status, page = 1, limit = 20 } =
+        action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/picks`,
+            {
+                params: {
+                    group_id,
+                    group_type,
+                    page,
+                    limit,
+                    ...(contest_id ? { contest_id } : {}),
+                    ...(user_id ? { user_id } : {}),
+                    ...(status ? { status } : {}),
+                },
+            }
+        );
+        const payload = response.data as { data?: FeedContestPicksData };
+        if (!payload?.data?.group) {
+            yield put(fetchFeedContestPicksFailure("Failed to load contest entries"));
+            return;
+        }
+        yield put(fetchFeedContestPicksSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestPicksFailure(
+                getErrorMessage(error, "Failed to load contest entries")
             )
         );
     }
@@ -553,10 +703,20 @@ export default function* feedContestSaga(): SagaIterator {
     // cancel is harmless server-side (idempotent) but must not race the first.
     yield takeLatest(cancelFeedContestRequest.type, handleCancelFeedContest);
     yield takeLatest(archiveFeedContestRequest.type, handleArchiveFeedContest);
+    // takeLatest, AND the drawer's confirm button is disabled while it runs: a
+    // repeat delete is a 409, not a harmless no-op like cancel/archive.
+    yield takeLatest(deleteFeedContestRequest.type, handleDeleteFeedContest);
     yield takeLatest(updateFeedContestRequest.type, handleUpdateFeedContest);
     // takeLatest: one contest's field is on screen at a time, and the "Show
     // more" page and the post-write refetch are the same read — newest wins.
     yield takeLatest(fetchFeedContestEntriesRequest.type, handleFetchFeedContestEntries);
+    // takeLatest for the same reason: one contest's board is on screen at a
+    // time, and "Show more" and the post-write refetch are the same read.
+    yield takeLatest(
+        fetchFeedContestLeaderboardRequest.type,
+        handleFetchFeedContestLeaderboard
+    );
+    yield takeLatest(fetchFeedContestPicksRequest.type, handleFetchFeedContestPicks);
     // takeLatest: one contest's dashboard at a time, and the post-write refetch
     // is the same read — the newest tally is the only correct one.
     yield takeLatest(fetchFeedContestStatsRequest.type, handleFetchFeedContestStats);

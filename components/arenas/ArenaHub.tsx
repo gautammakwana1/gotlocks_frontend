@@ -186,9 +186,6 @@ export const ArenaHub = () => {
         <div className="flex flex-col gap-5 pb-8 text-white">
             <header className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-gray-400">
-                        your communities
-                    </p>
                     <h1 className="mt-1 bg-gradient-to-r from-white via-violet-100 to-fuchsia-200 bg-clip-text text-3xl font-extrabold text-transparent sm:text-4xl">
                         Arenas
                     </h1>
@@ -233,13 +230,6 @@ export const ArenaHub = () => {
                         }}
                     />
                 )}
-
-                {activeView === "hosting" ? (
-                    <p className="rounded-2xl border border-violet-300/15 bg-violet-500/[0.06] px-4 py-3 text-xs leading-5 text-violet-100/80">
-                        Arena hosting is billed per Arena and is independent of personal Pro. A $50
-                        one-time unlock is required before creation.
-                    </p>
-                ) : null}
 
                 {listError ? (
                     <CommunityHubError

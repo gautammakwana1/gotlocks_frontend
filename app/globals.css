@@ -809,6 +809,161 @@ html:has([data-app-scale="desktop"]) {
   text-decoration-color: rgba(147, 197, 253, 0.72);
 }
 
+/*
+ * Arena workspaces inherit the same shared controls as Leagues, but carry their
+ * own violet product identity. Keep this scope on Arena routes so shared and
+ * deeply nested controls (including the Pick Builder) do not fall back to the
+ * League-blue brand tokens.
+ */
+.arena-theme {
+  --brand: #a78bfa;
+  --brand-soft: rgba(139, 92, 246, 0.16);
+  --brand-strong: #8b5cf6;
+  --brand-highlight: #c4b5fd;
+  --brand-text: #ede9fe;
+  --brand-text-soft: rgba(221, 214, 254, 0.84);
+  --brand-border: rgba(196, 181, 253, 0.46);
+  --brand-border-strong: rgba(196, 181, 253, 0.72);
+  --brand-shadow: rgba(124, 58, 237, 0.28);
+  --brand-caret: #c4b5fd;
+}
+
+.arena-theme .ui-accent-button {
+  border-color: rgba(196, 181, 253, 0.5);
+  background-image: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.3),
+    rgba(30, 20, 52, 0.62) 58%,
+    rgba(0, 0, 0, 0.24)
+  );
+}
+
+.arena-theme .ui-accent-button:hover {
+  border-color: rgba(221, 214, 254, 0.76);
+  background-image: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.4),
+    rgba(30, 20, 52, 0.68) 58%,
+    rgba(0, 0, 0, 0.24)
+  );
+}
+
+.arena-theme .ui-accent-button-solid {
+  background-color: rgba(124, 58, 237, 0.86);
+  color: #f5f3ff;
+}
+
+.arena-theme .ui-accent-button-solid:hover {
+  background-color: rgba(139, 92, 246, 0.96);
+}
+
+.arena-theme .ui-accent-badge,
+.arena-theme .ui-accent-badge-strong {
+  border-color: rgba(196, 181, 253, 0.46);
+  background-color: rgba(124, 58, 237, 0.16);
+}
+
+.arena-theme .ui-accent-outline-hover:hover {
+  border-color: rgba(196, 181, 253, 0.62);
+  background-color: rgba(124, 58, 237, 0.1);
+  box-shadow: 0 12px 32px -20px rgba(124, 58, 237, 0.38);
+}
+
+.arena-theme .ui-accent-pressed {
+  border-color: rgba(196, 181, 253, 0.72);
+  background-color: rgba(124, 58, 237, 0.2);
+}
+
+/* Arena theme overrides for shared Pick Builder utilities. */
+.arena-theme [class~="text-sky-50"],
+.arena-theme [class~="text-sky-100"],
+.arena-theme [class~="text-blue-100"] {
+  color: #ede9fe;
+}
+
+.arena-theme [class~="text-sky-200"],
+.arena-theme [class~="text-cyan-200"] {
+  color: #ddd6fe;
+}
+
+.arena-theme [class~="text-sky-100/70"] {
+  color: rgba(237, 233, 254, 0.7);
+}
+
+.arena-theme [class~="text-sky-200/80"] {
+  color: rgba(221, 214, 254, 0.8);
+}
+
+.arena-theme [class~="bg-sky-950/20"] {
+  background-color: rgba(46, 16, 101, 0.2);
+}
+
+.arena-theme [class~="bg-sky-500/10"],
+.arena-theme [class~="bg-blue-500/10"] {
+  background-color: rgba(139, 92, 246, 0.1);
+}
+
+.arena-theme [class~="bg-sky-500/15"] {
+  background-color: rgba(139, 92, 246, 0.15);
+}
+
+.arena-theme [class~="bg-sky-500/20"] {
+  background-color: rgba(139, 92, 246, 0.2);
+}
+
+.arena-theme [class~="bg-sky-500/25"] {
+  background-color: rgba(139, 92, 246, 0.25);
+}
+
+.arena-theme [class~="bg-sky-500/35"] {
+  background-color: rgba(139, 92, 246, 0.35);
+}
+
+.arena-theme [class~="bg-cyan-300/80"] {
+  background-color: rgba(196, 181, 253, 0.8);
+}
+
+.arena-theme [class~="border-sky-300"],
+.arena-theme [class~="border-sky-300/60"],
+.arena-theme [class~="border-sky-300/70"],
+.arena-theme [class~="border-sky-400/40"],
+.arena-theme [class~="border-sky-400/50"],
+.arena-theme [class~="border-sky-400/60"],
+.arena-theme [class~="border-sky-400/70"],
+.arena-theme [class~="border-blue-300/50"] {
+  border-color: rgba(196, 181, 253, 0.6);
+}
+
+.arena-theme [class~="hover:border-sky-300/70"]:hover,
+.arena-theme [class~="hover:border-sky-400/60"]:hover {
+  border-color: rgba(221, 214, 254, 0.72);
+}
+
+.arena-theme [class~="after:bg-sky-300/60"]::after {
+  background-color: rgba(196, 181, 253, 0.6);
+}
+
+.arena-theme [class~="accent-sky-400"] {
+  accent-color: #a78bfa;
+}
+
+.arena-theme [class~="focus:border-sky-300/60"]:focus {
+  border-color: rgba(196, 181, 253, 0.72);
+}
+
+.arena-theme [class~="focus-visible:outline-sky-300"]:focus-visible,
+.arena-theme [class~="focus-visible:outline-sky-300/70"]:focus-visible {
+  outline-color: rgba(196, 181, 253, 0.82);
+}
+
+.arena-theme [class~="focus-visible:ring-sky-300/70"]:focus-visible {
+  --tw-ring-color: rgba(196, 181, 253, 0.72);
+}
+
+.arena-theme [class~="shadow-[0_0_0_1px_rgba(96,165,250,0.35)]"] {
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.4);
+}
+
 .matchup-detail .rounded-2xl,
 .matchup-detail .rounded-3xl {
   border-radius: 0;

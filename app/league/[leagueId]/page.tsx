@@ -53,7 +53,10 @@ const LEAGUE_CONTEST_TABS: readonly {
   id: LeagueContestTabId;
   label: string;
 }[] = [
-    { id: "slip", label: "Slip Contests" },
+    // "Fantasy Contests" is the MVP's current name for this surface. The tab id
+    // stays `slip` — it keys the ?contestType deep link and every internal
+    // reference; only the label was renamed.
+    { id: "slip", label: "Fantasy Contests" },
     { id: "feed", label: "Feed Contests" },
   ];
 
@@ -336,7 +339,7 @@ const LeagueDashboardPage = () => {
   // Read once on mount so the legacy ?tab=leaderboard deep link still opens the
   // Feed on its Standings view — the back-compat effect below rewrites the URL.
   const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
-    searchParams.get("tab") === "leaderboard" ? "standings" : "all"
+    searchParams.get("tab") === "leaderboard" ? "standings" : "community"
   );
   const feedContestSections = useSelector(
     (state: RootState) => state.feedContest.sections
@@ -982,7 +985,7 @@ const LeagueDashboardPage = () => {
                       </span>
                     </h3>
                     <span className="ml-auto truncate text-right text-[11px] text-gray-500">
-                      Active Slip contests accepting picks or awaiting results
+                      Active Fantasy Contests accepting picks or awaiting results
                     </span>
                     <span aria-hidden className="text-sm text-gray-500">
                       {showOpenContests ? "▴" : "▾"}
@@ -1135,6 +1138,11 @@ const LeagueDashboardPage = () => {
           onLeaveGroup={handleLeaveLeague}
           leavingGroup={leavingLeague}
           groupId={leagueId}
+          // Opens the League-scoped member card rather than the global profile;
+          // the card links onward to the profile from its own header.
+          getMemberHref={(member) =>
+            member.user_id ? `/league/${leagueId}/members/${member.user_id}` : "#"
+          }
         />
       )}
 

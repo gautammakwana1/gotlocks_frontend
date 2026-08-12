@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
 import {
     getMemberDirectoryAvatarClassName,
+    getMemberDirectoryCardClassName,
     MemberDirectorySearch,
     MemberDirectoryViewToggle,
     memberDirectoryGridClassName,
@@ -42,6 +43,12 @@ type Props = {
     leavingGroup?: boolean;
     groupId: string;
     accent?: MemberDirectoryAccent;
+    /**
+     * Where a member row links. Supply this to open the group-scoped member CARD
+     * instead of the global profile — the card is what the League page uses, and
+     * it links onward to the global profile from its own header.
+     */
+    getMemberHref?: (member: MemberWithRole) => string;
 };
 
 type ActionState = {
@@ -110,8 +117,10 @@ const MemberActions = ({
 
 const MemberCard = ({
     member,
-    currentUserId,
+    memberHref,
+    memberLinkLabel,
     isCommissioner,
+    accent,
     state,
     onRemove,
     onLeave,
@@ -124,8 +133,10 @@ const MemberCard = ({
     leavingGroup,
 }: {
     member: MemberWithRole;
-    currentUserId: string | undefined;
+    memberHref: string;
+    memberLinkLabel: string;
     isCommissioner: boolean;
+    accent: MemberDirectoryAccent;
     state?: ActionState;
     onRemove: () => void;
     onLeave: () => void;
@@ -142,35 +153,34 @@ const MemberCard = ({
     const showActions = showPromote || showLeave || Boolean(state?.error);
 
     return (
-        <div role="listitem" className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-gradient-to-b from-blue-500/14 via-blue-500/8 to-slate-950/15 bg-clip-padding p-4 shadow-sm transition hover:border-sky-300/35">
+        <article role="listitem" className={getMemberDirectoryCardClassName(accent)}>
             {showRemove && (
                 <button
                     type="button"
                     onClick={onRemove}
                     disabled={disableRemove}
                     className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold text-gray-300 transition hover:border-red-400/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Remove member"
+                    aria-label={`Remove ${displayName || "member"}`}
                 >
                     X
                 </button>
             )}
             <div className="flex flex-1 flex-col items-center gap-3 pt-3">
                 <Link
-                    href={
-                        member.user_id && currentUserId
-                            ? getProfilePath(member.user_id, currentUserId)
-                            : "#"
-                    }
-                    className="flex h-14 w-14 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-gray-200 transition hover:border-sky-300/60 hover:text-white hover:shadow-[0_0_16px_rgba(96,165,250,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
-                    aria-label={`View ${displayName || "member"} profile`}
+                    href={memberHref}
+                    className={getMemberDirectoryAvatarClassName(accent, "card")}
+                    aria-label={memberLinkLabel}
                 >
+                    {/* The MVP renders initials because its mock users carry no
+                        avatar; this app has real ones, so the image wins and the
+                        icon is the fallback. */}
                     {memberProfileImage ? (
                         <Image
                             src={memberProfileImage}
-                            alt="Profile image"
+                            alt=""
                             width={56}
                             height={56}
-                            className={`tracking-wide rounded-xl object-cover h-13 w-13`}
+                            className="h-full w-full object-cover"
                             draggable={false}
                             onDragStart={(e) => e.preventDefault()}
                             unoptimized
@@ -179,13 +189,18 @@ const MemberCard = ({
                         <UserIcon className="h-8 w-8 text-white/80 sm:h-9 sm:w-9" />
                     )}
                 </Link>
-                <div className="text-center">
-                    <p className="text-sm font-semibold text-white">{displayName || "Member"}</p>
-                    {isCommissioner && (
-                        <p className="mt-1 text-[9px] font-semibold lowercase tracking-[0.16em] text-amber-200">
-                            owner
-                        </p>
-                    )}
+                <div className="min-w-0 max-w-full text-center">
+                    <p className="truncate text-sm font-semibold text-white">
+                        {displayName || "Member"}
+                    </p>
+                    {/* Every member states a role, not just the owner — a card
+                        with a blank line under the name reads as missing data. */}
+                    <p
+                        className={`mt-1 text-[9px] font-semibold uppercase tracking-[0.16em] ${isCommissioner ? "text-amber-200" : "text-gray-500"
+                            }`}
+                    >
+                        {isCommissioner ? "Owner" : "Member"}
+                    </p>
                 </div>
             </div>
             {showActions && (
@@ -199,7 +214,7 @@ const MemberCard = ({
                     state={state}
                 />
             )}
-        </div>
+        </article>
     );
 };
 
@@ -207,7 +222,8 @@ const MemberCard = ({
 // horizontally so more members fit on screen.
 const MemberRow = ({
     member,
-    currentUserId,
+    memberHref,
+    memberLinkLabel,
     isCommissioner,
     accent,
     state,
@@ -222,7 +238,8 @@ const MemberRow = ({
     leavingGroup,
 }: {
     member: MemberWithRole;
-    currentUserId: string | undefined;
+    memberHref: string;
+    memberLinkLabel: string;
     isCommissioner: boolean;
     accent: MemberDirectoryAccent;
     state?: ActionState;
@@ -236,59 +253,65 @@ const MemberRow = ({
     showLeave: boolean;
     leavingGroup?: boolean;
 }) => {
-    const displayName = formatDisplayName(member.profiles?.username);
+    const displayName = formatDisplayName(member.profiles?.username) || "Member";
     const memberProfileImage = generateProfileImageUrl(member.profiles?.profile_image);
 
     return (
-        <div role="listitem" className="flex items-center gap-3 py-3">
+        <li className="flex min-h-16 items-center gap-3 py-2.5">
+            {/* Avatar AND name share one link, so the whole left half of the row
+                is the tap target rather than just the 40px avatar. */}
             <Link
-                href={
-                    member.user_id && currentUserId
-                        ? getProfilePath(member.user_id, currentUserId)
-                        : "#"
-                }
-                className={getMemberDirectoryAvatarClassName(accent, "list")}
-                aria-label={`View ${displayName || "member"} profile`}
+                href={memberHref}
+                aria-label={memberLinkLabel}
+                className={`flex min-w-0 flex-1 items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${accent === "arena" ? "focus-visible:outline-violet-300" : "focus-visible:outline-sky-300"
+                    }`}
             >
-                {memberProfileImage ? (
-                    <Image
-                        src={memberProfileImage}
-                        alt="Profile image"
-                        width={40}
-                        height={40}
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                        onDragStart={(e) => e.preventDefault()}
-                        unoptimized
-                    />
-                ) : (
-                    <UserIcon className="h-5 w-5 text-white/80" />
-                )}
+                <span aria-hidden className={getMemberDirectoryAvatarClassName(accent, "list")}>
+                    {memberProfileImage ? (
+                        <Image
+                            src={memberProfileImage}
+                            alt=""
+                            width={40}
+                            height={40}
+                            className="h-full w-full object-cover"
+                            draggable={false}
+                            onDragStart={(e) => e.preventDefault()}
+                            unoptimized
+                        />
+                    ) : (
+                        <UserIcon className="h-5 w-5 text-white/80" />
+                    )}
+                </span>
+                <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-white">
+                        {displayName}
+                    </span>
+                    <span
+                        className={`mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.16em] ${isCommissioner ? "text-amber-200" : "text-gray-500"
+                            }`}
+                    >
+                        {isCommissioner ? "Owner" : "Member"}
+                    </span>
+                    {state?.error ? (
+                        <span className="mt-1 block text-xs text-red-300" role="alert">
+                            {state.error}
+                        </span>
+                    ) : null}
+                </span>
             </Link>
 
-            <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">
-                    {displayName || "Member"}
-                </p>
-                {isCommissioner ? (
-                    <p className="mt-0.5 text-[9px] font-semibold lowercase tracking-[0.16em] text-amber-200">
-                        owner
-                    </p>
-                ) : null}
-                {state?.error ? (
-                    <p className="mt-0.5 text-xs text-red-300">{state.error}</p>
-                ) : null}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
+            {/* Borderless, 44px-tall hit targets — the row already separates
+                itself with a divider, so bordered pills read as noise here. */}
+            <div className="flex shrink-0 items-center gap-1">
                 {showPromote && (
                     <button
                         type="button"
                         disabled={disablePromote}
                         onClick={onPromote}
-                        className="ui-accent-button rounded-lg px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                        className={`min-h-11 px-2 text-[9px] font-semibold uppercase tracking-[0.1em] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-[10px] ${accent === "arena" ? "text-violet-100" : "text-sky-100"
+                            }`}
                     >
-                        {state?.promoting ? "transferring..." : "transfer"}
+                        {state?.promoting ? "Working..." : "Make owner"}
                     </button>
                 )}
                 {showLeave && (
@@ -296,7 +319,7 @@ const MemberRow = ({
                         type="button"
                         onClick={onLeave}
                         disabled={leavingGroup}
-                        className="rounded-lg border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-white transition hover:border-red-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="min-h-11 px-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-red-200 transition hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-[10px]"
                     >
                         {leavingGroup ? "Leaving..." : "Leave"}
                     </button>
@@ -306,14 +329,14 @@ const MemberRow = ({
                         type="button"
                         onClick={onRemove}
                         disabled={disableRemove}
-                        aria-label="Remove member"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold text-gray-300 transition hover:border-red-400/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label={`Remove ${displayName}`}
+                        className="inline-flex h-11 w-11 items-center justify-center text-sm font-semibold text-gray-500 transition hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                        X
+                        ×
                     </button>
                 )}
             </div>
-        </div>
+        </li>
     );
 };
 
@@ -325,6 +348,7 @@ export const ModifyMembers = ({
     leavingGroup,
     groupId,
     accent = "league",
+    getMemberHref,
 }: Props) => {
     const router = useRouter();
     const { setToast } = useToast();
@@ -501,6 +525,8 @@ export const ModifyMembers = ({
         return <MembersSkeleton />;
     }
 
+    const surfaceLabel = accent === "arena" ? "Arena" : "League";
+
     const renderMember = (member: MemberWithRole) => {
         const state = member?.user_id ? actionState[member?.user_id] : {};
         const isCommissioner = member.role === "commissioner";
@@ -528,9 +554,21 @@ export const ModifyMembers = ({
             setPendingAction({ member, kind: "leave" });
         };
 
+        const displayName = formatDisplayName(member.profiles?.username) || "member";
+        // The group-scoped member card when the host supplies one, otherwise the
+        // global profile — which is what every caller did before the card existed.
+        const memberHref =
+            getMemberHref?.(member) ??
+            (member.user_id && currentUser?.userId
+                ? getProfilePath(member.user_id, currentUser.userId)
+                : "#");
+
         const shared = {
             member,
-            currentUserId: currentUser?.userId,
+            memberHref,
+            memberLinkLabel: getMemberHref
+                ? `View ${displayName} ${surfaceLabel} member card`
+                : `View ${displayName} profile`,
             isCommissioner,
             state,
             onRemove: requestRemove,
@@ -545,42 +583,49 @@ export const ModifyMembers = ({
         };
 
         return view === "cards" ? (
-            <MemberCard key={member.id} {...shared} />
+            <MemberCard key={member.id} accent={accent} {...shared} />
         ) : (
             <MemberRow key={member.id} accent={accent} {...shared} />
         );
     };
 
     return (
-        <section className="space-y-5">
+        <section className="space-y-4">
             <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
                 <MemberDirectorySearch
                     search={search}
                     onSearchChange={setSearch}
                     accent={accent}
-                    searchLabel="Search members"
+                    searchLabel={`Search ${surfaceLabel} members`}
                     embedded
                 />
                 <MemberDirectoryViewToggle view={view} onViewChange={setView} embedded />
             </div>
 
-            {visibleMembers.length ? (
+            {/* Two containers rather than one with a swapped class: the list view
+                is a real <ul>/<li>, which role="list" on a <div> only imitates. */}
+            {view === "cards" ? (
                 <div
                     role="list"
-                    aria-label={view === "cards" ? "Member cards" : "Member list"}
-                    className={
-                        view === "cards"
-                            ? memberDirectoryGridClassName
-                            : memberDirectoryListClassName
-                    }
+                    aria-label={`${surfaceLabel} member cards`}
+                    className={memberDirectoryGridClassName}
                 >
                     {visibleMembers.map(renderMember)}
                 </div>
             ) : (
-                <div className="rounded-xl border border-dashed border-white/15 bg-black/30 p-6 text-sm text-gray-500">
-                    No members match your search.
-                </div>
+                <ul
+                    aria-label={`${surfaceLabel} members list`}
+                    className={memberDirectoryListClassName}
+                >
+                    {visibleMembers.map(renderMember)}
+                </ul>
             )}
+
+            {visibleMembers.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-500">
+                    No members match your search.
+                </p>
+            ) : null}
 
             {pendingAction && (
                 <div

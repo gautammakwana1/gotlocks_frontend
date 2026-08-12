@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
@@ -21,7 +22,6 @@ import type {
     StructuredFeedContest,
 } from "@/lib/domain/community";
 import { selectArenaPointsLeaderboard } from "@/lib/scoring/context";
-import { displayNameGradientStyle } from "@/lib/styles/text";
 import { formatDateTime } from "@/lib/utils/date";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useToast } from "@/lib/state/ToastContext";
@@ -69,37 +69,37 @@ import {
 } from "@/components/billing/PurchaseFlowDialog";
 import { getCombinedContestCapacityLabel, getGroupCapacityLabel } from "@/lib/groups/limits";
 import LeaguePageSkeleton from "../skeletons/leagues/LeaguePageSkeleton";
+import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
 import { ArenaShellActions } from "./types";
 import { groupPreviewMetaTextClassName } from "../group/GroupPreviewChip";
 import StructuredContestList from "../contests/StructuredContestList";
 import ConnectedStructuredFeed from "../feed/ConnectedStructuredFeed";
+import type { StructuredFeedFilter } from "../feed/types";
+import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
+import {
+    getMemberDirectoryAvatarClassName,
+    getMemberDirectoryCardClassName,
+    MemberDirectorySearch,
+    MemberDirectoryViewToggle,
+    memberDirectoryGridClassName,
+    memberDirectoryListClassName,
+    type MemberDirectoryView,
+} from "../community/MemberDirectoryControls";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import useScopedGroup from "@/lib/groups/useScopedGroup";
 
+// One flat strip, matching the MVP and the League / contest detail pages.
+// There is deliberately no Leaderboard tab: the Community Leaderboard is a
+// filter chip inside the Feed (ArenaFeedPanel's `standings` node), which is
+// where the MVP and the League page both put it.
 const ARENA_TABS = [
     { id: "feed", label: "Feed" },
     { id: "contests", label: "Contests" },
-    { id: "leaderboard", label: "Community Leaderboard" },
     { id: "members", label: "Members" },
     { id: "settings", label: "Settings" },
 ] as const;
 
 type ArenaTabId = (typeof ARENA_TABS)[number]["id"];
-
-const ARENA_PRIMARY_TABS = [
-    { id: "feed", label: "Feed" },
-    { id: "members", label: "Members" },
-    { id: "settings", label: "Settings" },
-] as const;
-
-type ArenaPrimaryTabId = (typeof ARENA_PRIMARY_TABS)[number]["id"];
-
-const ARENA_FEED_TABS = [
-    { id: "feed", label: "Feed" },
-    { id: "contests", label: "Contests" },
-    { id: "leaderboard", label: "Community Leaderboard" },
-] as const;
-
-type ArenaFeedTabId = (typeof ARENA_FEED_TABS)[number]["id"];
 
 const LEADERBOARD_PERIODS: Array<{
     id: CommunityLeaderboardPeriodKind;
@@ -245,135 +245,47 @@ const ArenaDetailsLabel = ({
     );
 };
 
-const arenaFeedTabIcon = (tabId: ArenaFeedTabId) => {
-    const common = {
-        className: "h-4 w-4",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: 1.7,
-        strokeLinecap: "round" as const,
-        strokeLinejoin: "round" as const,
-        "aria-hidden": true,
-    };
-
-    if (tabId === "feed") {
-        return (
-            <svg viewBox="0 0 24 24" {...common}>
-                <path d="M4 6h16M4 12h12M4 18h9" />
-            </svg>
-        );
-    }
-
-    if (tabId === "contests") {
-        return (
-            <svg viewBox="0 0 24 24" {...common}>
-                <path d="M8 21h8" />
-                <path d="M12 17v4" />
-                <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" />
-                <path d="M17 6h3v2a3 3 0 0 1-3 3" />
-                <path d="M7 6H4v2a3 3 0 0 0 3 3" />
-            </svg>
-        );
-    }
-
-    return (
-        <svg viewBox="0 0 24 24" {...common}>
-            <path d="M5 20V11M12 20V4M19 20v-6" />
-            <path d="M3 20h18" />
-        </svg>
-    );
-};
-
+/**
+ * The shared folder-tab strip used by the League and contest detail pages, in
+ * the Arena's violet accent. The `after:` sliver on the active tab paints over
+ * the section's bottom border so the tab reads as continuous with the panel —
+ * that is the whole effect, so it has to stay in step with the `border-b` on
+ * the wrapping <section>.
+ */
 const ArenaTabStrip = ({
     activeTab,
     onChange,
 }: {
-    activeTab: ArenaPrimaryTabId;
-    onChange: (tab: ArenaPrimaryTabId) => void;
-}) => {
-    const activeTabIndex = Math.max(
-        0,
-        ARENA_PRIMARY_TABS.findIndex((tab) => tab.id === activeTab)
-    );
-
-    return (
-        <nav aria-label="Arena sections">
-            <div
-                className="relative grid w-full gap-1 py-1"
-                style={{
-                    gridTemplateColumns: `repeat(${ARENA_PRIMARY_TABS.length}, minmax(0, 1fr))`,
-                }}
-            >
-                <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-y-1 left-0 rounded-lg border border-white/10 bg-white/[0.08] transition-transform duration-300 ease-out"
-                    style={{
-                        width: `calc(100% / ${ARENA_PRIMARY_TABS.length})`,
-                        transform: `translateX(${activeTabIndex * 100}%)`,
-                    }}
-                />
-                {ARENA_PRIMARY_TABS.map((tab) => {
-                    const active = activeTab === tab.id;
-                    return (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            aria-label={tab.label}
-                            aria-current={active ? "page" : undefined}
-                            onClick={() => onChange(tab.id)}
-                            className={`relative z-10 flex h-11 min-w-0 items-center justify-center px-1 text-center text-[10px] font-semibold uppercase tracking-wide transition sm:h-10 sm:px-3 sm:text-sm ${active ? "text-white" : "text-gray-400 hover:text-white"
-                                }`}
-                        >
-                            <span className="truncate">{tab.label}</span>
-                        </button>
-                    );
-                })}
-            </div>
-        </nav>
-    );
-};
-
-const ArenaFeedTabStrip = ({
-    activeTab,
-    onChange,
-}: {
-    activeTab: ArenaFeedTabId;
-    onChange: (tab: ArenaFeedTabId) => void;
+    activeTab: ArenaTabId;
+    onChange: (tab: ArenaTabId) => void;
 }) => (
-    <div
-        role="tablist"
-        aria-label="Arena Feed sections"
-        className="grid w-full"
-        style={{
-            gridTemplateColumns: `repeat(${ARENA_FEED_TABS.length}, minmax(0, 1fr))`,
-        }}
-    >
-        {ARENA_FEED_TABS.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-                <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    id={`arena-feed-tab-${tab.id}`}
-                    aria-selected={active}
-                    aria-controls="arena-feed-panel"
-                    aria-label={tab.label}
-                    title={tab.label}
-                    onClick={() => onChange(tab.id)}
-                    className={`relative flex h-9 min-w-0 items-center justify-center px-2 text-center text-[11px] font-medium tracking-wide transition sm:px-3 ${active ? "text-white" : "text-gray-500 hover:text-gray-300"
-                        }`}
-                >
-                    {arenaFeedTabIcon(tab.id)}
-                    <span
-                        aria-hidden
-                        className={`absolute inset-x-4 bottom-0 h-px bg-sky-300 transition-opacity ${active ? "opacity-80" : "opacity-0"
+    <nav aria-label="Arena sections">
+        <div
+            className="grid w-full items-end gap-1"
+            style={{
+                gridTemplateColumns: `repeat(${ARENA_TABS.length}, minmax(0, 1fr))`,
+            }}
+        >
+            {ARENA_TABS.map((tab) => {
+                const active = activeTab === tab.id;
+                return (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        aria-label={tab.label}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => onChange(tab.id)}
+                        className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 text-center text-[13px] font-semibold transition-colors duration-200 ease-out sm:px-3 sm:text-sm motion-reduce:transition-none ${active
+                            ? "border-white/10 bg-black text-violet-100 after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']"
+                            : "border-transparent bg-black text-gray-400 hover:border-white/10 hover:text-white"
                             }`}
-                    />
-                </button>
-            );
-        })}
-    </div>
+                    >
+                        <span className="truncate">{tab.label}</span>
+                    </button>
+                );
+            })}
+        </div>
+    </nav>
 );
 
 const EmptyPanel = ({ title, body }: { title: string; body: string }) => (
@@ -389,6 +301,7 @@ const ArenaFeedPanel = ({
     role,
     writable,
     currentUserId,
+    initialFilter = "community",
 }: {
     /**
      * Route param. Required (not optional) so a record id — which can belong to the
@@ -400,27 +313,21 @@ const ArenaFeedPanel = ({
     role: string;
     writable: boolean;
     currentUserId?: string;
+    initialFilter?: StructuredFeedFilter;
 }) => {
     if (!arenaId) return;
     return (
         <div className="space-y-4">
-            {isArenaStaffRole(role) ? (
-                <section className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
-                        Staff workspace
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-gray-300">
-                        Owner and manager posts are staff content. Staff Picks are clearly marked
-                        noncompetitive and never earn Arena Points.
-                    </p>
-                    {!writable ? (
-                        <p className="mt-3 text-xs font-semibold text-gray-500">
-                            Publishing is unavailable in the current hosting state.
-                        </p>
-                    ) : null}
-                </section>
-            ) : null}
+            {/* No staff-only preamble above the Feed: the MVP puts nothing between
+                the tab strip and the Feed's own filter band, and the staff rules it
+                restated (noncompetitive Staff Picks, hosting-gated publishing) are
+                already stated where they apply — on the Staff Pick card and by the
+                composer's own disabled state. */}
 
+            {/* The Community Leaderboard rides in as the Feed's "Standings"
+                chip rather than a tab of its own — StructuredFeed only renders
+                that chip when a `standings` node is supplied. Same wiring as
+                the League page's LeagueFeedStandingsPanel, and the MVP's. */}
             <ConnectedStructuredFeed
                 groupId={arenaId}
                 groupType="arena"
@@ -428,6 +335,8 @@ const ArenaFeedPanel = ({
                 currentRole={role}
                 writable={writable}
                 currentUserId={currentUserId}
+                initialFilter={initialFilter}
+                standings={<ArenaLeaderboardPanel />}
             />
         </div>
     )
@@ -582,8 +491,11 @@ const ArenaLeaderboardPanel = () => {
                         type="button"
                         onClick={() => setPeriod(option.id)}
                         aria-pressed={period === option.id}
+                        // Violet, not sky: this now renders directly beneath the
+                        // Feed's own filter chips, which StructuredFeed tones
+                        // violet for an arena context.
                         className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${period === option.id
-                            ? "border-sky-300/50 bg-sky-500/15 text-sky-100"
+                            ? "border-violet-300/50 bg-violet-500/15 text-violet-100"
                             : "border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-200"
                             }`}
                     >
@@ -609,7 +521,7 @@ const ArenaLeaderboardPanel = () => {
                             key={row.userId}
                             className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/5 px-4 py-4 last:border-b-0 sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]"
                         >
-                            <span className="font-semibold text-sky-100">#{row.rank}</span>
+                            <span className="font-semibold text-violet-100">#{row.rank}</span>
                             <span className="truncate text-sm font-semibold text-white">
                                 @{row.username}
                             </span>
@@ -640,6 +552,37 @@ const initialsFor = (value: string) =>
         .join("")
         .slice(0, 2)
         .toUpperCase() || "??";
+
+/**
+ * Avatar body shared by both member views. The MVP mock has no avatars and draws
+ * initials; this app's member rows carry a real `profile_image`, so the photo
+ * wins and the initials are the fallback.
+ */
+const MemberAvatar = ({
+    profileImage,
+    initials,
+    size,
+}: {
+    profileImage?: string;
+    initials: string;
+    size: "card" | "list";
+}) => {
+    const src = generateProfileImageUrl(profileImage);
+    if (!src) return <>{initials}</>;
+    const dimension = size === "card" ? 56 : 40;
+    return (
+        <Image
+            src={src}
+            alt=""
+            width={dimension}
+            height={dimension}
+            className="h-full w-full object-cover"
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
+            unoptimized
+        />
+    );
+};
 
 type MemberActionKind = "promote" | "demote" | "remove" | "leave";
 
@@ -691,6 +634,7 @@ const ArenaMembersPanel = ({
     currentUserId,
     currentRole,
     writable,
+    loading,
     onLeaveSuccess,
 }: {
     /** Route param, required — see ArenaFeedPanel's arenaId note. */
@@ -699,9 +643,16 @@ const ArenaMembersPanel = ({
     currentUserId: string | undefined;
     currentRole: string;
     writable: boolean;
+    /**
+     * The members fetch is separate from the arena's, so an empty list is
+     * ambiguous without this: "nobody matched" and "not loaded yet" look
+     * identical, and the empty copy would flash on every open.
+     */
+    loading: boolean;
     onLeaveSuccess: () => void;
 }) => {
     const [search, setSearch] = useState("");
+    const [view, setView] = useState<MemberDirectoryView>("cards");
     const { setToast } = useToast();
     const dispatch = useDispatch();
     const {
@@ -717,7 +668,26 @@ const ArenaMembersPanel = ({
     const actionBusy = memberActionLoading || leaveArenaLoading;
     const [pendingMemberAction, setPendingMemberAction] =
         useState<PendingMemberAction | null>(null);
-    const visibleMemberships = memberships || [];
+
+    // Staff first, then members — the directory's job is to show who runs the
+    // Arena, and role is the only ordering the list endpoint does not impose.
+    // The search box used to be rendered but never read; it filters now.
+    const visibleMemberships = useMemo(() => {
+        const normalizedSearch = search.trim().toLowerCase();
+        const rank: Record<string, number> = { commissioner: 0, manager: 1, member: 2 };
+        return (memberships ?? [])
+            .filter((membership) =>
+                !normalizedSearch
+                    ? true
+                    : (membership.profiles?.username ?? "")
+                        .toLowerCase()
+                        .includes(normalizedSearch)
+            )
+            .sort(
+                (left, right) =>
+                    (rank[left.role ?? "member"] ?? 2) - (rank[right.role ?? "member"] ?? 2)
+            );
+    }, [memberships, search]);
 
     useEffect(() => {
         if (!memberActionError && !memberActionMessage) return;
@@ -796,114 +766,203 @@ const ArenaMembersPanel = ({
         dispatch(request({ arena_id: arenaId, user_id: userId, page: 1, limit: 10 }));
     };
 
+    // The Arena member CARD, not the global profile: everything on it is scoped
+    // to this Arena. The global profile is one link away from the card's header.
+    const memberHref = (membership: Members[number]) =>
+        membership.user_id ? `/arena/${arenaId}/members/${membership.user_id}` : "#";
+
+    /**
+     * One place deciding what a viewer may do to a row, so the Cards and List
+     * views cannot drift apart on permissions. These rules are this app's, NOT
+     * the MVP mock's — only the owner moderates here, where the MVP also lets a
+     * manager remove members.
+     */
+    const memberPermissions = (membership: Members[number]) => {
+        const handle = membership?.profiles?.username ?? "member";
+        const isSelf = membership.user_id === currentUserId;
+        return {
+            handle,
+            canPromote: isOwner && writable && membership.role === "member" && !isSelf,
+            canDemote: isOwner && writable && membership.role === "manager" && !isSelf,
+            canRemove:
+                isOwner && writable && membership.role !== "commissioner" && !isSelf,
+            isBusy: memberActionUserId === membership.user_id,
+            request: (kind: MemberActionKind) => {
+                if (!membership.user_id) return;
+                setPendingMemberAction({ kind, userId: membership.user_id, handle });
+            },
+        };
+    };
+
     return (
         <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h2 className="font-semibold text-white">Arena members</h2>
-                    <p className="mt-1 text-xs text-gray-500">
-                        Owners and managers use staff allowances and do not consume member capacity.
-                    </p>
-                </div>
-                <label className="sm:w-64">
-                    <span className="sr-only">Search Arena members</span>
-                    <input
-                        type="search"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        placeholder="Search members"
-                        className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-2.5 text-sm text-white outline-none transition focus:border-sky-300/60"
-                    />
-                </label>
+            <p className="text-xs text-gray-500">
+                Owners and managers use staff allowances and do not consume member capacity.
+            </p>
+
+            <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
+                <MemberDirectorySearch
+                    search={search}
+                    onSearchChange={setSearch}
+                    accent="arena"
+                    searchLabel="Search Arena members"
+                    embedded
+                />
+                <MemberDirectoryViewToggle view={view} onViewChange={setView} embedded />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleMemberships.map((membership) => {
-                    const handle = membership?.profiles?.username ?? "member";
-                    const isSelf = membership.user_id === currentUserId;
-                    const canPromote =
-                        isOwner && writable && membership.role === "member" && !isSelf;
-                    const canDemote =
-                        isOwner && writable && membership.role === "manager" && !isSelf;
-                    const canRemove =
-                        isOwner && writable && membership.role !== "commissioner" && !isSelf;
-                    const isBusy = memberActionUserId === membership.user_id;
+            {loading && visibleMemberships.length === 0 ? (
+                <MembersSkeleton />
+            ) : view === "cards" ? (
+                <div
+                    role="list"
+                    aria-label="Arena member cards"
+                    className={memberDirectoryGridClassName}
+                >
+                    {visibleMemberships.map((membership) => {
+                        const { handle, canPromote, canDemote, canRemove, isBusy, request } =
+                            memberPermissions(membership);
 
-                    const requestMemberAction = (kind: MemberActionKind) => {
-                        if (!membership.user_id) return;
-                        setPendingMemberAction({
-                            kind,
-                            userId: membership.user_id,
-                            handle,
-                        });
-                    };
-
-                    return (
-                        <article
-                            key={membership.id}
-                            className="rounded-xl border border-white/10 bg-white/[0.035] p-4"
-                        >
-                            <div className="flex items-center gap-3">
-                                <Link
-                                    href={
-                                        membership.user_id && currentUserId
-                                            ? getProfilePath(membership.user_id, currentUserId)
-                                            : "#"
-                                    }
-                                    aria-label={`View @${handle}'s profile`}
-                                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-xs font-semibold text-gray-200 transition hover:border-sky-300/50 hover:text-white"
-                                >
-                                    {initialsFor(handle)}
-                                </Link>
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-semibold text-white">@{handle}</p>
-                                    <p
-                                        className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${membership.role === "member" ? "text-gray-500" : "text-amber-200"
-                                            }`}
+                        return (
+                            <article
+                                key={membership.id}
+                                role="listitem"
+                                className={getMemberDirectoryCardClassName("arena")}
+                            >
+                                {canRemove ? (
+                                    <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => request("remove")}
+                                        aria-label={`Remove @${handle}`}
+                                        className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold text-gray-300 transition hover:border-red-400/60 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
-                                        {roleLabel(membership.role ?? "member")}
-                                    </p>
-                                </div>
-                            </div>
+                                        X
+                                    </button>
+                                ) : null}
 
-                            {canPromote || canDemote || canRemove ? (
-                                <div className="mt-4 flex flex-wrap gap-2 border-t border-white/10 pt-3">
-                                    {canPromote ? (
+                                <div className="flex flex-1 flex-col items-center gap-3 pt-3">
+                                    <Link
+                                        href={memberHref(membership)}
+                                        aria-label={`View @${handle}'s Arena member card`}
+                                        className={getMemberDirectoryAvatarClassName("arena", "card")}
+                                    >
+                                        <MemberAvatar
+                                            profileImage={membership.profiles?.profile_image}
+                                            initials={initialsFor(handle)}
+                                            size="card"
+                                        />
+                                    </Link>
+                                    <div className="min-w-0 max-w-full text-center">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                            @{handle}
+                                        </p>
+                                        <p
+                                            className={`mt-1 text-[9px] font-semibold uppercase tracking-[0.16em] ${membership.role === "member" ? "text-gray-500" : "text-amber-200"
+                                                }`}
+                                        >
+                                            {roleLabel(membership.role ?? "member")}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {canPromote || canDemote ? (
+                                    <button
+                                        type="button"
+                                        disabled={isBusy}
+                                        onClick={() => request(canPromote ? "promote" : "demote")}
+                                        className="w-full rounded-lg border border-violet-300/30 bg-violet-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100 transition hover:border-violet-300/50 hover:bg-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
+                                    >
+                                        {isBusy
+                                            ? "Working..."
+                                            : canPromote
+                                                ? "Make manager"
+                                                : "Make member"}
+                                    </button>
+                                ) : null}
+                            </article>
+                        );
+                    })}
+                </div>
+            ) : (
+                <ul aria-label="Arena members list" className={memberDirectoryListClassName}>
+                    {visibleMemberships.map((membership) => {
+                        const { handle, canPromote, canDemote, canRemove, isBusy, request } =
+                            memberPermissions(membership);
+
+                        return (
+                            <li
+                                key={membership.id}
+                                className="flex min-h-16 items-center gap-3 py-2.5"
+                            >
+                                <Link
+                                    href={memberHref(membership)}
+                                    aria-label={`View @${handle}'s Arena member card`}
+                                    className="flex min-w-0 flex-1 items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300"
+                                >
+                                    <span
+                                        aria-hidden
+                                        className={getMemberDirectoryAvatarClassName("arena", "list")}
+                                    >
+                                        <MemberAvatar
+                                            profileImage={membership.profiles?.profile_image}
+                                            initials={initialsFor(handle)}
+                                            size="list"
+                                        />
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block truncate text-sm font-semibold text-white">
+                                            @{handle}
+                                        </span>
+                                        <span
+                                            className={`mt-0.5 block text-[9px] font-semibold uppercase tracking-[0.16em] ${membership.role === "member"
+                                                ? "text-gray-500"
+                                                : "text-amber-200"
+                                                }`}
+                                        >
+                                            {roleLabel(membership.role ?? "member")}
+                                        </span>
+                                    </span>
+                                </Link>
+
+                                <div className="flex shrink-0 items-center gap-1">
+                                    {canPromote || canDemote ? (
                                         <button
                                             type="button"
                                             disabled={isBusy}
-                                            onClick={() => requestMemberAction("promote")}
-                                            className="rounded-lg border border-amber-300/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/10 disabled:opacity-50"
+                                            onClick={() => request(canPromote ? "promote" : "demote")}
+                                            className="min-h-11 px-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-[10px]"
                                         >
-                                            Make manager
-                                        </button>
-                                    ) : null}
-                                    {canDemote ? (
-                                        <button
-                                            type="button"
-                                            disabled={isBusy}
-                                            onClick={() => requestMemberAction("demote")}
-                                            className="rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:bg-white/5 disabled:opacity-50"
-                                        >
-                                            Make member
+                                            {isBusy
+                                                ? "Working..."
+                                                : canPromote
+                                                    ? "Make manager"
+                                                    : "Make member"}
                                         </button>
                                     ) : null}
                                     {canRemove ? (
                                         <button
                                             type="button"
                                             disabled={isBusy}
-                                            onClick={() => requestMemberAction("remove")}
-                                            className="rounded-lg border border-red-300/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:opacity-50"
+                                            onClick={() => request("remove")}
+                                            aria-label={`Remove @${handle}`}
+                                            className="inline-flex h-11 w-11 items-center justify-center text-sm font-semibold text-gray-500 transition hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
                                         >
-                                            Remove
+                                            ×
                                         </button>
                                     ) : null}
                                 </div>
-                            ) : null}
-                        </article>
-                    );
-                })}
-            </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+
+            {!loading && visibleMemberships.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-500">
+                    No members match your search.
+                </p>
+            ) : null}
 
             {!isOwner ? (
                 <section className="border-t border-white/10 pt-5">
@@ -2001,6 +2060,16 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
     const activeTab = normalizeTab(searchParams.get("tab"));
+    // Read once on mount so the legacy ?tab=leaderboard deep link still lands on
+    // the Feed's Standings view now that Leaderboard is no longer a tab —
+    // normalizeTab already falls it through to "feed". Mirrors the League page.
+    const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
+        searchParams.get("tab") === "leaderboard" ? "standings" : "community"
+    );
+    // The Arena Guide is opened by its own button under the Arena name. The MVP
+    // also auto-opens it on a member's first visit; that needs per-arena progress,
+    // which this backend has no store for — see the dialog's own header comment.
+    const [arenaGuideOpen, setArenaGuideOpen] = useState(false);
 
     const {
         loading,
@@ -2037,12 +2106,6 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
 
     const currentMembership = arena?.current_user_member?.role ?? "undefined";
     const isOwner = currentMembership === "commissioner";
-    const feedSectionActive =
-        activeTab === "feed" || activeTab === "contests" || activeTab === "leaderboard";
-    const activePrimaryTab: ArenaPrimaryTabId =
-        activeTab === "members" || activeTab === "settings" ? activeTab : "feed";
-    const activeFeedTab: ArenaFeedTabId =
-        activeTab === "contests" || activeTab === "leaderboard" ? activeTab : "feed";
     // const writable = isArenaWritable(hosting) && unlock.status === "unlocked";
     const managerLimit = hosting?.manager_limit ?? "Custom";
 
@@ -2078,7 +2141,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     return (
         <div className="flex flex-col gap-3 pb-10">
             <div className="-mx-5 flex items-center justify-between gap-3 px-5 sm:mx-0 sm:px-0">
-                <BackButton label="back to all groups" fallback="/arena" preferFallback />
+                <BackButton label="back to arenas" fallback="/arena" preferFallback />
                 {arena?.invite_code ? (
                     <InviteCodeCopy code={arena?.invite_code} className="-mr-[5px]" />
                 ) : (
@@ -2088,7 +2151,10 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                 )}
             </div>
 
-            <header className="-mx-5 border-b border-white/10 px-5 pb-3 sm:mx-0 sm:px-0">
+            {/* No border-b here: the tab strip's <section> owns the single rule
+                the active folder tab notches into, so a second one above it
+                reads as a double line. Same as the League detail header. */}
+            <header className="-mx-5 px-5 pb-3 sm:mx-0 sm:px-0">
                 <div className="relative min-w-0">
                     <div
                         className={`flex items-start justify-between gap-3 text-gray-400 ${groupPreviewMetaTextClassName}`}
@@ -2114,10 +2180,10 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                             managerLimit={managerLimit}
                         />
                     </div>
-                    <h1
-                        className="allow-caps mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
-                        style={displayNameGradientStyle}
-                    >
+                    {/* Violet→fuchsia, not the shared white/silver
+                        displayNameGradientStyle — Arena display names carry
+                        their own gradient everywhere they appear. */}
+                    <h1 className="allow-caps mt-1.5 bg-gradient-to-r from-white via-violet-100 to-fuchsia-200 bg-clip-text text-2xl font-extrabold text-transparent sm:text-3xl">
                         {arena?.name}
                     </h1>
                     {arena?.description ? (
@@ -2125,54 +2191,55 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                             {arena.description}
                         </p>
                     ) : null}
+                    {/* Sits directly under the name/description, where the MVP
+                        puts it — outside the description guard, so an Arena that
+                        never set one still offers the guide. */}
+                    <button
+                        type="button"
+                        onClick={() => setArenaGuideOpen(true)}
+                        className="mt-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400 transition hover:bg-white/5 hover:text-white"
+                    >
+                        Arena guide
+                    </button>
                 </div>
             </header>
 
-            <section className="-mx-5 -mt-3 border-b border-white/10 px-5 sm:mx-0 sm:px-0">
-                <ArenaTabStrip activeTab={activePrimaryTab} onChange={handleTabChange} />
-                {feedSectionActive ? (
-                    <div className="border-t border-white/[0.04]">
-                        <ArenaFeedTabStrip activeTab={activeFeedTab} onChange={handleTabChange} />
-                    </div>
-                ) : null}
+            <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0">
+                <ArenaTabStrip activeTab={activeTab} onChange={handleTabChange} />
             </section>
 
-            <main>
-                {feedSectionActive ? (
-                    <div
-                        id="arena-feed-panel"
-                        role="tabpanel"
-                        aria-labelledby={`arena-feed-tab-${activeFeedTab}`}
-                    >
-                        {activeTab === "feed" ? (
-                            <ArenaFeedPanel
-                                arenaId={arenaId}
-                                arenaName={arena?.name ?? ""}
-                                role={currentMembership}
-                                // Announcements are staff-only (owner OR manager) and
-                                // not gated on hosting state — so both post.
-                                writable={isArenaStaffRole(currentMembership)}
-                                currentUserId={currentUser?.userId}
-                            />
-                        ) : null}
+            {/* key={activeTab} restarts the workspace-tab-panel enter animation
+                on every switch — without it React reuses the node and the panel
+                swaps with no transition. */}
+            <main
+                key={activeTab}
+                className={`workspace-tab-panel ${activeTab === "feed" || activeTab === "contests" ? "-mt-3" : "pt-1"
+                    }`}
+            >
+                {activeTab === "feed" ? (
+                    <ArenaFeedPanel
+                        arenaId={arenaId}
+                        arenaName={arena?.name ?? ""}
+                        role={currentMembership}
+                        // Announcements are staff-only (owner OR manager) and
+                        // not gated on hosting state — so both post.
+                        writable={isArenaStaffRole(currentMembership)}
+                        currentUserId={currentUser?.userId}
+                        initialFilter={initialFeedFilter}
+                    />
+                ) : null}
 
-                        {activeTab === "contests" ? (
-                            <ArenaContestsPanel
-                                currentUserId={currentUser?.userId}
-                                arena={arena}
-                                arenaId={arenaId}
-                                contests={arenaContests}
-                                role={currentMembership}
-                                hosting={hosting}
-                                writable={isArenaStaffRole(currentMembership)}
-                                activeContestCount={arenaContests.length}
-                            />
-                        ) : null}
-
-                        {activeTab === "leaderboard" ? (
-                            <ArenaLeaderboardPanel />
-                        ) : null}
-                    </div>
+                {activeTab === "contests" ? (
+                    <ArenaContestsPanel
+                        currentUserId={currentUser?.userId}
+                        arena={arena}
+                        arenaId={arenaId}
+                        contests={arenaContests}
+                        role={currentMembership}
+                        hosting={hosting}
+                        writable={isArenaStaffRole(currentMembership)}
+                        activeContestCount={arenaContests.length}
+                    />
                 ) : null}
 
                 {activeTab === "members" ? (
@@ -2182,6 +2249,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                         currentUserId={currentUser?.userId}
                         currentRole={currentMembership}
                         writable={currentMembership === "commissioner"}
+                        loading={loadingMembers}
                         onLeaveSuccess={() => router.replace("/fantasy")}
                     />
                 ) : null}
@@ -2209,6 +2277,13 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                     Finish Arena setup in Settings
                 </button>
             ) : null}
+
+            <ArenaMemberWelcomeDialog
+                open={arenaGuideOpen}
+                arenaName={arena?.name ?? "this Arena"}
+                onComplete={() => setArenaGuideOpen(false)}
+                onDismiss={() => setArenaGuideOpen(false)}
+            />
         </div>
     );
 };

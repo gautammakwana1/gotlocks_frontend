@@ -2,10 +2,10 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalLeaderboardFailure, fetchGlobalLeaderboardRequest, fetchGlobalLeaderboardSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
+import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalLeaderboardFailure, fetchGlobalLeaderboardRequest, fetchGlobalLeaderboardSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, fetchSlipContestPicksFailure, fetchSlipContestPicksRequest, fetchSlipContestPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
+import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSlipContestPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, SlipContestPicksData, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
 import { fetchPostablePickSlipsRequest } from "../slices/slipSlice";
 
 type ApiErrorResponse = {
@@ -386,6 +386,61 @@ function* handleFetchGlobalLeaderboard(action: PayloadAction<FetchSocialGlobalLe
     }
 }
 
+/*
+ * GET /pick/slip-contest-picks — the group's Slip (Fantasy) contest picks, which
+ * is what the League Feed lists alongside its Feed-contest entries.
+ *
+ * No reveal rule to honour: every pick on this surface is public to the group
+ * from the moment it is made, whatever its slip's status, and the server states
+ * that back as `summary.is_revealed: true` rather than leaving it to be inferred.
+ */
+function* handleFetchSlipContestPicks(
+    action: PayloadAction<FetchSlipContestPicksPayload>
+): SagaIterator {
+    const {
+        group_id,
+        contest_id,
+        slip_id,
+        user_id,
+        status,
+        slip_type,
+        result,
+        page = 1,
+        limit = 20,
+    } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/pick/slip-contest-picks`,
+            {
+                params: {
+                    group_id,
+                    page,
+                    limit,
+                    ...(contest_id ? { contest_id } : {}),
+                    ...(slip_id ? { slip_id } : {}),
+                    ...(user_id ? { user_id } : {}),
+                    ...(status ? { status } : {}),
+                    ...(slip_type ? { slip_type } : {}),
+                    ...(result ? { result } : {}),
+                },
+            }
+        );
+        const payload = response.data as { data?: SlipContestPicksData };
+        if (!payload?.data?.group) {
+            yield put(fetchSlipContestPicksFailure("Failed to load slip contest picks"));
+            return;
+        }
+        yield put(fetchSlipContestPicksSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchSlipContestPicksFailure(
+                getErrorMessage(error, "Failed to load slip contest picks")
+            )
+        );
+    }
+}
+
 export default function* pickSaga() {
     yield takeLatest(createPickRequest.type, handleCreatePick);
     yield takeLatest(fetchAllPicksRequest.type, handleFetchAllPicks);
@@ -406,6 +461,7 @@ export default function* pickSaga() {
     yield takeLatest(autoGradingPicksRequest.type, handleAutoGradingPicks);
     yield takeLatest(fetchGlobalPendingReactedPostsRequest.type, handleFetchGlobalReactedPendingTopHitPosts);
     yield takeLatest(fetchAllContestsPicksRequest.type, handleFetchAllContestsPicks);
+    yield takeLatest(fetchSlipContestPicksRequest.type, handleFetchSlipContestPicks);
     yield takeLatest(replaceOrCreatePostablePickRequest.type, handleReplaceOrCreatePostablePick);
     yield takeLatest(resetPicksScoringPointsRequest.type, handleResetPicksScoringPoints);
     yield takeLatest(fetchGlobalLeaderboardRequest.type, handleFetchGlobalLeaderboard);

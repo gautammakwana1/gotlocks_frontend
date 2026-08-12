@@ -11,7 +11,6 @@ import { clearDeleteAccountMessage, deleteAccountRequest, logout } from "@/lib/r
 import DeactivateAccountSkeleton from "@/components/skeletons/app-settings/DeactivateAccountSkeleton";
 import { AuthSliceState, Group, GroupObject } from "@/lib/interfaces/interfaces";
 import { ArrowLeft } from "lucide-react";
-import * as Sentry from "@sentry/nextjs";
 
 type GroupSliceState = {
     group: {
@@ -69,7 +68,6 @@ const DeleteAccountPage = () => {
                 const { supabase } = await import("@/lib/supabaseClient");
                 await supabase.auth.signOut();
                 dispatch(logout());
-                Sentry.setUser(null);
                 router.replace("/landing-page");
             })();
         }

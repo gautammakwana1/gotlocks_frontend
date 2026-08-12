@@ -24,7 +24,11 @@ export type StructuredFeedCardProps = {
     className?: string;
     currentUserId?: string;
     onReaction?: (recordId: string, reaction: PickReaction) => void;
-    getPickReactionSummary?: (recordId: string, userId?: string) => PickReactionSummary;
+    /** Null means this record kind carries no reaction data — see the card body. */
+    getPickReactionSummary?: (
+        recordId: string,
+        userId?: string,
+    ) => PickReactionSummary | null;
     onReplace?: (record: StructuredFeedRecord) => void;
     onDelete?: (record: StructuredFeedRecord) => void;
     onEdit?: (record: StructuredFeedRecord) => void;
@@ -339,14 +343,16 @@ export const StructuredFeedCard = ({
     const canEdit = Boolean(isAnnouncement && record.actions?.canEdit && onEdit);
     const canPin = Boolean(isAnnouncement && record.actions?.canPin && onPin);
     const isPinned = Boolean(record.actions?.pinned);
-    // Both halves are required: the Arena / League feed endpoints don't return
-    // reaction tallies yet, so a card draws without the buttons rather than with
-    // a permanently-zero score.
-    const reactionsEnabled = Boolean(currentUserId && onReaction && getPickReactionSummary);
+    // Reactions are resolved PER RECORD, not per feed: the host answers with a
+    // summary only for kinds that actually carry counts (Community Picks today).
+    // A null answer — an announcement, which isn't a `picks` row at all, or a
+    // contest entry, whose endpoint returns no tallies — draws the card without
+    // the buttons rather than with a permanently-zero score.
     const reactionSummary =
         currentUserId && getPickReactionSummary
             ? getPickReactionSummary(record.id, currentUserId)
             : null;
+    const reactionsEnabled = Boolean(onReaction && reactionSummary);
     const reactionControls =
         reactionSummary && onReaction ? (
             <PostReactionButtons
@@ -372,10 +378,12 @@ export const StructuredFeedCard = ({
                     onReaction={
                         onReaction ? (_pickId, reaction) => onReaction(record.id, reaction) : undefined
                     }
+                    // The summary is already resolved above and `showReactions`
+                    // gates the call, so hand FeedList that value rather than
+                    // letting it re-ask with the pick's id — a Feed record id is
+                    // not always the pick id (contest entries are prefixed).
                     getPickReactionSummary={
-                        getPickReactionSummary
-                            ? (_pickId, userId) => getPickReactionSummary(record.id, userId)
-                            : undefined
+                        reactionSummary ? () => reactionSummary : undefined
                     }
                     embedded
                     contextualPointsLabel={

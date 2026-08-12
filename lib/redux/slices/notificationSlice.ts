@@ -45,7 +45,14 @@ const notificationSlice = createSlice({
             state.error = null;
         },
         markNotificationReadSuccess: (state, action) => {
+            void action;
             state.loading = false;
+            // /notification/mark-read marks every notification for the caller and
+            // returns no list, so reflect it locally — otherwise the header's
+            // unread badge stays lit until the next fetch.
+            state.notification = (state.notification ?? []).map((item) =>
+                item.is_read ? item : { ...item, is_read: true }
+            );
         },
         markNotificationReadFailure: (state, action) => {
             state.loading = false;
