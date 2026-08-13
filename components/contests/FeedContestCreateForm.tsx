@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
 import Loader from "@/components/ui/Loader";
+import ArenaVenueSetupDialog from "@/components/arenas/checkin/ArenaVenueSetupDialog";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type {
     CreateFeedContestPayload,
     FeedContest,
+    FeedContestEntryAccessMode,
     FeedContestGameSnapshot,
     FeedContestTemplate,
     FeedGroupType,
@@ -27,6 +29,7 @@ import {
     clearLeagueMatchupCounts,
     fetchLeagueMatchupCountsRequest,
 } from "@/lib/redux/slices/leagueSlice";
+import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
 import {
     addDateKeyDays,
     daysBetweenDateKeys,
@@ -74,7 +77,7 @@ const ENTRY_MODEL_BY_TEMPLATE: Record<FeedContestTemplate, string> = {
 /** The contest is expected to have settled this long after the last kickoff. */
 const CONTEST_END_LAG_MS = 8 * 60 * 60 * 1000;
 
-type ContestWizardStep = "style" | "slate" | "matchups" | "rules" | "review";
+type ContestWizardStep = "style" | "slate" | "matchups" | "rules" | "access" | "review";
 type ContestSubmissionMode = "draft" | "immediate";
 
 // General Combo picks its dates and sports first, then reviews the resulting
@@ -95,6 +98,58 @@ const SUNDAY_PICKEM_WIZARD_STEPS: readonly { id: ContestWizardStep; label: strin
     { id: "rules", label: "Rules" },
     { id: "review", label: "Review" },
 ];
+
+/* ----------------------------------------------------------------------------
+ * ACCESS is an ARENA-ONLY step, and the MVP inserts it in the same place for
+ * every template: immediately before Review, whatever the template's own steps
+ * are. A League never sees it — a League has no room to stand in, so
+ * `entry_access_mode` is pinned to 'open' server-side and asking for the venue
+ * mode from a League context is a 400 rather than a silent downgrade.
+ * -------------------------------------------------------------------------- */
+const withAccessStep = (
+    steps: readonly { id: ContestWizardStep; label: string }[]
+): readonly { id: ContestWizardStep; label: string }[] => [
+    ...steps.slice(0, -1),
+    { id: "access", label: "Access" },
+    steps[steps.length - 1],
+];
+
+const ARENA_GENERAL_COMBO_WIZARD_STEPS = withAccessStep(GENERAL_COMBO_WIZARD_STEPS);
+const ARENA_SUNDAY_PICKEM_WIZARD_STEPS = withAccessStep(SUNDAY_PICKEM_WIZARD_STEPS);
+
+/** The two Access choices, in the MVP's order. */
+const ENTRY_ACCESS_OPTIONS: readonly {
+    id: FeedContestEntryAccessMode;
+    label: string;
+    description: string;
+    helper: string;
+}[] = [
+        {
+            id: "open",
+            label: "Open to Arena members",
+            description:
+                "Eligible members can submit from anywhere while entries are open.",
+            helper:
+                "Best for online communities and contests that do not require an in-person visit.",
+        },
+        {
+            id: "venue_check_in_required",
+            label: "Venue Check-In Required",
+            description:
+                "Members must scan this Arena’s venue QR and complete a one-time location check before submitting or replacing an entry.",
+            helper:
+                "Use this when the contest is designed to encourage in-person participation at your venue.",
+        },
+    ];
+
+/**
+ * "one of this contest's N participant spots", or the limit-less phrasing when
+ * the Arena's tier ceiling was not passed in. Verbatim from the MVP.
+ */
+const contestParticipantSpotCopy = (participantLimit?: number | null) =>
+    participantLimit === null || participantLimit === undefined
+        ? "one of this contest’s participant spots"
+        : `one of this contest’s ${participantLimit} participant spots`;
 
 // Only these two templates can be created (FEED_CONTEST_CREATABLE_TEMPLATES).
 const TEMPLATE_PRESETS: readonly {
@@ -189,6 +244,8 @@ type DraftSeed = {
     winningPlaces: number;
     name: string;
     rulesText: string;
+    allowStaffParticipation: boolean;
+    entryAccessMode: FeedContestEntryAccessMode;
 };
 
 const CREATE_SEED: DraftSeed = {
@@ -205,6 +262,11 @@ const CREATE_SEED: DraftSeed = {
     winningPlaces: 3,
     name: "",
     rulesText: "",
+    // Both default to the RESTRICTIVE / unrestricted pair the MVP starts from:
+    // staff stay out unless deliberately opted in, and a contest nobody
+    // deliberately confined to a venue must never come out confined.
+    allowStaffParticipation: false,
+    entryAccessMode: "open",
 };
 
 const isSlateMode = (value: unknown): value is SundayPickemSlateMode =>
@@ -302,6 +364,13 @@ const buildDraftSeed = ({
         winningPlaces: contest.winning_places ?? 3,
         name: contest.name ?? "",
         rulesText: contest.rules_text ?? "",
+        // Both endpoints REPLACE the row, so a draft's saved answers have to be
+        // seeded here or re-saving would reset them to the create defaults.
+        allowStaffParticipation: contest.allow_staff_participation === true,
+        entryAccessMode:
+            contest.entry_access_mode === "venue_check_in_required"
+                ? "venue_check_in_required"
+                : "open",
     };
 };
 
@@ -316,6 +385,13 @@ export type FeedContestCreateFormProps = {
     createDisabledReason?: string;
     /** Blocks publishing only; a draft takes no active-contest slot. */
     publishDisabledReason?: string;
+    /**
+     * ARENA ONLY — the hosting tier's participating-member ceiling, which is
+     * what an Arena contest's capacity is. It only ever appears in copy ("each
+     * staff entrant uses one of this contest's 50 participant spots"); omit it
+     * and that sentence drops the number rather than inventing one.
+     */
+    participantLimit?: number | null;
     /**
      * DRAFT EDIT ONLY. The saved draft this wizard reopens, from
      * `GET /detail/:contest_id` — a list row will not do, since `rules_text` and
@@ -337,10 +413,12 @@ export const FeedContestCreateForm = ({
     detailHref,
     createDisabledReason,
     publishDisabledReason,
+    participantLimit = null,
     initialContest,
 }: FeedContestCreateFormProps) => {
     /** TRUE when the wizard is reopening a saved draft rather than starting one. */
     const editingDraft = Boolean(initialContest);
+    const isArenaContest = groupType === "arena";
     const accent: ContestAccent = groupType === "arena" ? "arena" : "league";
     const accentClasses = contestAccentClasses[accent];
     const router = useRouter();
@@ -365,6 +443,32 @@ export const FeedContestCreateForm = ({
     const matchupCountsError = useSelector(
         (state: RootState) => state.league.matchupCountsError
     );
+    const venueDetail = useSelector((state: RootState) => state.venue.detail);
+    const venueDetailForId = useSelector((state: RootState) => state.venue.detailForId);
+
+    /* ------------------------------------------------------------------------
+     * VENUE CHECK-IN — `GET /group/venue/detail/:group_id`, the read that makes
+     * the Access step honest. `venue_check_in.is_enabled` is the one boolean a
+     * creation screen needs: may this community publish a venue-required contest
+     * right now? `viewer.can_configure` is owner AND writable, pre-computed
+     * server-side so the button's enabled state and the endpoint that would
+     * refuse the action cannot disagree.
+     *
+     * Arena-only: a League answers `is_supported: false` rather than an error,
+     * but it has no Access step either, so the call is simply not made.
+     * ---------------------------------------------------------------------- */
+    useEffect(() => {
+        if (!isArenaContest || !groupId) return;
+        dispatch(fetchVenueCheckInDetailRequest({ group_id: groupId }));
+    }, [dispatch, groupId, isArenaContest]);
+
+    // Read through an id check — another Arena's venue must never decide whether
+    // THIS one can publish.
+    const scopedVenue = venueDetailForId === groupId ? venueDetail : null;
+    const hasActiveVenue = scopedVenue?.venue_check_in.is_enabled === true;
+    const canConfigureVenue = scopedVenue?.viewer.can_configure === true;
+    // `venueSetupOutstanding` and the publish gate it feeds are derived below,
+    // once `entryAccessMode` exists — they read the answer, not just the venue.
 
     const requestedStep = searchParams.get("step") as ContestWizardStep | null;
 
@@ -470,6 +574,36 @@ export const FeedContestCreateForm = ({
     );
     const [allowSameGameLegs, setAllowSameGameLegs] = useState(seed.allowSameGameLegs);
     const [winningPlaces, setWinningPlaces] = useState(seed.winningPlaces);
+    // Both are Arena-only answers. They are still held for a League so the state
+    // shape does not fork; `buildPayload` simply never sends them from there.
+    const [allowStaffParticipation, setAllowStaffParticipation] = useState(
+        seed.allowStaffParticipation
+    );
+    const [entryAccessMode, setEntryAccessMode] = useState<FeedContestEntryAccessMode>(
+        seed.entryAccessMode
+    );
+    const [venueSetupOpen, setVenueSetupOpen] = useState(false);
+
+    // Only ever true once the venue read has landed, so a contest is never
+    // blocked on a venue whose state is still unknown — the server's own 409 is
+    // the backstop if the answer changes between here and publish.
+    const venueSetupOutstanding =
+        isArenaContest &&
+        entryAccessMode === "venue_check_in_required" &&
+        Boolean(scopedVenue) &&
+        !hasActiveVenue;
+
+    /**
+     * The caller's own reason wins — it describes the group's whole ability to
+     * publish, which outranks one contest's entry gate. The venue reason blocks
+     * PUBLISHING only; a draft is exempt server-side too, precisely so the
+     * wizard stays saveable while the owner walks to the venue.
+     */
+    const effectivePublishDisabledReason =
+        publishDisabledReason ??
+        (venueSetupOutstanding
+            ? "Venue setup must be completed before publishing."
+            : undefined);
     const [submittingMode, setSubmittingMode] = useState<ContestSubmissionMode | null>(
         null
     );
@@ -627,8 +761,13 @@ export const FeedContestCreateForm = ({
         ]
     );
 
-    const wizardSteps =
-        template === "sunday_pickem" ? SUNDAY_PICKEM_WIZARD_STEPS : GENERAL_COMBO_WIZARD_STEPS;
+    const wizardSteps = isArenaContest
+        ? template === "sunday_pickem"
+            ? ARENA_SUNDAY_PICKEM_WIZARD_STEPS
+            : ARENA_GENERAL_COMBO_WIZARD_STEPS
+        : template === "sunday_pickem"
+            ? SUNDAY_PICKEM_WIZARD_STEPS
+            : GENERAL_COMBO_WIZARD_STEPS;
 
     const generatedComboDescription = useMemo(
         () =>
@@ -947,11 +1086,26 @@ export const FeedContestCreateForm = ({
             }
             return null;
         }
+        if (candidate === "access") {
+            // A League never reaches this step, but the review chain still runs
+            // it — and there the only legal answer is 'open', which is exactly
+            // what the server enforces.
+            if (!isArenaContest) {
+                return entryAccessMode === "open"
+                    ? null
+                    : "League Feed contests must use Open Entry.";
+            }
+            return entryAccessMode === "open" ||
+                entryAccessMode === "venue_check_in_required"
+                ? null
+                : "Choose where members can enter.";
+        }
         const setupError =
             validateStep("style") ??
             validateStep("slate") ??
             validateStep("matchups") ??
-            validateStep("rules");
+            validateStep("rules") ??
+            validateStep("access");
         if (setupError) return setupError;
         return automaticLocksAt && automaticExpectedEnd
             ? null
@@ -1076,6 +1230,14 @@ export const FeedContestCreateForm = ({
             rules_text: rulesText.trim(),
         };
 
+        // Arena-only answers. Deliberately NOT sent from a League: the server
+        // forces `allow_staff_participation` true there and 400s a venue request,
+        // so sending either would be at best inert and at worst a rejected create.
+        if (isArenaContest) {
+            payload.allow_staff_participation = allowStaffParticipation;
+            payload.entry_access_mode = entryAccessMode;
+        }
+
         if (template === "sunday_pickem") {
             payload.sunday_pickem_slate_mode = sundayPickemSlateMode;
         } else {
@@ -1094,8 +1256,14 @@ export const FeedContestCreateForm = ({
 
     const handleSubmit = (submissionMode: ContestSubmissionMode) => {
         const publishing = submissionMode === "immediate";
-        if (createDisabledReason || (publishing && publishDisabledReason) || submitting) {
-            if (publishing && publishDisabledReason) setError(publishDisabledReason);
+        if (
+            createDisabledReason ||
+            (publishing && effectivePublishDisabledReason) ||
+            submitting
+        ) {
+            if (publishing && effectivePublishDisabledReason) {
+                setError(effectivePublishDisabledReason);
+            }
             return;
         }
         const validationError = validateStep("review");
@@ -1115,20 +1283,16 @@ export const FeedContestCreateForm = ({
         // Reopening a saved draft REPLACES it in place — same body, same
         // validation, but the contest keeps its id, so every link to it survives.
         if (initialContest) {
+            // Both endpoints REPLACE the row, so every field has to travel or it
+            // resets. `allow_staff_participation` and `entry_access_mode` used to
+            // be carried forward from the saved draft here; the wizard authors
+            // both now (seeded from that same draft in buildDraftSeed), so
+            // `payload` already carries the current answers.
             const replacement: ReplaceDraftFeedContestPayload = {
                 ...payload,
                 contest_id: initialContest.id,
                 time_zone: organizerTimeZone,
                 publish: publishing,
-                // Both endpoints REPLACE the row, so anything the wizard cannot
-                // author has to be carried forward or it resets.
-                ...(initialContest.allow_staff_participation === undefined ||
-                    initialContest.allow_staff_participation === null
-                    ? {}
-                    : {
-                        allow_staff_participation:
-                            initialContest.allow_staff_participation,
-                    }),
             };
             dispatch(
                 publishing
@@ -1147,7 +1311,9 @@ export const FeedContestCreateForm = ({
 
     const currentStepIndex = wizardSteps.findIndex((candidate) => candidate.id === step);
 
-    const reviewRows: readonly [string, string][] = template
+    // `[label, value, helper?]` — the optional third cell is the MVP's smaller
+    // grey line under a value, used by the two Arena rows.
+    const reviewRows: readonly [string, string, string?][] = template
         ? [
             ["Style", template === "multi_pick" ? "General Combo" : "NFL Sunday Pick’em"],
             ["Contest name", name],
@@ -1160,10 +1326,10 @@ export const FeedContestCreateForm = ({
                             ? formatSlateDate(slateStartsOn)
                             : `${formatSlateDate(slateStartsOn)} – ${formatSlateDate(slateEndsOn)}`,
                     ],
-                ] as [string, string][])
+                ] as [string, string, string?][])
                 : ([
                     ["Sunday date", `${formatSlateDate(selectedSundayDate)} · Eastern Time`],
-                ] as [string, string][])),
+                ] as [string, string, string?][])),
             [
                 "Slate",
                 `${eligibleGameIds.length} selected ${eligibleGameIds.length === 1 ? "matchup" : "matchups"
@@ -1175,6 +1341,27 @@ export const FeedContestCreateForm = ({
                     automaticLocksAt
                 )} · automatically 5 minutes before the first matchup`,
             ],
+            ...(isArenaContest
+                ? ([
+                    [
+                        "Owner and manager participation",
+                        allowStaffParticipation
+                            ? `Allowed · each staff entrant uses ${contestParticipantSpotCopy(
+                                participantLimit
+                            )}`
+                            : "Not allowed",
+                    ],
+                    [
+                        "Entry access",
+                        entryAccessMode === "venue_check_in_required"
+                            ? "Venue Check-In Required"
+                            : "Open to Arena members",
+                        entryAccessMode === "venue_check_in_required"
+                            ? "Members need an active verified venue session whenever they submit or replace an entry."
+                            : undefined,
+                    ],
+                ] as [string, string, string?][])
+                : []),
         ]
         : [];
 
@@ -1825,6 +2012,170 @@ export const FeedContestCreateForm = ({
                                     />
                                 </label>
                             ) : null}
+
+                            {/* ARENA ONLY. Arena staff are noncompetitive by default —
+                                `resolveFeedContestForEntry` answers 403 for an owner or
+                                manager unless THIS contest opted them in. A League has
+                                no such rule (the commissioner always competes), so the
+                                section does not exist there. */}
+                            {isArenaContest ? (
+                                <section
+                                    aria-labelledby="arena-staff-participation-title"
+                                    className="border-t border-white/10 pt-5"
+                                >
+                                    <h3
+                                        id="arena-staff-participation-title"
+                                        className={fieldLabelClasses}
+                                    >
+                                        Owner and manager participation
+                                    </h3>
+                                    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                                        <label className="flex cursor-pointer items-start gap-3 text-sm normal-case text-gray-200">
+                                            <input
+                                                type="checkbox"
+                                                checked={allowStaffParticipation}
+                                                onChange={(event) =>
+                                                    setAllowStaffParticipation(event.target.checked)
+                                                }
+                                                className={`mt-1 h-4 w-4 ${accentClasses.checkbox}`}
+                                            />
+                                            <span className="font-semibold">
+                                                Allow owners and managers to participate
+                                            </span>
+                                        </label>
+                                        <p className="mt-2 max-w-2xl pl-7 text-xs font-normal normal-case leading-5 text-gray-500">
+                                            Each owner or manager chooses whether to enter. A staff
+                                            member who submits an entry uses{" "}
+                                            {contestParticipantSpotCopy(participantLimit)}, but staff
+                                            still do not use an Arena member spot. When participation
+                                            is allowed, owners and managers cannot view other entries
+                                            until the contest locks, whether or not they enter.
+                                        </p>
+                                    </div>
+                                </section>
+                            ) : null}
+                        </div>
+                    ) : null}
+
+                    {/* ------------------------------------------------------------------
+                        ACCESS — Arena only, and always the step immediately before
+                        Review. `entry_access_mode` is the whole answer: the server
+                        stores it on create/draft, refuses to PUBLISH a venue contest in
+                        an Arena with no configured venue (409, drafts exempt), and
+                        re-checks a live check-in session at every submit and replace.
+                       ------------------------------------------------------------------ */}
+                    {step === "access" && template && isArenaContest ? (
+                        <div className="space-y-6">
+                            <div>
+                                <p
+                                    className={`text-xs font-semibold uppercase tracking-[0.12em] ${accentClasses.textSoft}`}
+                                >
+                                    Step {currentStepIndex + 1} · Access
+                                </p>
+                                <h2 className="mt-2 text-2xl font-semibold text-white">
+                                    Where can members enter?
+                                </h2>
+                            </div>
+
+                            <div
+                                role="group"
+                                aria-label="Contest entry access"
+                                className="grid gap-4 md:grid-cols-2"
+                            >
+                                {ENTRY_ACCESS_OPTIONS.map((option) => {
+                                    const selected = entryAccessMode === option.id;
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            aria-pressed={selected}
+                                            onClick={() => {
+                                                setEntryAccessMode(option.id);
+                                                setError(undefined);
+                                            }}
+                                            className={`rounded-2xl border p-5 text-left transition ${selected
+                                                ? "border-violet-300/60 bg-violet-500/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                                                : "border-white/10 bg-black/25 hover:border-white/25"
+                                                }`}
+                                        >
+                                            <span className="block text-base font-semibold normal-case text-white">
+                                                {option.label}
+                                            </span>
+                                            <span className="mt-2 block text-sm font-normal normal-case leading-6 text-gray-300">
+                                                {option.description}
+                                            </span>
+                                            <span className="mt-3 block text-xs font-normal normal-case leading-5 text-gray-500">
+                                                {option.helper}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Shown only while setup is genuinely outstanding — the read
+                                has landed and this Arena has no ACTIVE venue. A manager
+                                sees the same notice without the button: `can_configure` is
+                                owner-only and pre-computed server-side, so the button and
+                                the endpoint that would refuse it agree by construction. */}
+                            {venueSetupOutstanding ? (
+                                <section
+                                    role="status"
+                                    className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-5 text-amber-100"
+                                >
+                                    <h3 className="font-semibold">
+                                        {scopedVenue?.venue_check_in.state === "disabled"
+                                            ? "Venue Check-In is switched off"
+                                            : "Venue setup required"}
+                                    </h3>
+                                    <p className="mt-1 text-sm leading-6 text-amber-100/75">
+                                        {scopedVenue?.venue_check_in.state === "disabled"
+                                            ? "This Arena's venue is disabled, so its printed QR no longer works. Turn it back on before publishing this contest."
+                                            : "Set your venue location and create its reusable QR before publishing this contest."}{" "}
+                                        You can still save this contest as a draft in the meantime.
+                                    </p>
+                                    {canConfigureVenue ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setVenueSetupOpen(true)}
+                                            className="mt-4 rounded-xl border border-amber-200/35 bg-amber-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-amber-950 transition hover:bg-white"
+                                        >
+                                            {scopedVenue?.venue_check_in.state === "disabled"
+                                                ? "Reactivate Venue Check-In"
+                                                : "Set Up Venue Check-In"}
+                                        </button>
+                                    ) : (
+                                        <p className="mt-3 text-xs leading-5 text-amber-100/60">
+                                            Only the Arena owner can set up the venue location.
+                                        </p>
+                                    )}
+                                </section>
+                            ) : null}
+
+                            {/* The reassuring counterpart: the venue IS live, so say which
+                                one and for how long a check-in lasts. */}
+                            {entryAccessMode === "venue_check_in_required" && hasActiveVenue ? (
+                                <section className="rounded-xl border border-emerald-300/20 bg-emerald-500/[0.07] p-5 text-emerald-50">
+                                    <h3 className="font-semibold">Venue Check-In is ready</h3>
+                                    <p className="mt-1 text-sm leading-6 text-emerald-100/75">
+                                        {scopedVenue?.venue_check_in.venue?.name}
+                                        {scopedVenue?.venue_check_in.venue?.display_address
+                                            ? ` · ${scopedVenue.venue_check_in.venue.display_address}`
+                                            : ""}
+                                        {scopedVenue?.venue_check_in.venue?.check_in_duration_minutes
+                                            ? ` · each check-in lasts ${scopedVenue.venue_check_in.venue.check_in_duration_minutes / 60} hours`
+                                            : ""}
+                                    </p>
+                                    {canConfigureVenue ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setVenueSetupOpen(true)}
+                                            className="mt-4 rounded-xl border border-emerald-200/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-emerald-100 transition hover:bg-emerald-500/10"
+                                        >
+                                            Update Venue
+                                        </button>
+                                    ) : null}
+                                </section>
+                            ) : null}
                         </div>
                     ) : null}
 
@@ -1845,7 +2196,7 @@ export const FeedContestCreateForm = ({
                                 </p>
                             </div>
                             <dl className="divide-y divide-white/10 border-y border-white/10">
-                                {reviewRows.map(([label, value]) => (
+                                {reviewRows.map(([label, value, helper]) => (
                                     <div
                                         key={label}
                                         className="grid gap-1 py-3.5 sm:grid-cols-[11rem_1fr] sm:gap-5"
@@ -1855,10 +2206,23 @@ export const FeedContestCreateForm = ({
                                         </dt>
                                         <dd className="text-sm font-semibold normal-case leading-6 text-white">
                                             {value}
+                                            {helper ? (
+                                                <span className="mt-1 block text-xs font-normal normal-case leading-5 text-gray-500">
+                                                    {helper}
+                                                </span>
+                                            ) : null}
                                         </dd>
                                     </div>
                                 ))}
                             </dl>
+                            {venueSetupOutstanding ? (
+                                <p
+                                    role="status"
+                                    className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm font-semibold normal-case text-amber-100"
+                                >
+                                    Venue setup must be completed before publishing.
+                                </p>
+                            ) : null}
                             {rulesText.trim() ? (
                                 <div className="border-b border-white/10 pb-4">
                                     <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
@@ -1904,10 +2268,10 @@ export const FeedContestCreateForm = ({
                                     onClick={() => handleSubmit("immediate")}
                                     disabled={
                                         Boolean(createDisabledReason) ||
-                                        Boolean(publishDisabledReason) ||
+                                        Boolean(effectivePublishDisabledReason) ||
                                         submitting
                                     }
-                                    title={publishDisabledReason}
+                                    title={effectivePublishDisabledReason}
                                     className={`rounded-xl px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] transition disabled:opacity-40 ${accentClasses.createButton}`}
                                 >
                                     {submitting && submittingMode === "immediate"
@@ -1927,6 +2291,18 @@ export const FeedContestCreateForm = ({
                     </div>
                 </div>
             </section>
+
+            {/* Outside the form section, as the MVP mounts it: the drawer portals
+                itself and re-reads `state.venue.detail`, so the Access step picks
+                the new venue up the moment the save lands — no refetch here. */}
+            {isArenaContest ? (
+                <ArenaVenueSetupDialog
+                    open={venueSetupOpen}
+                    onClose={() => setVenueSetupOpen(false)}
+                    arenaId={groupId}
+                    onConfigured={() => setVenueSetupOpen(false)}
+                />
+            ) : null}
         </div>
     );
 };

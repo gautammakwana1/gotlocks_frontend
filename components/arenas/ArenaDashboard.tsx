@@ -77,6 +77,7 @@ import {
 import ConnectedStructuredFeed from "../feed/ConnectedStructuredFeed";
 import type { StructuredFeedFilter } from "../feed/types";
 import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
+import ArenaVenueCheckInPanel from "./checkin/ArenaVenueCheckInPanel";
 import {
     getMemberDirectoryAvatarClassName,
     getMemberDirectoryCardClassName,
@@ -1463,44 +1464,22 @@ const ArenaSettingsPanel = ({
             {/* Permanent-unlock section: the only part of the hosting panel enabled so
                 far. Tier selection, change previews and the purchase-confirm flow stay
                 commented in ArenaHostingPanel below until their offer/usage data exists. */}
-            {/* VENUE CHECK-IN — placeholder.
-                The MVP ships a full panel here (verified location, reusable QR,
-                assist codes, live session activity). None of that exists in this
-                backend yet, so the section holds its place and states so rather
-                than rendering controls that cannot work. Replace this whole block
-                with the real panel once the check-in endpoints land. */}
-            <section
-                aria-labelledby="venue-check-in-heading"
-                className="space-y-4 px-5 py-7 sm:px-6"
-            >
-                <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                        <h2
-                            id="venue-check-in-heading"
-                            className="text-sm font-semibold uppercase tracking-[0.14em] text-white"
-                        >
-                            Venue Check-In
-                        </h2>
-                        <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
-                            One verified location and reusable QR for in-person Arena contests.
-                        </p>
-                    </div>
-                    <span className="mt-0.5 inline-flex shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gray-600" />
-                        Coming soon
-                    </span>
-                </div>
-
-                <div className="rounded-xl border border-dashed border-white/15 bg-black/30 px-4 py-4">
-                    <p className="text-sm font-semibold text-white">Not available yet</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Venue Check-In will let you verify a physical location once and
-                        reuse its QR code for contests that require members to be on site.
-                        It is not enabled for this Arena yet — nothing to set up here for
-                        now.
-                    </p>
-                </div>
-            </section>
+            {/* VENUE CHECK-IN — the MVP puts it between Arena identity and the
+                hosting panel, and it owns its own `/group/venue/detail` read. */}
+            <ArenaVenueCheckInPanel
+                arenaId={arenaId}
+                arenaName={arena?.name ?? "Arena"}
+                role={role}
+                // The MVP's gate: a not-yet-started Arena may still be set up, but a
+                // paused or lapsed one is read-only. Disable is exempt server-side.
+                configurationWritable={
+                    !hosting ||
+                    hosting.status === "not_started" ||
+                    hosting.status === "active" ||
+                    hosting.status === "included_month" ||
+                    hosting.status === "pause_scheduled"
+                }
+            />
 
             {/* BILLING AND HOSTING — the MVP's compact summary.
                 Tier selection, period controls and pause/resume are NOT repeated

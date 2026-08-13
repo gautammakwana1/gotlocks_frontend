@@ -31,7 +31,9 @@ import {
     clearFeedContestOdds,
     fetchFeedContestOddsRequest,
 } from "@/lib/redux/slices/feedContestOddsSlice";
+import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
+import VenueContestAccessPanel from "./VenueContestAccessPanel";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
 /* ----------------------------------------------------------------------------
@@ -106,6 +108,8 @@ export const FeedContestEntryShell = ({
         submittedEntry,
     } = useSelector((state: RootState) => state.feedContest);
     const odds = useSelector((state: RootState) => state.feedContestOdds);
+    const venueDetail = useSelector((state: RootState) => state.venue.detail);
+    const venueDetailForId = useSelector((state: RootState) => state.venue.detailForId);
 
     const [rulesAccepted, setRulesAccepted] = useState(false);
     const [feedback, setFeedback] = useState<{ tone: "error" | "success"; message: string }>();
@@ -216,10 +220,39 @@ export const FeedContestEntryShell = ({
             Date.now() < locksAt
     );
 
+    /* ---------- Venue Check-In ----------
+     *
+     * `resolveVenueEntryAccess` re-runs at BOTH the submit and the replace, so an
+     * entry can never outlive the session that authorised it — which is why this
+     * gates the BUILDER rather than only warning: offering a submit that is
+     * certain to answer 403 wastes the member's whole entry.
+     *
+     * The read is fired from the contest, not from the route: only the detail
+     * response knows this contest's group, and only its `entry_access_mode` says
+     * whether the venue tables need to be touched at all. An 'open' contest never
+     * makes the call.
+     */
+    const venueRequired = contest?.entry_access_mode === "venue_check_in_required";
+    const venueGroupId = scoped?.group?.id ?? "";
+
+    useEffect(() => {
+        if (!venueRequired || !venueGroupId) return;
+        dispatch(fetchVenueCheckInDetailRequest({ group_id: venueGroupId }));
+    }, [dispatch, venueGroupId, venueRequired]);
+
+    // Read through an id check, like every other group-scoped slot here.
+    const scopedVenue = venueGroupId && venueDetailForId === venueGroupId ? venueDetail : null;
+    const venueSession = scopedVenue?.session ?? null;
+    const checkedInAtVenue = venueSession?.is_checked_in === true;
+    // Optimistic until the read lands: a not-yet-answered slot must not look
+    // like a missing check-in and hide a builder the server would accept.
+    const venueAllowsBuilder = !venueRequired || !scopedVenue || checkedInAtVenue;
+
     // Only the General Combo entry model has a builder; the endpoint refuses
     // anything else with "This contest takes a '<model>' entry, not a combo."
     const isComboContest = contest?.entry_model === "multi_pick";
-    const canBuildEntry = entryWindowOpen && isComboContest && !barred && !settled;
+    const canBuildEntry =
+        entryWindowOpen && isComboContest && !barred && !settled && venueAllowsBuilder;
     // A join needs the rules ticked here; a replacement already accepted them.
     const needsRulesAcceptance = canBuildEntry && !hasAcceptedEntry;
     const acceptedCurrentRules = hasAcceptedEntry || rulesCurrent || rulesAccepted;
@@ -366,16 +399,42 @@ export const FeedContestEntryShell = ({
             {/* No bottom rule under the header any more — the MVP lets the builder
                 section's own top border be the first line on the page. */}
             <header className="pb-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                    {scoped?.group?.name ?? "Contest"} · Contest entry
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                        {scoped?.group?.name ?? "Contest"} · Contest entry
+                    </p>
+                    {/* The MVP's arena-only entry-access chip. */}
+                    {scoped?.context_type === "arena" ? (
+                        <span className="rounded-full border border-violet-300/25 bg-violet-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100">
+                            {venueRequired ? "VENUE CHECK-IN" : "OPEN ENTRY"}
+                        </span>
+                    ) : null}
+                </div>
                 <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">
                     {contest.name}
                 </h1>
                 <p className="mt-2 text-sm text-gray-400">
                     Entries lock {formatContestDateTime(contest.locks_at)} in your local time.
                 </p>
+                {venueRequired && checkedInAtVenue && venueSession?.expires_at ? (
+                    <p className="mt-2 text-sm font-semibold text-emerald-200">
+                        Venue check-in active until{" "}
+                        {formatContestDateTime(venueSession.expires_at)}
+                    </p>
+                ) : null}
             </header>
+
+            {/* Shown only once the venue read has answered and says there is no
+                live session — the builder is hidden in the same breath, because
+                the server re-checks this at submit AND at replace. */}
+            {venueRequired && entryWindowOpen && scopedVenue && !checkedInAtVenue ? (
+                <VenueContestAccessPanel
+                    venue={scopedVenue.venue_check_in.venue}
+                    lastStatus={venueSession?.last_status}
+                    lastExpiresAt={venueSession?.last_expires_at}
+                    revocationReason={venueSession?.revocation_reason}
+                />
+            ) : null}
 
             {feedback ? (
                 <p

@@ -369,6 +369,31 @@ export const FeedContestEditForm = ({
                                     not use an Arena member spot.
                                 </p>
                             </div>
+                            {/* Frozen alongside it, and for the same reason: an entrant
+                                who accepted "enter from anywhere" must never find the
+                                contest moved into a room. `PUT /update` is copy-only, so
+                                neither value can be sent from here. */}
+                            <h3
+                                id="arena-entry-access-title"
+                                className={`${fieldLabelClasses} mt-5`}
+                            >
+                                Entry access
+                            </h3>
+                            <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                                <p className="text-sm font-semibold text-white">
+                                    {contest.entry_access_mode === "venue_check_in_required"
+                                        ? "Venue Check-In Required"
+                                        : "Open to Arena members"}
+                                    <span className="ml-2 font-normal text-gray-500">
+                                        Frozen when this contest was published
+                                    </span>
+                                </p>
+                                <p className="mt-2 max-w-2xl text-xs normal-case leading-5 text-gray-500">
+                                    {contest.entry_access_mode === "venue_check_in_required"
+                                        ? "Members need an active verified venue session whenever they submit or replace an entry."
+                                        : "Eligible members can submit from anywhere while entries are open."}
+                                </p>
+                            </div>
                         </section>
                     ) : null}
 

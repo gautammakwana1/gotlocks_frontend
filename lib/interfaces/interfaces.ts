@@ -1992,6 +1992,410 @@ export type FeedContestSection =
 export type FeedContestTemplate = "multi_pick" | "sunday_pickem";
 
 /**
+ * Where a contest may be entered from — `feed_contests.entry_access_mode`,
+ * NOT NULL DEFAULT 'open', so every contest written before Venue Check-In
+ * existed already reads correctly.
+ *
+ * ARENA ONLY. `resolveFeedContestEntryAccessMode` pins a League Feed contest to
+ * 'open' (a League has no room to stand in), and asking for the venue mode in a
+ * League context is a 400 rather than a silent downgrade — dropping a
+ * restriction without saying so would publish an "in person" contest that is in
+ * fact enterable from anywhere.
+ */
+export type FeedContestEntryAccessMode = "open" | "venue_check_in_required";
+
+/* ----------------------------------------------------------------------------
+ * VENUE CHECK-IN — /group/venue/*. Group-agnostic on the wire (the tables, the
+ * columns and the gates all read `group_id`), but Arena-only in practice:
+ * `FEED_CONTEST_VENUE_CAPABLE_CONTEXTS` is the single constant that decides it,
+ * and a League answers `is_supported: false` rather than an error.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Three states, not two. "never set up" and "switched off" both mean nobody can
+ * check in, but they are different screens: one offers a Set Up button, the
+ * other explains that the printed QR has stopped working.
+ */
+export type VenueCheckInState = "not_configured" | "active" | "disabled";
+
+/**
+ * The venue as the caller is allowed to see it. The staff-only fields are absent
+ * for a member, and `latitude`/`longitude` are returned to NOBODY — the venue is
+ * confirmed by standing in it, and the coordinates are read on exactly one
+ * server-side path, which answers with a verdict rather than a location.
+ */
+export type GroupVenue = {
+    id: string;
+    name: string;
+    display_address: string;
+    check_in_duration_minutes: number;
+    status: string;
+    /** STAFF ONLY below this line. */
+    verification_radius_meters?: number;
+    configured_by_user_id?: string | null;
+    configured_at?: string | null;
+    disabled_at?: string | null;
+    disabled_by_user_id?: string | null;
+    created_at?: string;
+    updated_at?: string;
+};
+
+/** The viewer's own check-in, and — whatever is live now — the last one's fate. */
+export type VenueCheckInSessionSummary = {
+    is_checked_in: boolean;
+    session_id: string | null;
+    verified_at: string | null;
+    expires_at: string | null;
+    method: string | null;
+    seconds_remaining: number | null;
+    /**
+     * The PREVIOUS attempt's status even when nothing is live — what lets a
+     * screen say "your check-in expired" rather than the first-timer's
+     * "scan the venue QR".
+     */
+    last_status: string | null;
+    last_expires_at: string | null;
+    revocation_reason: string | null;
+};
+
+/**
+ * STAFF ONLY, and null for a member. The QR token is here and nowhere else: a
+ * member who can read it can check in from their sofa, which is the whole thing
+ * the feature exists to stop.
+ */
+export type VenueCheckInStaffDetail = {
+    public_check_in_token: string | null;
+    token_version: number | null;
+    check_in_url: string | null;
+    active_session_count: number;
+    /** Live venue-required contests, which make disabling illegal outright. */
+    blocking_contest_count: number;
+    can_disable: boolean;
+    can_regenerate_token: boolean;
+};
+
+export type VenueCheckInDetailData = {
+    group: { id: string; name: string; group_type: string };
+    viewer: {
+        role: string;
+        is_owner: boolean;
+        is_staff: boolean;
+        /** Owner AND the community writable — moving the geofence is a write. */
+        can_configure: boolean;
+        can_issue_assist_code: boolean;
+    };
+    venue_check_in: {
+        is_supported: boolean;
+        /**
+         * The one boolean a contest-creation screen needs: may this community
+         * publish a venue-required contest right now?
+         */
+        is_enabled: boolean;
+        state: VenueCheckInState;
+        venue: GroupVenue | null;
+    };
+    session: VenueCheckInSessionSummary;
+    staff: VenueCheckInStaffDetail | null;
+};
+
+/** GET /group/venue/detail/:group_id — group_id is a PATH param. */
+export type FetchVenueCheckInDetailPayload = {
+    group_id: string;
+};
+
+/**
+ * The four OWNER-ONLY writes. They are four endpoints rather than one
+ * flag-driven handler because they make four different promises about the QR,
+ * and that is the part an owner has to be able to predict before pressing
+ * anything:
+ *
+ *   configure   POST /configure/:group_id  mints the FIRST token. 409s on a
+ *                                          DISABLED venue — reviving that one
+ *                                          would resurrect every copy of the
+ *                                          retired poster. Also serves a full
+ *                                          re-save of an ACTIVE venue.
+ *   update      PUT  /update/:group_id     partial patch; NEVER touches the
+ *                                          token, the status or live sessions.
+ *                                          Works on a disabled venue too.
+ *   disable     PUT  /disable/:group_id    QR dead, every live session revoked.
+ *   enable      PUT  /enable/:group_id     back on with a NEW token — reprint.
+ *   regenerate  PUT  /regenerate-token/:group_id
+ *                                          NEW token on a venue that stays
+ *                                          OPEN, and every live check-in
+ *                                          SURVIVES. Requires an active venue.
+ *
+ * The last two both end with a new code, and the difference is the whole reason
+ * both exist: enable reopens a closed venue, regenerate retires a leaked poster
+ * while the room is still full.
+ */
+
+/**
+ * The complete write. `accuracy_meters` is optional and refused only when
+ * present and worse than 200 m: a venue pinned from a cell-tower fix puts the
+ * geofence around the wrong block, and every later "you must be at the venue"
+ * refusal is really that save's fault.
+ */
+export type ConfigureGroupVenuePayload = {
+    group_id: string;
+    name: string;
+    display_address: string;
+    latitude: number;
+    longitude: number;
+    accuracy_meters?: number | null;
+    verification_radius_meters?: number;
+    check_in_duration_minutes?: number;
+};
+
+/**
+ * The partial patch. Send only what changed — which is the point: an owner
+ * fixing a typo in the venue name should not have to stand in the restaurant.
+ * Latitude and longitude move as a PAIR or not at all; one axis alone would put
+ * the venue at a point nobody has ever been.
+ */
+export type UpdateGroupVenuePayload = {
+    group_id: string;
+    name?: string;
+    display_address?: string;
+    latitude?: number;
+    longitude?: number;
+    accuracy_meters?: number | null;
+    verification_radius_meters?: number;
+    check_in_duration_minutes?: number;
+};
+
+/** Both take the group id and nothing else. */
+export type GroupVenueLifecyclePayload = {
+    group_id: string;
+};
+
+/** The shape every venue WRITE answers with; each adds its own receipt fields. */
+export type GroupVenueWriteData = {
+    group: { id: string; name: string; group_type: string };
+    venue_check_in: {
+        is_supported: boolean;
+        is_enabled: boolean;
+        state: VenueCheckInState;
+        venue: GroupVenue | null;
+    };
+    /** What the printed poster encodes. Null once disabled — a dead token is
+     *  never handed back, or it ends up on a reprint. */
+    check_in_url: string | null;
+    public_check_in_token: string | null;
+    token_version?: number | null;
+    /** configure: this was the first setup rather than a re-save. */
+    created?: boolean;
+    /** update: the fields that call actually wrote. */
+    updated_fields?: string[];
+    /** disable: how many members were checked in and have been kicked out. */
+    revoked_session_count?: number;
+    was_already_disabled?: boolean;
+    /** enable + regenerate: unambiguous — this is NOT the code you had. */
+    token_rotated?: boolean;
+    requires_reprint?: boolean;
+    /**
+     * regenerate ONLY, and the mirror image of `revoked_session_count`: how many
+     * members keep their check-in through the rotation. Counted BEFORE the write,
+     * because it is a claim about who this action does not affect.
+     */
+    retained_session_count?: number;
+};
+
+/* ---------- The member side, keyed by TOKEN rather than group_id ----------
+ *
+ * Whoever just scanned the poster has the token and nothing else — they may not
+ * know the Arena exists, let alone its uuid.
+ */
+
+/**
+ * The four rungs of "what next", computed server-side because each is a
+ * different screen and reassembling them from booleans per client is how they
+ * drift apart.
+ */
+export type VenueCheckInNextStep =
+    | "sign_in"
+    | "join_group"
+    | "verify_location"
+    | "checked_in";
+
+/**
+ * GET /group/venue/check-in/resolve/:token — OPTIONAL auth, and it NEVER writes:
+ * scanning is not joining and is not checking in. A retired token, a disabled
+ * venue and a deleted Arena all answer the same 404 + `invalid_venue_token`, so
+ * the response cannot tell a real-but-dead token from an invented one.
+ */
+export type ResolveVenueCheckInPayload = {
+    token: string;
+};
+
+export type ResolveVenueCheckInData = {
+    group: { id: string; name: string; group_type: string };
+    /** The MEMBER projection — no QR token, and never any coordinates. */
+    venue: GroupVenue;
+    viewer: {
+        is_authenticated: boolean;
+        is_member: boolean;
+        role?: string | null;
+    };
+    session: VenueCheckInSessionSummary;
+    next_step: VenueCheckInNextStep;
+};
+
+/**
+ * Every outcome a CLIENT may report. It may never report `verified`,
+ * `outside_venue` or `accuracy_insufficient` — those are the server's verdict on
+ * a reading, and accepting them from the body would make the geofence advisory.
+ */
+export type VenueClientReportableOutcome =
+    | "permission_denied"
+    | "location_unavailable"
+    | "timed_out"
+    | "unsupported"
+    | "canceled";
+
+/** Everything the server can rule, including the two it alone decides. */
+export type VenueCheckInOutcome =
+    | "verified"
+    | "staff_verified"
+    | "outside_venue"
+    | "accuracy_insufficient"
+    | VenueClientReportableOutcome;
+
+/**
+ * POST /group/venue/check-in/verify/:token — send a reading OR a failure the
+ * client alone could observe, never both. The distance, the radius, the edge
+ * allowance, the clock and the session length are all resolved server-side,
+ * which is the entire difference between a geofence and a suggestion.
+ *
+ * `accuracy_meters` is REQUIRED alongside a reading (unlike on the venue
+ * configuration path, where it is advisory): here it decides the edge
+ * allowance, and a caller that could omit it would be choosing its own.
+ */
+export type VerifyVenueCheckInPayload = {
+    token: string;
+} & (
+        | {
+            latitude: number;
+            longitude: number;
+            accuracy_meters: number;
+            outcome?: never;
+        }
+        | {
+            outcome: VenueClientReportableOutcome;
+            latitude?: never;
+            longitude?: never;
+            accuracy_meters?: never;
+        }
+    );
+
+/** 201. A success creates ONLY a session — no join, no rules, no entry. */
+export type VerifyVenueCheckInData = {
+    checked_in: true;
+    outcome: "verified";
+    group: { id: string; name: string; group_type: string };
+    venue: { id: string; name: string; display_address: string };
+    session: VenueCheckInSessionSummary;
+    note: string;
+};
+
+/**
+ * 422. The attempt was recorded, but it did not verify. Deliberately carries the
+ * outcome and NOTHING about the geometry — no distance, no radius, no allowance,
+ * because "you are 40 m outside a 150 m radius" is a free calibration tool for
+ * anyone testing how far a spoofed coordinate has to move.
+ */
+export type VerifyVenueCheckInFailure = {
+    message: string;
+    code: VenueCheckInOutcome;
+};
+
+/* ---------- Staff activity ---------- */
+
+/**
+ * GET /group/venue/activity/:group_id — the panel's seven numbers for ONE
+ * calendar day, resolved in the caller's zone from `x-timezone` (a bar closing
+ * at 01:00 local is still having last night). STAFF ONLY, counts only: no member
+ * ids, no names, no coordinates.
+ */
+export type FetchVenueActivityPayload = {
+    group_id: string;
+    /** YYYY-MM-DD in the caller's zone. Omit for today. */
+    date?: string;
+};
+
+export type VenueActivityData = {
+    group: { id: string; name: string; group_type: string };
+    viewer: { role: string; is_owner: boolean; is_staff: boolean };
+    /** Echoed so the panel labels the day the SERVER agreed to show. */
+    range: { date: string; time_zone: string; starts_at: string; ends_at: string };
+    counts: {
+        check_ins: number;
+        unique_members: number;
+        new_members_from_qr: number;
+        returning_members: number;
+        venue_required_entries: number;
+        failed_attempts: number;
+        staff_assisted: number;
+    };
+    /** TRUE when a row cap was hit — the counts above are floors, not totals. */
+    is_partial: boolean;
+    note: string;
+};
+
+export type VenueState = {
+    /**
+     * Single-tenant, like every other group-scoped slot here: `detailForId` says
+     * whose venue is loaded, so one Arena's geofence can never describe another.
+     */
+    detail: VenueCheckInDetailData | null;
+    detailForId: string | null;
+    detailLoading: boolean;
+    detailError: string | null;
+
+    /**
+     * ONE set of flags for all four writes. They are mutually exclusive by
+     * construction — the settings panel shows Update *or* Enable, never both,
+     * and each is confirmed before it fires — so separate flags would only be
+     * three more things to keep in step. `configureAction` names whichever one
+     * is in flight, for the button that has to label itself.
+     */
+    configureAction:
+    | "configure"
+    | "update"
+    | "disable"
+    | "enable"
+    | "regenerate"
+    | null;
+    configureLoading: boolean;
+    configureMessage: string | null;
+    configureError: string | null;
+
+    /**
+     * The QR landing page's own slots. Kept APART from `detail` even though both
+     * describe a venue: this one is keyed by token, is readable signed-out, and
+     * carries the member projection — folding them together would let a
+     * staff-scoped read and a public one overwrite each other.
+     */
+    resolved: ResolveVenueCheckInData | null;
+    resolvedForToken: string | null;
+    resolveLoading: boolean;
+    resolveError: string | null;
+    /** The server's own `code`, so a dead token gets its own screen. */
+    resolveErrorCode: string | null;
+
+    verifyLoading: boolean;
+    verifySuccess: VerifyVenueCheckInData | null;
+    verifyError: string | null;
+    /** The refused outcome, which decides which sentence the member is shown. */
+    verifyErrorCode: VenueCheckInOutcome | null;
+
+    /** GET /activity — the staff panel's day. */
+    activity: VenueActivityData | null;
+    activityForId: string | null;
+    activityLoading: boolean;
+    activityError: string | null;
+};
+
+/**
  * One row of the schedule snapshot the client selected. The backend has no games
  * table (schedules come from OddsBlaze per sport), so the chosen catalog rows
  * travel with the create request and are validated against `eligible_game_ids`.
@@ -2041,6 +2445,13 @@ export type FeedContest = ArenaContest & {
      * create route always stores false — a commissioner competes regardless.
      */
     allow_staff_participation?: boolean | null;
+    /**
+     * ARENA CONTESTS ONLY in practice, though the column is on every row: a
+     * League Feed contest is always 'open'. Present on BOTH the list and the
+     * detail reads (`FEED_CONTEST_LIST_COLUMNS`), so a card can say so without
+     * opening the contest.
+     */
+    entry_access_mode?: FeedContestEntryAccessMode | null;
     pickem_correct_bonus?: number | null;
     catalog_snapshot_at?: string | null;
     updated_at?: string;
@@ -2111,6 +2522,21 @@ export type CreateFeedContestPayload = {
     eligible_game_ids: string[];
     eligible_games_json: FeedContestGameSnapshot[];
     winning_places: number;
+    /**
+     * ARENA ONLY — the wizard's "Owner and manager participation" control. Send
+     * nothing from a League: the server forces `true` there regardless (a
+     * commissioner competes), so a value would be inert rather than wrong.
+     *
+     * These endpoints REPLACE the row, so once a draft carries a value the next
+     * save has to carry it too or the opt-in silently resets.
+     */
+    allow_staff_participation?: boolean;
+    /**
+     * ARENA ONLY — the wizard's Access step. Omitted means 'open'; asking for
+     * `venue_check_in_required` from a League context is a 400, and publishing
+     * one in an Arena with no configured venue is a 409 (drafts are exempt).
+     */
+    entry_access_mode?: FeedContestEntryAccessMode;
 };
 
 /**
@@ -2137,13 +2563,6 @@ export type ReplaceDraftFeedContestPayload = CreateFeedContestPayload & {
     time_zone?: string;
     /** TRUE routes to `/publish-draft`, which saves and opens in the same call. */
     publish?: boolean;
-    /**
-     * ARENA ONLY, and carried forward rather than authored: the wizard has no
-     * control for it, and these endpoints REPLACE the row — so omitting it would
-     * silently reset a draft that had opted its staff in. Inert for a League,
-     * where the server forces `true` regardless.
-     */
-    allow_staff_participation?: boolean;
 };
 
 // GET /group/feed-contest/list[/open|/locked|/finalized|/drafts]. A section path
@@ -3494,6 +3913,7 @@ export type RootState = {
     feedContestSchedule: FeedContestScheduleState;
     feedContestOdds: FeedContestOddsState;
     memberCard: MemberCardState;
+    venue: VenueState;
 };
 
 export type UpdateGroupPayload = {

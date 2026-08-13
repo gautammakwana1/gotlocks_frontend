@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getSafeRelativeReturnPath } from "@/lib/auth/safeReturnPath";
 import { APP_NAME } from "@/lib/constants";
 import { clearLoginWithEmailMessage, initialForgotPasswordOTPRequest, loginWithEmailRequest, resetPasswordRequest, verifyForgotPasswordOTPRequest } from "../../lib/redux/slices/authSlice";
 import { useSelector } from "react-redux";
@@ -25,6 +26,21 @@ const SignInPage = ({
   backHref = "/",
 }: SignInPageProps) => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  /**
+   * `?returnTo=` — where to land INSTEAD of /home once signed in.
+   *
+   * Added for the venue check-in poster: a customer scanning it signs in and has
+   * to come back to that token's page, or the flow dead-ends on the home screen
+   * with no way back to the QR they scanned.
+   *
+   * Behaviour-preserving for everyone else — absent (or not a same-origin
+   * relative path, which `getSafeRelativeReturnPath` refuses) falls through to
+   * /home exactly as before. The filter is the point: an unfiltered redirect
+   * target on a sign-in page is an open-redirect phishing primitive.
+   */
+  const returnTo = getSafeRelativeReturnPath(searchParams.get("returnTo"));
+  const afterSignInPath = returnTo ?? "/home";
   const backLabel =
     backHref === "/pricing" ? "Back to pricing" : "Back to homepage";
   const dispatch = useAppDispatch();
@@ -45,9 +61,9 @@ const SignInPage = ({
     const storedProvider = getLocalStorage("provider");
     const storedUserId = getLocalStorage("userId");
     if (storedUser && storedAccessToken && storedRefreshToken && storedProvider && storedUserId) {
-      router.push("/home")
+      router.push(afterSignInPath)
     }
-  }, [router]);
+  }, [router, afterSignInPath]);
 
   useEffect(() => {
     const setupSession = async () => {
@@ -75,7 +91,7 @@ const SignInPage = ({
         setLocalStorage("userId", userId);
         setLocalStorage("provider", provider);
         dispatch(clearLoginWithEmailMessage());
-        router.push("/home");
+        router.push(afterSignInPath);
       } else if (error) {
         setToast({
           id: Date.now(),
@@ -91,7 +107,7 @@ const SignInPage = ({
       }
     };
     setupSession();
-  }, [user, error, loading, message, dispatch, router, setToast]);
+  }, [user, error, loading, message, dispatch, router, setToast, afterSignInPath]);
 
   const handleManualSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -229,7 +245,15 @@ const SignInPage = ({
       <div className="flex w-full max-w-md flex-col gap-4 rounded-3xl border border-white/10 bg-black/60 p-6 shadow-xl backdrop-blur">
         <button
           type="button"
-          onClick={() => router.push("/account-creation")}
+          // Carries `returnTo` across, so a customer who scanned the venue
+          // poster and chose "create an account" is still heading back to it.
+          onClick={() =>
+            router.push(
+              returnTo
+                ? `/account-creation?returnTo=${encodeURIComponent(returnTo)}`
+                : "/account-creation"
+            )
+          }
           className={`ui-accent-button w-full rounded-2xl py-3 text-base font-semibold uppercase tracking-wide transition`}
         >
           create an account

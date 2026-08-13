@@ -22,6 +22,7 @@ import feedContestSaga from "./sagas/feedContestSaga";
 import feedContestScheduleSaga from "./sagas/feedContestScheduleSaga";
 import feedContestOddsSaga from "./sagas/feedContestOddsSaga";
 import memberCardSaga from "./sagas/memberCardSaga";
+import venueSaga from "./sagas/venueSaga";
 
 export default function* rootSaga() {
 	yield all([
@@ -48,5 +49,6 @@ export default function* rootSaga() {
 		fork(feedContestScheduleSaga),
 		fork(feedContestOddsSaga),
 		fork(memberCardSaga),
+		fork(venueSaga),
 	]);
 }

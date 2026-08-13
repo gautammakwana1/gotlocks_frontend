@@ -277,7 +277,18 @@
       "PowerShell(Get-ChildItem -Path \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\components\" -Recurse -File | Where-Object { $_.Name -match \"Arena|Contest\" } | Select-Object FullName, Length, LastWriteTime | Sort-Object FullName)",
       "PowerShell(Get-ChildItem -Path \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\app\" -Recurse -File -Filter \"page.tsx\" | Where-Object { $_.FullName -match \"league|contest\" } | Select-Object -ExpandProperty FullName)",
       "PowerShell(@\\(\"D:\\\\Gotlocks\\\\gotlocks_frontend\\\\app\\\\league\\\\[leagueId]\\\\feed-contests\\\\create\\\\page.tsx\",\"D:\\\\Gotlocks\\\\gotlocks_frontend\\\\app\\\\league\\\\[leagueId]\\\\feed-contests\\\\[contestId]\\\\page.tsx\",\"D:\\\\Gotlocks\\\\gotlocks_frontend\\\\app\\\\league\\\\[leagueId]\\\\feed-contests\\\\[contestId]\\\\entry\\\\page.tsx\",\"D:\\\\Gotlocks\\\\gotlocks_frontend\\\\app\\\\league\\\\[leagueId]\\\\feed-contests\\\\[contestId]\\\\edit\\\\page.tsx\"\\) | ForEach-Object { Write-Output \"===== $_ =====\"; Get-Content $_ -Raw })",
-      "PowerShell(npx eslint \"components/arenas/ArenaDashboard.tsx\" \"components/contests/FeedContestSections.tsx\" \"components/contests/FeedContestEditRouter.tsx\" \"components/layout/AppShell.tsx\" \"components/feed/ConnectedStructuredFeed.tsx\" \"app/arena/[arenaId]/feed-contests\" 2>&1)"
+      "PowerShell(npx eslint \"components/arenas/ArenaDashboard.tsx\" \"components/contests/FeedContestSections.tsx\" \"components/contests/FeedContestEditRouter.tsx\" \"components/layout/AppShell.tsx\" \"components/feed/ConnectedStructuredFeed.tsx\" \"app/arena/[arenaId]/feed-contests\" 2>&1)",
+      "PowerShell($a = Get-FileHash \"C:\\\\Users\\\\pc\\\\Downloads\\\\gotlocks.app_mvp2 \\(1\\)\\\\components\\\\contests\\\\StructuredContestDetail.tsx\" -Algorithm MD5; $b = Get-FileHash \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\components\\\\contests\\\\StructuredContestDetail.tsx\" -Algorithm MD5; Write-Output \"downloads: $\\($a.Hash\\)\"; Write-Output \"dnext    : $\\($b.Hash\\)\")",
+      "PowerShell(npx eslint \"components/contests/FeedContestCreateForm.tsx\" \"components/contests/FeedContestEditForm.tsx\" \"app/arena/[arenaId]/feed-contests\" \"lib/interfaces/interfaces.ts\" 2>&1)",
+      "PowerShell(npx eslint \"components/contests/FeedContestCreateForm.tsx\" \"components/contests/FeedContestEntryShell.tsx\" \"components/contests/VenueContestAccessPanel.tsx\" \"components/contests/FeedContestDetail.tsx\" \"components/arenas/checkin/ArenaVenueSetupDialog.tsx\" \"lib/redux/slices/venueSlice.ts\" \"lib/redux/sagas/venueSaga.ts\" \"lib/arenas/venueCheckIn.ts\" 2>&1)",
+      "PowerShell(npm install qrcode --save)",
+      "PowerShell(npm install --save-dev \"@types/qrcode\")",
+      "PowerShell(npx eslint \"components/arenas/checkin\" 2>&1)",
+      "PowerShell(npx eslint \"components/arenas/checkin\" \"lib/redux/slices/venueSlice.ts\" \"lib/redux/sagas/venueSaga.ts\" 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\app\" -Recurse -File | Where-Object { $_.FullName -match \"check-in\" } | Select-Object -ExpandProperty FullName)",
+      "PowerShell(npx eslint \"components/arenas/checkin\" \"app/check-in\" \"lib/redux/slices/venueSlice.ts\" \"lib/redux/sagas/venueSaga.ts\" \"lib/auth/safeReturnPath.ts\" \"lib/auth/AuthProvider.tsx\" 2>&1)",
+      "PowerShell(npx eslint \"components/auth/SignInPage.tsx\" \"components/arenas/checkin\" \"app/check-in\" 2>&1)",
+      "PowerShell(npx eslint \"components/auth/SignInPage.tsx\" 2>&1)"
     ],
     "additionalDirectories": [
       "D:\\gautam\\gotlocks_backend\\src\\controllers",

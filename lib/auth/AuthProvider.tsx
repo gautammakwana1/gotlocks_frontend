@@ -9,7 +9,11 @@ import { supabase } from "../supabaseClient";
 
 export const AuthContext = createContext<CurrentUser | null>(null);
 
-const PUBLIC_ROUTES = ["/signin", "/pricing", "/landing-page", "/account-creation", "/auth/callback", "/auth/set-username", "/privacy-policy", "/terms-and-conditions"];
+// `/check-in` is the printed venue QR's landing page and MUST stay public: the
+// customer scanning a poster in a bar may have no account yet, and the page's
+// whole first rung is "sign in or create an account, then come back here".
+// Bouncing them to /landing-page loses the token and the flow dead-ends.
+const PUBLIC_ROUTES = ["/signin", "/pricing", "/landing-page", "/account-creation", "/auth/callback", "/auth/set-username", "/privacy-policy", "/terms-and-conditions", "/check-in"];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();

@@ -687,6 +687,17 @@ export const FeedContestDetail = ({
                         ? "Allowed · each staff entrant uses a contest participant spot"
                         : "Not allowed for this contest",
                 },
+                // `entry_access_mode` rides on the list AND detail columns, so
+                // this fact costs no extra read. A League has no room to stand
+                // in and is pinned to 'open', which is why it sits in here.
+                {
+                    label: "Entry access",
+                    value:
+                        contest.entry_access_mode === "venue_check_in_required"
+                            ? "Venue Check-In Required · an active verified venue session is needed to submit or replace an entry"
+                            : "Open to Arena members · entries can be submitted from anywhere",
+                    wide: true,
+                },
             ]
             : []),
     ];

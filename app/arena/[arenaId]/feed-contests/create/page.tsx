@@ -2,11 +2,13 @@
 
 import { Suspense, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import FeedContestCreateForm from "@/components/contests/FeedContestCreateForm";
 import { isArenaStaffRole } from "@/components/arenas/ArenaDashboard";
 import LeaguePageSkeleton from "@/components/skeletons/leagues/LeaguePageSkeleton";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
+import type { RootState } from "@/lib/interfaces/interfaces";
+import { fetchArenaHostingDetailsRequest } from "@/lib/redux/slices/arenaSlice";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import useScopedGroup from "@/lib/groups/useScopedGroup";
 
@@ -31,10 +33,15 @@ const ArenaFeedContestCreateContent = () => {
     // the first commit after navigating between two groups.
     const scopedArena = useScopedGroup(arenaId);
     const arena = scopedArena.group;
+    const { hosting, hostingForId } = useSelector((state: RootState) => state.arena);
 
     useEffect(() => {
         if (!arenaId || !currentUser) return;
         dispatch(fetchGroupByIdRequest({ groupId: arenaId }));
+        // Only for the Rules step's participation copy ("each staff entrant uses
+        // one of this contest's 50 participant spots"). `hostingForId` says whose
+        // hosting is in the shared slot, so another Arena's ceiling cannot leak in.
+        dispatch(fetchArenaHostingDetailsRequest({ arena_id: arenaId }));
     }, [dispatch, arenaId, currentUser]);
 
     const role = arena?.current_user_member?.role;
@@ -68,6 +75,11 @@ const ArenaFeedContestCreateContent = () => {
             contextName={arena.name ?? "Arena"}
             backHref={backHref}
             detailHref={(contestId) => `/arena/${arenaId}/feed-contests/${contestId}`}
+            participantLimit={
+                hostingForId === arenaId
+                    ? hosting?.participating_member_limit ?? null
+                    : null
+            }
         />
     );
 };
