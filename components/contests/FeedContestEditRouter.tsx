@@ -99,7 +99,10 @@ export const FeedContestEditRouter = ({
                 groupType={
                     (scoped.group.group_type === "arena" ? "arena" : "league") as FeedGroupType
                 }
-                contextName={scoped.group.name?.trim() || "League"}
+                contextName={
+                    scoped.group.name?.trim() ||
+                    (scoped.group.group_type === "arena" ? "Arena" : "League")
+                }
                 backHref={detailHref}
                 detailHref={() => detailHref}
                 initialContest={contest}

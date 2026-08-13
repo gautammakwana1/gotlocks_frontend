@@ -8,6 +8,7 @@ import BackButton from "@/components/ui/BackButton";
 import { ARENA_INCLUDED_TIER_LABEL } from "@/lib/arenas/tierLabels";
 import {
     arenaTierLabel,
+    ArenaStatusBanner,
     formatArenaCents as formatCents,
     getArenaHostingStatusLabel,
     getArenaTierLabel,
@@ -19,7 +20,6 @@ import type {
     ArenaRole,
     ArenaUnlock,
     CommunityLeaderboardPeriodKind,
-    StructuredFeedContest,
 } from "@/lib/domain/community";
 import { selectArenaPointsLeaderboard } from "@/lib/scoring/context";
 import { formatDateTime } from "@/lib/utils/date";
@@ -29,11 +29,10 @@ import InviteCodeCopy from "../group/InviteCodeCopy";
 import { DeleteGroupConfirmationModal } from "../group/ConfirmDeleteGroupModal";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { ArenaContest, ArenaHostingDetails, ArenaHostingStatus, ArenaState, ArenaUnlockDetails, Group, GroupSelector, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
+import { ArenaHostingDetails, ArenaHostingStatus, ArenaState, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupSelector, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
 import { fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchGroupOwnerPlanDetailsRequest } from "@/lib/redux/slices/groupsSlice";
 import {
     activateArenaHostingRequest,
-    cancelArenaOwnershipTransferRequest,
     cancelArenaPauseRequest,
     clearArenaDeleteState,
     clearArenaHostingActionMessage,
@@ -45,14 +44,11 @@ import {
     scheduleArenaPauseRequest,
     clearArenaOwnershipTransferMessage,
     clearUnlockArenaMessage,
-    createArenaOwnershipTransferRequest,
-    fetchArenaContestsRequest,
     fetchArenaHostingDetailsRequest,
     fetchArenaOwnershipTransferRequest,
     makeArenaManagerRequest,
     makeArenaMemberRequest,
     removeArenaMemberRequest,
-    respondArenaOwnershipTransferRequest,
     unlockArenaRequest,
     updateArenaDetailsRequest,
     clearUpdateArenaDetailsMessage,
@@ -72,7 +68,12 @@ import LeaguePageSkeleton from "../skeletons/leagues/LeaguePageSkeleton";
 import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
 import { ArenaShellActions } from "./types";
 import { groupPreviewMetaTextClassName } from "../group/GroupPreviewChip";
-import StructuredContestList from "../contests/StructuredContestList";
+import ContestHubCreateAction from "../contests/ContestHubCreateAction";
+import FeedContestSections from "../contests/FeedContestSections";
+import {
+    fetchFeedContestsRequest,
+    resetFeedContests,
+} from "@/lib/redux/slices/feedContestSlice";
 import ConnectedStructuredFeed from "../feed/ConnectedStructuredFeed";
 import type { StructuredFeedFilter } from "../feed/types";
 import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
@@ -342,81 +343,167 @@ const ArenaFeedPanel = ({
     )
 };
 
-const contestStatusTone = (status: StructuredFeedContest["lifecycleStatus"]) =>
-    status === "open"
-        ? "text-emerald-200"
-        : status === "locked" || status === "grading"
-            ? "text-amber-200"
-            : status === "final"
-                ? "text-sky-200"
-                : "text-gray-400";
-
+/* ----------------------------------------------------------------------------
+ * The Arena Contests tab, ported from the MVP's ArenaContestsPanel
+ * (gotlocks.app_mvp2/components/arenas/ArenaDashboard.tsx:265): a violet hosting
+ * band carrying the staff-only "Start a contest" card, then the phase accordion.
+ *
+ * The rows behind it moved too. This tab used to draw the legacy `arena_contests`
+ * list (`GET /group/arena/contests`); it now reads the SAME engine the League's
+ * Feed Contests tab does — `/group/feed-contest/*`, one surface for both
+ * contexts, selected by `group_type` ("arena" here, "league" there). That is why
+ * the accordion is `FeedContestSections` rather than `StructuredContestList`:
+ * each phase is its own server-owned query with its own count and pagination.
+ *
+ * Two arena-only rules the League never applies:
+ *   - the create gate mirrors the server's own (`resolveFeedContestContext`):
+ *     unlocked, hosting in `active`/`included_month`, under active_contest_limit;
+ *   - staff are NONCOMPETITIVE unless a contest opted them in, so their cards
+ *     offer "View Details" instead of "Build Entry" (`resolveFeedContestForEntry`
+ *     answers 403 otherwise).
+ * -------------------------------------------------------------------------- */
 const ArenaContestsPanel = ({
-    contests,
-    currentUserId,
-    arena,
     arenaId,
     role,
     hosting,
-    writable,
-    activeContestCount,
+    unlock,
 }: {
-    currentUserId?: string;
-    arena: Group | null;
     /** Route param — never the record's id, which can belong to the previous group. */
     arenaId: string;
-    contests: ArenaContest[];
     role: string;
     hosting: ArenaHostingDetails | null;
-    writable: boolean;
-    activeContestCount: number;
+    unlock: ArenaUnlockDetails | null;
 }) => {
-    if (!hosting || !arena || !currentUserId) return null;
-    const sortedContests = [...contests].sort((left, right) =>
-        right.created_at.localeCompare(left.created_at)
+    const dispatch = useDispatch();
+    const sections = useSelector((state: RootState) => state.feedContest.sections);
+    const staff = isArenaStaffRole(role);
+
+    const loadSection = useCallback(
+        (section: FeedContestSection, page: number) => {
+            if (!arenaId) return;
+            dispatch(
+                fetchFeedContestsRequest({
+                    section,
+                    group_id: arenaId,
+                    group_type: "arena",
+                    page,
+                    limit: 10,
+                })
+            );
+        },
+        [arenaId, dispatch]
     );
 
-    const staff = isArenaStaffRole(role);
-    const activeLimit = hosting.active_contest_limit;
-    const createDisabledReason = !staff
-        ? undefined
-        : hosting.status === "cleanup"
-            ? "Cleanup mode allows only grading, Review Required resolution, finalization, and cancellation of existing contests."
-            : !writable
-                ? "New contests are unavailable while Arena hosting is read-only."
-                : activeLimit !== null && activeContestCount >= activeLimit
-                    ? "This Arena has reached its active contest limit."
-                    : undefined;
+    useEffect(() => {
+        if (!arenaId) return;
+        // Archived is fetched for everyone — it is member-visible, and its section
+        // only renders once the read comes back with rows.
+        (["open", "locked", "finalized", "archived"] as const).forEach((section) =>
+            loadSection(section, 1)
+        );
+        // /list/drafts answers 403 for anyone who is not an organizer.
+        if (staff) loadSection("drafts", 1);
+    }, [arenaId, staff, loadSection]);
+
+    // `state.feedContest` is a single-tenant cache shared with the League hub, so
+    // the rows are dropped on the way out — no other group may ever read them.
+    useEffect(() => () => { dispatch(resetFeedContests()); }, [dispatch]);
+
+    // The create gate, mirroring the server's arena branch exactly. Note
+    // `pause_scheduled` is writable for ENTRIES but not for creating: the create
+    // path demands `active` / `included_month` and answers 402 otherwise.
+    //
+    // hosting and unlock ride in on their own request, which is still in flight
+    // for the first frames of this tab. Both gates below stay OPTIMISTIC until it
+    // lands: an unloaded slot is "unknown", not "locked", or an owner watches the
+    // create card claim their unlocked Arena needs unlocking before it corrects
+    // itself. Nothing is lost by being wrong that way — the create page re-gates
+    // and every rule is enforced server-side.
+    const hostingLoaded = Boolean(hosting && unlock);
+    const unlocked = unlock?.status === "unlocked";
+    const hostingCreatable =
+        hosting?.status === "active" || hosting?.status === "included_month";
+    const activeLimit = hosting?.active_contest_limit ?? null;
+    // open = scheduled + open, locked = locked + grading — together exactly the
+    // server's ACTIVE_CONTEST_STATUSES, which is what the limit counts.
+    const activeContestCount = sections.open.total + sections.locked.total;
+    const atContestLimit =
+        activeLimit !== null && activeContestCount >= activeLimit;
+
+    const createDisabledReason =
+        !staff || !hostingLoaded
+            ? undefined
+            : hosting?.status === "cleanup"
+                ? "Cleanup mode keeps existing contests readable. Results continue automatically, and staff can still use contest deletion controls."
+                : !unlocked
+                    ? "Permanently unlock this Arena before creating contests."
+                    : !hostingCreatable
+                        ? "New contests are unavailable while Arena hosting is read-only."
+                        : atContestLimit
+                            ? "This Arena has reached its active contest limit."
+                            : undefined;
+    const createDisabledHint =
+        staff && hostingLoaded && unlocked && hostingCreatable && atContestLimit
+            ? "Delete an active contest or wait for automatic finalization to open another one."
+            : undefined;
+
+    // Entry is gated on the WRITABLE hosting set, which is wider than the create
+    // one — a pause that has been scheduled but not taken effect still accepts
+    // entries (`resolveFeedContestForEntry`).
+    const hostingEnterable =
+        !hostingLoaded ||
+        (unlocked &&
+            (hostingCreatable || hosting?.status === "pause_scheduled"));
+    const canEnterContest = (contest: FeedContest) =>
+        Boolean(hostingEnterable) &&
+        // Arena staff are noncompetitive unless THIS contest opted them in.
+        (!staff || contest.allow_staff_participation === true);
 
     return (
-        <div className="space-y-4">
-            <StructuredContestList
+        <div>
+            {/* The MVP's violet band above the hub — the same slot the League
+                page fills with its sky one. It renders even for a member, so the
+                accordion keeps its distance from the tab strip either way. */}
+            <div className="-mx-5 bg-violet-950/20 bg-gradient-to-b from-black via-black/40 to-transparent px-5 py-4 sm:mx-0 sm:px-4">
+                {staff ? (
+                    <ContestHubCreateAction
+                        href={
+                            createDisabledReason
+                                ? undefined
+                                : `/arena/${arenaId}/feed-contests/create`
+                        }
+                        unavailableReason={createDisabledReason}
+                        unavailableHint={createDisabledHint}
+                        accent="violet"
+                    />
+                ) : null}
+            </div>
+
+            <FeedContestSections
                 title="Arena contests"
-                description={
-                    staff
-                        ? "Create and operate structured contests without entering the competition."
-                        : "Join, submit a complete entry, and follow proposed and final results."
-                }
-                contests={sortedContests}
-                participants={[]}
-                currentUserId={currentUserId}
-                detailHref={(contest) =>
-                    `/arena/${arenaId}/contests/${contest.id}`
-                }
+                sections={sections}
                 organizer={staff}
-                staffNoncompetitive={staff}
-                createHref={
-                    staff && !createDisabledReason
-                        ? `/arena/${arenaId}/contests/create`
-                        : undefined
+                detailHref={(contestId) =>
+                    `/arena/${arenaId}/feed-contests/${contestId}`
                 }
-                createDisabledReason={createDisabledReason}
+                entryHref={(contestId) =>
+                    `/arena/${arenaId}/feed-contests/${contestId}/entry`
+                }
+                entryWritable={canEnterContest}
+                onLoadMore={(section) =>
+                    loadSection(section, sections[section].page + 1)
+                }
                 emptyTitle="No Arena contests yet"
                 emptyBody={
                     staff
-                        ? "Create the first structured contest when Arena hosting permits it."
+                        ? "Start the first contest when Arena hosting permits it."
                         : "Arena staff have not made a contest available yet."
                 }
+                // The tier's participating-member ceiling, which is what an Arena
+                // contest's capacity actually is. The MVP passes the same figure
+                // through getArenaContestParticipantLimit.
+                participantLimit={hosting?.participating_member_limit ?? null}
+                accent="violet"
             />
         </div>
     );
@@ -1073,13 +1160,9 @@ const ArenaSettingsPanel = ({
     const [name, setName] = useState(arena?.name ?? "");
     const [description, setDescription] = useState(arena?.description ?? "");
     const [timeZone, setTimeZone] = useState("America/New_York");
-    const [newOwnerUserId, setNewOwnerUserId] = useState("");
     const [deleteConfirmation, setDeleteConfirmation] = useState("");
     const [deleteOtp, setDeleteOtp] = useState("");
     const [unlockOpen, setUnlockOpen] = useState(false);
-    // Which tier the purchase dialog is confirming, if any.
-    const [tierDialog, setTierDialog] = useState<ArenaSelfServiceHostingTier | null>(null);
-    const [pauseConfirmOpen, setPauseConfirmOpen] = useState(false);
     const unlockButtonRef = useRef<HTMLButtonElement>(null);
     const dispatch = useDispatch();
     const { setToast } = useToast();
@@ -1087,18 +1170,11 @@ const ArenaSettingsPanel = ({
         unlockLoading,
         unlockError,
         unlockMessage,
-        availableTiers,
-        transfer,
-        canRespondToTransfer,
-        canCancelTransfer,
-        transferActionLoading,
         transferError,
         transferMessage,
         updateLoading,
         updateError,
         updateMessage,
-        hostingActionLoading,
-        hostingActionTier,
         hostingActionError,
         hostingActionMessage,
         arenaDeleteLoading,
@@ -1139,11 +1215,11 @@ const ArenaSettingsPanel = ({
         dispatch(clearArenaOwnershipTransferMessage());
     }, [transferError, transferMessage, dispatch, setToast]);
 
-    // Pause writes report via toast. Tier activation does NOT — it runs inside the
-    // purchase dialog, which shows its own success/error state, so toasting there
-    // too would double-report the same outcome.
+    // Tier and pause writes are issued from /app-settings/plan/arena/[arenaId]
+    // now, not from this tab — but one can still settle while the organizer is
+    // back here, so its outcome is surfaced rather than dropped. No tier-dialog
+    // guard any more: this screen no longer owns a dialog that would report it.
     useEffect(() => {
-        if (tierDialog) return;
         if (!hostingActionError && !hostingActionMessage) return;
         setToast({
             id: Date.now(),
@@ -1152,7 +1228,7 @@ const ArenaSettingsPanel = ({
             duration: 5000,
         });
         dispatch(clearArenaHostingActionMessage());
-    }, [hostingActionError, hostingActionMessage, tierDialog, dispatch, setToast]);
+    }, [hostingActionError, hostingActionMessage, dispatch, setToast]);
 
     // Delete outcome. The "code sent" message is shown inside the dialog, so only
     // the terminal states surface here; on success the Arena no longer exists, so
@@ -1188,26 +1264,6 @@ const ArenaSettingsPanel = ({
         setToast,
         onDeleteSuccess,
     ]);
-
-    // The offer names a member who may have been promoted or removed since; clear
-    // a stale selection rather than sending a user id the backend will reject.
-    const transferCandidates = useMemo(
-        () =>
-            (members ?? []).filter(
-                (member) =>
-                    member.user_id &&
-                    member.user_id !== actorId &&
-                    member.role !== "commissioner"
-            ),
-        [members, actorId]
-    );
-
-    useEffect(() => {
-        if (!newOwnerUserId) return;
-        if (!transferCandidates.some((member) => member.user_id === newOwnerUserId)) {
-            setNewOwnerUserId("");
-        }
-    }, [newOwnerUserId, transferCandidates]);
 
     if (!arena || !unlock || !arenaId || !actorId) return null;
 
@@ -1276,42 +1332,6 @@ const ArenaSettingsPanel = ({
     const handleUnlockArena = () => {
         dispatch(unlockArenaRequest({ arena_id: arenaId }));
     };
-
-    // --- Hosting actions -----------------------------------------------------
-    // Tier changes go through the purchase dialog because they may charge; the
-    // backend decides whether this call is a charge or a deferred schedule, and
-    // its message says which.
-    const handleActivateTier = (tier: ArenaSelfServiceHostingTier) => {
-        dispatch(clearArenaHostingActionMessage());
-        setTierDialog(tier);
-    };
-
-    const handleCloseTierDialog = () => {
-        setTierDialog(null);
-        dispatch(clearArenaHostingActionMessage());
-    };
-
-    const handleConfirmTier = () => {
-        if (!tierDialog) return;
-        dispatch(activateArenaHostingRequest({ arena_id: arenaId, tier: tierDialog }));
-    };
-
-    // Re-selecting the tier already in force is what clears a scheduled change —
-    // same endpoint, no charge (the backend returns action: "schedule_canceled").
-    const handleKeepCurrentTier = () => {
-        if (!hosting?.tier) return;
-        dispatch(activateArenaHostingRequest({ arena_id: arenaId, tier: hosting.tier }));
-    };
-
-    const handleSchedulePause = () => {
-        setPauseConfirmOpen(false);
-        dispatch(scheduleArenaPauseRequest({ arena_id: arenaId }));
-    };
-
-    const handleCancelPause = () => {
-        dispatch(cancelArenaPauseRequest({ arena_id: arenaId }));
-    };
-
     // Deferred: POST /group/arena/advance-period does not exist yet. When it does,
     // it needs a request/success/failure trio in arenaSlice + a handler in
     // arenaSaga (same shape as the three hosting actions above), then uncomment
@@ -1349,41 +1369,12 @@ const ArenaSettingsPanel = ({
         dispatch(clearArenaDeleteState());
     };
 
-    const handleOwnershipTransfer = () => {
-        if (!newOwnerUserId) return;
-        dispatch(
-            createArenaOwnershipTransferRequest({
-                arena_id: arenaId,
-                to_user_id: newOwnerUserId,
-            })
-        );
-        setNewOwnerUserId("");
-    };
-
-    const handleOwnershipResponse = (accept: boolean) => {
-        if (!transfer) return;
-        dispatch(
-            respondArenaOwnershipTransferRequest({
-                request_id: transfer.id,
-                action: accept ? "accept" : "reject",
-                arena_id: arenaId,
-            })
-        );
-    };
-
-    const handleCancelOwnershipTransfer = () => {
-        if (!transfer) return;
-        dispatch(
-            cancelArenaOwnershipTransferRequest({
-                request_id: transfer.id,
-                arena_id: arenaId,
-            })
-        );
-    };
 
     return (
-        <div className="space-y-7">
-            <section className="space-y-4">
+        /* The MVP's settings layout: full-bleed rules between sections rather
+           than a stack of bordered cards, with each section re-insetting itself. */
+        <div className="-mx-5 divide-y divide-white/10 sm:-mx-6">
+            <section className="space-y-4 px-5 pb-7 pt-1 sm:px-6">
                 <div>
                     <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
                         Arena identity
@@ -1472,14 +1463,58 @@ const ArenaSettingsPanel = ({
             {/* Permanent-unlock section: the only part of the hosting panel enabled so
                 far. Tier selection, change previews and the purchase-confirm flow stay
                 commented in ArenaHostingPanel below until their offer/usage data exists. */}
-            <section className="space-y-4 border-t border-white/10 pt-6">
+            {/* VENUE CHECK-IN — placeholder.
+                The MVP ships a full panel here (verified location, reusable QR,
+                assist codes, live session activity). None of that exists in this
+                backend yet, so the section holds its place and states so rather
+                than rendering controls that cannot work. Replace this whole block
+                with the real panel once the check-in endpoints land. */}
+            <section
+                aria-labelledby="venue-check-in-heading"
+                className="space-y-4 px-5 py-7 sm:px-6"
+            >
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <h2
+                            id="venue-check-in-heading"
+                            className="text-sm font-semibold uppercase tracking-[0.14em] text-white"
+                        >
+                            Venue Check-In
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
+                            One verified location and reusable QR for in-person Arena contests.
+                        </p>
+                    </div>
+                    <span className="mt-0.5 inline-flex shrink-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gray-600" />
+                        Coming soon
+                    </span>
+                </div>
+
+                <div className="rounded-xl border border-dashed border-white/15 bg-black/30 px-4 py-4">
+                    <p className="text-sm font-semibold text-white">Not available yet</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                        Venue Check-In will let you verify a physical location once and
+                        reuse its QR code for contests that require members to be on site.
+                        It is not enabled for this Arena yet — nothing to set up here for
+                        now.
+                    </p>
+                </div>
+            </section>
+
+            {/* BILLING AND HOSTING — the MVP's compact summary.
+                Tier selection, period controls and pause/resume are NOT repeated
+                here: /app-settings/plan/arena/[arenaId] owns them, and the button
+                below is the way in. The permanent-unlock CTA stays, because a
+                locked Arena has no other entry point to it. */}
+            <section className="space-y-4 px-5 py-7 sm:px-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
-                            Unlock and hosting
+                            Billing and hosting
                         </h2>
                         <p className="mt-1 text-xs leading-5 text-gray-500">
-                            Permanent Arena ownership and monthly operating capacity are separate.
+                            Arena hosting is billed separately from personal League Pro.
                         </p>
                     </div>
                     <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-300">
@@ -1487,7 +1522,6 @@ const ArenaSettingsPanel = ({
                     </span>
                 </div>
 
-                {/* Step 2 — legacy grandfathered notice. Purely driven by unlock.source. */}
                 {unlock.source === "legacy_grandfathered" ? (
                     <p className="rounded-xl border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-xs leading-5 text-violet-100">
                         This legacy Arena is permanently grandfathered. Its migration month is
@@ -1495,13 +1529,17 @@ const ArenaSettingsPanel = ({
                     </p>
                 ) : null}
 
-                {unlock.status === "locked" ? (
-                    <div className="rounded-xl border border-sky-300/25 bg-sky-500/10 p-5">
-                        <p className="font-semibold text-white">Permanent Arena Unlock</p>
-                        <p className="mt-2 text-sm leading-6 text-gray-300">
-                            {unlockOffer.priceLabel} {unlockOffer.cadenceLabel} per Arena, including
-                            one {ARENA_INCLUDED_TIER_LABEL} month. The unlock stays with the Arena through pause,
-                            reactivation, and ownership transfer.
+                {/* An unlocked Arena without a hosting row yet has nothing to
+                    summarise, so the banner is skipped rather than faked. */}
+                {unlock.status === "unlocked" && hosting ? (
+                    <ArenaStatusBanner hosting={hosting} />
+                ) : unlock.status === "unlocked" ? null : (
+                    <div className="rounded-xl border border-violet-300/20 bg-violet-500/10 px-4 py-3">
+                        <p className="text-sm leading-6 text-violet-100">
+                            This Arena still needs its permanent unlock. One month of{" "}
+                            {ARENA_INCLUDED_TIER_LABEL} hosting is included with the{" "}
+                            {unlockOffer.priceLabel} unlock, and the unlock stays with the Arena
+                            through pause, reactivation, and ownership transfer.
                         </p>
                         {isOwner ? (
                             <button
@@ -1515,259 +1553,31 @@ const ArenaSettingsPanel = ({
                             </button>
                         ) : (
                             <p className="mt-3 text-xs font-semibold text-gray-500">
-                                The owner controls the permanent unlock.
+                                Only the Arena owner can purchase the permanent unlock.
                             </p>
                         )}
                     </div>
-                ) : hosting ? (
-                    <>
-                        {/* Step 5 — state warnings. Read straight off hosting.status; the
-                            backend remains the authority on what is actually permitted. */}
-                        {hosting.status === "pause_scheduled" ? (
-                            <p className="rounded-xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-xs leading-5 text-amber-100">
-                                Cancel the scheduled pause before changing hosting tiers.
-                            </p>
-                        ) : null}
-                        {hosting.status === "cleanup" ? (
-                            <p className="rounded-xl border border-orange-300/20 bg-orange-500/10 px-4 py-3 text-xs leading-5 text-orange-100">
-                                Finish or cancel unresolved Locked and Grading contests before
-                                choosing a reactivation tier.
-                            </p>
-                        ) : null}
+                )}
 
-                        {/* Step 6 — read-only current hosting. Every value comes from the
-                            hosting-details response; no client-side rules. */}
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                    <p className="font-semibold text-white">Current hosting</p>
-                                    <p className="mt-1 text-xs text-gray-500">
-                                        {getArenaTierLabel(hosting)} · {getArenaHostingStatusLabel(hosting)}
-                                    </p>
-                                </div>
-                                {formatCents(hosting.monthly_amount_cents) ? (
-                                    <p className="text-sm text-gray-300">
-                                        {formatCents(hosting.monthly_amount_cents)}
-                                        <span className="text-xs text-gray-500"> / month</span>
-                                    </p>
-                                ) : null}
-                            </div>
+                {isOwner ? (
+                    <div className="flex justify-end">
+                        <Link
+                            href={`/app-settings/plan/arena/${arenaId}`}
+                            className="inline-flex min-h-11 items-center rounded-xl border border-violet-300/35 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20"
+                        >
+                            Manage billing and hosting
+                        </Link>
+                    </div>
+                ) : (
+                    <p className="text-xs leading-5 text-gray-500">
+                        Only the Arena owner can view receipts or change hosting. Managers retain
+                        operational access here.
+                    </p>
+                )}
 
-                            <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
-                                {[
-                                    { label: "members", value: hosting.participating_member_limit },
-                                    { label: "managers", value: hosting.manager_limit },
-                                    { label: "contests", value: hosting.active_contest_limit },
-                                ].map((item) => (
-                                    <div
-                                        key={item.label}
-                                        className="rounded-lg border border-white/10 bg-black/30 px-2 py-2"
-                                    >
-                                        <dt className="text-[10px] uppercase tracking-wide text-gray-500">
-                                            {item.label}
-                                        </dt>
-                                        <dd className="mt-0.5 text-sm font-semibold text-white">
-                                            {item.value}
-                                        </dd>
-                                    </div>
-                                ))}
-                            </dl>
-
-                            <div className="mt-4 space-y-1 text-xs text-gray-500">
-                                {hosting.included_month_ends_at ? (
-                                    <p>
-                                        Included month ends{" "}
-                                        {formatDateTime(hosting.included_month_ends_at)}
-                                    </p>
-                                ) : null}
-                                {hosting.paid_through_at ? (
-                                    <p>Paid through {formatDateTime(hosting.paid_through_at)}</p>
-                                ) : null}
-                                {hosting.period_ends_at ? (
-                                    <p>Period ends {formatDateTime(hosting.period_ends_at)}</p>
-                                ) : null}
-                                {hosting.pause_scheduled_for ? (
-                                    <p>Pause scheduled for {formatDateTime(hosting.pause_scheduled_for)}</p>
-                                ) : null}
-                            </div>
-                        </div>
-
-                        {/* Steps 7a + 7b — tier grid. Card content (name, price, limits) is
-                            the STATIC frontend catalogue; only the current tier comes from
-                            the backend (hosting.tier). If the backend also returns a verdict
-                            for a tier in available_tiers, its summary/allowed renders on top.
-                            The per-tier action button arrives in step 7c. */}
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            {SELF_SERVICE_ARENA_TIERS.map((tierId) => {
-                                const offer = getArenaHostingOffer(tierId);
-                                const isCurrent = hosting.tier === tierId;
-                                const verdict = availableTiers.find((item) => item.tier === tierId);
-                                return (
-                                    <article
-                                        key={tierId}
-                                        className={`rounded-xl border p-4 ${isCurrent
-                                            ? "border-sky-300/45 bg-sky-500/10"
-                                            : "border-white/10 bg-white/[0.03]"
-                                            }`}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <p className="font-semibold text-white">{offer.name}</p>
-                                            {isCurrent ? (
-                                                <span className="text-[9px] font-semibold uppercase tracking-wide text-sky-200">
-                                                    current
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                        <p className="mt-1 text-sm text-gray-300">
-                                            {offer.priceLabel}
-                                            <span className="text-xs text-gray-500"> / month</span>
-                                        </p>
-                                        <p className="mt-3 text-xs leading-5 text-gray-500">
-                                            {offer.limits.participatingMemberLimit ?? "—"} members ·{" "}
-                                            {offer.limits.managerLimit ?? "—"} managers ·{" "}
-                                            {offer.limits.activeContestLimit ?? "—"} contests
-                                        </p>
-                                        {!isCurrent && verdict?.summary ? (
-                                            <p
-                                                className={`mt-2 text-[11px] leading-4 ${verdict.allowed ? "text-gray-500" : "text-amber-200"
-                                                    }`}
-                                            >
-                                                {verdict.summary}
-                                            </p>
-                                        ) : null}
-                                        {/* Step 7c. Only disabled when the backend explicitly
-                                            says this tier is not allowed; otherwise the server
-                                            stays the authority and may still reject. */}
-                                        {isOwner && !isCurrent ? (
-                                            <button
-                                                type="button"
-                                                disabled={
-                                                    (verdict ? !verdict.allowed : false) ||
-                                                    hostingActionLoading
-                                                }
-                                                onClick={() => handleActivateTier(tierId)}
-                                                className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-sky-300/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                            >
-                                                {hostingActionTier === tierId
-                                                    ? "Working…"
-                                                    : verdict?.action_label ??
-                                                    `Switch to ${offer.name}`}
-                                            </button>
-                                        ) : null}
-                                    </article>
-                                );
-                            })}
-
-                            {/* Custom tier is contact-only, so it never becomes selectable. */}
-                            <article className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-4">
-                                <p className="font-semibold text-white">
-                                    {getArenaHostingOffer("custom").name}
-                                </p>
-                                <p className="mt-1 text-sm text-gray-400">
-                                    {getArenaHostingOffer("custom").priceLabel} ·{" "}
-                                    {getArenaHostingOffer("custom").cadenceLabel}
-                                </p>
-                                <p className="mt-3 text-xs leading-5 text-gray-500">
-                                    {getArenaHostingOffer("custom").summary}
-                                </p>
-                                <span className="mt-3 inline-block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                    Contact state
-                                </span>
-                            </article>
-                        </div>
-
-                        {/* Scheduled-tier notice (display half of step 8). The "Keep <tier>"
-                            action needs the activate-hosting endpoint, so it stays out for now. */}
-                        {hosting.scheduled_tier ? (
-                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-300/20 bg-sky-500/10 px-4 py-3 text-xs leading-5 text-sky-100">
-                                <span>
-                                    {arenaTierLabel(hosting.scheduled_tier)} is scheduled
-                                    {hosting.status === "included_month"
-                                        ? ` after the included month${hosting.included_month_ends_at
-                                            ? ` ends ${formatDateTime(hosting.included_month_ends_at)}`
-                                            : ""
-                                        }.`
-                                        : " for the next paid period."}
-                                </span>
-                                {/* Step 8 — reuses activate-hosting with the current tier. */}
-                                {isOwner &&
-                                    hosting.status === "active" &&
-                                    hosting.tier &&
-                                    hosting.tier !== "custom" ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleKeepCurrentTier}
-                                        disabled={hostingActionLoading}
-                                        className="rounded-lg border border-sky-200/30 px-3 py-1.5 font-semibold uppercase tracking-wide transition hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        Keep {arenaTierLabel(hosting.tier)}
-                                    </button>
-                                ) : null}
-                            </div>
-                        ) : null}
-
-                        {/* Steps 9a–9c — pause / cancel pause / advance period. Which button
-                            shows is keyed off hosting.status; the backend still decides
-                            whether the action is actually permitted. */}
-                        {isOwner ? (
-                            <div className="flex flex-wrap gap-2">
-                                {hosting.status === "included_month" ||
-                                    hosting.status === "active" ||
-                                    hosting.status === "pause_scheduled" ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setPauseConfirmOpen(true)}
-                                        disabled={hostingActionLoading}
-                                        className="rounded-lg border border-amber-300/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        {hosting.status === "pause_scheduled"
-                                            ? "Reschedule pause"
-                                            : hosting.status === "included_month" &&
-                                                hosting.scheduled_tier
-                                                ? "Cancel next tier and pause"
-                                                : "Pause at period end"}
-                                    </button>
-                                ) : null}
-                                {hosting.status === "pause_scheduled" ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleCancelPause}
-                                        disabled={hostingActionLoading}
-                                        className="rounded-lg border border-emerald-300/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        Cancel scheduled pause
-                                    </button>
-                                ) : null}
-
-                                {/* Deferred with handleAdvancePeriod above — needs
-                                    POST /group/arena/advance-period to exist first.
-                                {hosting.status !== "paused" &&
-                                    hosting.status !== "not_started" &&
-                                    hosting.status !== "past_due" ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleAdvancePeriod}
-                                        disabled={hostingActionLoading}
-                                        className="rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        {hosting.status === "cleanup"
-                                            ? "Recheck cleanup"
-                                            : "Simulate period end"}
-                                    </button>
-                                ) : null}
-                                */}
-                            </div>
-                        ) : (
-                            <p className="text-xs text-gray-500">
-                                Only the Arena owner controls hosting.
-                            </p>
-                        )}
-                    </>
-                ) : null}
-
-                {/* Simulated-purchase confirm step, driven straight off the redux unlock
-                    state. Rendered OUTSIDE the "locked" branch so the success screen
-                    survives the unlock flipping this Arena to unlocked. */}
+                {/* Simulated-purchase confirm step, driven straight off the redux
+                    unlock state. Rendered OUTSIDE the "locked" branch so the success
+                    screen survives the unlock flipping this Arena to unlocked. */}
                 <PurchaseFlowDialog
                     open={unlockOpen}
                     kind="arena_unlock"
@@ -1792,210 +1602,10 @@ const ArenaSettingsPanel = ({
                     onClose={handleCloseUnlockDialog}
                     returnFocusRef={unlockButtonRef}
                 />
-
-                {/* Tier change. The backend decides charge-now vs defer-to-renewal, so
-                    the confirm copy stays neutral and the success screen shows the
-                    server's own message, which states which one happened. */}
-                {tierDialog ? (
-                    <PurchaseFlowDialog
-                        open
-                        kind="arena_hosting"
-                        eyebrow="simulated billing"
-                        title={`Switch to ${getArenaHostingOffer(tierDialog).name}`}
-                        description={
-                            availableTiers.find((item) => item.tier === tierDialog)?.summary ||
-                            "An upgrade is charged now and starts immediately. A downgrade, or any change made during the included month, starts at your next renewal instead."
-                        }
-                        offer={{
-                            name: getArenaHostingOffer(tierDialog).name,
-                            priceLabel: getArenaHostingOffer(tierDialog).priceLabel,
-                            cadenceLabel: getArenaHostingOffer(tierDialog).cadenceLabel,
-                        }}
-                        confirmLabel={
-                            availableTiers.find((item) => item.tier === tierDialog)
-                                ?.action_label ?? `Confirm ${getArenaHostingOffer(tierDialog).name}`
-                        }
-                        submittingLabel="Applying hosting change…"
-                        status={
-                            hostingActionLoading
-                                ? "submitting"
-                                : hostingActionError
-                                    ? "error"
-                                    : hostingActionMessage
-                                        ? "success"
-                                        : "idle"
-                        }
-                        errorMessage={hostingActionError}
-                        successTitle="Hosting updated"
-                        successMessage={hostingActionMessage}
-                        onConfirm={handleConfirmTier}
-                        onClose={handleCloseTierDialog}
-                    />
-                ) : null}
-
-                {/* Scheduling a pause permanently consumes the included month — even if
-                    the pause is cancelled later — so it is confirmed rather than fired
-                    straight off the button. */}
-                {pauseConfirmOpen && hosting ? (
-                    <div
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="arena-pause-title"
-                        onClick={() => {
-                            if (!hostingActionLoading) setPauseConfirmOpen(false);
-                        }}
-                    >
-                        <div
-                            className="w-full max-w-sm space-y-4 rounded-2xl border border-white/15 bg-black/90 p-5 shadow-2xl"
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <div className="space-y-1">
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
-                                    are you sure?
-                                </p>
-                                <p id="arena-pause-title" className="text-sm text-gray-200">
-                                    Pause this Arena at the end of the current period?
-                                </p>
-                            </div>
-                            <p className="text-[11px] leading-5 text-gray-400">
-                                Your Arena stays fully open until then, and you can cancel the pause
-                                any time before it takes effect. After it does, the Arena becomes
-                                read-only — identity, members, history, standings and the permanent
-                                unlock are all preserved.
-                            </p>
-                            {hosting.status === "included_month" ? (
-                                <p className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-[11px] leading-5 text-amber-100">
-                                    This uses up your included {ARENA_INCLUDED_TIER_LABEL} month. Cancelling the pause
-                                    later does not bring it back.
-                                    {hosting.scheduled_tier
-                                        ? ` Your scheduled ${arenaTierLabel(
-                                            hosting.scheduled_tier
-                                        )} will also be cancelled.`
-                                        : ""}
-                                </p>
-                            ) : null}
-                            <div className="flex items-center justify-end gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setPauseConfirmOpen(false)}
-                                    disabled={hostingActionLoading}
-                                    className="rounded-full border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-200 transition hover:border-white/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSchedulePause}
-                                    disabled={hostingActionLoading}
-                                    className="rounded-full border border-amber-300/70 bg-amber-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-50 transition hover:border-amber-200 hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {hostingActionLoading ? "working..." : "Schedule pause"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                ) : null}
             </section>
 
-            {canRespondToTransfer && transfer ? (
-                <section className="space-y-4 border-t border-sky-300/15 pt-6">
-                    <div>
-                        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-sky-100">
-                            Ownership invitation
-                        </h2>
-                        <p className="mt-1 text-xs leading-5 text-gray-400">
-                            @{transfer.from_owner?.username ?? "The current owner"} invited you to take
-                            ownership of this Arena. Accepting keeps its permanent unlock, hosting
-                            state, members, contests, and history.
-                        </p>
-                        <p className="mt-1 text-xs leading-5 text-amber-200">
-                            This invitation expires {formatDateTime(transfer.expires_at)}.
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            disabled={transferActionLoading}
-                            onClick={() => handleOwnershipResponse(true)}
-                            className="rounded-xl bg-sky-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-sky-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Accept ownership
-                        </button>
-                        <button
-                            type="button"
-                            disabled={transferActionLoading}
-                            onClick={() => handleOwnershipResponse(false)}
-                            className="rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-300 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Decline
-                        </button>
-                    </div>
-                </section>
-            ) : null}
-
             {isOwner ? (
-                <section className="space-y-4 border-t border-white/10 pt-6">
-                    <div>
-                        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
-                            Transfer ownership
-                        </h2>
-                        <p className="mt-1 text-xs leading-5 text-gray-500">
-                            The permanent unlock, hosting history, and included-month record stay with
-                            this Arena. The new owner does not need personal Pro and must accept the
-                            invitation before ownership changes.
-                        </p>
-                    </div>
-                    {canCancelTransfer && transfer ? (
-                        <div className="space-y-3 rounded-xl border border-amber-300/20 bg-amber-500/10 px-4 py-3">
-                            <p className="text-xs leading-5 text-amber-100">
-                                Waiting for @{transfer.to_user?.username ?? transfer.to_user_id} to
-                                accept ownership by {formatDateTime(transfer.expires_at)}.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleCancelOwnershipTransfer}
-                                disabled={transferActionLoading}
-                                className="rounded-lg border border-amber-200/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                Withdraw invitation
-                            </button>
-                        </div>
-                    ) : transferCandidates.length ? (
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <select
-                                aria-label="New Arena owner"
-                                value={newOwnerUserId}
-                                onChange={(event) => setNewOwnerUserId(event.target.value)}
-                                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/60"
-                            >
-                                <option value="">Choose an active member</option>
-                                {transferCandidates.map((membership) => (
-                                    <option key={membership.id} value={membership.user_id}>
-                                        @{membership.profiles?.username ?? membership.user_id} ·{" "}
-                                        {roleLabel(membership.role ?? "member")}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                type="button"
-                                onClick={handleOwnershipTransfer}
-                                disabled={!newOwnerUserId || transferActionLoading}
-                                className="rounded-xl border border-amber-300/35 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                Send transfer invitation
-                            </button>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-gray-500">
-                            Ownership can only move to an existing Arena member. Invite someone first.
-                        </p>
-                    )}
-                </section>
-            ) : null}
-
-            {isOwner ? (
-                <section className="space-y-4 border-t border-red-400/15 pt-6">
+                <section className="space-y-4 px-5 py-7 sm:px-6">
                     <div>
                         <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-red-200">
                             Permanently delete Arena
@@ -2085,7 +1695,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     // `arena?.x` reads untouched.
     const scopedArena = useScopedGroup(arenaId);
     const arena = scopedArena.group;
-    const { hosting, unlock, arenaContests, loading: arenaLoader, error: arenaErr } = useSelector((state: RootState) => state.arena);
+    const { hosting, unlock, loading: arenaLoader, error: arenaErr } = useSelector((state: RootState) => state.arena);
 
     useEffect(() => {
         if (!arenaId || !currentUser) return;
@@ -2093,7 +1703,9 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
         dispatch(fetchGroupByIdRequest({ groupId: arenaId }));
         dispatch(fetchGroupOwnerPlanDetailsRequest({ group_id: arenaId }));
         dispatch(fetchArenaHostingDetailsRequest({ arena_id: arenaId }));
-        dispatch(fetchArenaContestsRequest({ arena_id: arenaId }));
+        // No `fetchArenaContestsRequest` here any more: the Contests tab reads
+        // /group/feed-contest/list/* and owns those fetches itself, so the legacy
+        // arena_contests list is nothing this screen still draws.
         dispatch(fetchArenaOwnershipTransferRequest({ arena_id: arenaId }));
         dispatch(
             fetchGroupMembersByGroupIdRequest({
@@ -2116,7 +1728,6 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     };
 
     const memberCount = arena?.member_count ?? arena?.members?.length ?? 0;
-    const activeContestCount = arena?.active_contest ?? 0;
 
     if (scopedArena.status === "missing") {
         return (
@@ -2231,14 +1842,10 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
 
                 {activeTab === "contests" ? (
                     <ArenaContestsPanel
-                        currentUserId={currentUser?.userId}
-                        arena={arena}
                         arenaId={arenaId}
-                        contests={arenaContests}
                         role={currentMembership}
                         hosting={hosting}
-                        writable={isArenaStaffRole(currentMembership)}
-                        activeContestCount={arenaContests.length}
+                        unlock={unlock}
                     />
                 ) : null}
 

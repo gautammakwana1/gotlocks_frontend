@@ -13,12 +13,45 @@ import dockStyles from "./BottomDock.module.css";
 
 type TabIconProps = { className?: string };
 
+type TabAccent = "sky" | "violet";
+
 type TabDefinition = {
     id: string;
     label: string;
     href: string;
     icon: (props: TabIconProps) => ReactElement;
     matchers: string[];
+    /**
+     * Which brand colour this tab lights up in. Defaults to the app's sky; Arenas
+     * carry violet, the same identity they use on their own screens.
+     */
+    accent?: TabAccent;
+};
+
+/**
+ * Written out as whole class strings on purpose — Tailwind scans source text, so
+ * a composed `border-${accent}-300/70` would never be generated.
+ */
+const TAB_ACCENT: Record<TabAccent, {
+    activeFrame: string;
+    guidedFrame: string;
+    iconGradient: string;
+}> = {
+    sky: {
+        activeFrame:
+            "sm:border-sky-300/70 sm:bg-sky-400/10 sm:shadow-[0_12px_40px_-18px_rgba(96,165,250,0.7)]",
+        guidedFrame:
+            "border-sky-300/70 bg-sky-400/15 shadow-[0_12px_40px_-16px_rgba(125,211,252,0.8)]",
+        iconGradient: "from-sky-300 via-blue-500 to-sky-300 shadow-lg shadow-blue-500/35",
+    },
+    violet: {
+        activeFrame:
+            "sm:border-violet-300/70 sm:bg-violet-400/10 sm:shadow-[0_12px_40px_-18px_rgba(167,139,250,0.7)]",
+        guidedFrame:
+            "border-violet-300/70 bg-violet-400/15 shadow-[0_12px_40px_-16px_rgba(196,181,253,0.8)]",
+        iconGradient:
+            "from-violet-300 via-violet-500 to-fuchsia-300 shadow-lg shadow-violet-500/35",
+    },
 };
 
 const HIDDEN_ROUTES = [
@@ -193,19 +226,21 @@ const TabInner = ({
     active: boolean;
     locked?: boolean;
     isGuided?: boolean;
-}) => (
+}) => {
+    const accent = TAB_ACCENT[tab.accent ?? "sky"];
+    return (
     <div
         className={`${dockStyles.dockTab} relative flex w-full flex-col items-center justify-center rounded-none bg-transparent text-[10px] font-semibold tracking-[0.08em] transition sm:rounded-[20px] sm:border ${active
-            ? "sm:border-sky-300/70 sm:bg-sky-400/10 sm:shadow-[0_12px_40px_-18px_rgba(96,165,250,0.7)]"
+            ? accent.activeFrame
             : isGuided
-                ? "border-sky-300/70 bg-sky-400/15 shadow-[0_12px_40px_-16px_rgba(125,211,252,0.8)]"
+                ? accent.guidedFrame
                 : "sm:border-white/10 sm:bg-white/[0.03] sm:hover:border-white/25 sm:hover:bg-white/[0.08]"
             } ${locked ? "opacity-45" : ""}`}
     >
         {isGuided && <GuidedArrow />}
         <div
             className={`mb-1 flex h-12 w-[calc(100%-0.25rem)] max-w-[52px] items-center justify-center rounded-2xl bg-gradient-to-br text-white transition ${active || isGuided
-                ? "from-sky-300 via-blue-500 to-sky-300 shadow-lg shadow-blue-500/35"
+                ? accent.iconGradient
                 : "from-white/20 via-white/10 to-white/0 text-gray-200 group-hover:from-white/30 group-hover:via-white/20 group-hover:to-white/10"
                 }`}
         >
@@ -218,7 +253,8 @@ const TabInner = ({
         </span>
         {locked && !active && <LockBadge />}
     </div>
-);
+    );
+};
 
 const TabButton = ({
     tab,
@@ -318,6 +354,8 @@ export const MainTabBar = () => {
                 href: "/arena",
                 icon: ArenaIcon,
                 matchers: ["/arenas", "/arena"],
+                // Arenas are violet everywhere else in the app; the dock follows.
+                accent: "violet",
             },
             {
                 id: "social",

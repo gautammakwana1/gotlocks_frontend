@@ -35,12 +35,19 @@ export type FeedContestGameCatalog = {
 export const useFeedContestGameCatalog = (
     sports: readonly FeedContestSport[],
     /** `YYYY-MM-DD`, a comma list, or `YYYY-MM-DD-YYYY-MM-DD`. Empty = fetch nothing. */
-    dateSpec: string
+    dateSpec: string,
+    /**
+     * The zone `dateSpec` names its days in, sent as `X-Timezone`. Omit to let
+     * axiosInstance use the browser's — which is right for General Combo, where
+     * the organizer drew the range on their own calendar, and wrong for Sunday
+     * Pick'em, whose Sunday is an Eastern one.
+     */
+    timeZone?: string
 ): FeedContestGameCatalog => {
     const dispatch = useDispatch();
     // Sports arrive as a fresh array on every render; the key keeps the effect
     // and the memo keyed on the contents instead of the identity.
-    const requestKey = feedContestScheduleRequestKey(sports, dateSpec);
+    const requestKey = feedContestScheduleRequestKey(sports, dateSpec, timeZone);
     const shouldFetch = Boolean(dateSpec) && sports.length > 0;
 
     const storedKey = useSelector((state: RootState) => state.feedContestSchedule.requestKey);
@@ -53,11 +60,14 @@ export const useFeedContestGameCatalog = (
             dispatch(clearFeedContestSchedules());
             return;
         }
-        const [sportsPart, datePart] = requestKey.split("|");
+        // Split rather than closing over the props, so the effect depends only on
+        // the key — the arrays it was built from are new objects every render.
+        const [sportsPart, datePart, zonePart] = requestKey.split("|");
         dispatch(
             fetchFeedContestSchedulesRequest({
                 sports: sportsPart.split(",").filter(Boolean),
                 date: datePart,
+                ...(zonePart ? { time_zone: zonePart } : {}),
             })
         );
     }, [dispatch, requestKey, shouldFetch]);

@@ -430,12 +430,13 @@ export const ConnectedStructuredFeed = ({
     const feedContestPickToRecord = useCallback(
         (item: FeedContestPickRow): StructuredFeedRecord => {
             const detail = item.pick;
-            // The two surfaces route their contest detail differently: an Arena's
-            // lives at /arena/<id>/contests/<contestId>, a League's under
-            // /league/<id>/feed-contests/<contestId>.
+            // Both surfaces run the same engine, so both route their contest
+            // detail through /feed-contests/<contestId>. NOT the Arena's older
+            // /arena/<id>/contests/<contestId>: that is the legacy arena_contests
+            // screen, and these ids are feed_contests rows.
             const contestHref = item.contest
                 ? groupType === "arena"
-                    ? `/arena/${groupId}/contests/${item.contest.id}`
+                    ? `/arena/${groupId}/feed-contests/${item.contest.id}`
                     : `/league/${groupId}/feed-contests/${item.contest.id}`
                 : undefined;
             const settled = Boolean(detail?.result && detail.result !== "pending");

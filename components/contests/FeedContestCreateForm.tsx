@@ -47,6 +47,7 @@ import {
     toFeedContestSportCounts,
     toScheduleDateSpec,
     toZonedDateKey,
+    zonedKickoffFormatter,
     type ContestGameOption,
     type FeedContestSport,
     type SundayPickemSlateMode,
@@ -388,6 +389,40 @@ export const FeedContestCreateForm = ({
     const organizerToday = toZonedDateKey(creatorNow, organizerTimeZone);
     const organizerHorizonEnd = addDateKeyDays(organizerToday, SLATE_HORIZON_DAYS);
 
+    /*
+     * SUNDAY PICK'EM READS THE LEAGUE CLOCK, NOT THE ORGANIZER'S.
+     *
+     * A Pick'em card is one EASTERN Sunday — `buildSundayPickemSlate` on the
+     * server runs its "same Sunday" test and its kickoff windows in
+     * America/New_York and rejects a slate that spans two Eastern dates.
+     *
+     * Scoping this template's horizon in the organizer's zone therefore cut a
+     * single Sunday in half for anyone east of ET: a 4:25pm ET kickoff is Monday
+     * in Kolkata, so the late and Sunday-night games of a Sunday at the edge of
+     * the window fell outside [today, today+14] and disappeared — from the
+     * REQUEST as well as the filter, since the endpoint files each kickoff under
+     * a day in the zone `X-Timezone` names.
+     *
+     * General Combo keeps the organizer's zone: there the organizer really is
+     * drawing a range on their own calendar.
+     */
+    const easternToday = toZonedDateKey(creatorNow, SCHEDULE_TIME_ZONE);
+    const easternHorizonEnd = addDateKeyDays(easternToday, SLATE_HORIZON_DAYS);
+
+    /*
+     * Every Pick'em time on screen is stated on the league clock. For an
+     * organizer who is not ON that clock, an Eastern time alone is not readable —
+     * a 4:25pm ET kickoff is 1:55am the NEXT day in Kolkata — so each kickoff
+     * also carries its equivalent in the organizer's own zone, labelled. Both
+     * lines print `timeZoneName: "short"`, so neither can be mistaken for the
+     * other.
+     */
+    const organizerKickoffFormatter = useMemo(
+        () => zonedKickoffFormatter(organizerTimeZone),
+        [organizerTimeZone]
+    );
+    const showsLocalKickoff = organizerTimeZone !== SCHEDULE_TIME_ZONE;
+
     // One pass, read by every initialiser below, so the whole draft lands on the
     // FIRST commit — `template`, the slate dates and the sports together decide
     // the catalog query, and a render where any of them is still empty clears the
@@ -498,13 +533,18 @@ export const FeedContestCreateForm = ({
     );
     const catalogDateSpec =
         template === "sunday_pickem"
-            ? toScheduleDateSpec(organizerToday, organizerHorizonEnd)
+            ? toScheduleDateSpec(easternToday, easternHorizonEnd)
             : slateDateSpec;
+    // Pinned to the league clock for Pick'em so the days the server buckets by
+    // are the same days `catalogDateSpec` names. General Combo passes undefined
+    // and keeps axiosInstance's browser-zone default.
+    const catalogTimeZone =
+        template === "sunday_pickem" ? SCHEDULE_TIME_ZONE : undefined;
     const {
         options: catalogOptions,
         loading: catalogLoading,
         error: catalogError,
-    } = useFeedContestGameCatalog(catalogSports, catalogDateSpec);
+    } = useFeedContestGameCatalog(catalogSports, catalogDateSpec, catalogTimeZone);
 
     // Terminal states for both publication modes. Deeper rules (organizer
     // authority, hosting, active-contest limits, slate freshness) only live
@@ -557,16 +597,34 @@ export const FeedContestCreateForm = ({
         setToast,
     ]);
 
-    // The server already filtered to the requested days in the zone `x-timezone`
-    // named; this re-checks against the ORGANIZER's zone, which differs whenever
-    // the account carries an explicit one.
+    // The server already filtered to the requested days; this re-checks the
+    // boundaries client-side — on the SAME axis the request used, or the two
+    // disagree and the edge games of the window drop out.
+    //
+    // Pick'em compares `scheduleDateKey`, which `toContestGameOption` computed in
+    // Eastern; General Combo re-reads the kickoff in the organizer's zone, which
+    // differs from the header's whenever the account carries an explicit one.
     const contestGameOptions = useMemo(
         () =>
             catalogOptions.filter((option) => {
+                if (template === "sunday_pickem") {
+                    return (
+                        option.scheduleDateKey >= easternToday &&
+                        option.scheduleDateKey <= easternHorizonEnd
+                    );
+                }
                 const dateKey = toZonedDateKey(option.gameStartsAt, organizerTimeZone);
                 return dateKey >= organizerToday && dateKey <= organizerHorizonEnd;
             }),
-        [catalogOptions, organizerHorizonEnd, organizerTimeZone, organizerToday]
+        [
+            catalogOptions,
+            easternHorizonEnd,
+            easternToday,
+            organizerHorizonEnd,
+            organizerTimeZone,
+            organizerToday,
+            template,
+        ]
     );
 
     const wizardSteps =
@@ -1276,6 +1334,25 @@ export const FeedContestCreateForm = ({
                                         ? `Choose up to ${MAX_SLATE_DAYS} consecutive game dates, then select every sport you want in the slate. All eligible matchups start included for review.`
                                         : "All games in the selected Sunday window start included. Uncheck any matchup you want to exclude."}
                                 </p>
+                                {/* Stated once, up front: an organizer off the league clock is
+                                    about to read Eastern dates that do not match their own
+                                    calendar, and a card whose games run past their midnight is
+                                    correct rather than a mistake. */}
+                                {template === "sunday_pickem" && showsLocalKickoff ? (
+                                    <p
+                                        role="note"
+                                        className="mt-3 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs normal-case leading-5 text-gray-400"
+                                    >
+                                        Every date and kickoff on this step is the NFL league clock
+                                        (Eastern Time), the same clock the contest is scored on. In{" "}
+                                        <span className="font-semibold text-gray-200">
+                                            {organizerTimeZone.replaceAll("_", " ")}
+                                        </span>{" "}
+                                        the later games of an Eastern Sunday fall after midnight, so a
+                                        card can run into your Monday — each matchup below shows your
+                                        local time too.
+                                    </p>
+                                ) : null}
                             </div>
 
                             {template === "multi_pick" ? (
@@ -1471,6 +1548,17 @@ export const FeedContestCreateForm = ({
                                                                     new Date(option.gameStartsAt)
                                                                 )}
                                                             </span>
+                                                            {/* An Eastern time alone is unreadable off that
+                                                                clock — a late kickoff is the NEXT day in
+                                                                Asia. Shown only when the zones differ. */}
+                                                            {showsLocalKickoff ? (
+                                                                <span className="mt-0.5 block text-[11px] font-medium text-gray-600">
+                                                                    Your time ·{" "}
+                                                                    {organizerKickoffFormatter.format(
+                                                                        new Date(option.gameStartsAt)
+                                                                    )}
+                                                                </span>
+                                                            ) : null}
                                                         </span>
                                                     </label>
                                                 );

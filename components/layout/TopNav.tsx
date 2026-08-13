@@ -611,7 +611,7 @@ export const TopNav = () => {
             </button>
             <Link
               href="/global-points-shop"
-              className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-sky-300/50 hover:bg-sky-400/10"
+              className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-violet-300/50 hover:bg-violet-400/10"
               onClick={() => setMenuOpen(false)}
             >
               <span>reward room</span>

@@ -78,11 +78,20 @@ export const FEED_CONTEST_LEAGUE_FEEDS: Readonly<
     ],
 };
 
-/** Identifies one (sports, dates) slate request; order-insensitive on sports. */
+/**
+ * Identifies one (sports, dates, zone) slate request; order-insensitive on sports.
+ *
+ * The ZONE is part of the identity, not decoration: the endpoint files each
+ * kickoff under a calendar day in the zone `X-Timezone` names, so the same
+ * sports over the same dates return DIFFERENT games in Eastern than in the
+ * browser's zone. Leaving it out would let a Sunday Pick'em slate be served the
+ * General Combo answer that happened to be cached under the same key.
+ */
 export const feedContestScheduleRequestKey = (
     sports: readonly string[],
-    date: string
-) => `${[...sports].sort().join(",")}|${date}`;
+    date: string,
+    timeZone = ""
+) => `${[...sports].sort().join(",")}|${date}|${timeZone}`;
 
 /** One selectable row of the slate picker. */
 export type ContestGameOption = {

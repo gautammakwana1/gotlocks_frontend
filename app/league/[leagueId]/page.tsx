@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { formatDateTime } from "@/lib/utils/date";
 import { Contest, Group, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -24,8 +22,9 @@ import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 import LeagueFeedStandingsPanel from "@/components/group/LeagueFeedStandingsPanel";
 import ContestHubCreateAction from "@/components/contests/ContestHubCreateAction";
-import { contestPreviewCardSizeClassName } from "@/components/contests/FeedContestCard";
 import FeedContestSections from "@/components/contests/FeedContestSections";
+import { ContestPreviewCard } from "@/components/contests/preview/ContestPreviewCard";
+import { buildFantasyContestPreviewModel } from "@/components/contests/preview/fantasyContestPreview";
 import { fetchFeedContestsRequest, resetFeedContests } from "@/lib/redux/slices/feedContestSlice";
 import type { FeedContestSection } from "@/lib/interfaces/interfaces";
 import { canCreateContestInGroup, getActiveContestCapacityLabel, getActiveLeagueFeedContestCapacityLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getRegularMemberCapacityLabel, normalizeHostingTier } from "@/lib/groups/limits";
@@ -245,9 +244,6 @@ const LeagueTierDetailsLabel = ({
     </span>
   );
 };
-
-const contestSportLabels = (contest: Contest) =>
-  contest.sports.length > 1 ? ["Multi"] : contest.sports;
 
 const generateDeleteCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -764,56 +760,29 @@ const LeagueDashboardPage = () => {
     }
   };
 
-  const renderContestCard = (contest: Contest) => {
-    return (
-      <Link
-        key={contest.id}
-        href={`/league/${group?.id}/contests/${contest.id}`}
-        className={`${contestPreviewCardSizeClassName} rounded-lg border border-white/10 bg-white/[0.04] p-4 transition hover:border-sky-300/60 hover:bg-white/[0.07]`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-sm font-semibold text-white">{contest.name}</h3>
-            </div>
-          </div>
-          <span className="text-xs font-semibold uppercase tracking-wide text-sky-200">
-            {contest.included_members_count ?? 0} players
-          </span>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
-            <p className="font-semibold text-white">{contest.slips_count?.open_count}</p>
-            <p className="uppercase tracking-wide text-gray-500">open</p>
-          </div>
-          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
-            <p className="font-semibold text-white">{contest.slips_count?.review_count}</p>
-            <p className="uppercase tracking-wide text-gray-500">review</p>
-          </div>
-          <div className="rounded-md border border-white/10 bg-black/30 px-2 py-2">
-            <p className="font-semibold text-white">{contest.slips_count?.finalized_count}</p>
-            <p className="uppercase tracking-wide text-gray-500">final</p>
-          </div>
-        </div>
-        {/* `min-h-6` reserves the chip row so a contest with no sport labels
-            does not sit shorter than its neighbour. */}
-        <div className="mt-4 flex min-h-6 shrink-0 flex-wrap items-center gap-2">
-          {contestSportLabels(contest).map((sport) => (
-            <span
-              key={sport}
-              className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-300"
-            >
-              {sport}
-            </span>
-          ))}
-        </div>
-        {/* `mt-auto` is what makes every card in a row end at the same place. */}
-        <p className="mt-auto pt-3 text-[11px] text-gray-500">
-          {formatDateTime(contest.starts_at)} to {formatDateTime(contest.ends_at)}
-        </p>
-      </Link>
-    );
-  };
+  /**
+   * The Fantasy contest card — the same shared preview card the Feed contests
+   * and the Arena use, so the two halves of the Contests tab read as one design.
+   *
+   * NO WINNER on a finalized card: `buildFantasyContestPreviewModel` never sets
+   * `resultSummary`. A champion plate belongs to the Feed contest card alone.
+   */
+  const renderContestCard = (contest: Contest) => (
+    <ContestPreviewCard
+      key={contest.id}
+      headingLevel={4}
+      className="h-full self-stretch"
+      preview={buildFantasyContestPreviewModel({
+        contest,
+        detailHref: `/league/${group?.id}/contests/${contest.id}`,
+        // Only offered while the contest's latest slip is actually taking
+        // picks — `last_slip.is_accepting_picks` is the server's own verdict
+        // with the pick deadline already applied.
+        addPickHref: (slip) =>
+          `/league/${group?.id}/contests/${contest.id}/slips/${slip.id}/add-pick`,
+      })}
+    />
+  );
 
   if (!group && !loading) {
     return (
@@ -1106,6 +1075,11 @@ const LeagueDashboardPage = () => {
                 organizer={isCommissioner}
                 detailHref={(contestId) =>
                   `/league/${group?.id}/feed-contests/${contestId}`
+                }
+                // Turns an open contest the viewer has not entered into a
+                // "Build Entry" / "Make Picks" card instead of "View Details".
+                entryHref={(contestId) =>
+                  `/league/${group?.id}/feed-contests/${contestId}/entry`
                 }
                 onLoadMore={(section) =>
                   loadFeedContestSection(

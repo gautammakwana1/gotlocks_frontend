@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { FeedContestCard, type ContestAccent } from "./FeedContestCard";
-import type { FeedContestSection } from "@/lib/interfaces/interfaces";
+import type { ContestAccent } from "./FeedContestCard";
+import { ContestPreviewCard } from "./preview/ContestPreviewCard";
+import { buildFeedContestPreviewModel } from "./preview/feedContestPreview";
+import type { FeedContest, FeedContestSection } from "@/lib/interfaces/interfaces";
 import type { FeedContestSectionState } from "@/lib/redux/slices/feedContestSlice";
 
 /* ----------------------------------------------------------------------------
@@ -76,6 +78,24 @@ export type FeedContestSectionsProps = {
     organizer: boolean;
     /** Omit to render non-navigable cards — a surface with no detail route yet. */
     detailHref?: (contestId: string) => string;
+    /**
+     * Where an OPEN contest the viewer has not entered sends them. Supplying it
+     * turns that card's action into "Build Entry" / "Make Picks"; without it
+     * every card reads "View Details".
+     */
+    entryHref?: (contestId: string) => string;
+    /**
+     * Whether the viewer may actually build an entry, which decides whether an
+     * open card offers "Build Entry" / "Make Picks" or falls back to "View
+     * Details". A predicate for a per-contest rule: an Arena's owner and
+     * managers compete ONLY in a contest that opted them in
+     * (`allow_staff_participation`), and nobody enters while Arena hosting is
+     * read-only. A League passes nothing — every member may always enter.
+     *
+     * Drafts are excluded on top of this, whatever it answers: a draft is
+     * operated, never entered.
+     */
+    entryWritable?: boolean | ((contest: FeedContest) => boolean);
     onLoadMore: (section: FeedContestSection) => void;
     emptyTitle: string;
     emptyBody: string;
@@ -93,12 +113,15 @@ export const FeedContestSections = ({
     sections,
     organizer,
     detailHref,
+    entryHref,
+    entryWritable = true,
     onLoadMore,
     emptyTitle,
     emptyBody,
     participantLimit = null,
     accent = "sky",
 }: FeedContestSectionsProps) => {
+    void participantLimit;
     const [expandedSections, setExpandedSections] =
         useState<Record<FeedContestSection, boolean>>(DEFAULT_EXPANDED);
 
@@ -200,18 +223,40 @@ export const FeedContestSections = ({
                             </div>
                         ) : contests.length ? (
                             <div className="mt-3 space-y-3">
-                                <div className="grid items-stretch gap-3 px-5 md:grid-cols-2 sm:px-6">
+                                {/* Finalized cards are the compact result plate, so
+                                    they tile two-up on large screens rather than
+                                    sharing the poster grid. Same split as the MVP. */}
+                                <div
+                                    data-contest-preview-phase={sectionId}
+                                    data-contest-preview-layout={
+                                        sectionId === "finalized"
+                                            ? "compact-responsive-grid"
+                                            : "responsive-grid"
+                                    }
+                                    className={`grid items-stretch px-5 sm:px-6 ${sectionId === "finalized"
+                                        ? "auto-rows-fr grid-cols-1 gap-2 lg:grid-cols-2"
+                                        : "gap-3 md:grid-cols-2"
+                                        }`}
+                                >
                                     {contests.map((contest) => (
-                                        <FeedContestCard
+                                        <ContestPreviewCard
                                             key={contest.id}
-                                            contest={contest}
-                                            href={detailHref?.(contest.id)}
-                                            accent={accent}
-                                            presentation="hub"
-                                            participantLimit={participantLimit}
-                                            // An organizer operates the contest; a draft
-                                            // never shows a join/entry state.
-                                            hideParticipantState={sectionId === "drafts"}
+                                            headingLevel={4}
+                                            className="h-full self-stretch"
+                                            preview={buildFeedContestPreviewModel({
+                                                contest,
+                                                detailHref: detailHref?.(contest.id) ?? "#",
+                                                entryHref: entryHref?.(contest.id),
+                                                accent: accent === "violet" ? "arena" : "league",
+                                                // A draft is operated, never entered, so it
+                                                // never offers an entry action — whatever
+                                                // the caller's own rule answers.
+                                                entryWritable:
+                                                    sectionId !== "drafts" &&
+                                                    (typeof entryWritable === "function"
+                                                        ? entryWritable(contest)
+                                                        : entryWritable),
+                                            })}
                                         />
                                     ))}
                                 </div>

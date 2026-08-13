@@ -38,13 +38,21 @@ type FeedResult = FeedContestScheduleGroup & { ok: boolean };
 function* fetchOneLeagueFeed(
     feed: (typeof FEED_CONTEST_LEAGUE_FEEDS)[keyof typeof FEED_CONTEST_LEAGUE_FEEDS][number],
     sport: string,
-    date: string
+    date: string,
+    timeZone?: string
 ): SagaIterator<FeedResult> {
     try {
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.get,
             `${API_BASE_URL}${feed.path}`,
-            { params: { date } }
+            {
+                params: { date },
+                // Explicit beats axiosInstance's browser-zone default (it only
+                // fills the header in when absent). `date` and the day the server
+                // files a kickoff under MUST be read in the same zone, or the
+                // boundary games of the range silently vanish.
+                ...(timeZone ? { headers: { "X-Timezone": timeZone } } : {}),
+            }
         );
         const payload = response.data as {
             data?: { schedule?: { events?: LeagueScheduleEvent[] } };
@@ -69,8 +77,8 @@ function* fetchOneLeagueFeed(
 function* handleFetchFeedContestSchedules(
     action: PayloadAction<FetchFeedContestSchedulesPayload>
 ): SagaIterator {
-    const { sports, date } = action.payload;
-    const requestKey = feedContestScheduleRequestKey(sports, date);
+    const { sports, date, time_zone: timeZone } = action.payload;
+    const requestKey = feedContestScheduleRequestKey(sports, date, timeZone);
 
     if (!date || !sports.length) {
         yield put(fetchFeedContestSchedulesSuccess({ requestKey, groups: [] }));
@@ -90,7 +98,9 @@ function* handleFetchFeedContestSchedules(
 
     try {
         const results: FeedResult[] = yield all(
-            feeds.map(({ feed, sport }) => call(fetchOneLeagueFeed, feed, sport, date))
+            feeds.map(({ feed, sport }) =>
+                call(fetchOneLeagueFeed, feed, sport, date, timeZone)
+            )
         );
 
         if (results.every((result) => !result.ok)) {

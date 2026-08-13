@@ -291,6 +291,36 @@ export type Contest = {
     };
     included_members_count: number;
     excluded_members_count: number;
+    /**
+     * The contest's MOST RECENT Fantasy slip, or null when it owns none.
+     *
+     * Added so a contest card can name the round it is actually on without the
+     * client fetching every slip of every contest. `phase` is the status with the
+     * clock applied — an 'open' slip past its pick deadline reports "review", not
+     * "open" — and `is_accepting_picks` is that same verdict as a boolean.
+     */
+    last_slip?: ContestLastSlip | null;
+};
+
+/** `CONTEST_LAST_SLIP_COLUMNS` plus the two derived fields the helper stamps on. */
+export type ContestLastSlip = {
+    id: string;
+    name: string;
+    index?: number | null;
+    contest_number?: number | null;
+    status?: string | null;
+    slip_type?: string | null;
+    pick_deadline_at?: string | null;
+    results_deadline_at?: string | null;
+    finalized_at?: string | null;
+    is_graded?: boolean | null;
+    archived?: boolean | null;
+    sports?: string[] | null;
+    pick_limit?: number | string | null;
+    created_at?: string | null;
+    /** open | review | final | locked | grading | voided — see resolveSlipPhase. */
+    phase?: string | null;
+    is_accepting_picks?: boolean | null;
 };
 
 export type Slip = {
@@ -2022,6 +2052,36 @@ export type FeedContest = ArenaContest & {
      * are absent on every list row and present on `/detail/:contest_id`.
      */
     eligible_games_json?: FeedContestGameSnapshot[] | null;
+    /**
+     * The member who took 1st and what their entry finished on, read from the
+     * achievement finalization awarded.
+     *
+     * ALWAYS an object and always present, so a client never branches on the key
+     * existing — but an EMPTY one wherever nothing was won: a contest still
+     * running, one that was canceled, and one that finished with a field where
+     * nobody scored all report `{}`. `/list/finalized` is where it is populated.
+     *
+     * Feed contests only. The Fantasy card deliberately shows no winner.
+     */
+    winner?: FeedContestWinner | Record<string, never>;
+};
+
+/** The populated shape of `FeedContest.winner`; `{}` means "nothing was won". */
+export type FeedContestWinner = {
+    user_id: string;
+    username: string | null;
+    profile_image: string | null;
+    /** So a card can say "You won" without comparing ids itself. */
+    is_own: boolean;
+    /** contest_achievements.final_score — the contest's own number. */
+    points: number;
+    placement: number;
+    type: string;
+    /** The enum already spelled for a screen. */
+    label: string;
+    awarded_at: string;
+    is_tie: boolean;
+    tied_count: number;
 };
 
 // POST /group/feed-contest/create (publishes straight to 'open') and
@@ -3721,6 +3781,16 @@ export type FetchFeedContestSchedulesPayload = {
     sports: string[];
     /** `YYYY-MM-DD`, a comma list, or `YYYY-MM-DD-YYYY-MM-DD`. */
     date: string;
+    /**
+     * The zone `date` is expressed in, sent as `X-Timezone`. Omit to let
+     * axiosInstance fall back to the browser's.
+     *
+     * Sunday Pick'em pins this to the NFL league clock: the backend's
+     * `buildSundayPickemSlate` runs its "same Sunday" test in
+     * America/New_York and rejects anything else, so the wizard has to ask
+     * for Eastern days or it will offer a slate the endpoint refuses.
+     */
+    time_zone?: string;
 };
 
 /** One league feed's slice of the answer; Soccer contributes three of these. */

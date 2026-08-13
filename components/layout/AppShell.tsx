@@ -40,8 +40,9 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
     : false;
   const structuredContestRoute = pathname
     ? /^\/arena\/[^/]+\/contests\/(?:create|[^/]+)$/.test(pathname) ||
-    // …/feed-contests/create, …/feed-contests/<id>, and that id's /edit + /entry
-    /^\/league\/[^/]+\/feed-contests\/(?:create|[^/]+(?:\/(?:edit|entry))?)$/.test(pathname)
+    // …/feed-contests/create, …/feed-contests/<id>, and that id's /edit + /entry.
+    // Both surfaces run the same screens off /group/feed-contest/*.
+    /^\/(?:league|arena)\/[^/]+\/feed-contests\/(?:create|[^/]+(?:\/(?:edit|entry))?)$/.test(pathname)
     : false;
   const tightTop =
     pathname === "/profile" || (pathname ? pathname.startsWith("/user/") : false);
