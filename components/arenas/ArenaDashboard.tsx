@@ -44,6 +44,8 @@ import {
     scheduleArenaPauseRequest,
     clearArenaOwnershipTransferMessage,
     clearUnlockArenaMessage,
+    fetchArenaGuideStatusRequest,
+    markArenaGuideViewedRequest,
     fetchArenaHostingDetailsRequest,
     fetchArenaOwnershipTransferRequest,
     makeArenaManagerRequest,
@@ -1655,10 +1657,23 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
         searchParams.get("tab") === "leaderboard" ? "standings" : "community"
     );
-    // The Arena Guide is opened by its own button under the Arena name. The MVP
-    // also auto-opens it on a member's first visit; that needs per-arena progress,
-    // which this backend has no store for — see the dialog's own header comment.
-    const [arenaGuideOpen, setArenaGuideOpen] = useState(false);
+    /**
+     * The Arena Guide, exactly as the MVP drives it: `"automatic"` is the
+     * welcome pop-up a newly joined member gets on their first visit,
+     * `"manual"` is the "Arena guide" button under the Arena name.
+     *
+     * The MODE decides whether closing it records anything. A manual re-open by
+     * somebody who has already read it must not overwrite their `completed`
+     * with a `dismissed` — and re-recording is otherwise a no-op, so only the
+     * automatic path writes.
+     */
+    const [arenaGuideMode, setArenaGuideMode] = useState<"automatic" | "manual" | null>(
+        null
+    );
+    // Latched so the auto-open fires at most ONCE per mount. Without it, the
+    // optimistic flip in the slice would race the effect and the dialog could
+    // reopen the instant it closed.
+    const autoGuideDecidedRef = useRef(false);
 
     const {
         loading,
@@ -1674,7 +1689,14 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     // `arena?.x` reads untouched.
     const scopedArena = useScopedGroup(arenaId);
     const arena = scopedArena.group;
-    const { hosting, unlock, loading: arenaLoader, error: arenaErr } = useSelector((state: RootState) => state.arena);
+    const {
+        hosting,
+        unlock,
+        loading: arenaLoader,
+        error: arenaErr,
+        guide: arenaGuide,
+        guideForId: arenaGuideForId,
+    } = useSelector((state: RootState) => state.arena);
 
     useEffect(() => {
         if (!arenaId || !currentUser) return;
@@ -1686,6 +1708,9 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
         // /group/feed-contest/list/* and owns those fetches itself, so the legacy
         // arena_contests list is nothing this screen still draws.
         dispatch(fetchArenaOwnershipTransferRequest({ arena_id: arenaId }));
+        // Has this member been shown the Arena Guide for THIS Arena? Per-arena,
+        // so joining a second one asks again.
+        dispatch(fetchArenaGuideStatusRequest({ arena_id: arenaId }));
         dispatch(
             fetchGroupMembersByGroupIdRequest({
                 group_id: arenaId,
@@ -1697,6 +1722,47 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
 
     const currentMembership = arena?.current_user_member?.role ?? "undefined";
     const isOwner = currentMembership === "commissioner";
+
+    /**
+     * Auto-open on a DEFINITE yes and nothing else.
+     *
+     * `should_show_guide` is derived server-side from the acknowledgement row,
+     * so it is the only thing gated on — never re-derived from the timestamps
+     * beside it, and never assumed while the read is in flight or has failed
+     * (`guide` is null in both cases, which reads as "don't open").
+     *
+     * Scoped by `guideForId`: this opens a modal over the page, and the previous
+     * Arena's answer deciding it is exactly the bug that only appears when a
+     * member navigates between two of them.
+     */
+    // Declared BEFORE the auto-open below, and the order is load-bearing: React
+    // runs effects in declaration order, so a reset placed after it would wipe a
+    // mode the same commit had just set — the dialog would never open when this
+    // Arena's guide was already in the store from an earlier visit.
+    useEffect(() => {
+        autoGuideDecidedRef.current = false;
+        setArenaGuideMode(null);
+    }, [arenaId]);
+
+    useEffect(() => {
+        if (autoGuideDecidedRef.current) return;
+        if (arenaGuideForId !== arenaId) return;
+        if (!arenaGuide?.should_show_guide) return;
+        autoGuideDecidedRef.current = true;
+        setArenaGuideMode("automatic");
+    }, [arenaGuide?.should_show_guide, arenaGuideForId, arenaId]);
+
+    /**
+     * `completed` = read through to the last step. `dismissed` = closed early.
+     * Both silence it; the split is what keeps "did members actually read it"
+     * answerable. Only an AUTOMATIC open records — see the mode's own note.
+     */
+    const closeArenaGuide = (status: "completed" | "dismissed") => {
+        if (arenaGuideMode === "automatic") {
+            dispatch(markArenaGuideViewedRequest({ arena_id: arenaId, status }));
+        }
+        setArenaGuideMode(null);
+    };
     // const writable = isArenaWritable(hosting) && unlock.status === "unlocked";
     const managerLimit = hosting?.manager_limit ?? "Custom";
 
@@ -1786,7 +1852,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                         never set one still offers the guide. */}
                     <button
                         type="button"
-                        onClick={() => setArenaGuideOpen(true)}
+                        onClick={() => setArenaGuideMode("manual")}
                         className="mt-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400 transition hover:bg-white/5 hover:text-white"
                     >
                         Arena guide
@@ -1865,10 +1931,10 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
             ) : null}
 
             <ArenaMemberWelcomeDialog
-                open={arenaGuideOpen}
+                open={arenaGuideMode !== null}
                 arenaName={arena?.name ?? "this Arena"}
-                onComplete={() => setArenaGuideOpen(false)}
-                onDismiss={() => setArenaGuideOpen(false)}
+                onComplete={() => closeArenaGuide("completed")}
+                onDismiss={() => closeArenaGuide("dismissed")}
             />
         </div>
     );

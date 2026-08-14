@@ -2287,14 +2287,89 @@ export type VerifyVenueCheckInPayload = {
         }
     );
 
-/** 201. A success creates ONLY a session — no join, no rules, no entry. */
+/**
+ * 201. A success creates ONLY a session — no join, no rules, no entry.
+ *
+ * The assist-code redemption answers with this SAME envelope, differing only in
+ * `outcome`/`method`, precisely so the entry gate, the activity counts and this
+ * client all treat the two paths identically without knowing which happened.
+ */
 export type VerifyVenueCheckInData = {
     checked_in: true;
-    outcome: "verified";
+    outcome: "verified" | "staff_verified";
+    /** Present on the assist-code path: `staff_assist`. */
+    method?: string;
     group: { id: string; name: string; group_type: string };
     venue: { id: string; name: string; display_address: string };
     session: VenueCheckInSessionSummary;
     note: string;
+};
+
+/* ---------- Staff assist codes — the in-person fallback ---------- */
+
+/**
+ * POST /group/venue/assist-code/:group_id — no body.
+ *
+ * STAFF-wide (owner, commissioner OR manager), unlike the venue's owner-only
+ * configuration: whoever is behind the bar when a phone fails has to be able to
+ * solve it without finding the owner. Requires an ACTIVE venue (409) and a
+ * writable Arena (402), because a code is a promise that a check-in will work
+ * and both would break that promise at redemption, in front of the customer.
+ */
+export type IssueVenueAssistCodePayload = {
+    group_id: string;
+};
+
+export type IssueVenueAssistCodeData = {
+    assist_code_id: string;
+    /**
+     * The plaintext, returned ONCE and never again — only a peppered digest is
+     * stored. A lost code means issuing another, which is why the panel holds
+     * this in state until it expires rather than re-reading it.
+     */
+    code: string;
+    issued_at: string;
+    expires_at: string;
+    max_uses: number;
+    expires_in_seconds: number;
+    venue: { id: string; name: string };
+    note: string;
+};
+
+/**
+ * POST /group/venue/check-in/redeem-assist-code — the member's half.
+ *
+ * Scoped by GROUP, with `token` accepted too: the person reaching for a code is
+ * usually the one whose GPS just failed, so requiring a fresh scan would gate
+ * the fallback behind the thing that broke. Sent WITH the token from the QR
+ * page, since that page has one.
+ *
+ * A bad, expired, revoked or already-spent code — including one this member has
+ * already redeemed — is a single 400 `invalid_staff_assist_code`. It does not
+ * distinguish them, and neither should any screen.
+ */
+export type RedeemVenueAssistCodePayload = {
+    code: string;
+    token?: string;
+    group_id?: string;
+};
+
+/**
+ * PUT /group/venue/assist-code/:code_id/revoke — no body. Staff-wide, like
+ * issuance: whoever can hand one out can take it back.
+ *
+ * Only an UNSPENT code can be revoked (409 otherwise) — a code that already
+ * opened a session is history, and revoking it here would not end that session.
+ * Idempotent: a second call answers 200 with `was_already_revoked`.
+ */
+export type RevokeVenueAssistCodePayload = {
+    assist_code_id: string;
+};
+
+export type RevokeVenueAssistCodeData = {
+    assist_code_id: string;
+    revoked_at: string;
+    was_already_revoked: boolean;
 };
 
 /**
@@ -2393,6 +2468,25 @@ export type VenueState = {
     activityForId: string | null;
     activityLoading: boolean;
     activityError: string | null;
+
+    /**
+     * The staff fallback. `issuedAssistCode` holds the ONLY copy of the
+     * plaintext there will ever be — the server stores a digest — so it lives
+     * here until it expires or is revoked, and is never re-fetchable.
+     */
+    issuedAssistCode: IssueVenueAssistCodeData | null;
+    assistIssueLoading: boolean;
+    assistIssueError: string | null;
+    assistRevokeLoading: boolean;
+    assistRevokeError: string | null;
+
+    /**
+     * The member's redemption. Its SUCCESS is folded into `verifySuccess`, not a
+     * slot of its own: the reply is the same envelope the GPS path returns, and
+     * the check-in screen should have exactly one success path.
+     */
+    assistRedeemLoading: boolean;
+    assistRedeemError: string | null;
 };
 
 /**
@@ -3654,6 +3748,80 @@ export type FetchArenaContestPicksPayload = {
     limit?: number;
 };
 
+/* ----------------------------------------------------------------------------
+ * ARENA GUIDE — the welcome walkthrough a member sees on their first visit to
+ * an Arena.
+ *
+ * PER-ARENA, and that is the whole point of it having its own endpoints rather
+ * than a `tutorial_key` on /progress/tutorial-progress: that table is keyed
+ * (user_id, tutorial_key) with no group column, so it could only ever record
+ * that somebody has seen "the group guide" once, ever — and a member joining
+ * their SECOND Arena would never see it again. This one is keyed
+ * (group_id, user_id, version).
+ * -------------------------------------------------------------------------- */
+
+/** Both silence the guide; the split only exists so "did they read it" stays answerable. */
+export type ArenaGuideAckStatus = "completed" | "dismissed";
+
+export type ArenaGuideView = {
+    version: number;
+    has_viewed_guide: boolean;
+    /**
+     * The ONLY field a client should gate the dialog on. Derived server-side so
+     * the read and the write can never disagree about what "viewed" means —
+     * never re-derive it from the timestamps below.
+     */
+    should_show_guide: boolean;
+    /**
+     * TRUE when they acknowledged an OLDER cut. Lets a screen open with "here's
+     * what's new" rather than "welcome" after ARENA_GUIDE_VERSION is bumped,
+     * without a second call.
+     */
+    has_viewed_any_version: boolean;
+    status: ArenaGuideAckStatus | null;
+    acknowledged_at: string | null;
+    completed_at: string | null;
+    dismissed_at: string | null;
+    updated_at: string | null;
+};
+
+/** GET /group/arena/guide?arena_id= — members only (403), arena-only (404). */
+export type FetchArenaGuideStatusPayload = {
+    arena_id: string;
+};
+
+export type ArenaGuideStatusData = {
+    arena: { id: string; name: string; group_type: string };
+    viewer: {
+        role: string;
+        is_owner: boolean;
+        /**
+         * Returned to word the screen, NOT to gate it: the guide is gated on
+         * acknowledgement rather than age, so a member who joined a year ago and
+         * never saw it still gets it.
+         */
+        joined_at: string | null;
+    };
+    guide: ArenaGuideView;
+};
+
+/**
+ * POST /group/arena/guide/viewed — `status` defaults to 'completed'.
+ * Idempotent on purpose: a client that fires this on unmount will send it
+ * twice, and the second is not an error.
+ */
+export type MarkArenaGuideViewedPayload = {
+    arena_id: string;
+    status?: ArenaGuideAckStatus;
+};
+
+export type MarkArenaGuideViewedData = {
+    arena: { id: string; name: string; group_type: string };
+    already_acknowledged: boolean;
+    /** The row just written, in the same shape the GET returns. */
+    guide: ArenaGuideView;
+};
+
 export type ArenaState = {
     hosting: ArenaHostingDetails | null;
     unlock: ArenaUnlockDetails | null;
@@ -3670,6 +3838,18 @@ export type ArenaState = {
     loading: boolean;
     error: string | null;
     message: string | null;
+    /**
+     * The Arena Guide's state for the viewer. Single-tenant and stamped with
+     * `guideForId` like everything else here — auto-opening a welcome dialog off
+     * the PREVIOUS Arena's answer is exactly the kind of thing that only shows
+     * up in production.
+     */
+    guide: ArenaGuideView | null;
+    guideForId: string | null;
+    guideLoading: boolean;
+    guideError: string | null;
+    guideAckLoading: boolean;
+    guideAckError: string | null;
     // Owner billing workspace (GET /group/arena/owned-hosting-details). Separate
     // from `hosting`/`unlock` above, which hold the single Arena being viewed.
     ownedHosting: OwnedArenaHostingRow[];

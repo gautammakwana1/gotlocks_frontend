@@ -25,6 +25,7 @@ import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 import NflPickBuilderSkeleton from "./skeletons/NflPickBuilderSkeleton";
 import NflMatchupDetailSkeleton from "./skeletons/NflMatchupDetailSkeleton";
+import { House } from "lucide-react";
 
 type BookOdds = {
     book?: string;
@@ -2653,18 +2654,6 @@ export const NflPickBuilder = ({
         dispatchPayloads([payload], action);
     };
 
-    // const submitSameGameCombo = (groupId: string, action: "post" | "slip") => {
-    //     const payload = buildSameGameComboSubmissionPayload(groupId, action);
-    //     if (!payload) return;
-    //     dispatchPayloads([payload], action);
-    // };
-
-    // const submitStraight = (legId: string, action: "post" | "slip") => {
-    //     const payload = buildStraightSubmissionPayload(legId, action);
-    //     if (!payload) return;
-    //     dispatchPayloads([payload], action);
-    // };
-
     const submitSelectedPosts = ({
         includeMainCombo,
         includeSinglePick,
@@ -2750,86 +2739,6 @@ export const NflPickBuilder = ({
         );
     };
 
-    // const handleSubmitPick = (action: "post" | "slip") => {
-    //     if (locked) return;
-
-    //     if (action === "post" && !selectedConfidence) {
-    //         setToast({
-    //             id: Date.now(),
-    //             type: "error",
-    //             message: "Select a confidence level to post.",
-    //             duration: 3000
-    //         })
-    //     }
-
-    //     const handler = action === "post"
-    //         ? onCreatePostPick ?? onSave
-    //         : onPostToSlip ?? onSave;
-
-    //     if (hasMultipick) {
-    //         if (action === "post") {
-    //             if (!activeDraft) return;
-    //             handler({
-    //                 ...activeDraft,
-    //                 confidence: selectedConfidence ?? activeDraft.confidence ?? null,
-    //             });
-    //             resetAfterPost();
-    //             return;
-    //         }
-
-    //         const payloads = buildParlayLegPayloads();
-    //         if (!payloads || payloads.length === 0) {
-    //             setToast({
-    //                 id: Date.now(),
-    //                 type: "error",
-    //                 message: "Couldn't build your picks. Please try again.",
-    //                 duration: 3000
-    //             })
-    //             return;
-    //         }
-
-    //         if (slip.pick_limit !== "unlimited") {
-    //             const existingCount = picks.filter(
-    //                 (entry) => entry.slip_id === slip.id && entry.user_id === currentUser.userId
-    //             ).length;
-    //             const isEditing =
-    //                 Boolean(
-    //                     initialPick &&
-    //                     initialPick.slip_id === slip.id &&
-    //                     initialPick.user_id === currentUser.userId
-    //                 );
-    //             const adjustedCount = isEditing
-    //                 ? Math.max(0, existingCount - 1)
-    //                 : existingCount;
-    //             if (adjustedCount + payloads.length > slip.pick_limit) {
-    //                 setToast({
-    //                     id: Date.now(),
-    //                     type: "error",
-    //                     message: "Pick limit reached for this slip.",
-    //                     duration: 3000
-    //                 })
-    //                 return;
-    //             }
-    //         }
-
-    //         payloads.forEach((payload) => {
-    //             handler({
-    //                 ...payload,
-    //                 confidence: selectedConfidence ?? activeDraft?.confidence ?? null,
-    //             });
-    //         });
-    //         resetAfterPost();
-    //         return;
-    //     }
-
-    //     if (!activeDraft) return;
-    //     handler({
-    //         ...activeDraft,
-    //         confidence: selectedConfidence ?? activeDraft?.confidence ?? null,
-    //     });
-    //     resetAfterPost();
-    // };
-
     const renderGameCards = () => {
         if (filteredGames.length === 0) {
             return (
@@ -2892,8 +2801,8 @@ export const NflPickBuilder = ({
                                 }}
                                 tabIndex={isDisabled ? -1 : 0}
                                 aria-disabled={isDisabled}
-                                className={`flex min-h-[48px] w-full items-center justify-center bg-transparent p-0 text-left ${isDisabled ? "cursor-not-allowed" : ""
-                                    }`}
+                                className={`flex min-h-[60px] flex-col items-center justify-center px-2 py-1 text-center transition sm:px-3 ${isSelected ? "text-emerald-50" : "text-gray-200"
+                                    } ${isDisabled ? "cursor-not-allowed" : ""}`}
                             >
                                 {withLine
                                     ? renderLineOddsBox(lineLabel, oddsLabel, isSelected, muted)
@@ -2920,91 +2829,131 @@ export const NflPickBuilder = ({
                                     handleGameChoice(game);
                                 }
                             }}
-                            className={`grid w-full items-start gap-3 px-5 py-4 text-left transition grid-cols-[minmax(0,1fr)_200px] sm:grid-cols-[minmax(0,1fr)_320px] sm:gap-4 sm:px-6 ${isRowDisabled
+                            className={`py-4 px-2 space-y-0 [--table-chip-width:60px] sm:[--table-chip-width:96px] ${isRowDisabled
                                 ? "cursor-not-allowed opacity-60"
                                 : "cursor-pointer hover:bg-white/[0.02]"
                                 }`}
                         >
-                            <div className="min-w-0 self-start pt-8">
-                                <p className="text-xs font-semibold leading-snug text-white">
-                                    <span className="block">{isMobile ? getMobileTeamName(game.away_abbr, game.away_team) : game.away_team} @</span>
-                                    <span className="block">{isMobile ? getMobileTeamName(game.home_abbr, game.home_team) : game.home_team}</span>
-                                </p>
-                                <p className="mt-3 text-[11px] text-gray-400">
-                                    {formatDateTime(game.date)}
-                                </p>
+                            <div
+                                className="grid justify-end items-center gap-2 text-[10px] uppercase tracking-wide text-gray-400"
+                                style={{
+                                    gridTemplateColumns:
+                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                }}
+                            >
+                                <div className="px-3"></div>
+                                <div className="text-center">Spread</div>
+                                <div className="text-center">Money</div>
+                                <div className="text-center">Total</div>
                             </div>
 
-                            <div className="flex w-full flex-col items-end justify-between gap-2 -mr-4 sm:mr-0 sm:pr-2">
-                                <div className="w-fit space-y-2 text-xs text-white [--table-chip-width:60px] sm:[--table-chip-width:96px]">
-                                    <div
-                                        className="grid justify-end gap-1 text-[10px] uppercase tracking-wide text-gray-500"
-                                        style={{
-                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                        }}
-                                    >
-                                        <span className="text-center">Spread</span>
-                                        <span className="text-center">Money</span>
-                                        <span className="text-center">Total</span>
-                                    </div>
-                                    <div
-                                        className="grid justify-end gap-1"
-                                        style={{
-                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                        }}
-                                    >
-                                        {renderPreviewCell(
-                                            spreadAway,
-                                            formatLineValue(spreadAway?.selection?.line),
-                                            spreadAway ? formatOdds(spreadAway.price) : "-",
-                                            !spreadAway,
-                                            true
-                                        )}
-                                        {renderPreviewCell(
-                                            moneyAway,
-                                            moneyAway ? formatOdds(moneyAway.price) : "-",
-                                            moneyAway ? formatOdds(moneyAway.price) : "-",
-                                            !moneyAway,
-                                            false
-                                        )}
-                                        {renderPreviewCell(
-                                            totalOver,
-                                            totalLine !== null ? `O ${totalLine}` : "-",
-                                            totalOver ? formatOdds(totalOver.price) : "-",
-                                            !totalOver,
-                                            true
-                                        )}
-                                    </div>
-                                    <div
-                                        className="grid justify-end gap-1 -mt-3 sm:mt-0"
-                                        style={{
-                                            gridTemplateColumns: "repeat(3, var(--table-chip-width))",
-                                        }}
-                                    >
-                                        {renderPreviewCell(
-                                            spreadHome,
-                                            formatLineValue(spreadHome?.selection?.line),
-                                            spreadHome ? formatOdds(spreadHome.price) : "-",
-                                            !spreadHome,
-                                            true
-                                        )}
-                                        {renderPreviewCell(
-                                            moneyHome,
-                                            moneyHome ? formatOdds(moneyHome.price) : "-",
-                                            moneyHome ? formatOdds(moneyHome.price) : "-",
-                                            !moneyHome,
-                                            false
-                                        )}
-                                        {renderPreviewCell(
-                                            totalUnder,
-                                            totalLine !== null ? `U ${totalLine}` : "-",
-                                            totalUnder ? formatOdds(totalUnder.price) : "-",
-                                            !totalUnder,
-                                            true
-                                        )}
+                            <div
+                                className="grid justify-end items-stretch gap-1"
+                                style={{
+                                    gridTemplateColumns:
+                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                }}
+                            >
+                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-xs font-semibold leading-snug text-white">
+                                            {isMobile ? getMobileTeamName(game.away_abbr, game.away_team) : game.away_team}
+                                        </p>
                                     </div>
                                 </div>
-                                <span className="text-xs text-gray-500">→</span>
+                                {renderPreviewCell(
+                                    spreadAway,
+                                    formatLineValue(spreadAway?.selection?.line),
+                                    spreadAway ? formatOdds(spreadAway.price) : "-",
+                                    !spreadAway,
+                                    true
+                                )}
+                                {renderPreviewCell(
+                                    moneyAway,
+                                    moneyAway ? formatOdds(moneyAway.price) : "-",
+                                    moneyAway ? formatOdds(moneyAway.price) : "-",
+                                    !moneyAway,
+                                    false
+                                )}
+                                {renderPreviewCell(
+                                    totalOver,
+                                    totalLine !== null ? `O ${totalLine}` : "-",
+                                    totalOver ? formatOdds(totalOver.price) : "-",
+                                    !totalOver,
+                                    true
+                                )}
+                            </div>
+
+                            <div
+                                className="grid items-center -mt-2 sm:mt-0"
+                                style={{
+                                    gridTemplateColumns:
+                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                }}
+                            >
+                                <div className="px-3">
+                                    <div className="relative flex items-center h-px w-full overflow-hidden">
+                                        <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/100 to-transparent shimmer-divider"></div>
+                                    </div>
+                                </div>
+                                <div></div>
+                                <div></div>
+                                <div></div>
+                            </div>
+
+                            <div
+                                className="grid justify-end items-stretch gap-1 -mt-2 sm:mt-0"
+                                style={{
+                                    gridTemplateColumns:
+                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                }}
+                            >
+                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center justify-between gap-2 px-3 sm:gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-xs font-semibold leading-snug text-white">
+                                            {isMobile ? getMobileTeamName(game.home_abbr, game.home_team) : game.home_team}
+                                        </p>
+                                    </div>
+                                    <House size={14} color="white" className="shrink-0" />
+                                </div>
+                                {renderPreviewCell(
+                                    spreadHome,
+                                    formatLineValue(spreadHome?.selection?.line),
+                                    spreadHome ? formatOdds(spreadHome.price) : "-",
+                                    !spreadHome,
+                                    true
+                                )}
+                                {renderPreviewCell(
+                                    moneyHome,
+                                    moneyHome ? formatOdds(moneyHome.price) : "-",
+                                    moneyHome ? formatOdds(moneyHome.price) : "-",
+                                    !moneyHome,
+                                    false
+                                )}
+                                {renderPreviewCell(
+                                    totalUnder,
+                                    totalLine !== null ? `U ${totalLine}` : "-",
+                                    totalUnder ? formatOdds(totalUnder.price) : "-",
+                                    !totalUnder,
+                                    true
+                                )}
+                            </div>
+
+                            <div
+                                className="flex items-center justify-between gap-2 text-xs uppercase tracking-wide text-gray-400"
+                                style={{
+                                    gridTemplateColumns:
+                                        "minmax(0,1fr) repeat(3, var(--table-chip-width))",
+                                }}
+                            >
+                                <div className="flex items-center">
+                                    <span className={`px-3 text-gray-400 ${isMobile ? `text-[10px]` : `text-[11px]`}`}>
+                                        {formatDateTime(game.date)}
+                                    </span>
+                                </div>
+                                <div className="items-center">
+                                    <span className="text-xs text-gray-500">→</span>
+                                </div>
                             </div>
                         </div>
                     );

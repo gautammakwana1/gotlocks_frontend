@@ -10,8 +10,12 @@ import type {
     FetchVenueCheckInDetailPayload,
     GroupVenueLifecyclePayload,
     GroupVenueWriteData,
+    IssueVenueAssistCodeData,
+    IssueVenueAssistCodePayload,
+    RedeemVenueAssistCodePayload,
     ResolveVenueCheckInData,
     ResolveVenueCheckInPayload,
+    RevokeVenueAssistCodePayload,
     UpdateGroupVenuePayload,
     VenueActivityData,
     VenueCheckInDetailData,
@@ -31,7 +35,15 @@ import {
     fetchVenueCheckInDetailSuccess,
     groupVenueWriteFailure,
     groupVenueWriteSuccess,
+    issueVenueAssistCodeFailure,
+    issueVenueAssistCodeRequest,
+    issueVenueAssistCodeSuccess,
+    redeemVenueAssistCodeFailure,
+    redeemVenueAssistCodeRequest,
     regenerateVenueTokenRequest,
+    revokeVenueAssistCodeFailure,
+    revokeVenueAssistCodeRequest,
+    revokeVenueAssistCodeSuccess,
     resolveVenueCheckInTokenFailure,
     resolveVenueCheckInTokenRequest,
     resolveVenueCheckInTokenSuccess,
@@ -340,6 +352,110 @@ function* handleFetchVenueActivity(
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * STAFF ASSIST CODES — the in-person fallback.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * POST /assist-code/:group_id — no body. STAFF-wide, not owner-only: whoever is
+ * behind the bar when a phone fails has to be able to solve it.
+ *
+ * The plaintext comes back ONCE. It is never re-fetchable, so the slice holds it
+ * and the panel shows it until it expires — losing it means issuing another.
+ */
+function* handleIssueVenueAssistCode(
+    action: PayloadAction<IssueVenueAssistCodePayload>
+): SagaIterator {
+    const { group_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/venue/assist-code/${encodeURIComponent(group_id)}`,
+            {}
+        );
+        const payload = response.data as { data?: IssueVenueAssistCodeData };
+        if (!payload?.data?.code) {
+            yield put(
+                issueVenueAssistCodeFailure("The check-in code could not be created.")
+            );
+            return;
+        }
+        yield put(issueVenueAssistCodeSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            issueVenueAssistCodeFailure(
+                getErrorMessage(error, "Failed to generate a staff check-in code")
+            )
+        );
+    }
+}
+
+/**
+ * PUT /assist-code/:code_id/revoke — no body, and idempotent: a second call
+ * answers 200 with `was_already_revoked`, which is the outcome the caller
+ * wanted either way, so both land on success.
+ */
+function* handleRevokeVenueAssistCode(
+    action: PayloadAction<RevokeVenueAssistCodePayload>
+): SagaIterator {
+    const { assist_code_id } = action.payload;
+    try {
+        yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/venue/assist-code/${encodeURIComponent(assist_code_id)}/revoke`,
+            {}
+        );
+        yield put(revokeVenueAssistCodeSuccess({ assist_code_id }));
+    } catch (error: unknown) {
+        yield put(
+            revokeVenueAssistCodeFailure(
+                getErrorMessage(error, "Failed to revoke the check-in code")
+            )
+        );
+    }
+}
+
+/**
+ * POST /check-in/redeem-assist-code — body `{ code }` plus `token` (from the QR
+ * page) or `group_id`.
+ *
+ * A SUCCESS is dispatched as `verifyVenueCheckInSuccess`, not an action of its
+ * own: the reply is the same envelope the GPS path returns, differing only in
+ * `outcome`/`method`, and the check-in screen should have exactly one success
+ * path. Everything downstream — the entry gate, the staff counts, the audit —
+ * already treats the two identically.
+ */
+function* handleRedeemVenueAssistCode(
+    action: PayloadAction<RedeemVenueAssistCodePayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/venue/check-in/redeem-assist-code`,
+            action.payload
+        );
+        const payload = response.data as { data?: VerifyVenueCheckInData };
+        if (!payload?.data?.checked_in) {
+            yield put(
+                redeemVenueAssistCodeFailure(
+                    "Your check-in could not be completed. Ask staff for a new code."
+                )
+            );
+            return;
+        }
+        yield put(verifyVenueCheckInSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            redeemVenueAssistCodeFailure(
+                getErrorMessage(
+                    error,
+                    "That staff check-in code is invalid, expired, or already used."
+                )
+            )
+        );
+    }
+}
+
 export default function* venueSaga(): SagaIterator {
     yield all([
         takeLatest(fetchVenueCheckInDetailRequest.type, handleFetchVenueCheckInDetail),
@@ -351,5 +467,8 @@ export default function* venueSaga(): SagaIterator {
         takeLatest(resolveVenueCheckInTokenRequest.type, handleResolveVenueCheckInToken),
         takeLatest(verifyVenueCheckInRequest.type, handleVerifyVenueCheckIn),
         takeLatest(fetchVenueActivityRequest.type, handleFetchVenueActivity),
+        takeLatest(issueVenueAssistCodeRequest.type, handleIssueVenueAssistCode),
+        takeLatest(revokeVenueAssistCodeRequest.type, handleRevokeVenueAssistCode),
+        takeLatest(redeemVenueAssistCodeRequest.type, handleRedeemVenueAssistCode),
     ]);
 }

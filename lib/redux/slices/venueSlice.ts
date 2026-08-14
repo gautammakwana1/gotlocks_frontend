@@ -5,7 +5,11 @@ import type {
     FetchVenueCheckInDetailPayload,
     GroupVenueLifecyclePayload,
     GroupVenueWriteData,
+    IssueVenueAssistCodeData,
+    IssueVenueAssistCodePayload,
+    RedeemVenueAssistCodePayload,
     ResolveVenueCheckInData,
+    RevokeVenueAssistCodePayload,
     ResolveVenueCheckInPayload,
     UpdateGroupVenuePayload,
     VenueActivityData,
@@ -57,6 +61,13 @@ const initialState: VenueState = {
     activityForId: null,
     activityLoading: false,
     activityError: null,
+    issuedAssistCode: null,
+    assistIssueLoading: false,
+    assistIssueError: null,
+    assistRevokeLoading: false,
+    assistRevokeError: null,
+    assistRedeemLoading: false,
+    assistRedeemError: null,
 };
 
 /**
@@ -293,6 +304,11 @@ const venueSlice = createSlice({
             state.verifyError = null;
             state.verifyErrorCode = null;
             state.verifySuccess = action.payload;
+            // Shared with the assist-code path, which dispatches this same
+            // action: whichever way the member got in, the redeem spinner and
+            // its error have to stop too.
+            state.assistRedeemLoading = false;
+            state.assistRedeemError = null;
             if (state.resolved) {
                 state.resolved = {
                     ...state.resolved,
@@ -342,6 +358,93 @@ const venueSlice = createSlice({
             state.activity = null;
         },
 
+        /* -------------------------------------------------------------------
+         * STAFF ASSIST CODES — the in-person fallback.
+         * ----------------------------------------------------------------- */
+        issueVenueAssistCodeRequest: (
+            state,
+            action: PayloadAction<IssueVenueAssistCodePayload>
+        ) => {
+            void action;
+            state.assistIssueLoading = true;
+            state.assistIssueError = null;
+            // The previous code is dropped the moment a new one is asked for:
+            // it is about to be superseded on screen, and showing two live
+            // codes to a staff member reading one aloud is how the wrong one
+            // gets spoken.
+            state.issuedAssistCode = null;
+            state.assistRevokeError = null;
+        },
+        issueVenueAssistCodeSuccess: (
+            state,
+            action: PayloadAction<IssueVenueAssistCodeData>
+        ) => {
+            state.assistIssueLoading = false;
+            state.assistIssueError = null;
+            state.issuedAssistCode = action.payload;
+        },
+        issueVenueAssistCodeFailure: (state, action: PayloadAction<string>) => {
+            state.assistIssueLoading = false;
+            state.assistIssueError = action.payload;
+        },
+
+        revokeVenueAssistCodeRequest: (
+            state,
+            action: PayloadAction<RevokeVenueAssistCodePayload>
+        ) => {
+            void action;
+            state.assistRevokeLoading = true;
+            state.assistRevokeError = null;
+        },
+        /**
+         * The code is cleared from the panel whether it was revoked now or had
+         * already been revoked — both mean the same thing to whoever is holding
+         * the piece of paper, and leaving it on screen would invite it being
+         * read out.
+         */
+        revokeVenueAssistCodeSuccess: (
+            state,
+            action: PayloadAction<{ assist_code_id: string }>
+        ) => {
+            state.assistRevokeLoading = false;
+            state.assistRevokeError = null;
+            if (state.issuedAssistCode?.assist_code_id === action.payload.assist_code_id) {
+                state.issuedAssistCode = null;
+            }
+        },
+        revokeVenueAssistCodeFailure: (state, action: PayloadAction<string>) => {
+            state.assistRevokeLoading = false;
+            state.assistRevokeError = action.payload;
+        },
+        /** Dropped when it expires on the clock, or when the panel unmounts. */
+        clearIssuedVenueAssistCode: (state) => {
+            state.issuedAssistCode = null;
+            state.assistIssueError = null;
+            state.assistRevokeError = null;
+        },
+
+        /**
+         * The member's redemption. Its success is dispatched as
+         * `verifyVenueCheckInSuccess` by the saga — same envelope, same screen
+         * state — so only the loading and error halves live here.
+         */
+        redeemVenueAssistCodeRequest: (
+            state,
+            action: PayloadAction<RedeemVenueAssistCodePayload>
+        ) => {
+            void action;
+            state.assistRedeemLoading = true;
+            state.assistRedeemError = null;
+            // A code attempt and a GPS attempt are two ways to say the same
+            // thing, so a fresh try of either clears the other's complaint.
+            state.verifyError = null;
+            state.verifyErrorCode = null;
+        },
+        redeemVenueAssistCodeFailure: (state, action: PayloadAction<string>) => {
+            state.assistRedeemLoading = false;
+            state.assistRedeemError = action.payload;
+        },
+
         /** Dropped when the owning screen unmounts. */
         clearVenueCheckInDetail: () => initialState,
     },
@@ -369,6 +472,15 @@ export const {
     fetchVenueActivityRequest,
     fetchVenueActivitySuccess,
     fetchVenueActivityFailure,
+    issueVenueAssistCodeRequest,
+    issueVenueAssistCodeSuccess,
+    issueVenueAssistCodeFailure,
+    revokeVenueAssistCodeRequest,
+    revokeVenueAssistCodeSuccess,
+    revokeVenueAssistCodeFailure,
+    clearIssuedVenueAssistCode,
+    redeemVenueAssistCodeRequest,
+    redeemVenueAssistCodeFailure,
     clearVenueCheckInDetail,
 } = venueSlice.actions;
 

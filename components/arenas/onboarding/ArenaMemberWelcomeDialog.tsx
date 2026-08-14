@@ -3,21 +3,22 @@
 import { useEffect, useId, useState } from "react";
 
 /**
- * The Arena Guide — a four-step primer on how an Arena works, opened from the
- * "Arena guide" button under the Arena name.
+ * The Arena Guide — a four-step primer on how an Arena works.
+ *
+ * Opened two ways, and the caller tells them apart: AUTOMATICALLY on a newly
+ * joined member's first visit (gated on `should_show_guide` from
+ * `GET /group/arena/guide`), or manually from the "Arena guide" button under the
+ * Arena name.
  *
  * Ported from the MVP's ArenaMemberWelcomeDialog, copy included. Steps 2–4
  * describe Venue Check-In contests (QR scan + location verification), which is
  * the MVP's model for an in-person Arena and is deliberately kept verbatim here
  * so this screen stays at MVP parity.
  *
- * `onComplete` and `onDismiss` are kept as separate callbacks even though this
- * screen wires both to the same close: the MVP ALSO auto-opens the guide on a
- * member's first visit and records which way it was closed. That path needs
- * per-arena progress, which this backend has no table for (user_tutorial_progress
- * is keyed by user + a fixed global key), so only the manual trigger is wired.
- * Keeping the split means adding the auto-open later touches the caller, not this
- * component.
+ * `onComplete` and `onDismiss` are separate because the two are recorded
+ * differently: 'completed' means read through, 'dismissed' means closed early.
+ * Both silence the guide — the split exists so "how many members actually read
+ * it" stays an answerable question.
  */
 
 const makeSteps = (arenaName: string) => [

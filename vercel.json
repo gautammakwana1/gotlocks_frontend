@@ -35,6 +35,10 @@
         {
             "path": "/api/cron/feed-contest-finalize-expired",
             "schedule": "4-59/10 * * * *"
+        },
+        {
+            "path": "/api/cron/venue-expire-sessions",
+            "schedule": "8-59/10 * * * *"
         }
     ]
 }

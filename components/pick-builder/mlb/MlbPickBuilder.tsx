@@ -44,6 +44,7 @@ import MlbPickBuilderSkeleton from "./skeletons/MlbPickBuilderSkeleton";
 import MlbMatchupDetailSkeleton from "./skeletons/MlbMatchupDetailSkeleton";
 import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
+import { House } from "lucide-react";
 
 type OddsBlazeTeam = {
     id: string;
@@ -4269,12 +4270,13 @@ export const MlbPickBuilder = ({
                                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
                                                 }}
                                             >
-                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
+                                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center justify-between gap-2 px-3 sm:gap-3">
                                                     <div className="min-w-0">
                                                         <p className="truncate text-xs font-semibold leading-snug text-white">
                                                             {isMobile ? getMobileTeamName(game.homeAbbr, game.homeTeam) : game.homeTeam}
                                                         </p>
                                                     </div>
+                                                    <House size={14} color="white" className="shrink-0" />
                                                 </div>
                                                 {renderPreviewCell(
                                                     spreadHome,

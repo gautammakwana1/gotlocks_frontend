@@ -3124,7 +3124,7 @@ export const SoccerPickBuilder = ({
                                                                         </p>
                                                                     </span>
                                                                 </div>
-                                                                <House size={14} color="white" />
+                                                                <House size={14} color="white" className="shrink-0" />
                                                             </div>
 
                                                             <div className="row-span-3 flex items-center justify-center">

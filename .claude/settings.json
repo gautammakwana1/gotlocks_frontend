@@ -288,7 +288,10 @@
       "PowerShell(Get-ChildItem -Path \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\app\" -Recurse -File | Where-Object { $_.FullName -match \"check-in\" } | Select-Object -ExpandProperty FullName)",
       "PowerShell(npx eslint \"components/arenas/checkin\" \"app/check-in\" \"lib/redux/slices/venueSlice.ts\" \"lib/redux/sagas/venueSaga.ts\" \"lib/auth/safeReturnPath.ts\" \"lib/auth/AuthProvider.tsx\" 2>&1)",
       "PowerShell(npx eslint \"components/auth/SignInPage.tsx\" \"components/arenas/checkin\" \"app/check-in\" 2>&1)",
-      "PowerShell(npx eslint \"components/auth/SignInPage.tsx\" 2>&1)"
+      "PowerShell(npx eslint \"components/auth/SignInPage.tsx\" 2>&1)",
+      "PowerShell($a = Get-FileHash \"C:\\\\Users\\\\pc\\\\Downloads\\\\gotlocks.app_mvp2\\\\app\\\\check-in\\\\[token]\\\\page.tsx\" -Algorithm MD5; $b = Get-FileHash \"D:\\\\Next\\\\gotlocks.app_mvp2\\\\app\\\\check-in\\\\[token]\\\\page.tsx\" -Algorithm MD5; Write-Output \"dl: $\\($a.Hash\\)  local: $\\($b.Hash\\)\"; \\(Get-Item \"C:\\\\Users\\\\pc\\\\Downloads\\\\gotlocks.app_mvp2\\\\app\\\\check-in\\\\[token]\\\\page.tsx\"\\).Length)",
+      "PowerShell(npx eslint \"components/arenas/checkin\" \"lib/redux/slices/venueSlice.ts\" \"lib/redux/sagas/venueSaga.ts\" \"lib/arenas/venueCheckIn.ts\" 2>&1)",
+      "PowerShell(npx eslint \"app/api/cron/venue-expire-sessions\" 2>&1)"
     ],
     "additionalDirectories": [
       "D:\\gautam\\gotlocks_backend\\src\\controllers",

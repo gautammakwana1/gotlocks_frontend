@@ -24,6 +24,10 @@ import type {
     ConfirmArenaDeletePayload,
     InitiateArenaDeletePayload,
     LeaveArenaPayload,
+    ArenaGuideStatusData,
+    FetchArenaGuideStatusPayload,
+    MarkArenaGuideViewedData,
+    MarkArenaGuideViewedPayload,
     ArenaHostingDetailsResponse,
     OwnedArenaHostingPayload,
     OwnedArenaHostingResponse,
@@ -68,6 +72,12 @@ const initialState: ArenaState = {
     loading: false,
     error: null,
     message: null,
+    guide: null,
+    guideForId: null,
+    guideLoading: false,
+    guideError: null,
+    guideAckLoading: false,
+    guideAckError: null,
     ownedHosting: [],
     ownedHostingHasMore: false,
     ownedHostingLoading: false,
@@ -1421,6 +1431,82 @@ const arenaSlice = createSlice({
             state.leaveArenaError = null;
             state.leaveArenaMessage = null;
         },
+
+        /* --------------------------------------------------------------------
+         * ARENA GUIDE — should this member be shown the welcome walkthrough?
+         * ------------------------------------------------------------------ */
+        fetchArenaGuideStatusRequest: (
+            state,
+            action: PayloadAction<FetchArenaGuideStatusPayload>
+        ) => {
+            // Dropped at REQUEST time on an id mismatch. This slot decides
+            // whether a modal opens over the page, so the previous Arena's
+            // answer must not survive into this one's in-flight window.
+            if (state.guideForId !== action.payload.arena_id) {
+                state.guide = null;
+            }
+            state.guideForId = action.payload.arena_id;
+            state.guideLoading = true;
+            state.guideError = null;
+        },
+        fetchArenaGuideStatusSuccess: (
+            state,
+            action: PayloadAction<ArenaGuideStatusData>
+        ) => {
+            state.guideLoading = false;
+            state.guideError = null;
+            state.guide = action.payload.guide;
+            state.guideForId = action.payload.arena?.id ?? state.guideForId;
+        },
+        fetchArenaGuideStatusFailure: (state, action: PayloadAction<string>) => {
+            state.guideLoading = false;
+            state.guideError = action.payload;
+            // Null, never a synthesised `should_show_guide: false`: a failed read
+            // means UNKNOWN, and the screen's own rule is "open only on a
+            // definite yes", so this stays closed without pretending it was told.
+            state.guide = null;
+        },
+
+        markArenaGuideViewedRequest: (
+            state,
+            action: PayloadAction<MarkArenaGuideViewedPayload>
+        ) => {
+            state.guideAckLoading = true;
+            state.guideAckError = null;
+            // Optimistic, and deliberately so: the dialog closes on the click,
+            // and leaving `should_show_guide` true until the round trip lands
+            // would let the auto-open effect fire again behind it.
+            if (state.guide && state.guideForId === action.payload.arena_id) {
+                state.guide = {
+                    ...state.guide,
+                    has_viewed_guide: true,
+                    should_show_guide: false,
+                    has_viewed_any_version: true,
+                    status: action.payload.status ?? "completed",
+                };
+            }
+        },
+        markArenaGuideViewedSuccess: (
+            state,
+            action: PayloadAction<MarkArenaGuideViewedData>
+        ) => {
+            state.guideAckLoading = false;
+            state.guideAckError = null;
+            // The server echoes the row it wrote in the same shape the GET
+            // returns, so this replaces the optimistic guess with the truth —
+            // timestamps included — without a follow-up read.
+            if (state.guideForId === action.payload.arena?.id) {
+                state.guide = action.payload.guide;
+            }
+        },
+        markArenaGuideViewedFailure: (state, action: PayloadAction<string>) => {
+            state.guideAckLoading = false;
+            state.guideAckError = action.payload;
+            // The optimistic flip is NOT rolled back. Re-opening the guide over
+            // a member who just closed it is worse than showing it once more on
+            // their next visit, which is what an unrecorded acknowledgement
+            // costs.
+        },
     },
 });
 
@@ -1579,6 +1665,12 @@ export const {
     leaveArenaSuccess,
     leaveArenaFailure,
     clearLeaveArenaState,
+    fetchArenaGuideStatusRequest,
+    fetchArenaGuideStatusSuccess,
+    fetchArenaGuideStatusFailure,
+    markArenaGuideViewedRequest,
+    markArenaGuideViewedSuccess,
+    markArenaGuideViewedFailure,
 } = arenaSlice.actions;
 
 export default arenaSlice.reducer;

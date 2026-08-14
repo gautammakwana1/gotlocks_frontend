@@ -5,11 +5,14 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "@/lib/interfaces/interfaces";
 import {
     clearGroupVenueWriteState,
+    clearIssuedVenueAssistCode,
     disableGroupVenueRequest,
     enableGroupVenueRequest,
     fetchVenueActivityRequest,
     fetchVenueCheckInDetailRequest,
+    issueVenueAssistCodeRequest,
     regenerateVenueTokenRequest,
+    revokeVenueAssistCodeRequest,
 } from "@/lib/redux/slices/venueSlice";
 import ArenaVenueQrCard from "./ArenaVenueQrCard";
 import ArenaVenueSetupDialog from "./ArenaVenueSetupDialog";
@@ -29,12 +32,9 @@ import ArenaVenueSetupDialog from "./ArenaVenueSetupDialog";
  * the button's enabled state and the endpoint that would refuse it agree by
  * construction rather than by two copies of one rule.
  *
- * ONE piece of the MVP is still absent, because the endpoint behind it does not
- * exist: the "Staff location fallback" — a six-digit, single-use assist code an
- * owner or manager reads out when a member's GPS will not cooperate.
- * `viewer.can_issue_assist_code` (staff AND active AND writable) already comes
- * back on the detail read, ready to gate the button. Marked TODO(api) at its
- * spot, between the QR card and Today's activity.
+ * Every section of the MVP's panel is now live. "Staff location fallback" adds
+ * one thing the MVP has no endpoint for — a Revoke beside the issued code — for
+ * the ordinary case of six digits read aloud to the wrong table.
  * -------------------------------------------------------------------------- */
 
 export type ArenaVenueCheckInPanelProps = {
@@ -69,6 +69,11 @@ export const ArenaVenueCheckInPanel = ({
         activity,
         activityForId,
         activityError,
+        issuedAssistCode,
+        assistIssueLoading,
+        assistIssueError,
+        assistRevokeLoading,
+        assistRevokeError,
     } = useSelector((state: RootState) => state.venue);
 
     const [setupOpen, setSetupOpen] = useState(false);
@@ -155,10 +160,32 @@ export const ArenaVenueCheckInPanel = ({
         }
     }, [configureError, configureLoading, configureMessage, dispatch]);
 
-    // A token rotation or a state flip invalidates whatever was on screen.
+    // A token rotation or a state flip invalidates whatever was on screen —
+    // including a live assist code, which belongs to the venue that just changed
+    // underneath it.
     useEffect(() => {
         setConfirmingAction(null);
-    }, [staff?.public_check_in_token, state]);
+        dispatch(clearIssuedVenueAssistCode());
+    }, [dispatch, staff?.public_check_in_token, state]);
+
+    /**
+     * The code dies on the clock, not on a refresh: five minutes is short enough
+     * that a stale one left on screen would be read aloud to a customer who then
+     * gets "invalid, expired, or already used" for no visible reason.
+     */
+    useEffect(() => {
+        if (!issuedAssistCode) return;
+        const remainingMs = Date.parse(issuedAssistCode.expires_at) - Date.now();
+        const timeoutId = window.setTimeout(
+            () => dispatch(clearIssuedVenueAssistCode()),
+            Math.min(Math.max(0, remainingMs + 5), 2_147_000_000)
+        );
+        return () => window.clearTimeout(timeoutId);
+    }, [dispatch, issuedAssistCode]);
+
+    // Staff AND an active venue AND a writable Arena — the server's own answer,
+    // so the button cannot offer what the endpoint would refuse.
+    const canIssueAssistCode = scoped?.viewer.can_issue_assist_code === true;
 
     if (!isStaff) return null;
 
@@ -410,11 +437,99 @@ export const ArenaVenueCheckInPanel = ({
                                 )}
                             </div>
 
-                            {/* TODO(api): the MVP's "Staff location fallback" — a
-                                six-digit, single-use assist code for when GPS fails in the
-                                building — still has no route.
-                                `viewer.can_issue_assist_code` already comes back on the
-                                detail response, ready for it. */}
+                            {/* The MVP's "Staff location fallback", verbatim, plus a
+                                Revoke the MVP has no endpoint for. Gated on
+                                `viewer.can_issue_assist_code` — staff AND an active
+                                venue AND a writable Arena, pre-computed server-side so
+                                the button and the endpoint cannot disagree. */}
+                            <section
+                                aria-labelledby="venue-staff-fallback-heading"
+                                className="px-5 py-5 sm:px-6"
+                            >
+                                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                                    <div className="min-w-0">
+                                        <h3
+                                            id="venue-staff-fallback-heading"
+                                            className="text-sm font-semibold text-white"
+                                        >
+                                            Staff location fallback
+                                        </h3>
+                                        <p className="mt-1 text-xs leading-5 text-gray-500">
+                                            Issue a six-digit, single-use code when GPS
+                                            verification fails. Codes expire after five minutes.
+                                        </p>
+                                    </div>
+                                    {canIssueAssistCode ? (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                dispatch(
+                                                    issueVenueAssistCodeRequest({ group_id: arenaId })
+                                                )
+                                            }
+                                            disabled={assistIssueLoading}
+                                            aria-busy={assistIssueLoading}
+                                            className="ml-auto min-h-10 shrink-0 rounded-lg border border-violet-300/30 px-3.5 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {assistIssueLoading
+                                                ? "Generating…"
+                                                : issuedAssistCode
+                                                    ? "Generate another"
+                                                    : "Generate assist code"}
+                                        </button>
+                                    ) : null}
+                                </div>
+
+                                {issuedAssistCode ? (
+                                    <div className="mt-4 border-l-2 border-emerald-300/35 pl-4">
+                                        <div className="flex flex-wrap items-baseline justify-between gap-3">
+                                            <p className="font-mono text-2xl font-bold tracking-[0.24em] text-emerald-200">
+                                                {issuedAssistCode.code}
+                                            </p>
+                                            <p className="text-xs text-emerald-100/70">
+                                                Expires{" "}
+                                                {new Date(
+                                                    issuedAssistCode.expires_at
+                                                ).toLocaleTimeString([], {
+                                                    hour: "numeric",
+                                                    minute: "2-digit",
+                                                })}
+                                            </p>
+                                        </div>
+                                        {/* Said plainly: the server keeps only a digest, so
+                                            this really is the only copy that will exist. */}
+                                        <p className="mt-2 text-[11px] leading-5 text-gray-500">
+                                            {issuedAssistCode.note}
+                                        </p>
+                                        <div className="mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    dispatch(
+                                                        revokeVenueAssistCodeRequest({
+                                                            assist_code_id:
+                                                                issuedAssistCode.assist_code_id,
+                                                        })
+                                                    )
+                                                }
+                                                disabled={assistRevokeLoading}
+                                                className="min-h-9 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-gray-300 transition hover:bg-white/[0.05] disabled:opacity-50"
+                                            >
+                                                {assistRevokeLoading ? "Revoking…" : "Revoke code"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {assistIssueError || assistRevokeError ? (
+                                    <p
+                                        role="alert"
+                                        className="mt-3 text-xs leading-5 text-red-200"
+                                    >
+                                        {assistIssueError ?? assistRevokeError}
+                                    </p>
+                                ) : null}
+                            </section>
 
                             {/* Rendered on the SERVER's verdict, not the role prop —
                                 the same `is_staff` the endpoint authorises with. A

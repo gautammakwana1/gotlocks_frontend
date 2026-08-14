@@ -22,6 +22,10 @@ import type {
     ConfirmArenaDeletePayload,
     InitiateArenaDeletePayload,
     LeaveArenaPayload,
+    ArenaGuideStatusData,
+    FetchArenaGuideStatusPayload,
+    MarkArenaGuideViewedData,
+    MarkArenaGuideViewedPayload,
     ArenaHostingDetailsResponse,
     OwnedArenaHostingPayload,
     OwnedArenaHostingResponse,
@@ -164,9 +168,15 @@ import {
     initiateArenaDeleteFailure,
     initiateArenaDeleteRequest,
     initiateArenaDeleteSuccess,
+    fetchArenaGuideStatusFailure,
+    fetchArenaGuideStatusRequest,
+    fetchArenaGuideStatusSuccess,
     leaveArenaFailure,
     leaveArenaRequest,
     leaveArenaSuccess,
+    markArenaGuideViewedFailure,
+    markArenaGuideViewedRequest,
+    markArenaGuideViewedSuccess,
     scheduleArenaPauseFailure,
     scheduleArenaPauseRequest,
     scheduleArenaPauseSuccess,
@@ -1520,6 +1530,77 @@ function* handleCancelArenaOwnershipTransfer(
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * ARENA GUIDE — the welcome walkthrough for a newly joined member.
+ *
+ * Per-ARENA, which is why it is not a `tutorial_key` on the progress slice:
+ * user_tutorial_progress has no group column, so joining a second Arena would
+ * never show the guide again.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * GET /group/arena/guide?arena_id= — members only (403), Arenas only (404),
+ * 410 for a deleted one.
+ *
+ * `should_show_guide` is derived server-side and is the ONLY field the screen
+ * gates on; everything else in `guide` is there to word the dialog.
+ */
+function* handleFetchArenaGuideStatus(
+    action: PayloadAction<FetchArenaGuideStatusPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/guide`,
+            { params: { arena_id: action.payload.arena_id } }
+        );
+        const payload = response.data as { data?: ArenaGuideStatusData };
+        if (!payload?.data?.guide) {
+            yield put(fetchArenaGuideStatusFailure("Failed to load the Arena guide status"));
+            return;
+        }
+        yield put(fetchArenaGuideStatusSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaGuideStatusFailure(
+                getErrorMessage(error, "Failed to load the Arena guide status")
+            )
+        );
+    }
+}
+
+/**
+ * POST /group/arena/guide/viewed — `status` is 'completed' when they read it
+ * through and 'dismissed' when they closed it early. Both silence the guide;
+ * the split only exists so "how many members actually read it" stays an
+ * answerable question.
+ *
+ * Idempotent server-side, so a double-fire on unmount is not an error.
+ */
+function* handleMarkArenaGuideViewed(
+    action: PayloadAction<MarkArenaGuideViewedPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/arena/guide/viewed`,
+            action.payload
+        );
+        const payload = response.data as { data?: MarkArenaGuideViewedData };
+        if (!payload?.data?.guide) {
+            yield put(markArenaGuideViewedFailure("Failed to update the Arena guide status"));
+            return;
+        }
+        yield put(markArenaGuideViewedSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            markArenaGuideViewedFailure(
+                getErrorMessage(error, "Failed to update the Arena guide status")
+            )
+        );
+    }
+}
+
 export default function* arenaSaga() {
     yield takeLatest(fetchArenaGroupsRequest.type, handleFetchArenaGroups);
     yield takeLatest(fetchOwnedArenasRequest.type, handleFetchOwnedArenas);
@@ -1578,4 +1659,6 @@ export default function* arenaSaga() {
     yield takeLatest(initiateArenaDeleteRequest.type, handleInitiateArenaDelete);
     yield takeLatest(confirmArenaDeleteRequest.type, handleConfirmArenaDelete);
     yield takeLatest(leaveArenaRequest.type, handleLeaveArena);
+    yield takeLatest(fetchArenaGuideStatusRequest.type, handleFetchArenaGuideStatus);
+    yield takeLatest(markArenaGuideViewedRequest.type, handleMarkArenaGuideViewed);
 }

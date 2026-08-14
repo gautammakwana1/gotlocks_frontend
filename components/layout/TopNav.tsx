@@ -597,7 +597,7 @@ export const TopNav = () => {
                 setMenuOpen(false);
                 router.push("/app-settings");
               }}
-              className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10"
+              className="group flex items-center justify-end rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-emerald-400/50 hover:bg-emerald-500/10 gap-5"
             >
               <span>account settings</span>
               <Image
@@ -611,7 +611,7 @@ export const TopNav = () => {
             </button>
             <Link
               href="/global-points-shop"
-              className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-violet-300/50 hover:bg-violet-400/10"
+              className="group flex items-center justify-end gap-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-violet-300/50 hover:bg-violet-400/10"
               onClick={() => setMenuOpen(false)}
             >
               <span>reward room</span>
@@ -630,7 +630,7 @@ export const TopNav = () => {
                 setMenuOpen(false);
                 setTutorialStage("home");
               }}
-              className="group ui-accent-outline-hover flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition"
+              className="group ui-accent-outline-hover flex items-center justify-end gap-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition"
             >
               <span>tutorial</span>
               <Image
@@ -644,7 +644,7 @@ export const TopNav = () => {
             </button>
             <Link
               href="/feedback"
-              className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
+              className="group flex items-center justify-end gap-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
               onClick={() => setMenuOpen(false)}
             >
               <span>feedback</span>
@@ -664,7 +664,7 @@ export const TopNav = () => {
                   setMenuOpen(false);
                   handleLogOut();
                 }}
-                className="group flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-red-400/60 hover:bg-red-500/10"
+                className="group flex items-center justify-end gap-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-red-400/60 hover:bg-red-500/10"
               >
                 <span>logout</span>
                 <Image

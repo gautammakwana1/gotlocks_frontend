@@ -36,6 +36,14 @@ export const VENUE_TARGET_ACCURACY_METERS = 50;
 
 export const VENUE_LOCATION_TIMEOUT_MS = 10_000;
 
+/**
+ * The staff fallback code's length — `VENUE_ASSIST_CODE_LENGTH` server-side.
+ * Only the digit count is mirrored: the five-minute window and the single-use
+ * rule are enforced by the endpoint and are never a client's business to
+ * pre-empt.
+ */
+export const VENUE_ASSIST_CODE_LENGTH = 6;
+
 export type VenueLocationReading = {
     latitude: number;
     longitude: number;

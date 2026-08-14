@@ -11,11 +11,13 @@ import {
 } from "@/lib/auth/safeReturnPath";
 import {
     browserVenueGeolocationAdapter,
+    VENUE_ASSIST_CODE_LENGTH,
     type VenueGeolocationAdapter,
 } from "@/lib/arenas/venueCheckIn";
 import type { RootState } from "@/lib/interfaces/interfaces";
 import {
     clearVenueCheckInVerification,
+    redeemVenueAssistCodeRequest,
     resolveVenueCheckInTokenRequest,
     verifyVenueCheckInRequest,
 } from "@/lib/redux/slices/venueSlice";
@@ -38,13 +40,17 @@ import {
  * server's, which is the entire difference between a geofence and a suggestion —
  * so a refusal arrives as a 422 with an outcome code and is rendered verbatim.
  *
- * TWO pieces of the MVP's page are absent, each for a missing endpoint:
- *   - the six-digit STAFF ASSIST CODE fallback (no assist-code route yet);
- *   - the join-by-venue-token button. `/join-arena` takes an invite CODE, and
- *     the resolve response deliberately does not carry one — a public token page
- *     handing out a join credential would make the poster an invite. So the
- *     join rung sends the customer to the Arenas hub instead.
- * Both are marked TODO(api) at their spot.
+ * The STAFF ASSIST CODE fallback sits under the location button, as the MVP has
+ * it: six digits, read out by staff, for the phone that will not cooperate. Its
+ * success is the SAME redux action the GPS path dispatches, because the endpoint
+ * answers with the same envelope — so this screen has exactly one success state
+ * and nothing downstream knows which way the member got in.
+ *
+ * ONE piece of the MVP's page is still absent: the join-by-venue-token button.
+ * `/join-arena` takes an invite CODE, and the resolve response deliberately does
+ * not carry one — a public token page handing out a join credential would make
+ * the poster an invite. So the join rung sends the customer to the Arenas hub
+ * instead, marked TODO(api) at its spot.
  * -------------------------------------------------------------------------- */
 
 const formatSessionExpiration = (value: string | null) =>
@@ -100,9 +106,12 @@ export const VenueCheckInScreen = ({
         verifyLoading,
         verifySuccess,
         verifyError,
+        assistRedeemLoading,
+        assistRedeemError,
     } = useSelector((state: RootState) => state.venue);
 
     const [locating, setLocating] = useState(false);
+    const [assistCode, setAssistCode] = useState("");
     const requestController = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -387,7 +396,9 @@ export const VenueCheckInScreen = ({
         );
     };
 
-    const busy = locating || verifyLoading;
+    // One busy flag across both paths: the two are alternative ways of proving
+    // the same thing, so neither should be startable while the other is running.
+    const busy = locating || verifyLoading || assistRedeemLoading;
 
     return (
         <CheckInFrame>
@@ -441,10 +452,61 @@ export const VenueCheckInScreen = ({
                                 : "Verify My Location"}
                 </button>
 
-                {/* TODO(api): the MVP offers a six-digit staff assist code here for
-                    when GPS fails in the building. There is no assist-code route yet;
-                    `viewer.can_issue_assist_code` on the staff detail read is already
-                    returned for it. */}
+                {/* The staff fallback, exactly where the MVP puts it: under the
+                    location button, for the member whose phone will not cooperate.
+                    The token travels with it — this page has one — but the endpoint
+                    is group-scoped on purpose, so a member who could not scan at all
+                    can still be helped from elsewhere later. */}
+                <div className="my-6 flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
+                    <span className="h-px flex-1 bg-white/10" />
+                    Having trouble? Enter a staff check-in code.
+                    <span className="h-px flex-1 bg-white/10" />
+                </div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    Six-digit assist code
+                    <input
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={VENUE_ASSIST_CODE_LENGTH}
+                        value={assistCode}
+                        onChange={(event) =>
+                            setAssistCode(
+                                event.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, VENUE_ASSIST_CODE_LENGTH)
+                            )
+                        }
+                        placeholder="000000"
+                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-center font-mono text-lg tracking-[0.3em] text-white outline-none focus:border-violet-300/60"
+                    />
+                </label>
+                {/* One sentence for every way a code can fail — the server does not
+                    distinguish a wrong code from an expired, revoked or already-spent
+                    one, and neither should this. */}
+                {assistRedeemError ? (
+                    <p
+                        role="alert"
+                        className="mt-3 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-100"
+                    >
+                        {assistRedeemError}
+                    </p>
+                ) : null}
+                <button
+                    type="button"
+                    onClick={() =>
+                        dispatch(
+                            redeemVenueAssistCodeRequest({
+                                code: assistCode,
+                                token: publicToken,
+                            })
+                        )
+                    }
+                    disabled={assistCode.length !== VENUE_ASSIST_CODE_LENGTH || busy}
+                    aria-busy={assistRedeemLoading}
+                    className="mt-3 min-h-11 w-full rounded-xl border border-violet-300/30 bg-violet-500/10 px-5 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    {assistRedeemLoading ? "Checking code…" : "Use Staff Assist Code"}
+                </button>
 
                 <Link
                     href={`/arena/${scoped.group.id}`}
