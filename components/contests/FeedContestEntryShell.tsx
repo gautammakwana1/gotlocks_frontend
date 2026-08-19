@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
@@ -10,12 +10,36 @@ import {
     FEED_CONTEST_MIN_LEGS,
     formatContestDateTime,
 } from "@/lib/contests/feedContestCatalog";
-import { feedContestOddsRequestKey } from "@/lib/contests/feedContestOdds";
+import {
+    feedContestOddsRequestKey,
+    withEnrichedContestOdds,
+} from "@/lib/contests/feedContestOdds";
+import {
+    PICKEM_ENTRY_API_READY,
+    PICKEM_ENTRY_PLACEHOLDER_NOTICE,
+    pickemMatchupOptionsFromMoneyline,
+} from "@/lib/contests/pickemEntry";
+import {
+    TD_PSYCHIC_SELECTION_COUNT,
+    buildTdPsychicSelections,
+    isTdPsychicCardLocked,
+    tdPsychicCardDescription,
+    tdPsychicEntrySelections,
+    tdPsychicMatchupsFromScorers,
+    tdPsychicPrefillFromLegs,
+    tdPsychicScorerCatalog,
+    type TdPsychicCatalogSelection,
+    type TdPsychicScorerIdentity,
+    type TdPsychicStoredLeg,
+} from "@/lib/contests/tdPsychicEntry";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type {
     FeedContestEntryLegPayload,
     FeedContestEntryRow,
+    FeedContestGameOddsEntry,
+    FeedContestGameOddsSource,
+    FeedContestOddsGroup,
     RootState,
 } from "@/lib/interfaces/interfaces";
 import {
@@ -23,16 +47,30 @@ import {
     clearFeedContestEntries,
     clearFeedContestEntryMessage,
     enterFeedContestRequest,
+    enterPickemFeedContestRequest,
+    replacePickemFeedContestEntryRequest,
     fetchFeedContestDetailRequest,
     fetchFeedContestEntriesRequest,
     replaceFeedContestEntryRequest,
+    enterTdPsychicFeedContestRequest,
+    replaceTdPsychicFeedContestEntryRequest,
 } from "@/lib/redux/slices/feedContestSlice";
 import {
     clearFeedContestOdds,
+    fetchContestGameOddsRetryRequest,
+    fetchContestMatchOddsRequest,
     fetchFeedContestOddsRequest,
 } from "@/lib/redux/slices/feedContestOddsSlice";
+import {
+    clearPickemMoneyline,
+    fetchPickemMoneylineRequest,
+} from "@/lib/redux/slices/pickemMoneylineSlice";
+import { clearTdScorers, fetchTdScorersRequest } from "@/lib/redux/slices/tdScorersSlice";
 import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
+import PickemCardEntryEditor from "./PickemCardEntryEditor";
+import TdPsychicCardBuilder from "./TdPsychicCardBuilder";
+import TdPsychicEntryCard from "./TdPsychicEntryCard";
 import VenueContestAccessPanel from "./VenueContestAccessPanel";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
@@ -44,14 +82,38 @@ import type { FeedContestAccent } from "./FeedContestDetail";
  * Layout, copy and gating are the MVP's. What changed is where the data comes
  * from: the MVP reads a synchronous mock catalog, so it can render the whole
  * builder on the first commit. Here the slate rides on the contest detail and
- * the markets arrive from `/leagues/**\/schedules-with-odds-by-events`, so the
- * builder carries its own loading and error states and the rules gate is
- * rendered before either lands.
+ * the markets arrive over the network, so the builder carries its own loading
+ * and error states and the rules gate is rendered before either lands.
  *
- * One call does BOTH halves of joining: `POST /enter` accepts the rules, opts
- * the member in and submits the combo, so nobody is ever left opted in with no
- * entry. Once an entry exists, `PUT /replace-entry` swaps it in place.
+ * THREE ENTRY MODELS, and SIX endpoints — one pair each, never crossed. Each
+ * endpoint refuses the other models' contests by name, so the choice here is not
+ * cosmetic:
+ *
+ *          board                              join                    swap
+ *   combo  /schedules-with-odds-by-events     POST /enter             PUT /replace-entry
+ *   card   /leagues/nfl/moneyline-odds        POST /enter-pickem      PUT /replace-pickem-entry
+ *   td     /leagues/nfl/td-scorers-by-events  POST /enter-td-psychic  PUT /replace-td-psychic-entry
+ *
+ * The TD row differs from the two above it in what it SENDS, not merely in where
+ * it sends it: a combo and a card each carry a price per leg and are priced at
+ * acceptance. A TD card carries three player identities and NO prices at all —
+ * one shared price per scorer is captured at the contest lock, the same number
+ * for everyone holding that player, which is the only way its correct-scorer
+ * tiebreak can compare two cards
+ *
+ * Joining is ONE call in both models — it accepts the rules, opts the member in
+ * and submits, so nobody is ever left opted in with no entry. Once an entry
+ * exists the swap replaces it in place, and a card is swapped WHOLE: the
+ * replacement is validated exactly as a first submission is.
  * -------------------------------------------------------------------------- */
+
+/**
+ * Stable empties. A contest whose board has not landed yet must not hand the
+ * builder a fresh array/object identity every render — its whole slate↔odds join
+ * is memoised on exactly these two references.
+ */
+const NO_ODDS_GROUPS: readonly FeedContestOddsGroup[] = [];
+const NO_GAME_ODDS: Readonly<Record<string, FeedContestGameOddsEntry>> = {};
 
 const accentClassesFor = (accent: FeedContestAccent) =>
     accent === "arena"
@@ -108,6 +170,8 @@ export const FeedContestEntryShell = ({
         submittedEntry,
     } = useSelector((state: RootState) => state.feedContest);
     const odds = useSelector((state: RootState) => state.feedContestOdds);
+    const moneyline = useSelector((state: RootState) => state.pickemMoneyline);
+    const tdScorers = useSelector((state: RootState) => state.tdScorers);
     const venueDetail = useSelector((state: RootState) => state.venue.detail);
     const venueDetailForId = useSelector((state: RootState) => state.venue.detailForId);
 
@@ -136,6 +200,8 @@ export const FeedContestEntryShell = ({
             dispatch(clearFeedContestDetail());
             dispatch(clearFeedContestEntries());
             dispatch(clearFeedContestOdds());
+            dispatch(clearPickemMoneyline());
+            dispatch(clearTdScorers());
         },
         [dispatch]
     );
@@ -164,6 +230,57 @@ export const FeedContestEntryShell = ({
         [contest, slate]
     );
     const oddsDescribeThisContest = Boolean(requestKey) && odds.requestKey === requestKey;
+    // Both boards key their cache the same way, so each is read through the same
+    // "is this MY slate?" check rather than trusting whatever is in the slot.
+    const moneylineDescribesThisContest =
+        Boolean(requestKey) && moneyline.requestKey === requestKey;
+    const tdScorersDescribeThisContest =
+        Boolean(requestKey) && tdScorers.requestKey === requestKey;
+
+    /*
+     * WHICH board this contest needs.
+     *
+     * A Pick'em card asks one question per game, so it reads the narrow
+     * `/leagues/nfl/moneyline-odds` endpoint — the moneyline only, already
+     * flattened — instead of the full market board. Only ONE of the two is ever
+     * fetched: pulling every market and discarding all but the moneyline is the
+     * cost this endpoint exists to remove.
+     */
+    const usesMoneylineBoard = contest?.entry_model === "pickem_card";
+    /*
+     * And the board a TD PSYCHIC card needs — the anytime-touchdown-scorer read,
+     * where the question is which PLAYER scores rather than which team wins. It
+     * arrives already filtered to the full-game 1+ line, so the builder cannot
+     * offer a selection (a 2+ alternate, a first-scorer market, a passing TD)
+     * that the entry endpoint would then refuse.
+     */
+    const usesTdScorerBoard = contest?.entry_model === "td_psychic_card";
+
+    const dispatchOddsFetch = useCallback(() => {
+        if (!contest || !slate.length) return;
+        // Exactly ONE of the three is ever fetched. Pulling the full market
+        // board and discarding all but one market is the cost the two narrow
+        // endpoints exist to remove.
+        dispatch(
+            usesTdScorerBoard
+                ? fetchTdScorersRequest({
+                      contest_id: contest.id,
+                      game_ids: slate.map((game) => game.game_id),
+                      sportsbook: "fanduel",
+                  })
+                : usesMoneylineBoard
+                  ? fetchPickemMoneylineRequest({
+                        contest_id: contest.id,
+                        game_ids: slate.map((game) => game.game_id),
+                        sportsbook: "fanduel",
+                    })
+                  : fetchFeedContestOddsRequest({
+                        contest_id: contest.id,
+                        games: slate,
+                        sportsbook: "fanduel",
+                    })
+        );
+    }, [contest, dispatch, slate, usesMoneylineBoard, usesTdScorerBoard]);
 
     // Keyed on the REQUEST KEY string, not on the slate array: the array is a new
     // identity every render and would loop.
@@ -172,26 +289,108 @@ export const FeedContestEntryShell = ({
         if (!contest || !slate.length || !requestKey) return;
         if (requestedKeyRef.current === requestKey) return;
         requestedKeyRef.current = requestKey;
-        dispatch(
-            fetchFeedContestOddsRequest({
-                contest_id: contest.id,
-                games: slate,
-                sportsbook: "fanduel",
-            })
-        );
-    }, [contest, dispatch, requestKey, slate]);
+        dispatchOddsFetch();
+    }, [contest, dispatchOddsFetch, requestKey, slate]);
 
     const refetchOdds = () => {
-        if (!contest || !slate.length) return;
         requestedKeyRef.current = requestKey;
-        dispatch(
-            fetchFeedContestOddsRequest({
-                contest_id: contest.id,
-                games: slate,
-                sportsbook: "fanduel",
-            })
-        );
+        dispatchOddsFetch();
     };
+
+    /**
+     * The batch board with every TARGETED per-game answer folded into it — ONE
+     * array, so the builder keeps a single render path.
+     *
+     * `withEnrichedContestOdds` folds in only the entries that actually came back
+     * with markets, and returns its input by identity when none did. An empty,
+     * failed or in-flight enrichment therefore cannot blank a game the batch
+     * already priced, and cannot churn the memos downstream either.
+     */
+    const enrichedOddsGroups = useMemo(
+        () =>
+            oddsDescribeThisContest
+                ? withEnrichedContestOdds(odds.groups, odds.byGame)
+                : NO_ODDS_GROUPS,
+        [odds.byGame, odds.groups, oddsDescribeThisContest]
+    );
+
+    /**
+     * The two targeted per-game reads, scoped to the BATCH answer's request key.
+     *
+     * That key is what every per-game reducer case checks before it stores
+     * anything, so a fetch that outlives this screen — or lands after the slate
+     * re-quoted under a new key — is dropped rather than filed under another
+     * contest's games. Dispatching from here rather than from the builder is what
+     * makes that possible: the key is derived here and nowhere else.
+     */
+    const requestGameOdds = useCallback(
+        ({
+            gameId,
+            sport,
+            source,
+        }: {
+            gameId: string;
+            sport: string;
+            source: FeedContestGameOddsSource;
+        }) => {
+            if (!requestKey || !oddsDescribeThisContest) return;
+            const payload = {
+                contestRequestKey: requestKey,
+                gameId,
+                sport,
+                // The same book the batch read asked for. The by-match-id family
+                // bakes the book into the PATH, so a mismatch here would quietly
+                // show a board priced by the other one.
+                sportsbook: "fanduel" as const,
+            };
+            dispatch(
+                source === "match_odds"
+                    ? fetchContestMatchOddsRequest(payload)
+                    : fetchContestGameOddsRetryRequest(payload)
+            );
+        },
+        [dispatch, oddsDescribeThisContest, requestKey]
+    );
+
+    /**
+     * The Pick'em card's matchups — the same slate↔odds join the combo builder
+     * does internally, narrowed to one moneyline per team.
+     *
+     * Unlike the combo builder this does NOT drop started or unpriced games: a
+     * card is the WHOLE slate, so a dropped game would let it read "complete"
+     * while the server still refuses it. They arrive flagged and the editor
+     * disables them.
+     */
+    const pickemMatchups = useMemo(
+        () =>
+            moneylineDescribesThisContest
+                ? pickemMatchupOptionsFromMoneyline(slate, moneyline.events)
+                : [],
+        [moneyline.events, moneylineDescribesThisContest, slate]
+    );
+
+    /**
+     * The TD Psychic card's matchups — the same slate↔board join, narrowed to
+     * one player list per game.
+     *
+     * Like the Pick'em join and unlike the combo builder's, this does NOT drop
+     * started or unpriced games: the slate is what the contest froze, and a
+     * silently dropped matchup reads to a member as "this game is not in the
+     * contest". A game with no scorers posted yet arrives with an empty list and
+     * says so in its own page.
+     */
+    const tdPsychicMatchups = useMemo(
+        () =>
+            tdScorersDescribeThisContest
+                ? tdPsychicMatchupsFromScorers(slate, tdScorers.events)
+                : [],
+        [slate, tdScorers.events, tdScorersDescribeThisContest]
+    );
+    /** Every distinct scorer on the slate — what a replacement re-resolves against. */
+    const tdPsychicCatalog = useMemo(
+        () => tdPsychicScorerCatalog(tdPsychicMatchups),
+        [tdPsychicMatchups]
+    );
 
     /* ---------- Who may enter, and whether this is a join or a replacement ---------- */
     const participation = contest?.my_participation ?? null;
@@ -248,11 +447,16 @@ export const FeedContestEntryShell = ({
     // like a missing check-in and hide a builder the server would accept.
     const venueAllowsBuilder = !venueRequired || !scopedVenue || checkedInAtVenue;
 
-    // Only the General Combo entry model has a builder; the endpoint refuses
-    // anything else with "This contest takes a '<model>' entry, not a combo."
+    // Three entry models have a builder. `multi_pick` is the General Combo
+    // board; `pickem_card` is the Sunday Pick'em card — one moneyline in every
+    // included matchup; `td_psychic_card` is three anytime touchdown scorers
+    // across the slate. Anything else has no UI here.
     const isComboContest = contest?.entry_model === "multi_pick";
+    const isPickemContest = contest?.entry_model === "pickem_card";
+    const isTdPsychicContest = contest?.entry_model === "td_psychic_card";
+    const buildableModel = isComboContest || isPickemContest || isTdPsychicContest;
     const canBuildEntry =
-        entryWindowOpen && isComboContest && !barred && !settled && venueAllowsBuilder;
+        entryWindowOpen && buildableModel && !barred && !settled && venueAllowsBuilder;
     // A join needs the rules ticked here; a replacement already accepted them.
     const needsRulesAcceptance = canBuildEntry && !hasAcceptedEntry;
     const acceptedCurrentRules = hasAcceptedEntry || rulesCurrent || rulesAccepted;
@@ -302,6 +506,80 @@ export const FeedContestEntryShell = ({
             ),
         [ownEntry]
     );
+
+    /**
+     * The accepted TD card's three players, re-resolved against the CURRENT
+     * board — what a replacement opens pre-filled with.
+     *
+     * NOT read straight off the stored legs, and it cannot be: every
+     * member-facing read redacts `providerMarketId`, `providerSelectionId` and
+     * `external_pick_key` out of them (`redactTdPsychicPickForMember`), so a card
+     * genuinely cannot be re-submitted from its own receipt. The player identity
+     * survives redaction, and re-matching it against the live board is both the
+     * only way to rebuild a payload the endpoint accepts AND the right
+     * behaviour: a scorer whose line has since been pulled drops out of the
+     * pre-fill rather than being re-sent and refused.
+     */
+    const tdPsychicPrefill = useMemo(
+        () =>
+            tdPsychicPrefillFromLegs(
+                (ownEntry?.legs ?? []) as Parameters<typeof tdPsychicPrefillFromLegs>[0],
+                tdPsychicCatalog
+            ),
+        [ownEntry, tdPsychicCatalog]
+    );
+    /**
+     * How many of the accepted card's scorers the current board could NOT
+     * re-resolve — a line the book has since pulled.
+     *
+     * Counted only from a board that answered COMPLETELY. Two guards, and both
+     * are load-bearing:
+     *
+     *   `tdScorersDescribeThisContest` — before the read lands every scorer is
+     *   "missing" simply because nothing has loaded.
+     *
+     *   `!tdScorers.partial` — when a chunk fails, its games come back with no
+     *   players at all. Counting that as "pulled" tells a member their pick is
+     *   gone and asks them to replace a perfectly valid one, over a transient
+     *   upstream error.
+     */
+    const tdPsychicDroppedScorers =
+        isTdPsychicContest &&
+        tdScorersDescribeThisContest &&
+        !tdScorers.partial &&
+        ownEntry?.legs?.length
+            ? ownEntry.legs.length - tdPsychicPrefill.length
+            : 0;
+
+    /* ---------- The accepted TD card, as its own receipt ----------
+     *
+     * NOT the feed post the other two models get, and the MVP is explicit about
+     * it: its `ContestSubmittedEntryCard` is guarded by
+     * `contest.template !== "td_psychic"`, and every TD surface renders
+     * `TdPsychicEntryCard` instead. The reason is the shape of the thing — three
+     * square scorer cards with a shared Combo price under them is not a parlay
+     * leg list, and reading it as one loses the row the whole template is built
+     * around.
+     */
+    const tdPsychicCurrentOddsByPlayerId = useMemo(
+        () =>
+            new Map(
+                tdPsychicCatalog.map((selection) => [selection.playerId, selection.currentOdds])
+            ),
+        [tdPsychicCatalog]
+    );
+    const tdPsychicLegs = (ownEntry?.legs ?? []) as unknown as TdPsychicStoredLeg[];
+    const tdPsychicReceiptSelections = useMemo(
+        () =>
+            isTdPsychicContest
+                ? tdPsychicEntrySelections(tdPsychicLegs, tdPsychicCurrentOddsByPlayerId)
+                : [],
+        // `tdPsychicLegs` is derived from `ownEntry` each render; keying on the
+        // entry itself is what keeps this memo stable.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [isTdPsychicContest, ownEntry, tdPsychicCurrentOddsByPlayerId]
+    );
+    const tdPsychicCardLocked = isTdPsychicCardLocked(tdPsychicLegs);
     /**
      * The MVP's `replacingExistingEntry` — an accepted entry that the builder
      * below is about to edit in place. It suppresses the receipt, so the screen
@@ -319,15 +597,24 @@ export const FeedContestEntryShell = ({
             !entrySubmitError && submittedEntry && "previous_entry" in submittedEntry
                 ? submittedEntry.previous_entry
                 : null;
-        const swapNote =
-            swap && typeof swap.leg_count === "number"
-                ? ` Replaced a ${swap.leg_count}-leg entry${
-                      typeof swap.combined_american_odds === "number"
-                          ? ` at ${
-                                swap.combined_american_odds > 0 ? "+" : ""
-                            }${swap.combined_american_odds}`
-                          : ""
-                  }.`
+        /*
+         * The two replace endpoints describe what they displaced DIFFERENTLY,
+         * because the two models are different: a combo reports one parlay
+         * (`leg_count` at a `combined_american_odds`), a card reports how many
+         * picks it held (`pick_count`) and never a combined price — a card has
+         * none. Read whichever the reply actually carries.
+         */
+        const swapNote = !swap
+            ? ""
+            : "leg_count" in swap && typeof swap.leg_count === "number"
+              ? ` Replaced a ${swap.leg_count}-leg entry${
+                    "combined_american_odds" in swap &&
+                    typeof swap.combined_american_odds === "number"
+                        ? ` at ${swap.combined_american_odds > 0 ? "+" : ""}${swap.combined_american_odds}`
+                        : ""
+                }.`
+              : "pick_count" in swap && typeof swap.pick_count === "number"
+                ? ` Replaced a ${swap.pick_count}-pick card.`
                 : "";
         const message = entrySubmitError ?? `${entrySubmitMessage ?? ""}${swapNote}`;
         setFeedback({ tone: entrySubmitError ? "error" : "success", message });
@@ -372,6 +659,106 @@ export const FeedContestEntryShell = ({
                       rules_version: contest.rules_version,
                   })
                 : enterFeedContestRequest({ ...body, rules_version: contest.rules_version })
+        );
+    };
+
+    /**
+     * The Sunday Pick'em write.
+     *
+     * The legs it builds are already the right ones — byte-compatible with what
+     * the combo path sends — but the endpoint behind `handleSubmit` refuses a
+     * `pickem_card` contest twice over (see PICKEM_ENTRY_API_READY for the two
+     * guards and their file:line). So while that flag is false this stops at a
+     * placeholder rather than firing a request that is certain to 400.
+     *
+     * When the real endpoint ships: flip PICKEM_ENTRY_API_READY to true. If it is
+     * a NEW route rather than the existing one, replace the `handleSubmit(legs)`
+     * call below with its dispatch — this function is the only place to change.
+     */
+    const handlePickemSubmit = (legs: FeedContestEntryLegPayload[]) => {
+        if (!contest) return;
+        if (!PICKEM_ENTRY_API_READY) {
+            console.info("[pickem] card built, endpoint not live yet", {
+                contest_id: contest.id,
+                entry_model: contest.entry_model,
+                leg_count: legs.length,
+                legs,
+            });
+            setFeedback({ tone: "success", message: PICKEM_ENTRY_PLACEHOLDER_NOTICE });
+            setToast({
+                id: Date.now(),
+                type: "success",
+                message: PICKEM_ENTRY_PLACEHOLDER_NOTICE,
+                duration: 5000,
+            });
+            return;
+        }
+        if (!hasAcceptedEntry && !acceptedCurrentRules) {
+            const message = "Accept the current contest rules before submitting your card.";
+            setFeedback({ tone: "error", message });
+            setToast({ id: Date.now(), type: "error", message, duration: 4000 });
+            return;
+        }
+        const body = {
+            contest_id: contest.id,
+            legs,
+            description: legs.map((leg) => leg.description).join(" • ").slice(0, 300),
+            source_tab: "Feed Contest",
+            build_mode: "ODDS",
+            rules_version: contest.rules_version,
+        };
+        // A member holding an accepted card REPLACES it; /enter-pickem would
+        // answer 409. Both endpoints take the same body — the replacement is a
+        // WHOLE card, validated exactly as a first submission is.
+        dispatch(
+            hasAcceptedEntry
+                ? replacePickemFeedContestEntryRequest(body)
+                : enterPickemFeedContestRequest(body)
+        );
+    };
+
+    /**
+     * The TD Psychic write.
+     *
+     * The one place in this screen where NOTHING PRICED travels. The other two
+     * models send `legs[]` with an `american_odds` each; this sends
+     * `selections[]` of five identity fields and no numbers, because a TD card
+     * has no price until the shared capture at `locks_at` gives every member
+     * holding a scorer the same one.
+     *
+     * A member holding an accepted card REPLACES it; `/enter-td-psychic` would
+     * answer 409. Both endpoints take the same body — the replacement is a WHOLE
+     * card of three, validated exactly as a first submission is.
+     */
+    const handleTdPsychicSubmit = (
+        selections: TdPsychicScorerIdentity[],
+        chosen: TdPsychicCatalogSelection[]
+    ) => {
+        if (!contest) return;
+        if (selections.length !== TD_PSYCHIC_SELECTION_COUNT) {
+            const message = `Pick ${TD_PSYCHIC_SELECTION_COUNT} different touchdown scorers before submitting your card.`;
+            setFeedback({ tone: "error", message });
+            setToast({ id: Date.now(), type: "error", message, duration: 4000 });
+            return;
+        }
+        if (!hasAcceptedEntry && !acceptedCurrentRules) {
+            const message = "Accept the current contest rules before submitting your card.";
+            setFeedback({ tone: "error", message });
+            setToast({ id: Date.now(), type: "error", message, duration: 4000 });
+            return;
+        }
+        const body = {
+            contest_id: contest.id,
+            selections: buildTdPsychicSelections(selections),
+            description: tdPsychicCardDescription(chosen),
+            source_tab: "Feed Contest",
+            build_mode: "ODDS",
+            rules_version: contest.rules_version,
+        };
+        dispatch(
+            hasAcceptedEntry
+                ? replaceTdPsychicFeedContestEntryRequest(body)
+                : enterTdPsychicFeedContestRequest(body)
         );
     };
 
@@ -461,10 +848,38 @@ export const FeedContestEntryShell = ({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
                         Accepted entry receipt
                     </p>
-                    {/* The same feed card the Entries tab shows, as the MVP does —
-                        an accepted entry reads like the pick post it is. Not bled
-                        to the edges here: the MVP only does that inside the detail
-                        screen's flush entries list, not inside this padded card. */}
+                    {/* A TD card gets its own receipt — see the note on
+                        `tdPsychicReceiptSelections`. Everything else reads like the
+                        pick post it is, in the same feed card the Entries tab
+                        shows. Not bled to the edges here: the MVP only does that
+                        inside the detail screen's flush entries list, not inside
+                        this padded card. */}
+                    {isTdPsychicContest ? (
+                        <TdPsychicEntryCard
+                            className="mt-4"
+                            selections={tdPsychicReceiptSelections}
+                            submittedAt={ownRow!.submitted_at}
+                            showResults={
+                                contest.lifecycle_status !== "open" ||
+                                tdPsychicReceiptSelections.some(
+                                    (selection) => selection.result !== "pending"
+                                )
+                            }
+                            /*
+                             * UNDEFINED hides the Combo row outright, which is the
+                             * correct pre-lock state: the card genuinely has no
+                             * combined price until the shared capture writes one.
+                             * NULL is the different thing — locked, but the capture
+                             * could not produce one, which is what a voided card
+                             * reads as.
+                             */
+                            comboAmericanOdds={
+                                tdPsychicCardLocked
+                                    ? (ownEntry.american_odds ?? null)
+                                    : undefined
+                            }
+                        />
+                    ) : (
                     <ContestEntryFeedCard
                         row={ownRow!}
                         pick={ownEntry}
@@ -472,7 +887,18 @@ export const FeedContestEntryShell = ({
                             scoped?.context_type === "arena" ? "Arena Points" : "League Points"
                         }
                         currentUserId={currentUser?.userId}
+                        entryFormat={
+                            isTdPsychicContest
+                                ? "td_psychic"
+                                : isPickemContest
+                                  ? "sunday_pickem"
+                                  : "general_combo"
+                        }
+                        pickemCorrectBonus={contest.pickem_correct_bonus}
+                        contestName={contest.name}
+                        contestHref={detailHref}
                     />
+                    )}
                 </section>
             ) : null}
 
@@ -489,7 +915,11 @@ export const FeedContestEntryShell = ({
                             <span
                                 className={`text-[10px] uppercase tracking-[0.16em] ${accentClasses.textSoft}`}
                             >
-                                contest lines
+                                {isTdPsychicContest
+                                    ? "td scorers"
+                                    : isPickemContest
+                                      ? "moneyline card"
+                                      : "contest lines"}
                             </span>
                         </div>
                         {/* The MVP gates this on there being NO participant row at
@@ -503,59 +933,160 @@ export const FeedContestEntryShell = ({
                         ) : null}
                     </div>
 
-                    <ContestPickBuilder
-                        context={{
-                            contestId: contest.id,
-                            contestName: contest.name,
-                            slate,
-                            // Only ever the odds that describe THIS request; a
-                            // stale group set would price another slate's games.
-                            oddsGroups: oddsDescribeThisContest ? odds.groups : [],
-                            allowedSports: contest.sports ?? undefined,
-                            locksAt: contest.locks_at,
-                            rules: {
-                                minLegs: contest.minimum_legs ?? FEED_CONTEST_MIN_LEGS,
-                                maxLegs: contest.maximum_legs ?? FEED_CONTEST_MAX_LEGS,
-                                minimumCombinedOdds: contest.minimum_odds ?? null,
-                                allowSameGameLegs: contest.allow_same_game_legs === true,
-                            },
-                            initialLegKeys,
-                            initialLegLabels,
-                            // "Not yet this contest's odds" counts as loading, so
-                            // the builder never flashes "no eligible markets"
-                            // before the first read lands — but NOT when the read
-                            // failed, since a failure also clears the request key
-                            // and would otherwise hide the error behind a
-                            // spinner that never resolves.
-                            loading:
-                                odds.loading || (!oddsDescribeThisContest && !odds.error),
-                            error: odds.error,
-                            onRetry: refetchOdds,
-                            submitting: entrySubmitLoading,
-                            submitLabel: hasAcceptedEntry ? "Replace entry" : undefined,
-                            // `rulesAccepted`, NOT the derived `acceptedCurrentRules`:
-                            // the sheet's checkbox and the section above it are one
-                            // control in two places, and feeding the derived value
-                            // here renders it pre-ticked and un-untickable whenever
-                            // the member's stored acceptance is already current.
-                            // The rules themselves ride along now: the MVP moved
-                            // the whole review into the sheet, so this is where a
-                            // joiner reads them before ticking.
-                            rulesAcceptance: needsRulesAcceptance
-                                ? {
-                                      accepted: rulesAccepted,
-                                      onAcceptedChange: setRulesAccepted,
-                                      label: "I accept the current rules for this complete entry.",
-                                      rulesText: contest.rules_text,
-                                      rulesVersion: contest.rules_version,
-                                  }
-                                : undefined,
-                            onSubmit: handleSubmit,
-                        }}
-                        onDismiss={() => router.push(`${detailHref}?tab=entries`)}
-                        showDismissButton
-                        surface="page"
-                    />
+                    {isTdPsychicContest ? (
+                        <TdPsychicCardBuilder
+                            contestId={contest.id}
+                            matchups={tdPsychicMatchups}
+                            accent={accent}
+                            loading={
+                                tdScorers.loading ||
+                                (!tdScorersDescribeThisContest && !tdScorers.error)
+                            }
+                            error={tdScorers.error}
+                            /*
+                             * A PARTIAL board is not an error and not a complete
+                             * one either: some of this contest's games could not be
+                             * read, so their scorers are missing rather than absent.
+                             * Surfaced as a retryable warning — picking from what
+                             * did arrive is still valid, and the entry endpoint
+                             * re-resolves every selection anyway.
+                             */
+                            partialNotice={
+                                tdScorersDescribeThisContest && tdScorers.partial
+                                    ? "Some of this contest's games could not be read, so their touchdown scorers are missing from the list below. Try again to load the full slate."
+                                    : null
+                            }
+                            onRetry={refetchOdds}
+                            submitting={entrySubmitLoading}
+                            submitLabel={hasAcceptedEntry ? "Replace TD Psychic card" : undefined}
+                            initialSelections={tdPsychicPrefill}
+                            /*
+                             * Rendered by the builder rather than here, because
+                             * only the builder knows when it stops being true: it
+                             * hides the notice the moment the card is whole again,
+                             * which this screen cannot see.
+                             */
+                            prefillNotice={
+                                tdPsychicDroppedScorers > 0
+                                    ? tdPsychicDroppedScorers === 1
+                                        ? "One of your scorers is no longer an available anytime touchdown pick, so it could not be carried over — choose a replacement."
+                                        : `${tdPsychicDroppedScorers} of your scorers are no longer available anytime touchdown picks, so they could not be carried over — choose replacements.`
+                                    : null
+                            }
+                            /*
+                             * CARD IDENTITY ONLY — this is the builder's hard-reset
+                             * key, so nothing that merely arrives late belongs in
+                             * it. The prefill is handled separately (and idempotently)
+                             * by the builder's own seeding effect; folding its
+                             * readiness in here would make a late board re-run the
+                             * reset and wipe picks the member had already made.
+                             */
+                            versionKey={`${ownEntry?.id ?? "new"}:${contest.rules_version}`}
+                            rulesAcceptance={
+                                needsRulesAcceptance
+                                    ? {
+                                          accepted: rulesAccepted,
+                                          onAcceptedChange: setRulesAccepted,
+                                          label: "I accept the current rules for this complete card.",
+                                          rulesText: contest.rules_text,
+                                          rulesVersion: contest.rules_version,
+                                      }
+                                    : undefined
+                            }
+                            onSubmit={handleTdPsychicSubmit}
+                        />
+                    ) : isPickemContest ? (
+                        <PickemCardEntryEditor
+                            contestId={contest.id}
+                            matchups={pickemMatchups}
+                            accent={accent}
+                            loading={
+                                moneyline.loading ||
+                                (!moneylineDescribesThisContest && !moneyline.error)
+                            }
+                            error={moneyline.error}
+                            onRetry={refetchOdds}
+                            submitting={entrySubmitLoading}
+                            submitLabel={hasAcceptedEntry ? "Replace complete card" : undefined}
+                            initialLegs={ownEntry?.legs ?? undefined}
+                            versionKey={`${contest.id}:${ownEntry?.id ?? "new"}:${contest.rules_version}`}
+                            rulesAcceptance={
+                                needsRulesAcceptance
+                                    ? {
+                                          accepted: rulesAccepted,
+                                          onAcceptedChange: setRulesAccepted,
+                                          label: "I accept the current rules for this complete card.",
+                                          rulesText: contest.rules_text,
+                                          rulesVersion: contest.rules_version,
+                                      }
+                                    : undefined
+                            }
+                            onSubmit={handlePickemSubmit}
+                        />
+                    ) : (
+                        <ContestPickBuilder
+                            context={{
+                                contestId: contest.id,
+                                contestName: contest.name,
+                                slate,
+                                // Only ever the odds that describe THIS request; a
+                                // stale group set would price another slate's games.
+                                // Enrichment rides inside it, so the builder never
+                                // has to choose between two boards.
+                                oddsGroups: enrichedOddsGroups,
+                                // The ledger behind the two targeted reads: the
+                                // builder uses it to de-dupe and to show
+                                // "Checking for markets…", never for markets.
+                                gameOdds: oddsDescribeThisContest
+                                    ? odds.byGame
+                                    : NO_GAME_ODDS,
+                                onRequestGameOdds: requestGameOdds,
+                                allowedSports: contest.sports ?? undefined,
+                                locksAt: contest.locks_at,
+                                rules: {
+                                    minLegs: contest.minimum_legs ?? FEED_CONTEST_MIN_LEGS,
+                                    maxLegs: contest.maximum_legs ?? FEED_CONTEST_MAX_LEGS,
+                                    minimumCombinedOdds: contest.minimum_odds ?? null,
+                                    allowSameGameLegs: contest.allow_same_game_legs === true,
+                                },
+                                initialLegKeys,
+                                initialLegLabels,
+                                // "Not yet this contest's odds" counts as loading, so
+                                // the builder never flashes "no eligible markets"
+                                // before the first read lands — but NOT when the read
+                                // failed, since a failure also clears the request key
+                                // and would otherwise hide the error behind a
+                                // spinner that never resolves.
+                                loading:
+                                    odds.loading || (!oddsDescribeThisContest && !odds.error),
+                                error: odds.error,
+                                onRetry: refetchOdds,
+                                submitting: entrySubmitLoading,
+                                submitLabel: hasAcceptedEntry ? "Replace entry" : undefined,
+                                // `rulesAccepted`, NOT the derived `acceptedCurrentRules`:
+                                // the sheet's checkbox and the section above it are one
+                                // control in two places, and feeding the derived value
+                                // here renders it pre-ticked and un-untickable whenever
+                                // the member's stored acceptance is already current.
+                                // The rules themselves ride along now: the MVP moved
+                                // the whole review into the sheet, so this is where a
+                                // joiner reads them before ticking.
+                                rulesAcceptance: needsRulesAcceptance
+                                    ? {
+                                          accepted: rulesAccepted,
+                                          onAcceptedChange: setRulesAccepted,
+                                          label: "I accept the current rules for this complete entry.",
+                                          rulesText: contest.rules_text,
+                                          rulesVersion: contest.rules_version,
+                                      }
+                                    : undefined,
+                                onSubmit: handleSubmit,
+                            }}
+                            onDismiss={() => router.push(`${detailHref}?tab=entries`)}
+                            showDismissButton
+                            surface="page"
+                        />
+                    )}
                 </section>
             ) : null}
 
@@ -565,8 +1096,8 @@ export const FeedContestEntryShell = ({
                         ? "You are not eligible to enter this contest."
                         : settled
                           ? "Your entry is locked and can no longer be replaced. Results and live standings update automatically."
-                          : !isComboContest
-                          ? "This contest does not take a General Combo entry, so it cannot be built here yet."
+                          : !buildableModel
+                          ? "This contest does not take a General Combo, Sunday Pick'em or TD Psychic entry, so it cannot be built here yet."
                           : "This entry is read-only because the contest is not currently accepting submissions. Results and live standings update automatically."}
                 </section>
             ) : null}

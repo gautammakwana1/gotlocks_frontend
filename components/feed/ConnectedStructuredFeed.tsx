@@ -12,6 +12,7 @@ import type {
     Pick,
     PickReaction,
     PickReactionSummary,
+    PickResult,
     RootState,
     SlipContestPickRow,
     StaffAnnouncement,
@@ -44,6 +45,7 @@ import {
 import {
     clearFeedContestPicks,
     fetchFeedContestPicksRequest,
+    fetchFeedContestPodiumsRequest,
 } from "@/lib/redux/slices/feedContestSlice";
 import {
     clearSlipContestPicks,
@@ -54,7 +56,12 @@ import { fetchLiveNFLScheduleRequest } from "@/lib/redux/slices/nflSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { formatDateTime } from "@/lib/utils/date";
 import { AnnouncementEditModal } from "./AnnouncementEditModal";
+import {
+    FeedContestWinnersBlock,
+    FEED_CONTEST_WINNERS_PAGE_SIZE,
+} from "./FeedContestWinnersBlock";
 import { StructuredFeed } from "./StructuredFeed";
+import { resolveContestEntryLifecycle } from "./formatters";
 import {
     buildCommunityPickPayload,
     buildMoneylineStaffPickOptions,
@@ -174,6 +181,23 @@ const applyReaction = (
 // market, selection line, accepted odds (parsed from odds_bracket), potential/
 // awarded points, and a result label once settled. Mirrors the MVP feed card's
 // selection rendering.
+/**
+ * Narrow a raw `result` to the graded outcome the card tints on. The picks rows
+ * and the contest-entry detail rows type this field differently (`PickResult` on
+ * one, a bare `string` on the other), and an unrecognised value must read as
+ * "not graded" rather than be cast into a tone the card would then paint.
+ *
+ * Without this the card's result tinting is unreachable: `resultLabel` alone
+ * leaves `selection.result` undefined, which pins `data-pick-selection-state` to
+ * "pending" and the selection line to plain white however the pick settled.
+ */
+const GRADED_PICK_RESULTS = new Set(["win", "loss", "void", "not_found"]);
+
+const toGradedPickResult = (raw: unknown): PickResult | undefined =>
+    typeof raw === "string" && GRADED_PICK_RESULTS.has(raw)
+        ? (raw as PickResult)
+        : undefined;
+
 const buildPickSelection = (pick: Pick): StructuredFeedRecordSelection => {
     const parsed = parseAmericanOdds(pick.odds_bracket);
     const settled = Boolean(pick.result && pick.result !== "pending");
@@ -184,6 +208,7 @@ const buildPickSelection = (pick: Pick): StructuredFeedRecordSelection => {
         acceptedAmericanOdds: parsed ?? 0,
         potentialPoints: pick.points ?? 0,
         awardedPoints: settled ? pick.awardedPoints ?? null : undefined,
+        result: settled ? toGradedPickResult(pick.result) : undefined,
         resultLabel: settled
             ? String(pick.result).replaceAll("_", " ")
             : undefined,
@@ -376,8 +401,8 @@ export const ConnectedStructuredFeed = ({
     //
     // `pick` carries the whole row so the card renders the canonical pick body
     // (tier tile, confidence, combo legs, result chip) instead of the compact
-    // selection block; `selection` stays for the search index and as the fallback
-    // if a row ever arrives without a description.
+    // selection block; `selection` stays as the fallback if a row ever arrives
+    // without a description.
     const communityPickToRecord = useCallback(
         (pick: ArenaCommunityPick): StructuredFeedRecord => {
             const author = normalizeAuthor(pick.author) ?? pick.profiles;
@@ -450,6 +475,12 @@ export const ConnectedStructuredFeed = ({
                 },
                 createdAtLabel: item.submitted_at ? formatDateTime(item.submitted_at) : "",
                 visibility: item.is_revealed ? "visible" : "hidden_until_lock",
+                // Drives the Entries view's filter drawer. Read off the CONTEST's
+                // lifecycle, not the row's `is_revealed` — the drawer asks which
+                // phase the contest is in, which is a different question from
+                // whether this viewer may see the entry's detail yet. Reuses the
+                // already-fetched join, so this adds no request.
+                entryLifecycle: resolveContestEntryLifecycle(item.contest?.lifecycle_status),
                 // Names the contest in the card header — "Feed Contest General
                 // Combo Entry - <name> ↗" — so a feed of mixed contests reads.
                 presentation:
@@ -457,9 +488,11 @@ export const ConnectedStructuredFeed = ({
                         ? {
                             kind: "feed_contest",
                             entryFormat:
-                                item.contest.template === "sunday_pickem"
-                                    ? "sunday_pickem"
-                                    : "general_combo",
+                                item.contest.template === "td_psychic"
+                                    ? "td_psychic"
+                                    : item.contest.template === "sunday_pickem"
+                                      ? "sunday_pickem"
+                                      : "general_combo",
                             contestHref,
                             contestName: item.contest.name,
                             contextualPointsLabel:
@@ -479,6 +512,7 @@ export const ConnectedStructuredFeed = ({
                             0,
                         potentialPoints: detail.points ?? 0,
                         awardedPoints: settled ? detail.arena_points_awarded ?? null : undefined,
+                        result: settled ? toGradedPickResult(detail.result) : undefined,
                         resultLabel: settled
                             ? String(detail.result).replaceAll("_", " ")
                             : undefined,
@@ -534,6 +568,12 @@ export const ConnectedStructuredFeed = ({
                 },
                 createdAtLabel: item.submitted_at ? formatDateTime(item.submitted_at) : "",
                 visibility: "visible",
+                // Fantasy contests only store "ACTIVE" | "ARCHIVED", so their
+                // entries can only ever resolve to Open or Settled — there is no
+                // stored locked/live phase. The mapper returns undefined for
+                // anything else, which leaves the entry under "All entries" only
+                // rather than filing it under a phase it may not be in.
+                entryLifecycle: resolveContestEntryLifecycle(item.contest?.status),
                 presentation:
                     item.contest && contestHref
                         ? {
@@ -552,6 +592,7 @@ export const ConnectedStructuredFeed = ({
                         detail.american_odds ?? parseAmericanOdds(detail.odds_bracket) ?? 0,
                     potentialPoints: detail.points ?? 0,
                     awardedPoints: settled ? detail.arena_points_awarded ?? null : undefined,
+                    result: settled ? toGradedPickResult(detail.result) : undefined,
                     resultLabel: settled
                         ? String(detail.result).replaceAll("_", " ")
                         : undefined,
@@ -1058,6 +1099,24 @@ export const ConnectedStructuredFeed = ({
         dispatch,
     ]);
 
+    // The Winners strip's read lives HERE rather than in FeedContestWinnersBlock
+    // because the block is rendered inside CommunitySwipePager's slide, which is
+    // keyed on the active view — so it unmounts and remounts on every
+    // Updates/Entries/Standings switch. Owning the fetch in the pager's stable
+    // parent keeps it to one GET per group, as it was before the strip moved
+    // inside the pager. The block itself is now a pure read of the slice.
+    useEffect(() => {
+        if (!groupId) return;
+        dispatch(
+            fetchFeedContestPodiumsRequest({
+                group_id: groupId,
+                group_type: groupType,
+                page: 1,
+                limit: FEED_CONTEST_WINNERS_PAGE_SIZE,
+            })
+        );
+    }, [dispatch, groupId, groupType]);
+
     useEffect(() => {
         const pending = pendingReplaceResolve.current;
         if (!pending || pending.kind !== "community_pick") return;
@@ -1257,6 +1316,23 @@ export const ConnectedStructuredFeed = ({
 
     return (
         <>
+            {/*
+             * `onCreateAnnouncement` is deliberately NOT passed, even though the
+             * MVP's ConnectedStructuredFeed owns the announcement drawer
+             * (MVP:159-168). StructuredFeed's header carries exactly one create
+             * affordance and picks it either/or: supplying the callback replaces
+             * the four-tab composer drawer with an announcement-only workspace
+             * for EVERY viewer.
+             *
+             * The MVP can afford that because it deleted Community Picks and
+             * Staff Picks. Here they are live REST wiring, and
+             * `canCreateStaffPost` is staff-only (:302) while
+             * `canCreateCommunityPick` is not — so routing the header through an
+             * announcement workspace would hand plain members a button they
+             * cannot post from and remove their only entry point to a Community
+             * Pick. The header button already renders the MVP's icon, position
+             * and chrome; only drawer OWNERSHIP stays here, which is not visual.
+             */}
             <StructuredFeed
                 context={context}
                 currentRole={feedRole}
@@ -1264,6 +1340,18 @@ export const ConnectedStructuredFeed = ({
                 records={records}
                 selectionOptions={staffPickOptions}
                 standings={standings}
+                // Owns its own read (/list/finalized/podium) rather than taking a
+                // node from the host, because both hosts would build the exact
+                // same one — the Feed already knows the group, the surface and
+                // the accent, which is everything the block needs.
+                winners={
+                    <FeedContestWinnersBlock
+                        context={context}
+                        groupType={groupType}
+                        accent={isArena ? "violet" : "sky"}
+                        currentUserId={currentUserId}
+                    />
+                }
                 initialFilter={initialFilter}
                 currentUserId={currentUserId}
                 onReaction={onReaction}
@@ -1287,6 +1375,10 @@ export const ConnectedStructuredFeed = ({
                 <AnnouncementEditModal
                     initialTitle={editing.title}
                     initialBody={editing.body}
+                    // Mounted outside any `.arena-theme` ancestor (neither host
+                    // wraps the Feed in one), so the modal has to be told which
+                    // surface it belongs to or an Arena edit renders League-blue.
+                    isArena={isArena}
                     // Scope busy to THIS row's edit, so a stale/other-row loadingId
                     // can't trap a freshly-opened modal.
                     busy={editAnnouncementLoadingId === editing.id}

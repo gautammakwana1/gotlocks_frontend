@@ -46,7 +46,6 @@ import { fetchDraftkingsSoccerEnglandPremierLeagueOddsRequest, fetchDraftkingsSo
 import { ODDS_BRACKETS } from "@/lib/constants";
 import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
-import { House } from "lucide-react";
 import SoccerPickBuilderSkeleton from "./skeletons/SoccerPickBuilderSkeleton";
 import SoccerMatchupDetailSkeleton from "./skeletons/SoccerMatchupDetailSkeleton";
 
@@ -3109,12 +3108,13 @@ export const SoccerPickBuilder = ({
                                                             </div>
 
                                                             <div className="px-3 row-start-2 col-start-1">
-                                                                <div className="relative flex items-center h-px w-full overflow-hidden">
+                                                                <div className="relative flex items-center gap-2 w-full overflow-hidden">
+                                                                    <span className="shrink-0 text-[10px] font-semibold leading-none tracking-wide text-gray-500">at</span>
                                                                     <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/100 to-transparent shimmer-divider"></div>
                                                                 </div>
                                                             </div>
 
-                                                            <div className="flex items-center justify-between min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3 row-start-3">
+                                                            <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3 row-start-3">
                                                                 <div className="min-w-0">
                                                                     <span className="truncate text-xs font-semibold leading-snug text-white">
                                                                         {/* <p className="truncate text-[10px] text-slate-100/50">home</p> */}
@@ -3124,7 +3124,6 @@ export const SoccerPickBuilder = ({
                                                                         </p>
                                                                     </span>
                                                                 </div>
-                                                                <House size={14} color="white" className="shrink-0" />
                                                             </div>
 
                                                             <div className="row-span-3 flex items-center justify-center">

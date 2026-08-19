@@ -1,26 +1,39 @@
-import { all, call, put, takeLatest } from "redux-saga/effects";
+import { all, call, put, select, takeEvery, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type {
+    FeedContestGameOddsEntry,
+    FeedContestGameOddsSource,
     FeedContestOddsGroup,
+    FeedContestOddsState,
+    FetchContestGameOddsPayload,
     FetchFeedContestOddsPayload,
+    LeagueMatchOddsPayload,
     LeagueOddsByEventsSchedule,
     MultiLeagueOddsByEventsSchedule,
 } from "@/lib/interfaces/interfaces";
 import {
     chunkEventIds,
+    contestGameOddsGroup,
     feedContestOddsRequestKey,
     FEED_CONTEST_ODDS_FEEDS,
     groupSlateBySport,
     isAmbiguousOddsSport,
+    isRequestableEventId,
+    matchOddsFeedsFor,
     MAX_EVENT_IDS_ACROSS_LEAGUES,
     MAX_EVENT_IDS_PER_LEAGUE,
     MULTI_LEAGUE_ODDS_BY_EVENTS_PATH,
+    oddsByEventsFeedsFor,
 } from "@/lib/contests/feedContestOdds";
 import {
+    fetchContestGameOddsFailure,
+    fetchContestGameOddsRetryRequest,
+    fetchContestGameOddsSuccess,
+    fetchContestMatchOddsRequest,
     fetchFeedContestOddsFailure,
     fetchFeedContestOddsRequest,
     fetchFeedContestOddsSuccess,
@@ -336,8 +349,288 @@ function* handleFetchFeedContestOdds(
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * PER-GAME enrichment of the board above.
+ *
+ * Two targeted calls, one game each, both pure enrichment: whatever they return
+ * is stored BESIDE the batch answer, never instead of it, so an empty answer, a
+ * failure or a call still in flight leaves the slate rendering exactly as the
+ * batch left it — including the "Markets not posted yet" copy, which stays
+ * driven by the batch's `missing_event_ids` and nothing else.
+ * -------------------------------------------------------------------------- */
+
+type FeedContestOddsHost = { feedContestOdds: FeedContestOddsState };
+
+/**
+ * The (contest, game, path) triples with a request actually on the wire.
+ *
+ * The reducer ledger cannot carry this on its own: redux-saga sees an action
+ * AFTER the reducer has run, so by the time a handler starts, a request the
+ * reducer rejected as a duplicate looks identical to the one it accepted. This
+ * set is what tells them apart, and it is what stops React's double-invoked
+ * effects (or a double tap) from putting the same 645 KB board on the wire
+ * twice. Keyed by contest request key, so it cannot leak across contests, and
+ * released in a `finally` so a cancelled saga does not wedge a game shut.
+ */
+const inFlightGameOdds = new Set<string>();
+
+/**
+ * The shared shell around both paths: scope check, de-dupe, then success or
+ * failure for exactly one (game, path).
+ *
+ * The de-dupe test is "did the REDUCER accept this request", i.e. did it move
+ * this path's attempt to `loading`. That single check covers every rejection the
+ * reducer makes — an out-of-scope request key, a path already tried, a game some
+ * other path already priced — without duplicating any of that logic here.
+ */
+function* runContestGameOddsFetch(
+    source: FeedContestGameOddsSource,
+    payload: FetchContestGameOddsPayload,
+    fetchGroup: (
+        payload: FetchContestGameOddsPayload
+    ) => SagaIterator<FeedContestOddsGroup | null>,
+    failureMessage: string
+): SagaIterator {
+    const { contestRequestKey, gameId } = payload;
+    if (!gameId || !contestRequestKey) return;
+
+    const inFlightKey = `${contestRequestKey}|${gameId}|${source}`;
+    if (inFlightGameOdds.has(inFlightKey)) return;
+
+    const entry: FeedContestGameOddsEntry | undefined = yield select(
+        (state: FeedContestOddsHost) => state.feedContestOdds.byGame?.[gameId]
+    );
+    if (entry?.attempts?.[source]?.status !== "loading") return;
+
+    inFlightGameOdds.add(inFlightKey);
+    try {
+        const group: FeedContestOddsGroup | null = yield call(fetchGroup, payload);
+        yield put(
+            fetchContestGameOddsSuccess({
+                contestRequestKey,
+                gameId,
+                source,
+                group,
+                fetchedAt: Date.now(),
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            fetchContestGameOddsFailure({
+                contestRequestKey,
+                gameId,
+                source,
+                error: getErrorMessage(error, failureMessage),
+            })
+        );
+    } finally {
+        inFlightGameOdds.delete(inFlightKey);
+    }
+}
+
+/**
+ * ITEM 1 — the FULL market board for one game, `/leagues/<sport>/odds?match_id=`.
+ *
+ * The batch read leaves `main` unset and the endpoint defaults it to TRUE, so
+ * the slate board is main lines only. These controllers send no `main` filter
+ * upstream at all, so this answers with every market the book posted — props,
+ * alternates, the lot. It is also the reason this fires for the opened matchup
+ * and never for the slate: the same MLB event is ~645 KB here against ~186 KB
+ * on the main-lines board.
+ *
+ * Soccer is asked one competition at a time and the first that carries the game
+ * wins. Sequential, unlike the batch's fan-out: for a single opened matchup the
+ * usual answer is one call, and firing three full boards to throw two away is
+ * exactly the traffic this route makes expensive.
+ */
+function* fetchContestMatchOddsGroup(
+    payload: FetchContestGameOddsPayload
+): SagaIterator<FeedContestOddsGroup | null> {
+    const { gameId, sport, sportsbook = DEFAULT_SPORTSBOOK, isLive = false } = payload;
+
+    // Fail closed. This family does NOT validate the id server-side — a
+    // `map:NFL:SPORTSDATAIO:123` key would be forwarded raw to the vendor — and
+    // an unmapped sport/book pair has no route at all. Neither may be guessed
+    // into a URL; the un-suffixed `/odds` routes hardcode FanDuel, so pointing a
+    // DraftKings contest at one would show a board priced by the wrong book.
+    if (!isRequestableEventId(gameId)) {
+        throw new Error(`"${gameId}" is not an id the odds feed can be asked for`);
+    }
+    const feeds = matchOddsFeedsFor(sport, sportsbook);
+    if (!feeds.length) {
+        throw new Error(`No odds-by-match-id route for ${sport || "this sport"} on ${sportsbook}`);
+    }
+
+    let failures = 0;
+    let lastError: unknown = null;
+
+    for (const feed of feeds) {
+        try {
+            const response: AxiosResponse<unknown> = yield call(
+                axiosInstance.get,
+                `${API_BASE_URL}${feed.path}`,
+                {
+                    params: {
+                        match_id: gameId,
+                        // Part of THIS family's cache key (`..._${isLive}`), so it
+                        // is always sent explicitly rather than sometimes omitted
+                        // — otherwise one game warms two upstream entries.
+                        is_live: isLive ? "true" : "false",
+                    },
+                }
+            );
+            // `data.odds` is `data.schedule` minus the requested/missing/partial
+            // bookkeeping — the vendor payload passed straight through, so its
+            // `events` is trusted only as far as being an array.
+            const rawEvents = (response.data as { data?: { odds?: LeagueMatchOddsPayload } })
+                ?.data?.odds?.events;
+
+            const group = contestGameOddsGroup({
+                sport,
+                competition: feed.competition,
+                league: feed.league,
+                gameId,
+                events: Array.isArray(rawEvents) ? rawEvents : [],
+            });
+            if (group.events.length) return group;
+        } catch (error: unknown) {
+            // A soccer competition that does not carry this game answers 200 with
+            // an empty list — but an unknown event can also make the vendor 404,
+            // which these controllers surface as a 500. Two of three soccer calls
+            // legitimately fail this way, so one failure is not the game failing.
+            failures += 1;
+            lastError = error;
+            console.error(`Contest match odds failed for ${feed.path}:`, error);
+        }
+    }
+
+    // Every route tried blew up: report it, so the ledger records an error rather
+    // than a clean "no markets". A partial failure with a clean empty answer is
+    // just "nothing posted", which is not an error state on this screen.
+    if (failures === feeds.length) {
+        throw lastError ?? new Error("Failed to load the full market board for this game");
+    }
+    return null;
+}
+
+/**
+ * ITEM 2 — the TARGETED by-events retry for ONE game the batch reported unpriced.
+ *
+ * `main=false` is doing two jobs and both are load-bearing:
+ *   - the server's per-event cache key carries the main flag
+ *     (`ob:odds:v1:<league>:<book>:<m1|m0>:…`), and a miss from the batch leaves
+ *     a 60-second negative marker under the `m1` key. A same-shaped retry would
+ *     be served that remembered miss and could not reach the vendor at all;
+ *     `m0` is a genuine cache miss, so this actually re-asks.
+ *   - it returns the full board rather than main lines, so a game rescued here
+ *     arrives with the same depth as an enriched one.
+ *
+ * Unlike the by-match-id family this one still answers 200 with
+ * `missing_event_ids` when the provider simply has no odds, so "unpriced" stays
+ * distinguishable from "broken".
+ */
+function* fetchContestGameOddsRetryGroup(
+    payload: FetchContestGameOddsPayload
+): SagaIterator<FeedContestOddsGroup | null> {
+    const { gameId, sport, sportsbook = DEFAULT_SPORTSBOOK } = payload;
+
+    // One bad token 400s the whole request here, so the id is checked before it
+    // is sent — exactly as the batch read filters its slate.
+    if (!isRequestableEventId(gameId)) {
+        throw new Error(`"${gameId}" is not an id the odds feed can be asked for`);
+    }
+    const feeds = oddsByEventsFeedsFor(sport);
+    if (!feeds.length) {
+        throw new Error(`No odds-by-events route for ${sport || "this sport"}`);
+    }
+
+    let failures = 0;
+    let lastError: unknown = null;
+    let answered: FeedContestOddsGroup | null = null;
+
+    for (const feed of feeds) {
+        try {
+            const response: AxiosResponse<unknown> = yield call(
+                axiosInstance.get,
+                `${API_BASE_URL}${feed.path}`,
+                {
+                    params: {
+                        // One id, comma-join rules still apply: never an array.
+                        event_ids: gameId,
+                        sportsbook,
+                        main: "false",
+                    },
+                }
+            );
+            const schedule = (response.data as { data?: { schedule?: LeagueOddsByEventsSchedule } })
+                ?.data?.schedule;
+
+            const group = contestGameOddsGroup({
+                sport,
+                competition: feed.competition,
+                league: feed.league,
+                gameId,
+                events: schedule?.events ?? [],
+                missingEventIds: schedule?.missing_event_ids,
+                partial: schedule?.partial,
+            });
+            if (group.events.length) return group;
+            // Kept so a soccer game that every competition reports as missing
+            // still records WHICH answer said so rather than a bare null.
+            answered = answered ?? group;
+        } catch (error: unknown) {
+            failures += 1;
+            lastError = error;
+            console.error(`Contest game odds retry failed for ${feed.path}:`, error);
+        }
+    }
+
+    // ANY route that blew up is a real breakage on THIS family, unlike the
+    // by-match-id one above: a competition that simply does not carry the game
+    // answers 200 with the id under `missing_event_ids`, so a throw here is never
+    // "nothing posted". Soccer is the case that makes the difference visible —
+    // it walks three competitions, and the interleaving where the game's own
+    // competition 500s while the other two answer 200-empty used to be recorded
+    // as a clean, settled "no markets", permanently spending the game's one
+    // attempt with nothing anywhere saying a route had failed.
+    if (failures > 0) {
+        throw lastError ?? new Error("Failed to re-load the odds for this game");
+    }
+    return answered;
+}
+
+function* handleFetchContestMatchOdds(
+    action: PayloadAction<FetchContestGameOddsPayload>
+): SagaIterator {
+    yield call(
+        runContestGameOddsFetch,
+        "match_odds",
+        action.payload,
+        fetchContestMatchOddsGroup,
+        "Failed to load the full market board for this game"
+    );
+}
+
+function* handleFetchContestGameOddsRetry(
+    action: PayloadAction<FetchContestGameOddsPayload>
+): SagaIterator {
+    yield call(
+        runContestGameOddsFetch,
+        "by_events",
+        action.payload,
+        fetchContestGameOddsRetryGroup,
+        "Failed to re-load the odds for this game"
+    );
+}
+
 export default function* feedContestOddsSaga(): SagaIterator {
     // takeLatest: only one contest's entry screen is open at a time, and a
     // re-quote fired from the review sheet must supersede the read it replaces.
     yield takeLatest(fetchFeedContestOddsRequest.type, handleFetchFeedContestOdds);
+    // takeEvery, NOT takeLatest: these are per-GAME reads, and takeLatest would
+    // cancel the board for the matchup a member opened first the moment they
+    // opened a second one. De-duping is done per (contest, game, path) instead,
+    // by the reducer's attempt ledger plus the in-flight set above.
+    yield takeEvery(fetchContestMatchOddsRequest.type, handleFetchContestMatchOdds);
+    yield takeEvery(fetchContestGameOddsRetryRequest.type, handleFetchContestGameOddsRetry);
 }

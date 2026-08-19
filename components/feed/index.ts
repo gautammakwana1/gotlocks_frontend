@@ -11,7 +11,6 @@
 //     getStructuredFeedContextLabel,
 //     getStructuredFeedPointLabel,
 //     getStructuredFeedRecordLabel,
-//     getStructuredFeedRecordSearchText,
 //     getStructuredFeedRoleLabel,
 //     isStructuredFeedRecordHidden,
 //     structuredFeedRecordMatchesFilter,

@@ -199,7 +199,7 @@ export const FeedContestEditForm = ({
     // joined, which this screen cannot see — that case surfaces as a 409 on save.
     const editable =
         organizer &&
-        ["multi_pick", "sunday_pickem"].includes(contest.template) &&
+        ["multi_pick", "sunday_pickem", "td_psychic"].includes(contest.template) &&
         CONTEST_EDITABLE_STATUSES.includes(contest.lifecycle_status) &&
         !contest.canceled_at &&
         !contest.archived_at;

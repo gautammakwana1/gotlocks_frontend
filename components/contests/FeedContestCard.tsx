@@ -137,6 +137,8 @@ export const contestParticipantLabel = (
 export const contestTemplateLabel = (template: string) => {
     if (template === "multi_pick") return "General Combo";
     if (template === "sunday_pickem") return "NFL Sunday Pick’em";
+    // The fallback below would render this one as "Td Psychic".
+    if (template === "td_psychic") return "TD Psychic";
     return template
         .replaceAll("_", " ")
         .replace(/\b\w/g, (character) => character.toUpperCase());

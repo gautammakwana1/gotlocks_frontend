@@ -18,9 +18,12 @@ import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { SearchIcon } from "@/components/ui/SvgIcons";
 import { LOSING_POST_CARD_TONE, NEUTRAL_POST_CARD_SURFACE, PENDING_POST_CARD_TONE, WINNING_POST_CARD_TONE } from "@/lib/styles/postCards";
-import OnboardingModal from "@/components/modals/OnboardingModal";
-import { GLOBAL_TUTORIAL } from "@/lib/onboarding/tutorials";
-import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
+// TUTORIAL DISABLED 2026-08-17 — superseded by the per-League/per-Arena Guides.
+// Commented, not deleted: uncomment these three imports plus the three blocks
+// marked "TUTORIAL DISABLED" below to restore the Global intro.
+// import OnboardingModal from "@/components/modals/OnboardingModal";
+// import { GLOBAL_TUTORIAL } from "@/lib/onboarding/tutorials";
+// import { updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import PostPickSkeleton from "@/components/skeletons/social/PostPickSkeleton";
 import GlobalLeaderboardSkeleton from "@/components/skeletons/social/GlobalLeaderboardSkeleton";
 import { WeeklyWinnersRange } from "@/lib/social/weeklyWinnersLeaderboard";
@@ -300,7 +303,8 @@ const SocialPage = () => {
     const currentUser = useCurrentUser();
 
     const { loading: pickLoader, message: pickMessage, postPicks, globalLeaderboard, globalLeaderboardLoading } = useSelector((state: RootState) => state.pick);
-    const { hasSeenSocialIntro, hasSeenWelcomeIntro } = useSelector((state: RootState) => state.progress);
+    // TUTORIAL DISABLED 2026-08-17
+    // const { hasSeenSocialIntro, hasSeenWelcomeIntro } = useSelector((state: RootState) => state.progress);
 
     const fetchDataByTab = (pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -418,9 +422,10 @@ const SocialPage = () => {
         }
     };
 
-    const handleCompleteGlobalIntro = () => {
-        dispatch(updateTutorialProgressRequest({ tutorial_key: "social" }));
-    }
+    // TUTORIAL DISABLED 2026-08-17
+    // const handleCompleteGlobalIntro = () => {
+    //     dispatch(updateTutorialProgressRequest({ tutorial_key: "social" }));
+    // }
 
     const renderTabButton = (tab: SocialTab, label: string) => {
         const active = activeTab === tab;
@@ -1126,6 +1131,7 @@ const SocialPage = () => {
             </section>
 
             <UserSearchDialog open={isUserSearchOpen} onClose={() => setIsUserSearchOpen(false)} />
+            {/* TUTORIAL DISABLED 2026-08-17
             <OnboardingModal
                 open={hasSeenWelcomeIntro && !hasSeenSocialIntro}
                 steps={GLOBAL_TUTORIAL}
@@ -1133,7 +1139,7 @@ const SocialPage = () => {
                     handleCompleteGlobalIntro();
                     router.push("/home");
                 }}
-            />
+            /> */}
         </div>
     );
 };

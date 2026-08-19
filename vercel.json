@@ -22,7 +22,11 @@
         },
         {
             "path": "/api/cron/feed-contest-lock-expired",
-            "schedule": "*/10 * * * *"
+            "schedule": "*/2 * * * *"
+        },
+        {
+            "path": "/api/cron/feed-contest-capture-td-prices",
+            "schedule": "1-59/2 * * * *"
         },
         {
             "path": "/api/cron/feed-contest-grade-combo",
@@ -31,6 +35,10 @@
         {
             "path": "/api/cron/feed-contest-grade-pickem",
             "schedule": "2-59/10 * * * *"
+        },
+        {
+            "path": "/api/cron/feed-contest-grade-td-psychic",
+            "schedule": "3-59/10 * * * *"
         },
         {
             "path": "/api/cron/feed-contest-finalize-expired",

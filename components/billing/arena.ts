@@ -116,6 +116,26 @@ export const SELF_SERVICE_ARENA_TIERS: ArenaSelfServiceHostingTier[] = [
 
 export const getArenaUnlockOffer = (): ArenaUnlockOffer => ({ ...ARENA_UNLOCK_OFFER });
 
+/** Support inbox for the contact-only Custom tier. */
+export const ARENA_CUSTOM_CONTACT_EMAIL = "arena@glocks.app";
+
+/**
+ * The mailto: behind "Contact us about Custom hosting", so the 250+ tier is a
+ * real affordance rather than a dead end. The Arena name is prefilled when the
+ * caller has one — on the creation wizard it is whatever they have typed so far.
+ */
+export const getArenaCustomContactHref = (
+    { arenaName }: { arenaName?: string | null } = {}
+): string => {
+    const subject = "Custom Arena hosting inquiry";
+    const body = arenaName
+        ? `I'd like to talk about custom hosting for my Arena "${arenaName}" (more than 250 members).`
+        : "I'd like to talk about custom Arena hosting for more than 250 members.";
+    return `mailto:${ARENA_CUSTOM_CONTACT_EMAIL}?subject=${encodeURIComponent(
+        subject
+    )}&body=${encodeURIComponent(body)}`;
+};
+
 export const getArenaHostingOffer = (tier: ArenaHostingTier): ArenaHostingOffer => {
     const offer = ARENA_HOSTING_OFFERS[tier];
     return { ...offer, limits: { ...offer.limits } };

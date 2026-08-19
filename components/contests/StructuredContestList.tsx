@@ -11,10 +11,26 @@ type ContestAccent = "sky" | "violet";
 type ContestListPresentation = "panel" | "hub";
 type ContestSectionId = "open" | "locked" | "finalized";
 
+/**
+ * DEAD FILE — NOT RENDERED ANYWHERE. Zero importers repo-wide.
+ *
+ * The live contest-phase accordion on BOTH surfaces is `FeedContestSections`
+ * (app/league/[leagueId]/page.tsx and components/arenas/ArenaDashboard.tsx).
+ * That component is the real port of the MVP's StructuredContestList, re-scoped
+ * from "group one in-memory array by phase" to one server-owned query per
+ * section. Edit THAT file; anything changed here reaches no screen.
+ *
+ * Kept only as the closest transliteration of the MVP's in-memory grouping, for
+ * reference while the server-owned sections settle. Delete it once they have.
+ *
+ * The sky -> blue-400 retone this comment used to defer has since landed on the
+ * shared stylesheet (preview/ContestPreviewCard.module.css), so the cards below
+ * are on the blue-400 / violet-400 ramp like every other preview card.
+ */
 const contestAccentTone = {
     sky: {
         create:
-            "border-sky-300/35 bg-sky-500/10 text-sky-100 hover:border-sky-200/70 hover:bg-sky-500/15",
+            "border-blue-400/35 bg-blue-400/10 text-blue-300 hover:border-blue-400/70 hover:bg-blue-400/15",
     },
     violet: {
         create:
@@ -33,7 +49,9 @@ const sectionDetails: Record<
     },
     locked: {
         label: "Locked",
-        description: "Live standings update automatically",
+        // "rank", not "standings" — the MVP's wording (MVP:52); a locked contest
+        // shows a live rank, and "Standings" is a different tab's name.
+        description: "Live rank updates automatically",
         empty: "No contests are locked right now.",
     },
     finalized: {

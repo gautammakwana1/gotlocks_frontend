@@ -35,6 +35,14 @@ import type {
  * The MVP's fourth column — a disclosure that expands the entry itself — is NOT
  * ported: this endpoint carries `pick_id` and nothing else about the entry, and
  * the Entries tab already renders every entry in full.
+ *
+ * This board deliberately does NOT use components/community/StandingsCard: that
+ * is the gold LIFETIME surface (League / Arena / Global rankings), and the MVP
+ * keeps this per-contest board on its own neutral responsive-list frame too.
+ * Its row is a two-line stack whose metric pair col-spans on mobile, it pages
+ * from the server behind "Show more" rather than scrolling a 15-row viewport,
+ * and it pins the viewer's own line in a separate frame above the board — none
+ * of which survives a single `gridClassName` row template.
  * -------------------------------------------------------------------------- */
 
 export type FeedContestStandingsAccent = "league" | "arena";
@@ -57,8 +65,24 @@ const accentClasses: Record<
     },
 };
 
+/*
+ * FULL-LENGTH board, as the MVP now draws it
+ * (StructuredContestDetail.tsx:821-822 + :5102). The rounded, bordered card
+ * this used to be was a port of an older MVP frame; the current one drops the
+ * border, the radius and the drop shadow and lets the row wash run to the
+ * screen edge, which is also what the sibling Entries tab already does here
+ * (FeedContestEntriesPanel.tsx:337).
+ *
+ * The bleed matches AppShell's `px-5 sm:px-6` gutter, so re-adding the same
+ * inset to every child puts the rows back in line with the section heading
+ * FeedContestDetail renders above this panel.
+ */
+const STANDINGS_BLEED_CLASS_NAME = "-mx-5 sm:-mx-6";
+
+const STANDINGS_INSET_CLASS_NAME = "px-5 sm:px-6";
+
 const STANDINGS_FRAME_CLASS_NAME =
-    "overflow-hidden rounded-xl border border-white/15 bg-gradient-to-br from-white/[0.08] via-white/[0.035] to-white/[0.02] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_-30px_rgba(0,0,0,0.9)]";
+    "min-w-0 bg-gradient-to-br from-white/[0.08] via-white/[0.035] to-white/[0.02]";
 
 const STANDING_METRIC_CARD_CLASS_NAME =
     "min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2";
@@ -110,7 +134,11 @@ export type FeedContestStandingsPanelProps = {
     winningPlaces: number;
     /** "League points" | "Arena points" — replaces the global XP wording. */
     pointsLabel: string;
-    /** `multi_pick` scores on combo odds; Pick'em scores on correct picks. */
+    /**
+     * `multi_pick` scores on combo odds; Pick'em and TD Psychic both score on
+     * correct picks, so both read `x/y` in that column — a TD card is always
+     * out of three.
+     */
     template: string;
     currentUserId?: string;
     accent?: FeedContestStandingsAccent;
@@ -170,7 +198,10 @@ const StandingRow = ({
             data-standing-current-user={isOwn ? "true" : undefined}
             className={zebra}
         >
-            <div className="grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 px-3 py-3 sm:grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] sm:px-4">
+            <div
+                data-standings-content-row
+                className={`grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-3 sm:grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] ${STANDINGS_INSET_CLASS_NAME}`}
+            >
                 <div className="relative h-9 w-9 sm:h-10 sm:w-10">
                     <span
                         aria-hidden
@@ -236,7 +267,21 @@ const StandingRow = ({
                                 ? typeof row.combo_odds === "number"
                                     ? formatAmericanOdds(row.combo_odds)
                                     : "—"
-                                : typeof row.total_picks === "number"
+                                : /*
+                                   * A hidden row is a DASH, never "0".
+                                   *
+                                   * Before the lock the server nulls
+                                   * `total_picks` for everyone but the viewer,
+                                   * but still sends `correct_picks: 0` — which
+                                   * is genuinely 0 only because no game has
+                                   * played yet. Printing it would state a
+                                   * result about an entry this viewer is not
+                                   * allowed to see; null there means "not yet
+                                   * visible", never "no value".
+                                   */
+                                  !row.is_entry_revealed
+                                  ? "—"
+                                  : typeof row.total_picks === "number"
                                     ? `${row.correct_picks ?? 0}/${row.total_picks}`
                                     : `${row.correct_picks ?? 0}`}
                         </dd>
@@ -307,10 +352,16 @@ export const FeedContestStandingsPanel = ({
     // flashing an empty board that would read as "nobody entered".
     if (!leaderboard) {
         return (
-            <div aria-hidden="true" className={STANDINGS_FRAME_CLASS_NAME}>
+            <div
+                aria-hidden="true"
+                className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
+            >
                 <ul className="divide-y divide-white/10">
                     {[0, 1, 2].map((key) => (
-                        <li key={key} className="flex items-center gap-3 px-4 py-3.5">
+                        <li
+                            key={key}
+                            className={`flex items-center gap-3 py-3.5 ${STANDINGS_INSET_CLASS_NAME}`}
+                        >
                             <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-white/[0.06] sm:h-10 sm:w-10" />
                             <div className="min-w-0 flex-1">
                                 <div className="h-3 w-32 animate-pulse rounded bg-white/[0.06]" />
@@ -353,8 +404,13 @@ export const FeedContestStandingsPanel = ({
     return (
         <div className="space-y-3">
             {own && !ownIsOnBoard ? (
-                <div className={STANDINGS_FRAME_CLASS_NAME}>
-                    <p className="border-b border-white/10 bg-black/20 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                <div
+                    className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
+                >
+                    <p
+                        data-standings-column-header
+                        className={`border-b border-white/10 bg-black/20 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 ${STANDINGS_INSET_CLASS_NAME}`}
+                    >
                         Your standing
                     </p>
                     <ul>
@@ -373,10 +429,14 @@ export const FeedContestStandingsPanel = ({
                 </div>
             ) : null}
 
-            <div data-standings-frame className={STANDINGS_FRAME_CLASS_NAME}>
+            <div
+                data-standings-frame
+                className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
+            >
                 <div
                     aria-hidden
-                    className="hidden grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] items-center gap-3 border-b border-white/10 bg-black/20 px-4 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 sm:grid"
+                    data-standings-column-header
+                    className={`hidden grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] items-center gap-3 border-b border-white/10 bg-black/20 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 sm:grid ${STANDINGS_INSET_CLASS_NAME}`}
                 >
                     <span className="col-span-2">Player</span>
                     <span>Performance</span>

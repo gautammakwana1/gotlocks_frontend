@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -31,8 +31,17 @@ import {
 import ContestDeletionDrawer, {
     type ContestDeletionResult,
 } from "./ContestDeletionDrawer";
+import {
+    ContestDetailHeader,
+    ContestDetailTabBar,
+    type ContestDetailFormat,
+} from "./ContestDetailHeader";
 import FeedContestEntriesPanel from "./FeedContestEntriesPanel";
 import FeedContestStandingsPanel from "./FeedContestStandingsPanel";
+import type {
+    ContestPreviewArtworkKey,
+    ContestPreviewVisualState,
+} from "./preview/model";
 
 /* ----------------------------------------------------------------------------
  * The Feed contest DETAIL screen, ported from the MVP's StructuredContestDetail
@@ -144,9 +153,36 @@ const isContestCanceled = (contest: FeedContest) =>
 const contestFormatLabel = (template: string) => {
     if (template === "multi_pick") return "General Combo";
     if (template === "sunday_pickem") return "NFL Sunday Pick’em";
+    if (template === "td_psychic") return "TD Psychic";
     if (template === "same_game_combo_challenge") return "Legacy Same-Game Combo";
     return "Legacy Single Pick";
 };
+
+/**
+ * The header artwork — the faded, masked image behind ContestDetailHeader.
+ * `CONTEST_ART` is keyed by the MVP's template names, so this backend's
+ * `multi_pick` maps onto the General Combo art exactly as
+ * `preview/feedContestPreview.ts` maps it for the contest cards. That module
+ * keeps its own table module-private, so this mirrors it rather than reaching
+ * in; the two legacy templates have no art of their own and share the key.
+ */
+const CONTEST_ARTWORK_BY_TEMPLATE: Record<string, ContestPreviewArtworkKey> = {
+    multi_pick: "general_combo",
+    general_combo: "general_combo",
+    sunday_pickem: "sunday_pickem",
+    td_psychic: "td_psychic",
+};
+
+const contestArtworkKey = (template: string): ContestPreviewArtworkKey =>
+    CONTEST_ARTWORK_BY_TEMPLATE[template] ?? "general_combo";
+
+/** `data-contest-format`, which the header stylesheet tints per template. */
+const contestDetailFormat = (template: string): ContestDetailFormat =>
+    template === "sunday_pickem"
+        ? "sunday_pickem"
+        : template === "td_psychic"
+            ? "td_psychic"
+            : "general_combo";
 
 /** Multi-sport contests collapse to one "Multi" chip, exactly as the cards do. */
 const headerSportChips = (contest: FeedContest) => {
@@ -161,6 +197,16 @@ const eligibleSlateSportsLabel = (contest: FeedContest) =>
 const contestScoringLabel = (contest: FeedContest) => {
     if (contest.template === "sunday_pickem") {
         return `Correct picks first · odds points + ${contest.pickem_correct_bonus ?? 2} per correct winner`;
+    }
+    /*
+     * Both halves are load-bearing, and the second is the one a member gets
+     * wrong: a TD card RANKS on correct count, so a 2-of-3 can take a podium
+     * place — but POINTS come from the combined lock-time odds of all three
+     * scorers, which only a perfect card has. Stating only the ranking rule here
+     * would make a second-place finish worth zero read as a bug.
+     */
+    if (contest.template === "td_psychic") {
+        return "Correct picks first · only a perfect 3 of 3 card earns points, from its combined lock-time odds";
     }
     if (contest.template === "multi_pick") {
         const minimum = contest.minimum_odds
@@ -256,6 +302,13 @@ export const FeedContestDetail = ({
     const accentClasses = contestAccentClasses[accent];
     const router = useRouter();
     const searchParams = useSearchParams();
+    /**
+     * This screen's own route — the contest detail URL, which is where each
+     * entry card's header link points. Read from the router rather than passed
+     * in, because both mount sites (arena and league) already ARE this path and
+     * neither has it as a string to hand over.
+     */
+    const contestPathname = usePathname();
     const dispatch = useDispatch();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
@@ -558,6 +611,43 @@ export const FeedContestDetail = ({
                     : phase[0].toUpperCase() + phase.slice(1);
     const isArenaContest = scoped?.context_type === "arena";
 
+    /* ---------- Header: the MVP's ContestDetailHeader inputs ---------- */
+
+    /**
+     * The header's THREE visual states, over our four display phases. A draft
+     * has no state of its own and reads as open, exactly as it does on the
+     * contest preview cards — `phaseLabel` below is what tells the two apart.
+     */
+    const headerVisualState: ContestPreviewVisualState =
+        phase === "locked"
+            ? "locked"
+            : phase === "finalized"
+                ? "finalized"
+                : "open";
+
+    /*
+     * The MVP's `headerTimingLabel` (StructuredContestDetail ~4357), plus one
+     * branch it has no phase for. A draft, canceled or archived contest has no
+     * meaningful clock to print, and `phaseLabel` is the only place those three
+     * are still spelled visibly now that the old accent status pill is gone —
+     * the MVP itself already hands `phaseLabel` to this slot for a contest that
+     * has not opened yet, so this follows its own precedent.
+     */
+    const headerTimingLabel =
+        archived || canceled || phase === "draft"
+            ? phaseLabel
+            : phase === "finalized"
+                ? contest.finalized_at
+                    ? `Finalized ${formatContestDateTime(contest.finalized_at)}`
+                    : "Final results"
+                : phase === "locked"
+                    ? contest.expected_ends_at
+                        ? `Finalizes ${formatContestDateTime(contest.expected_ends_at)}`
+                        : "Settlement in progress"
+                    : opensInFuture
+                        ? phaseLabel
+                        : `Locks ${formatContestDateTime(contest.locks_at)}`;
+
     /* ---------- Standings tab: the header summary ----------
      *
      * The MVP moved the counts apart: the ENTRIES tab owns "N submitted" (our
@@ -628,18 +718,22 @@ export const FeedContestDetail = ({
     const isLiveParticipant = ["opted_in", "entered", "locked", "completed"].includes(
         contest.my_participation?.status ?? ""
     );
-    const showStaffEntrySubtabs =
-        isArenaStaffViewer && Boolean(contest.allow_staff_participation) && canParticipate;
+    /*
+     * The MVP's `participatingStaffPrivacyActive`. Arena staff eligible to
+     * compete in their own contest must not read the field early, even though
+     * their role otherwise could — so this OVERRIDES `canViewAllEntries`.
+     *
+     * `!entriesArePublic` is part of the rule, not an optimisation: once the
+     * contest locks the field is public to everyone and there is no privacy left
+     * to protect, so leaving it out would keep staff locked out for ever.
+     */
+    const staffParticipationPrivacy =
+        isArenaStaffViewer &&
+        Boolean(contest.allow_staff_participation) &&
+        canParticipate &&
+        !entriesArePublic;
     const canViewAllEntries =
         entriesArePublic || (isArenaStaffViewer && !isLiveParticipant);
-    // Which view a viewer WITHOUT the sub-tabs lands on: an organizer who cannot
-    // enter has no receipt of their own to show, so the field is all there is.
-    const defaultEntryView: "mine" | "all" =
-        isArenaStaffViewer && !canParticipate
-            ? "all"
-            : entriesArePublic
-                ? "all"
-                : "mine";
     const contextName =
         scoped?.group?.name?.trim() || (isArenaContest ? "Arena" : "League");
     const participantCapacityLabel = `${contest.participant_count ?? 0} / ${
@@ -713,7 +807,7 @@ export const FeedContestDetail = ({
      * so the button and the endpoint agree before the round trip.
      */
     const canEditContest =
-        ["multi_pick", "sunday_pickem"].includes(contest.template) &&
+        ["multi_pick", "sunday_pickem", "td_psychic"].includes(contest.template) &&
         CONTEST_EDITABLE_STATUSES.includes(contest.lifecycle_status) &&
         !canceled &&
         !archived;
@@ -736,7 +830,11 @@ export const FeedContestDetail = ({
     const entryParticipantStatus = entryParticipation?.status ?? null;
     const canEnterContest =
         writable &&
-        contest.entry_model === "multi_pick" &&
+        // The three entry models with a builder: the General Combo board, the
+        // Sunday Pick'em moneyline card, and the TD Psychic scorer card.
+        // `FeedContestEntryShell` renders one of the three, so all three must
+        // reach it.
+        ["multi_pick", "pickem_card", "td_psychic_card"].includes(contest.entry_model) &&
         contest.lifecycle_status === "open" &&
         !canceled &&
         !archived &&
@@ -888,99 +986,45 @@ export const FeedContestDetail = ({
 
     return (
         <div className="flex flex-col gap-2 pb-10">
-            <header className="-mx-5 pb-4 pl-5 pr-2 sm:mx-0 sm:px-0">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <BackButton
-                        fallback={backHref}
-                        preferFallback
-                        className="shrink-0 py-1"
-                    />
-                    <div className="flex flex-wrap justify-end gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                        <span
-                            className={`rounded-full border px-2 py-1 ${accentClasses.openStatus}`}
-                        >
-                            {phaseLabel}
-                        </span>
-                        <span className="rounded-full bg-white/5 px-2 py-1">
-                            {formatContestDateTime(contest.opens_at ?? contest.created_at)}{" "}
-                            to{" "}
-                            {formatContestDateTime(
-                                contest.expected_ends_at ?? contest.locks_at
-                            )}
-                        </span>
-                        {headerSportChips(contest).map((sport) => (
-                            <span key={sport} className="rounded-full bg-white/5 px-2 py-1">
-                                {sport}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                <div className="mt-2.5 flex min-w-0 items-center gap-2 text-base font-semibold sm:text-lg lg:gap-3 lg:text-xl">
-                    <span className="min-w-0 max-w-[45%] truncate text-gray-400">
-                        {contextName}
-                    </span>
-                    <span className="shrink-0 text-gray-600">/</span>
-                    <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-white sm:text-lg lg:text-xl">
-                        {contest.name}
-                    </h1>
-                </div>
-            </header>
-
-            <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0">
-                <div
-                    role="tablist"
-                    aria-label="Contest sections"
-                    className="grid w-full items-end gap-1"
-                    style={{
-                        gridTemplateColumns: `repeat(${availableTabs.length}, minmax(0, 1fr))`,
-                    }}
-                    onKeyDown={(event) => {
-                        if (
-                            !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-                        ) {
-                            return;
-                        }
-                        event.preventDefault();
-                        const currentIndex = availableTabs.indexOf(activeTab);
-                        const nextIndex =
-                            event.key === "Home"
-                                ? 0
-                                : event.key === "End"
-                                    ? availableTabs.length - 1
-                                    : event.key === "ArrowRight"
-                                        ? (currentIndex + 1) % availableTabs.length
-                                        : (currentIndex - 1 + availableTabs.length) %
-                                        availableTabs.length;
-                        const next = availableTabs[nextIndex];
-                        setDetailTab(next);
-                        document.getElementById(`contest-tab-${next}`)?.focus();
-                    }}
-                >
-                    {availableTabs.map((tab) => {
-                        const selected = tab === activeTab;
-                        const label = tab[0].toUpperCase() + tab.slice(1);
-                        return (
-                            <button
-                                key={tab}
-                                id={`contest-tab-${tab}`}
-                                type="button"
-                                role="tab"
-                                aria-selected={selected}
-                                aria-controls={`contest-panel-${tab}`}
-                                tabIndex={selected ? 0 : -1}
-                                onClick={() => setDetailTab(tab)}
-                                className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 text-center text-sm font-semibold transition-colors duration-200 ease-out sm:px-3 motion-reduce:transition-none ${
-                                    selected
-                                        ? `border-white/10 bg-black ${accentClasses.textStrong} after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']`
-                                        : "border-transparent bg-black text-gray-400 hover:border-white/10 hover:text-white"
-                                }`}
-                            >
-                                <span className="truncate">{label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </section>
+            {/* The shared contest chrome: the contest artwork as a faded,
+                masked backdrop, a state-tinted gradient, the back button, the
+                access / timing / sport meta chips and the Context / Contest
+                title line — with the tab strip nested as its children, exactly
+                as the MVP nests it (StructuredContestDetail ~4684). */}
+            <ContestDetailHeader
+                accent={accent}
+                artwork={contestArtworkKey(contest.template)}
+                backHref={backHref}
+                contextName={contextName}
+                contestName={contest.name}
+                contestTypeLabel={contestFormatLabel(contest.template)}
+                format={contestDetailFormat(contest.template)}
+                sports={headerSportChips(contest)}
+                state={headerVisualState}
+                stateLabel={phaseLabel}
+                timingLabel={headerTimingLabel}
+                // The chip is desktop-only in the shared header; our old header
+                // showed its timing on every width, so the compact slot keeps it.
+                mobileTimingLabel={headerTimingLabel}
+                accessLabel={
+                    isArenaContest
+                        ? contest.entry_access_mode === "venue_check_in_required"
+                            ? "Venue check-in"
+                            : "Open entry"
+                        : undefined
+                }
+            >
+                <ContestDetailTabBar
+                    activeTab={activeTab}
+                    ariaLabel="Contest sections"
+                    getPanelId={(tab) => `contest-panel-${tab}`}
+                    onTabChange={setDetailTab}
+                    tabs={availableTabs.map((tab) => ({
+                        id: tab,
+                        label: tab[0].toUpperCase() + tab.slice(1),
+                    }))}
+                />
+            </ContestDetailHeader>
 
             {activeTab === "details" ? (
                 <div
@@ -1212,10 +1256,19 @@ export const FeedContestDetail = ({
                             error={entriesError}
                             accent={accent}
                             currentUserId={currentUser?.userId}
+                            // The entries read's contest projection omits this,
+                            // and only a Pick'em card's scoring split needs it.
+                            pickemCorrectBonus={contest.pickem_correct_bonus}
+                            // Names each entry card's header. The link is
+                            // self-referential from this tab, which is fine — the
+                            // same card is also rendered on the entry route and in
+                            // the group Feed, where it is not.
+                            contestName={contest.name}
+                            contestHref={contestPathname}
                             isDraft={phase === "draft"}
-                            showStaffEntrySubtabs={showStaffEntrySubtabs}
+                            staffParticipationPrivacy={staffParticipationPrivacy}
                             canViewAllEntries={canViewAllEntries}
-                            defaultEntryView={defaultEntryView}
+                            canParticipate={canParticipate}
                             myParticipationStatus={contest.my_participation?.status ?? null}
                             hasParticipation={Boolean(contest.my_participation)}
                             rulesCurrent={rulesCurrent}

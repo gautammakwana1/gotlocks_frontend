@@ -25,7 +25,6 @@ import { getMobileTeamName, useIsMobile } from "@/lib/utils/helpers";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage, getSlipConflictWarningMessages } from "@/lib/slips/pickConflicts";
 import NflPickBuilderSkeleton from "./skeletons/NflPickBuilderSkeleton";
 import NflMatchupDetailSkeleton from "./skeletons/NflMatchupDetailSkeleton";
-import { House } from "lucide-react";
 
 type BookOdds = {
     book?: string;
@@ -2892,7 +2891,8 @@ export const NflPickBuilder = ({
                                 }}
                             >
                                 <div className="px-3">
-                                    <div className="relative flex items-center h-px w-full overflow-hidden">
+                                    <div className="relative flex items-center gap-2 w-full overflow-hidden">
+                                        <span className="shrink-0 text-[10px] font-semibold leading-none tracking-wide text-gray-500">at</span>
                                         <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/100 to-transparent shimmer-divider"></div>
                                     </div>
                                 </div>
@@ -2908,13 +2908,12 @@ export const NflPickBuilder = ({
                                         "minmax(0,1fr) repeat(3, var(--table-chip-width))",
                                 }}
                             >
-                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center justify-between gap-2 px-3 sm:gap-3">
+                                <div className="flex min-h-[36px] sm:min-h-[52px] min-w-0 items-center gap-2 px-3 sm:gap-3">
                                     <div className="min-w-0">
                                         <p className="truncate text-xs font-semibold leading-snug text-white">
                                             {isMobile ? getMobileTeamName(game.home_abbr, game.home_team) : game.home_team}
                                         </p>
                                     </div>
-                                    <House size={14} color="white" className="shrink-0" />
                                 </div>
                                 {renderPreviewCell(
                                     spreadHome,

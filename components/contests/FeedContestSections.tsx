@@ -27,24 +27,31 @@ const SECTION_DETAILS: Record<
     FeedContestSection,
     { label: string; description: string; empty: string; countNoun: string }
 > = {
+    // The three published phases carry the MVP's own one-line descriptions
+    // verbatim (MVP StructuredContestList:41-59). "rank", not "standings", in the
+    // locked row: a locked contest shows a live RANK, and "Standings" is the name
+    // of a different tab — saying it here reads as a pointer to that tab.
     open: {
         label: "Open",
-        description: "Accepting entries or opening soon",
+        description: "Entry timing and availability",
         empty: "No contests are open right now.",
         countNoun: "open",
     },
     locked: {
         label: "Locked",
-        description: "Live standings update automatically",
+        description: "Live rank updates automatically",
         empty: "No contests are locked right now.",
         countNoun: "locked",
     },
     finalized: {
         label: "Finalized",
-        description: "Completed contest history",
+        description: "Completed results",
         empty: "No finalized contest results yet.",
         countNoun: "finalized",
     },
+    // No MVP counterpart — the MVP groups one in-memory array into three phases
+    // and has no server-owned drafts/archived section — so these two keep the
+    // copy written for this app.
     drafts: {
         label: "Drafts",
         description: "Organizer-only and not published",

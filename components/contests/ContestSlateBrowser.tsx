@@ -19,6 +19,23 @@ export type ContestSlateBrowserProps = {
     accent: ContestSlateBrowserAccent;
     /** IANA zone used for the organizer-facing calendar tabs and kickoffs. */
     timeZone?: string;
+    /**
+     * Template-specific market availability — the green/amber line at the foot
+     * of each matchup card.
+     *
+     * DEFAULTS TO TRUE here, where the MVP defaults to the catalog's `hasOdds`
+     * flag. That flag has no counterpart in this app: the schedule endpoint is a
+     * pure fixture feed and carries no prices, which is also why the create
+     * payload omits `has_odds` and lets the server read its own default of true.
+     * So the default states exactly what the client already asserts to the
+     * server, and a template that knows better — TD Psychic, which has read the
+     * scorer board — passes a real resolver.
+     */
+    availabilityResolver?: (game: ContestGameOption) => boolean;
+    availabilityLabels?: {
+        available: string;
+        unavailable: string;
+    };
 };
 
 type DateOption = {
@@ -32,7 +49,7 @@ const accentClasses = {
         selectedCard: "border-sky-300/55 bg-sky-500/10 ring-1 ring-inset ring-sky-300/20",
         selectedBadge: "border-sky-300/35 bg-sky-400/15 text-sky-100",
         teamBadge: "border-sky-300/20 bg-sky-500/10 text-sky-100",
-        focus: "focus-visible:ring-sky-300/60",
+        focus: "focus-visible:ring-white/70",
     },
     arena: {
         activeTab: "border-violet-300 text-white",
@@ -40,7 +57,7 @@ const accentClasses = {
             "border-violet-300/55 bg-violet-500/10 ring-1 ring-inset ring-violet-300/20",
         selectedBadge: "border-violet-300/35 bg-violet-400/15 text-violet-100",
         teamBadge: "border-violet-300/20 bg-violet-500/10 text-violet-100",
-        focus: "focus-visible:ring-violet-300/60",
+        focus: "focus-visible:ring-white/70",
     },
 } as const;
 
@@ -112,6 +129,11 @@ export const ContestSlateBrowser = ({
     onToggleGame,
     accent,
     timeZone = resolveOrganizerTimeZone(),
+    availabilityResolver = () => true,
+    availabilityLabels = {
+        available: "Markets available",
+        unavailable: "Markets not posted yet",
+    },
 }: ContestSlateBrowserProps) => {
     const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
     const styles = accentClasses[accent];
@@ -315,19 +337,23 @@ export const ContestSlateBrowser = ({
                 aria-labelledby={
                     activeSportTabId ? `${activeDateTabId} ${activeSportTabId}` : activeDateTabId
                 }
-                className={`grid max-h-[30rem] gap-3 overflow-y-auto overscroll-contain pr-1 outline-none focus-visible:ring-2 ${styles.focus} lg:max-h-[28rem] lg:grid-cols-2`}
+                className={`grid max-h-[30rem] gap-3 overflow-y-auto overscroll-contain pr-1 outline-none focus-visible:ring-2 ${styles.focus} lg:max-h-[17rem] lg:grid-cols-2`}
             >
                 {visibleGames.map((game) => {
                     const selected = selectedIds.has(game.id);
                     const kickoff = formatKickoff(game.gameStartsAt, timeZone);
                     const matchup = `${game.awayTeam} at ${game.homeTeam}`;
+                    const marketAvailable = availabilityResolver(game);
+                    const availabilityLabel = marketAvailable
+                        ? availabilityLabels.available
+                        : availabilityLabels.unavailable;
                     return (
                         <button
                             key={game.id}
                             type="button"
                             data-contest-slate-game-id={game.id}
                             aria-pressed={selected}
-                            aria-label={`${selected ? "Remove" : "Include"} ${matchup}, ${game.competition}, ${kickoff}`}
+                            aria-label={`${selected ? "Remove" : "Include"} ${matchup}, ${game.competition}, ${kickoff}, ${availabilityLabel}`}
                             onClick={() => onToggleGame(game.id)}
                             className={`group w-full rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 ${styles.focus} ${selected
                                 ? styles.selectedCard
@@ -383,6 +409,13 @@ export const ContestSlateBrowser = ({
                                         </span>
                                     </span>
                                 ))}
+                            </span>
+                            <span
+                                className={`mt-3 block text-[11px] font-semibold normal-case ${
+                                    marketAvailable ? "text-emerald-200" : "text-amber-100"
+                                }`}
+                            >
+                                {availabilityLabel}
                             </span>
                         </button>
                     );

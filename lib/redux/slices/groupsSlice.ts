@@ -49,6 +49,11 @@ import type {
 	CommunityGroupsPage,
 	JoinCommunityFailurePayload,
 	JoinedCommunity,
+	LeagueGuideView,
+	FetchLeagueGuideStatusPayload,
+	LeagueGuideStatusData,
+	MarkLeagueGuideViewedPayload,
+	MarkLeagueGuideViewedData,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -125,6 +130,17 @@ type GroupState = {
 	unreadCounts: number;
 	groupsCounts: GroupCounts | null;
 	ownerPlan: GroupOwnerPlan | null;
+	// League Guide (GET/POST /group/league/guide). Single-tenant, so it carries
+	// its own `leagueGuideForId` stamp: this slot decides whether a modal opens
+	// over the page, and `state.group` is known to survive navigation between
+	// groups. `leagueGuide*`-prefixed so it can never be confused with the Arena
+	// guide on arenaSlice.
+	leagueGuide: LeagueGuideView | null;
+	leagueGuideForId: string | null;
+	leagueGuideLoading: boolean;
+	leagueGuideError: string | null;
+	leagueGuideAckLoading: boolean;
+	leagueGuideAckError: string | null;
 };
 
 const initialState: GroupState = {
@@ -185,6 +201,12 @@ const initialState: GroupState = {
 	unreadCounts: 0,
 	groupsCounts: null,
 	ownerPlan: null,
+	leagueGuide: null,
+	leagueGuideForId: null,
+	leagueGuideLoading: false,
+	leagueGuideError: null,
+	leagueGuideAckLoading: false,
+	leagueGuideAckError: null,
 };
 
 const groupSlice = createSlice({
@@ -891,6 +913,86 @@ const groupSlice = createSlice({
 			state.error = null;
 			state.message = null;
 		},
+
+		/* --------------------------------------------------------------------
+		 * LEAGUE GUIDE — should this member be shown the welcome walkthrough?
+		 *
+		 * Mirrors arenaSlice's guide reducers. The three load-bearing rules are
+		 * commented individually below; they are the reason this is not a
+		 * generic request/success/failure triad.
+		 * ------------------------------------------------------------------ */
+		fetchLeagueGuideStatusRequest: (
+			state,
+			action: PayloadAction<FetchLeagueGuideStatusPayload>
+		) => {
+			// Dropped at REQUEST time on an id mismatch. This slot decides
+			// whether a modal opens over the page, so the previous League's
+			// answer must not survive into this one's in-flight window.
+			if (state.leagueGuideForId !== action.payload.league_id) {
+				state.leagueGuide = null;
+			}
+			state.leagueGuideForId = action.payload.league_id;
+			state.leagueGuideLoading = true;
+			state.leagueGuideError = null;
+		},
+		fetchLeagueGuideStatusSuccess: (
+			state,
+			action: PayloadAction<LeagueGuideStatusData>
+		) => {
+			state.leagueGuideLoading = false;
+			state.leagueGuideError = null;
+			state.leagueGuide = action.payload.guide;
+			state.leagueGuideForId = action.payload.league?.id ?? state.leagueGuideForId;
+		},
+		fetchLeagueGuideStatusFailure: (state, action: PayloadAction<string>) => {
+			state.leagueGuideLoading = false;
+			state.leagueGuideError = action.payload;
+			// Null, never a synthesised `should_show_guide: false`: a failed read
+			// means UNKNOWN, and the screen's own rule is "open only on a
+			// definite yes", so this stays closed without pretending it was told.
+			state.leagueGuide = null;
+		},
+
+		markLeagueGuideViewedRequest: (
+			state,
+			action: PayloadAction<MarkLeagueGuideViewedPayload>
+		) => {
+			state.leagueGuideAckLoading = true;
+			state.leagueGuideAckError = null;
+			// Optimistic, and deliberately so: the dialog closes on the click,
+			// and leaving `should_show_guide` true until the round trip lands
+			// would let the auto-open effect fire again behind it.
+			if (state.leagueGuide && state.leagueGuideForId === action.payload.league_id) {
+				state.leagueGuide = {
+					...state.leagueGuide,
+					has_viewed_guide: true,
+					should_show_guide: false,
+					has_viewed_any_version: true,
+					status: action.payload.status ?? "completed",
+				};
+			}
+		},
+		markLeagueGuideViewedSuccess: (
+			state,
+			action: PayloadAction<MarkLeagueGuideViewedData>
+		) => {
+			state.leagueGuideAckLoading = false;
+			state.leagueGuideAckError = null;
+			// The server echoes the row it wrote in the same shape the GET
+			// returns, so this replaces the optimistic guess with the truth —
+			// timestamps included — without a follow-up read.
+			if (state.leagueGuideForId === action.payload.league?.id) {
+				state.leagueGuide = action.payload.guide;
+			}
+		},
+		markLeagueGuideViewedFailure: (state, action: PayloadAction<string>) => {
+			state.leagueGuideAckLoading = false;
+			state.leagueGuideAckError = action.payload;
+			// The optimistic flip is NOT rolled back. Re-opening the guide over
+			// a member who just closed it is worse than showing it once more on
+			// their next visit, which is what an unrecorded acknowledgement
+			// costs.
+		},
 	},
 });
 
@@ -1022,6 +1124,12 @@ export const {
 	fetchGroupOwnerPlanDetailsSuccess,
 	fetchGroupOwnerPlanDetailsFailure,
 	clearFetchGroupOwnerPlanDetailsMessage,
+	fetchLeagueGuideStatusRequest,
+	fetchLeagueGuideStatusSuccess,
+	fetchLeagueGuideStatusFailure,
+	markLeagueGuideViewedRequest,
+	markLeagueGuideViewedSuccess,
+	markLeagueGuideViewedFailure,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

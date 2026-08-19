@@ -347,6 +347,22 @@ export const getActiveContestCountsLabel = (league: LeagueSettingsInput, contest
 };
 
 /**
+ * The same count, named for the FANTASY contest surface — the MVP's
+ * `getActiveLeagueContestCapacityLabel`.
+ *
+ * Its own helper rather than a reword of the one above, which is shared with
+ * Home and the profile Groups list where the generic "active contests" is
+ * correct (an Arena has no Fantasy contests to speak of).
+ */
+export const getActiveFantasyContestCapacityLabel = (
+    league: LeagueSettingsInput,
+    contestsCounts: number
+) => {
+    const settings = normalizeLeagueSettings(league);
+    return `${contestsCounts}/${settings.max_active_contests} active Fantasy Contests`;
+};
+
+/**
  * Owned-league caps mirrored from the backend's ONLY enforced create limit
  * (groupController.createGroup: free plan && ownedLeagues >= 3 -> 403). Pro is
  * unlimited. PLAN_LIMITS above encodes a different, older policy (2/5) whose only

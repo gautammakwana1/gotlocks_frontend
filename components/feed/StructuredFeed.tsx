@@ -1,40 +1,91 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
+import { CommunitySwipePager } from "@/components/community/CommunitySwipePager";
 import PostComposerIcon from "@/components/ui/PostComposerIcon";
 import { getFeedZebraRowClassName } from "@/components/social/feedRowTone";
+import { ContestEntryFilterDrawer } from "./ContestEntryFilterDrawer";
 import { GroupFeedPostDrawer } from "./GroupFeedPostDrawer";
 import { StructuredFeedCard } from "./StructuredFeedCard";
 import { StructuredFeedReplacementComposer } from "./StructuredFeedReplacementComposer";
 import {
-    getStructuredFeedRecordSearchText,
+    structuredFeedRecordMatchesEntryLifecycle,
     structuredFeedRecordMatchesFilter,
 } from "./formatters";
 import type {
+    ContestEntryLifecycleFilter,
     StructuredFeedFilter,
     StructuredFeedProps,
     StructuredFeedRecord,
 } from "./types";
 
-// The MVP's two record chips, plus Standings when the host supplies that node.
-// There is no "All": Community already carries every non-contest record.
-const FEED_FILTERS: readonly { id: StructuredFeedFilter; label: string }[] = [
-    { id: "community", label: "Community" },
-    { id: "competitive", label: "Contest Entries" },
+// The MVP's two record views, plus Standings when the host supplies that node.
+// There is no "All": Updates already carries every non-entry record.
+const FEED_VIEWS: readonly { id: StructuredFeedFilter; label: string }[] = [
+    { id: "updates", label: "Updates" },
+    { id: "entries", label: "Entries" },
 ];
 
 const feedChromeTone = {
     sky: {
-        band: "bg-sky-950/20 bg-gradient-to-b from-black via-black/40 to-transparent",
-        input: "focus:border-sky-300/60",
-        selectedFilter: "border-sky-300/50 bg-sky-500/15 text-sky-100",
+        band: "bg-blue-400/[0.055] bg-gradient-to-b from-black via-black/40 to-transparent",
+        actionIcon:
+            "border-blue-400/25 bg-blue-400/10 text-blue-300 group-hover:border-blue-400/45 group-hover:bg-blue-400/15",
+        actionFocus: "focus-visible:outline-sky-300",
     },
     violet: {
         band: "bg-violet-950/20 bg-gradient-to-b from-black via-black/40 to-transparent",
-        input: "focus:border-violet-300/60",
-        selectedFilter: "border-violet-300/50 bg-violet-500/15 text-violet-100",
+        actionIcon:
+            "border-violet-300/25 bg-violet-500/10 text-violet-100 group-hover:border-violet-200/45 group-hover:bg-violet-500/15",
+        actionFocus: "focus-visible:outline-violet-300",
     },
 } as const;
+
+/**
+ * Mirrors the MVP's `CONTEST_HUB_ACTION_ICON_CLASS_NAME` /
+ * `CONTEST_HUB_ACTION_ACCENT_CLASSES[accent].icon`, so the Feed's header buttons
+ * and the Contests tab's create button wear one plate.
+ *
+ * Held locally rather than imported: the MVP's home for these strings was
+ * ContestHubCreateAction, but both hosts here have since moved to
+ * ContestCreationDrawer and that component is now orphaned — so there is no
+ * shared module left to import them from. If the plate is ever needed in a third
+ * place, lift these into a small shared module; do NOT revive
+ * ContestHubCreateAction to hold them.
+ */
+const FEED_ACTION_ICON_CLASS_NAME =
+    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors duration-200";
+
+const FilterIcon = () => (
+    <svg
+        aria-hidden="true"
+        data-icon="filters"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        className="h-4 w-4 shrink-0"
+    >
+        <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M8 15v4" />
+    </svg>
+);
+
+const StandingsFlipIcon = () => (
+    <svg
+        aria-hidden="true"
+        data-icon="standings-flip"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-4 w-4 shrink-0"
+    >
+        <path d="M5 7h13M15 4l3 3-3 3M19 17H6M9 14l-3 3 3 3" />
+    </svg>
+);
 
 export const StructuredFeed = ({
     context,
@@ -44,8 +95,13 @@ export const StructuredFeed = ({
     selectionOptions,
     contestOptions = [],
     communityPickWindow,
-    initialFilter = "community",
+    initialFilter = "updates",
     standings,
+    standingsAction,
+    winners,
+    onCreateAnnouncement,
+    createAnnouncementOpen = false,
+    createAnnouncementTriggerRef,
     currentUserId,
     onReaction,
     getPickReactionSummary,
@@ -60,14 +116,17 @@ export const StructuredFeed = ({
     className = "",
 }: StructuredFeedProps) => {
     const [filter, setFilter] = useState<StructuredFeedFilter>(
-        initialFilter === "standings" && !standings ? "community" : initialFilter
+        initialFilter === "standings" && !standings ? "updates" : initialFilter
     );
-    const [search, setSearch] = useState("");
+    const [entryLifecycleFilter, setEntryLifecycleFilter] =
+        useState<ContestEntryLifecycleFilter>("all");
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+    const filterTriggerRef = useRef<HTMLButtonElement>(null);
     const [composerOpen, setComposerOpen] = useState(false);
     const composerTriggerRef = useRef<HTMLButtonElement>(null);
     const [replacementRecord, setReplacementRecord] = useState<StructuredFeedRecord | null>(null);
     const [replacementStatus, setReplacementStatus] = useState<string>();
-    const normalizedSearch = search.trim().toLocaleLowerCase();
+    const viewPanelId = useId();
     const accent = context.kind === "arena" ? "violet" : "sky";
     const chromeTone = feedChromeTone[accent];
 
@@ -77,190 +136,283 @@ export const StructuredFeed = ({
         capabilities.canCreateStaffPick ||
         capabilities.canCreateStaffPost;
 
-    const filterOptions = standings
-        ? [...FEED_FILTERS, { id: "standings" as const, label: "Standings" }]
-        : FEED_FILTERS;
+    const viewOptions = standings
+        ? [...FEED_VIEWS, { id: "standings" as const, label: "Standings" }]
+        : FEED_VIEWS;
 
+    // Guarded rather than read straight off state: a host can drop its standings
+    // node after mount (the League board is conditional), and the pager clamps an
+    // unknown id to index 0 — which would show the Updates label over a body that
+    // matched nothing.
+    const activeFilter = filter === "standings" && !standings ? "updates" : filter;
+    const isContestEntries = activeFilter === "entries";
+    const showStandings = activeFilter === "standings";
+
+    // Every contest entry in the Feed, before either filter. The drawer's tally
+    // is measured against this.
+    const contestEntryRecords = useMemo(
+        () => records.filter((record) => structuredFeedRecordMatchesFilter(record, "entries")),
+        [records]
+    );
+
+    // The view match alone decides membership: Updates is the catch-all (every
+    // kind except competitive_pick) and Entries is the competitive_pick list.
+    // Inside Entries only, the drawer's lifecycle axis narrows it further.
     const visibleRecords = useMemo(
         () =>
             records.filter(
                 (record) =>
-                    structuredFeedRecordMatchesFilter(record, filter) &&
-                    (!normalizedSearch ||
-                        getStructuredFeedRecordSearchText(record, context).includes(normalizedSearch))
+                    structuredFeedRecordMatchesFilter(record, activeFilter) &&
+                    (!isContestEntries ||
+                        structuredFeedRecordMatchesEntryLifecycle(record, entryLifecycleFilter))
             ),
-        [context, filter, normalizedSearch, records]
+        [activeFilter, entryLifecycleFilter, isContestEntries, records]
     );
 
-    const showStandings = filter === "standings" && Boolean(standings);
-    // The Contest Entries chip counts entries, not posts — same wording as the MVP.
-    const isContestEntries = filter === "competitive";
-    const resultCountLabel = isContestEntries
-        ? visibleRecords.length === 1
-            ? "entry"
-            : "entries"
-        : visibleRecords.length === 1
-            ? "post"
-            : "posts";
-    // With no "All" chip the empty copy has to name the view the organizer is
-    // actually looking at, or an empty Contest Entries tab reads as an empty Feed.
-    const emptyTitle = normalizedSearch
-        ? isContestEntries
-            ? "No matching contest entries"
-            : "No matching community posts"
-        : isContestEntries
-            ? "No contest entries to show yet"
-            : emptyMessage;
+    const filteredEntryCount = useMemo(
+        () =>
+            contestEntryRecords.filter((record) =>
+                structuredFeedRecordMatchesEntryLifecycle(record, entryLifecycleFilter)
+            ).length,
+        [contestEntryRecords, entryLifecycleFilter]
+    );
+
+    const entryFilterEmptyLabel =
+        entryLifecycleFilter === "open"
+            ? "open"
+            : entryLifecycleFilter === "locked_live"
+                ? "locked or live"
+                : entryLifecycleFilter === "settled"
+                    ? "settled"
+                    : null;
+    // With no "All" view the empty copy has to name the view the reader is
+    // actually looking at, or an empty Entries page reads as an empty Feed.
+    const emptyTitle = isContestEntries
+        ? entryFilterEmptyLabel
+            ? `No ${entryFilterEmptyLabel} contest entries to show`
+            : "No contest entries to show yet"
+        : emptyMessage;
+    const emptySubline = isContestEntries
+        ? entryLifecycleFilter === "all"
+            ? "Submitted contest entries will appear here."
+            : "Choose another status in Filters to keep browsing."
+        : null;
+
+    // The composer trigger is the MVP's announcement icon when the host owns the
+    // workspace, and this component's own four-tab drawer otherwise. It is never
+    // BOTH: whichever owns it, the header keeps exactly one create affordance.
+    const composeAction = onCreateAnnouncement
+        ? {
+            ref: createAnnouncementTriggerRef,
+            onClick: onCreateAnnouncement,
+            label: "New Announcement",
+            expanded: createAnnouncementOpen,
+            action: "create-announcement",
+        }
+        : canCompose
+            ? {
+                ref: composerTriggerRef,
+                onClick: () => setComposerOpen(true),
+                label: "New post",
+                expanded: composerOpen,
+                action: "create-post",
+            }
+            : null;
+
+    const actionButtonClassName = `group relative ${FEED_ACTION_ICON_CLASS_NAME} ${chromeTone.actionIcon} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${chromeTone.actionFocus}`;
 
     return (
-        <section aria-label={`${context.name} Feed`} className={className}>
-            {replacementRecord && onReplaceSubmit ? (
-                <div className="pb-5">
-                    <StructuredFeedReplacementComposer
-                        context={context}
-                        record={replacementRecord}
-                        selectionOptions={selectionOptions}
-                        onSubmit={onReplaceSubmit}
-                        onCancel={() => setReplacementRecord(null)}
-                        onAccepted={(message) => {
-                            setReplacementRecord(null);
-                            setReplacementStatus(message);
-                        }}
-                    />
-                </div>
-            ) : null}
-
-            {replacementStatus ? (
-                <div className="pb-5">
-                    <p role="status" className="text-sm text-emerald-200">
-                        {replacementStatus}
-                    </p>
-                </div>
-            ) : null}
-
-            <div className={`-mx-5 space-y-3 px-5 py-4 sm:mx-0 sm:px-4 ${chromeTone.band}`}>
-                <div className="flex items-stretch gap-3">
-                    {canCompose ? (
-                        <button
-                            ref={composerTriggerRef}
-                            type="button"
-                            onClick={() => setComposerOpen(true)}
-                            aria-haspopup="dialog"
-                            aria-expanded={composerOpen}
-                            className="inline-flex h-12 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-white/10 bg-black/60 px-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-white transition-colors hover:border-white/20 hover:bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 motion-reduce:transition-none sm:gap-2 sm:px-3.5 sm:text-xs sm:tracking-[0.1em]"
-                        >
-                            <span>New post</span>
-                            <PostComposerIcon className="h-5 w-5" />
-                        </button>
-                    ) : null}
-                    <label className="min-w-0 flex-1">
-                        <span className="sr-only">Search Feed</span>
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search picks, people, contests, and posts"
-                            className={`h-12 w-full rounded-xl border border-white/10 bg-black/60 px-4 text-sm normal-case text-white outline-none transition placeholder:text-gray-600 ${chromeTone.input}`}
-                        />
-                    </label>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div role="group" aria-label="Feed filters" className="flex flex-wrap gap-2">
-                        {filterOptions.map((option) => (
-                            <button
-                                key={option.id}
-                                type="button"
-                                aria-pressed={filter === option.id}
-                                onClick={() => setFilter(option.id)}
-                                className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${filter === option.id
-                                    ? chromeTone.selectedFilter
-                                    : "border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-200"
-                                    }`}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-                    {filter !== "standings" ? (
-                        <p aria-live="polite" className="text-xs text-gray-500">
-                            {visibleRecords.length} {resultCountLabel}
-                        </p>
-                    ) : null}
-                </div>
-            </div>
-
-            {showStandings ? (
-                <div
-                    aria-label="Feed standings"
-                    className="-mx-5 border-t border-white/10 px-5 pt-4 sm:mx-0 sm:px-0"
-                >
-                    {standings}
-                </div>
-            ) : visibleRecords.length ? (
-                // One continuous striped list rather than detached cards, so an
-                // announcement and a pick post read as rows of the same feed.
-                <div
-                    className="-mx-5 divide-y divide-white/10 overflow-visible border-y border-white/10 sm:mx-0"
-                    aria-label="Feed posts"
-                >
-                    {visibleRecords.map((record, index) => (
-                        <StructuredFeedCard
-                            key={record.id}
+        <>
+            <section aria-label={`${context.name} Feed`} className={className}>
+                {replacementRecord && onReplaceSubmit ? (
+                    <div className="pb-5">
+                        <StructuredFeedReplacementComposer
                             context={context}
-                            record={record}
-                            className={getFeedZebraRowClassName(index)}
-                            currentUserId={currentUserId}
-                            onReaction={onReaction}
-                            getPickReactionSummary={getPickReactionSummary}
-                            onReplace={
-                                onReplaceSubmit
-                                    ? (selectedRecord) => {
-                                        setReplacementRecord(selectedRecord);
-                                        setReplacementStatus(undefined);
-                                        onReplace?.(selectedRecord);
-                                    }
-                                    : undefined
-                            }
-                            onDelete={onDelete}
-                            onEdit={onEdit}
-                            onPin={onPin}
+                            record={replacementRecord}
+                            selectionOptions={selectionOptions}
+                            onSubmit={onReplaceSubmit}
+                            onCancel={() => setReplacementRecord(null)}
+                            onAccepted={(message) => {
+                                setReplacementRecord(null);
+                                setReplacementStatus(message);
+                            }}
                         />
-                    ))}
-                </div>
-            ) : (
-                <div className="-mx-5 border-t border-white/10 px-5 pt-5 sm:mx-0 sm:px-0">
-                    <div className="rounded-2xl border border-dashed border-white/15 bg-black/25 p-6">
-                        <p className="font-semibold text-white">{emptyTitle}</p>
-                        {normalizedSearch ? (
-                            <p className="mt-2 text-sm text-gray-500">
-                                Try another search or switch the Feed filter.
-                            </p>
-                        ) : null}
                     </div>
-                </div>
-            )}
+                ) : null}
 
-            {/* Mounted only while open so the Pick Builder chunk (and its data
-                fetching) is not paid for by every Feed render. */}
-            {composerOpen ? (
-                <GroupFeedPostDrawer
-                    open={composerOpen}
-                    onClose={() => setComposerOpen(false)}
-                    returnFocusRef={composerTriggerRef}
-                    context={context}
-                    contextName={context.name}
-                    currentRole={currentRole}
-                    capabilities={capabilities}
-                    selectionOptions={selectionOptions}
-                    contestOptions={contestOptions}
-                    communityPickWindow={communityPickWindow}
-                    onSubmit={onSubmit}
-                    onSubmitBuiltPicks={onSubmitBuiltPicks}
-                    onPostComplete={() => setComposerOpen(false)}
-                />
-            ) : null}
-        </section>
+                {replacementStatus ? (
+                    <div className="pb-5">
+                        <p role="status" className="text-sm text-emerald-200">
+                            {replacementStatus}
+                        </p>
+                    </div>
+                ) : null}
+
+                <CommunitySwipePager
+                    items={viewOptions}
+                    activeId={activeFilter}
+                    onChange={setFilter}
+                    ariaLabel="Feed views"
+                    progressLabel="Feed view progress"
+                    positionLabel="View"
+                    accent={accent}
+                    panelId={viewPanelId}
+                    showPosition={false}
+                    headerProps={{ "data-feed-header": true }}
+                    headerClassName={`-mx-5 border-b border-white/10 px-5 py-3 sm:mx-0 sm:px-4 lg:[&_[data-community-pager-label-layout]]:pl-6 lg:[&_[data-community-pager-label]]:text-lg lg:[&_[data-community-pager-label]]:font-extrabold ${chromeTone.band}`}
+                    controlsAccessory={
+                        // Always rendered, even when empty, so the progress dots
+                        // keep the same x-position as the reader swipes between
+                        // views with different actions.
+                        <div
+                            role="group"
+                            aria-label="Feed tools"
+                            className="flex size-10 shrink-0 items-center justify-end"
+                        >
+                            {activeFilter === "updates" && composeAction ? (
+                                <button
+                                    ref={composeAction.ref}
+                                    type="button"
+                                    onClick={composeAction.onClick}
+                                    aria-label={composeAction.label}
+                                    aria-haspopup="dialog"
+                                    aria-expanded={composeAction.expanded}
+                                    data-feed-action={composeAction.action}
+                                    className={actionButtonClassName}
+                                >
+                                    <PostComposerIcon className="h-4 w-4 shrink-0" />
+                                </button>
+                            ) : isContestEntries ? (
+                                <button
+                                    ref={filterTriggerRef}
+                                    type="button"
+                                    onClick={() => setFilterDrawerOpen(true)}
+                                    aria-label="Filters"
+                                    aria-haspopup="dialog"
+                                    aria-expanded={filterDrawerOpen}
+                                    data-feed-action="filters"
+                                    className={actionButtonClassName}
+                                >
+                                    <FilterIcon />
+                                    {entryLifecycleFilter !== "all" ? (
+                                        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-bold text-black shadow-sm shadow-black/60">
+                                            1
+                                        </span>
+                                    ) : null}
+                                </button>
+                            ) : showStandings && standingsAction ? (
+                                <button
+                                    type="button"
+                                    onClick={standingsAction.onClick}
+                                    aria-label={standingsAction.ariaLabel}
+                                    data-feed-action="flip-standings"
+                                    className={`${actionButtonClassName} ${standingsAction.className ?? ""}`}
+                                >
+                                    <StandingsFlipIcon />
+                                </button>
+                            ) : null}
+                        </div>
+                    }
+                >
+                    {showStandings && standings ? (
+                        <div aria-label="Feed standings" className="-mx-5 sm:mx-0">
+                            {standings}
+                        </div>
+                    ) : (
+                        <>
+                            {/* The Winners strip answers "what just finished", which is
+                                the MVP's contest_results record — a record that lives in
+                                Updates. It is NOT narrowed by the lifecycle filter,
+                                because it is a banner over the view rather than a row
+                                inside it. */}
+                            {winners && activeFilter === "updates" ? (
+                                <div className="-mx-5 sm:mx-0">{winners}</div>
+                            ) : null}
+
+                            {visibleRecords.length ? (
+                                // One continuous striped list rather than detached cards,
+                                // so an announcement and a pick post read as rows of the
+                                // same feed.
+                                <div
+                                    className="-mx-5 divide-y divide-white/10 overflow-visible border-b border-white/10 sm:mx-0"
+                                    aria-label={
+                                        // The MVP says "Official updates"; this Feed's
+                                        // catch-all also carries member Community Picks,
+                                        // so the label names the view honestly.
+                                        isContestEntries ? "Contest entries" : "Community updates"
+                                    }
+                                >
+                                    {visibleRecords.map((record, index) => (
+                                        <StructuredFeedCard
+                                            key={record.id}
+                                            context={context}
+                                            record={record}
+                                            className={getFeedZebraRowClassName(index)}
+                                            currentUserId={currentUserId}
+                                            onReaction={onReaction}
+                                            getPickReactionSummary={getPickReactionSummary}
+                                            onReplace={
+                                                onReplaceSubmit
+                                                    ? (selectedRecord) => {
+                                                        setReplacementRecord(selectedRecord);
+                                                        setReplacementStatus(undefined);
+                                                        onReplace?.(selectedRecord);
+                                                    }
+                                                    : undefined
+                                            }
+                                            onDelete={onDelete}
+                                            onEdit={onEdit}
+                                            onPin={onPin}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="-mx-5 px-5 pt-5 sm:mx-0 sm:px-0">
+                                    <div className="rounded-2xl border border-dashed border-white/15 bg-black/25 p-6">
+                                        <p className="font-semibold text-white">{emptyTitle}</p>
+                                        {emptySubline ? (
+                                            <p className="mt-2 text-sm text-gray-500">{emptySubline}</p>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </CommunitySwipePager>
+
+                {/* Mounted only while open so the Pick Builder chunk (and its data
+                    fetching) is not paid for by every Feed render. */}
+                {composerOpen ? (
+                    <GroupFeedPostDrawer
+                        open={composerOpen}
+                        onClose={() => setComposerOpen(false)}
+                        returnFocusRef={composerTriggerRef}
+                        context={context}
+                        contextName={context.name}
+                        currentRole={currentRole}
+                        capabilities={capabilities}
+                        selectionOptions={selectionOptions}
+                        contestOptions={contestOptions}
+                        communityPickWindow={communityPickWindow}
+                        onSubmit={onSubmit}
+                        onSubmitBuiltPicks={onSubmitBuiltPicks}
+                        onPostComplete={() => setComposerOpen(false)}
+                    />
+                ) : null}
+            </section>
+            {/* Sibling of the section, not a child of the pager: the pager only
+                ignores swipes that START on an interactive element, so a drawer
+                mounted inside the swipe region would have its buttons eat drags. */}
+            <ContestEntryFilterDrawer
+                open={filterDrawerOpen}
+                onClose={() => setFilterDrawerOpen(false)}
+                returnFocusRef={filterTriggerRef}
+                value={entryLifecycleFilter}
+                onChange={setEntryLifecycleFilter}
+                visibleCount={filteredEntryCount}
+                totalCount={contestEntryRecords.length}
+            />
+        </>
     );
 };
 

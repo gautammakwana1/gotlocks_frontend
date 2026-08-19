@@ -111,12 +111,24 @@ export const LeftChevronIcon = (props: IconProps) => (
     </svg>
 );
 
+/**
+ * A CHEVRON POINTING DOWN. Rotate it with `rotate-180` to point it up — there is
+ * no `direction` prop, and passing one silently does nothing (it lands on the
+ * DOM as an unknown attribute).
+ *
+ * The default size matters: an inline `<svg>` with a viewBox and no width or
+ * height has no intrinsic size to lay out, so a call site that forgets a size
+ * class gets an invisible icon rather than an obviously wrong one. `{...props}`
+ * still spreads last, so any caller's own `className` replaces this.
+ */
 export const ChevronUpDownIcon = (props: IconProps) => (
     <svg
         viewBox="0 0 24 24"
+        className="h-4 w-4"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.8"
+        aria-hidden
         {...props}
     >
         <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />

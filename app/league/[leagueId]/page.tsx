@@ -4,12 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
+import {
+  COMMUNITY_DETAIL_CONTEST_ACTION_CLASS_NAME,
+  COMMUNITY_DETAIL_HEADER_PRIMARY_ACTION_CLASS_NAME,
+  CommunityDetailChrome,
+  CommunityDetailHeader,
+  CommunityDetailIndicatorSeparator,
+  CommunityDetailTabBar,
+  CommunityDetailTabStrip,
+} from "@/components/community/CommunityDetailChrome";
+import { CommunitySwipePager } from "@/components/community/CommunitySwipePager";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import { Contest, Group, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchGroupOwnerPlanDetailsRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
+import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchGroupOwnerPlanDetailsRequest, fetchLeagueGuideStatusRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, markLeagueGuideViewedRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
+import LeagueMemberGuideDialog from "@/components/leagues/onboarding/LeagueMemberGuideDialog";
 import ModifyMembers from "@/components/group/ModifyMembers";
 import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
@@ -21,7 +32,9 @@ import LeaguePageSkeleton, { ContestCardSkeleton } from "@/components/skeletons/
 import GroupChatTab from "@/components/group/GroupChatTab";
 import InviteCodeCopy from "@/components/group/InviteCodeCopy";
 import LeagueFeedStandingsPanel from "@/components/group/LeagueFeedStandingsPanel";
-import ContestHubCreateAction from "@/components/contests/ContestHubCreateAction";
+import ContestCreationDrawer from "@/components/contests/ContestCreationDrawer";
+import FeedContestDrawerBuilder from "@/components/contests/FeedContestDrawerBuilder";
+import FantasyContestDrawerBuilder from "@/components/contests/FantasyContestDrawerBuilder";
 import FeedContestSections from "@/components/contests/FeedContestSections";
 import { ContestPreviewCard } from "@/components/contests/preview/ContestPreviewCard";
 import { buildFantasyContestPreviewModel } from "@/components/contests/preview/fantasyContestPreview";
@@ -76,72 +89,63 @@ const LeagueTabStrip = ({
   tabs,
   activeTab,
   onTabChange,
+  className,
+  ariaLabel,
 }: {
   tabs: readonly LeagueTab[];
   activeTab: TabId;
   onTabChange: (tabId: TabId) => void;
-}) => (
-  <div
-    role="navigation"
-    aria-label="League sections"
-    className="grid w-full items-end gap-1"
-    style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
-  >
-    {tabs.map((tab) => {
-      const isActive = activeTab === tab.id;
-      return (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onTabChange(tab.id)}
-          aria-label={tab.label}
-          aria-current={isActive ? "page" : undefined}
-          className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 text-center text-[13px] font-semibold transition-colors duration-200 ease-out sm:px-3 sm:text-sm motion-reduce:transition-none ${isActive
-            ? "border-white/10 bg-black text-sky-100 after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']"
-            : "border-transparent bg-black text-gray-400 hover:border-white/10 hover:text-white"
-            }`}
-        >
-          <span className="truncate">{tab.label}</span>
-        </button>
-      );
-    })}
-  </div>
-);
+  className: string;
+  ariaLabel: string;
+}) => {
+  return (
+    <CommunityDetailTabBar
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      className={className}
+      ariaLabel={ariaLabel}
+    />
+  );
+};
 
-const LeagueContestTabStrip = ({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: LeagueContestTabId;
-  onTabChange: (tabId: LeagueContestTabId) => void;
-}) => (
-  <div
-    role="tablist"
-    aria-label="League contest types"
-    className="grid w-full grid-cols-2 rounded-2xl border border-sky-200/10 bg-black/25 p-1"
-  >
-    {LEAGUE_CONTEST_TABS.map((tab) => {
-      const isActive = activeTab === tab.id;
-      return (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          id={`league-${tab.id}-contests-tab`}
-          aria-controls={`league-${tab.id}-contests-panel`}
-          aria-selected={isActive}
-          onClick={() => onTabChange(tab.id)}
-          className={`flex min-h-11 min-w-0 items-center justify-center rounded-xl px-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 motion-reduce:transition-none ${isActive
-            ? "bg-sky-500/20 text-sky-50 shadow-sm"
-            : "text-gray-400 hover:bg-white/[0.04] hover:text-white"
-            }`}
-        >
-          <span className="truncate">{tab.label}</span>
-        </button>
-      );
-    })}
-  </div>
-);
+// Superseded by CommunitySwipePager, which is what the MVP switches contest
+// types with. Kept here (commented, not deleted) as the record of the pill strip
+// this hub used to render — it has no callers left.
+// const LeagueContestTabStrip = ({
+//   activeTab,
+//   onTabChange,
+// }: {
+//   activeTab: LeagueContestTabId;
+//   onTabChange: (tabId: LeagueContestTabId) => void;
+// }) => (
+//   <div
+//     role="tablist"
+//     aria-label="League contest types"
+//     className="grid w-full grid-cols-2 rounded-2xl border border-sky-200/10 bg-black/25 p-1"
+//   >
+//     {LEAGUE_CONTEST_TABS.map((tab) => {
+//       const isActive = activeTab === tab.id;
+//       return (
+//         <button
+//           key={tab.id}
+//           type="button"
+//           role="tab"
+//           id={`league-${tab.id}-contests-tab`}
+//           aria-controls={`league-${tab.id}-contests-panel`}
+//           aria-selected={isActive}
+//           onClick={() => onTabChange(tab.id)}
+//           className={`flex min-h-11 min-w-0 items-center justify-center rounded-xl px-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 motion-reduce:transition-none ${isActive
+//             ? "bg-sky-500/20 text-sky-50 shadow-sm"
+//             : "text-gray-400 hover:bg-white/[0.04] hover:text-white"
+//             }`}
+//         >
+//           <span className="truncate">{tab.label}</span>
+//         </button>
+//       );
+//     })}
+//   </div>
+// );
 
 const LeagueTierDetailsLabel = ({
   league,
@@ -219,7 +223,11 @@ const LeagueTierDetailsLabel = ({
         <span
           id={league.id}
           role="tooltip"
-          className="absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-white/15 bg-[#090d16] p-3 text-left font-sans text-xs font-normal normal-case tracking-normal text-gray-300 shadow-2xl shadow-black/50"
+          // whitespace-normal is load-bearing: the header metadata row this
+          // label sits in sets `lg:whitespace-nowrap`, and white-space
+          // inherits — without the reset the sentences below render on one
+          // line and spill straight out of the w-64 box on desktop.
+          className="absolute right-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2.5rem)] whitespace-normal break-words rounded-xl border border-white/15 bg-[#090d16] p-3 text-left font-sans text-xs font-normal normal-case tracking-normal text-gray-300 shadow-2xl shadow-black/50"
         >
           <span className={`block font-semibold ${isPro ? "text-amber-100" : "text-sky-100"}`}>
             {tierLabel}
@@ -267,6 +275,23 @@ const LeagueDashboardPage = () => {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activePage, setActivePage] = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
+  /**
+   * The League Guide, exactly as the MVP drives it: `"automatic"` is the
+   * welcome pop-up a newly joined member gets on their first visit,
+   * `"manual"` is the "League guide" button in the header's action row.
+   *
+   * The MODE decides whether closing it records anything. A manual re-open by
+   * somebody who has already read it must not overwrite their `completed`
+   * with a `dismissed` — and re-recording is otherwise a no-op, so only the
+   * automatic path writes.
+   */
+  const [leagueGuideMode, setLeagueGuideMode] = useState<"automatic" | "manual" | null>(
+    null
+  );
+  // Latched so the auto-open fires at most ONCE per mount. Without it, the
+  // optimistic flip in the slice would race the effect and the dialog could
+  // reopen the instant it closed.
+  const autoGuideDecidedRef = useRef(false);
 
   const {
     group,
@@ -277,6 +302,8 @@ const LeagueDashboardPage = () => {
     deleteMessage,
     unreadCounts,
     ownerPlan,
+    leagueGuide,
+    leagueGuideForId,
   } = useSelector((state: GroupSelector) => state.group);
   const { activeContests, archivedContests, hasMoreActive, hasMoreArchived, loading: contestLoader } = useSelector((state: RootState) => state.contest);
 
@@ -306,8 +333,51 @@ const LeagueDashboardPage = () => {
     dispatch(fetchActiveContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     dispatch(fetchArchivedContestsRequest({ group_id: leagueId, page: 1, limit: 10 }));
     dispatch(fetchUnreadCountsByLeagueIdRequest({ group_id: leagueId }));
+    // The League Guide read is NOT dispatched here — see the league-only effect
+    // below, which waits for the group to identify itself first.
     fetchedGroupId.current = leagueId;
   }, [leagueId, currentUser, dispatch]);
+
+  /**
+   * Auto-open on a DEFINITE yes and nothing else.
+   *
+   * `should_show_guide` is derived server-side from the acknowledgement row,
+   * so it is the only thing gated on — never re-derived from the timestamps
+   * beside it, and never assumed while the read is in flight or has failed
+   * (`leagueGuide` is null in both cases, which reads as "don't open").
+   *
+   * Scoped by `leagueGuideForId`: this opens a modal over the page, and the
+   * previous League's answer deciding it is exactly the bug that only appears
+   * when a member navigates between two of them.
+   */
+  // Declared BEFORE the auto-open below, and the order is load-bearing: React
+  // runs effects in declaration order, so a reset placed after it would wipe a
+  // mode the same commit had just set — the dialog would never open when this
+  // League's guide was already in the store from an earlier visit.
+  useEffect(() => {
+    autoGuideDecidedRef.current = false;
+    setLeagueGuideMode(null);
+  }, [leagueId]);
+
+  useEffect(() => {
+    if (autoGuideDecidedRef.current) return;
+    if (leagueGuideForId !== leagueId) return;
+    if (!leagueGuide?.should_show_guide) return;
+    autoGuideDecidedRef.current = true;
+    setLeagueGuideMode("automatic");
+  }, [leagueGuide?.should_show_guide, leagueGuideForId, leagueId]);
+
+  /**
+   * `completed` = read through to the last step. `dismissed` = closed early.
+   * Both silence it; the split is what keeps "did members actually read it"
+   * answerable. Only an AUTOMATIC open records — see the mode's own note.
+   */
+  const closeLeagueGuide = (status: "completed" | "dismissed") => {
+    if (leagueGuideMode === "automatic") {
+      dispatch(markLeagueGuideViewedRequest({ league_id: leagueId, status }));
+    }
+    setLeagueGuideMode(null);
+  };
 
   const isMember = isLeagueMember(group, currentUser?.userId);
   // The League feed mutations authorize on group_members.role
@@ -335,8 +405,30 @@ const LeagueDashboardPage = () => {
   // Read once on mount so the legacy ?tab=leaderboard deep link still opens the
   // Feed on its Standings view — the back-compat effect below rewrites the URL.
   const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
-    searchParams.get("tab") === "leaderboard" ? "standings" : "community"
+    searchParams.get("tab") === "leaderboard" ? "standings" : "updates"
   );
+  // The Start-a-contest workspace. Both contest types share ONE affordance: the
+  // drawer's Step 1 chooser is what picks between them, so the hub no longer
+  // needs a create card per panel.
+  //
+  // Choosing FEED swaps the drawer's body to the wizard in place, as the MVP
+  // does, instead of navigating away — a League has two types, so unlike the
+  // Arena it keeps the chooser and can step back to it.
+  //
+  // /league/:id/feed-contests/create is untouched and still canonical: it owns
+  // the group fetch, the commissioner gate and the redirect for anyone arriving
+  // by URL. Fantasy still links there for now — see the choice list below.
+  const [contestCreationOpen, setContestCreationOpen] = useState(false);
+  const [contestCreationStep, setContestCreationStep] = useState<
+    "choice" | "feed" | "fantasy"
+  >("choice");
+  const contestCreationTriggerRef = useRef<HTMLButtonElement>(null);
+  // Every open starts at the chooser. Reset on OPEN rather than on close so the
+  // body does not visibly swap back while the drawer is animating out.
+  const openContestCreation = () => {
+    setContestCreationStep("choice");
+    setContestCreationOpen(true);
+  };
   const feedContestSections = useSelector(
     (state: RootState) => state.feedContest.sections
   );
@@ -396,6 +488,24 @@ const LeagueDashboardPage = () => {
       router.replace(`/arena/${leagueId}`);
     }
   }, [isArena, router, currentUser, leagueId]);
+
+  /**
+   * Has this member been shown the League Guide for THIS League? Per-league, so
+   * joining a second one asks again.
+   *
+   * Deliberately NOT in the mount effect with the other five fetches: those are
+   * group-generic, this one is the only League-ONLY endpoint on the page, and
+   * `GET /group/league/guide` answers 404 for anything that is not a League. An
+   * arena id reaching this route is routine, not exceptional — Home links both
+   * kinds to /league/:id and the effect above hands them over — so the read
+   * waits until the loaded group has confirmed it is the League this URL asked
+   * for. The one-round-trip delay only moves when the welcome pop-up appears,
+   * never whether it does.
+   */
+  useEffect(() => {
+    if (!currentUser || !isLoadedGroup || group?.group_type !== "league") return;
+    dispatch(fetchLeagueGuideStatusRequest({ league_id: leagueId }));
+  }, [currentUser, dispatch, group?.group_type, isLoadedGroup, leagueId]);
 
   useEffect(() => {
     setActiveContestTab(normalizeContestTab(contestTabParam));
@@ -818,119 +928,175 @@ const LeagueDashboardPage = () => {
 
   return (
     <div className="flex flex-col gap-3 pb-10">
-      <div className="flex items-center justify-between gap-3">
-        <BackButton label="back to all groups" fallback="/fantasy" preferFallback />
-        <InviteCodeCopy code={group?.invite_code} className="-mr-[5px]" />
-      </div>
-      <header className="-mx-5 px-5 pb-3 sm:mx-0 sm:px-0">
-            <div className="relative min-w-0">
-              <div
-                className={`flex items-start justify-between gap-3 text-gray-400 ${groupPreviewMetaTextClassName}`}
-              >
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  {group && (
-                    <>
-                      <span>{getGroupCapacityLabel(group, memberCount)}</span>
-                      {/* <span>{getActiveContestCountsLabel(group, activeContestCount)}</span> */}
-                      <span>
-                        {getCombinedContestCapacityLabel(
-                          group,
-                          [],
-                          []
-                        )}
-                      </span>
-                    </>
+      <CommunityDetailChrome accent="league">
+        <CommunityDetailHeader
+          backAction={
+            <BackButton
+              label="back to all groups"
+              fallback="/fantasy"
+              preferFallback
+              alignSelf="center"
+            />
+          }
+          inviteIndicator={
+            <InviteCodeCopy
+              code={group?.invite_code}
+              className="-mr-[5px] lg:-mr-[3px] lg:text-[11px]"
+            />
+          }
+          metadataClassName={groupPreviewMetaTextClassName}
+          metadataStart={
+            group ? (
+              <>
+                <span>{getGroupCapacityLabel(group, memberCount)}</span>
+                {/* <span>{getActiveContestCountsLabel(group, activeContestCount)}</span> */}
+                <CommunityDetailIndicatorSeparator />
+                <span>
+                  {getCombinedContestCapacityLabel(
+                    group,
+                    [],
+                    []
                   )}
-                </div>
-                {group?.group_type === "league" ? (
-                  <LeagueTierDetailsLabel
-                    league={group}
-                    memberCapacityLabel={getRegularMemberCapacityLabel(group)}
-                    standardContestCapacityLabel={getActiveContestCapacityLabel(
-                      group,
-                      []
-                    )}
-                    feedContestCapacityLabel={getActiveLeagueFeedContestCapacityLabel(
-                      group,
-                      []
-                    )}
-                  />
-                ) : (
-                  <GroupTypeMetaLabel
-                    group={group}
-                    ownerPlan={groupOwnerPlan}
-                    className="shrink-0 text-right"
-                  />
+                </span>
+              </>
+            ) : null
+          }
+          metadataEnd={
+            group?.group_type === "league" ? (
+              <LeagueTierDetailsLabel
+                league={group}
+                memberCapacityLabel={getRegularMemberCapacityLabel(group)}
+                standardContestCapacityLabel={getActiveContestCapacityLabel(
+                  group,
+                  []
                 )}
-              </div>
-              <h1
-                className="allow-caps pr-24 mt-1.5 text-2xl font-extrabold text-transparent bg-clip-text sm:text-3xl"
-                style={displayNameGradientStyle}
+                feedContestCapacityLabel={getActiveLeagueFeedContestCapacityLabel(
+                  group,
+                  []
+                )}
+              />
+            ) : (
+              <GroupTypeMetaLabel
+                group={group}
+                ownerPlan={groupOwnerPlan}
+                className="shrink-0 text-right"
+              />
+            )
+          }
+          title={group?.name}
+          titleStyle={displayNameGradientStyle}
+          description={group?.description}
+          actions={
+            <>
+              {/* The League guide re-open. It lives in the header's action row
+                  rather than under the description — outside any description
+                  guard either way, so a League that never set one still offers
+                  the guide. A manual open records nothing (see
+                  closeLeagueGuide). */}
+              <button
+                type="button"
+                onClick={() => setLeagueGuideMode("manual")}
+                className={`${COMMUNITY_DETAIL_HEADER_PRIMARY_ACTION_CLASS_NAME} w-full`}
               >
-                {group?.name}
-              </h1>
-              {group?.description && (
-                <p className="mt-1.5 max-w-2xl truncate text-xs text-gray-500">
-                  {group.description}
-                </p>
-              )}
+                League guide
+              </button>
               <button
                 ref={chatTriggerRef}
                 type="button"
                 onClick={() => setChatOpen(true)}
-                aria-label="Open group chat"
+                // Matches the visible label, which this row changed to
+                // "Open chat" — an accessible name that does not contain the
+                // visible one breaks voice control (WCAG 2.5.3 Label in Name).
+                // The fuller wording stays on `title` as the hover hint, exactly
+                // as the MVP splits them.
+                aria-label="Open chat"
                 aria-controls="league-chat"
                 aria-expanded={chatOpen}
                 title="Open group chat"
-                className="absolute right-0 top-7 inline-flex h-7 items-center justify-end gap-1.5 text-[10px] font-semibold tracking-[0.12em] text-gray-500 transition hover:text-gray-300"
+                className={`${COMMUNITY_DETAIL_HEADER_PRIMARY_ACTION_CLASS_NAME} w-full`}
               >
                 {unreadCounts > 0 && (
-                  <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-sky-500/25 px-1 text-[9px] font-bold tabular-nums text-sky-100">
+                  <span className="mr-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-sky-500/25 px-1 text-[9px] font-bold tabular-nums text-sky-100">
                     {unreadCounts > 99 ? "99+" : unreadCounts}
                   </span>
                 )}
-                {"<- open chat"}
+                Open chat
               </button>
-            </div>
-      </header>
-
-      <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0">
-        <LeagueTabStrip
-          tabs={visibleTabs}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
+            </>
+          }
         />
-      </section>
+
+        <CommunityDetailTabStrip>
+          <LeagueTabStrip
+            tabs={visibleTabs}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            className="grid sm:hidden"
+            ariaLabel="League sections mobile"
+          />
+          <LeagueTabStrip
+            tabs={visibleTabs}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            className="hidden sm:grid"
+            ariaLabel="League sections desktop"
+          />
+        </CommunityDetailTabStrip>
+      </CommunityDetailChrome>
 
       {activeTab === "contests" && (
-        <div className="space-y-6 pt-1">
-          <LeagueContestTabStrip
-            activeTab={activeContestTab}
-            onTabChange={handleContestTabChange}
-          />
-
+        // The MVP's contest-hub band (MVP league page:929): the contest-type
+        // switcher and a single Start-contest button share one tinted header, in
+        // place of the full-width create card that used to sit inside each panel.
+        // The switcher is CommunitySwipePager, so the two contest types are a
+        // swipeable carousel with progress dots rather than a pill strip — and,
+        // as in the MVP, the panels below carry NO role="tabpanel"/aria-labelledby:
+        // a carousel has no tablist to label them, and the pager's own dots point
+        // at `panelId` instead. Deep links (?tab=contests&contestType=feed) are
+        // untouched — handleContestTabChange still owns the URL.
+        //
+        // The root's `sm:-mx-6` cancels AppShell's `sm:px-6` so the tinted band
+        // and the rules below it bleed to the container edge at every width,
+        // exactly as the Arena's violet counterpart does (ArenaContestsPanel's
+        // header, ArenaDashboard:493). CommunityDetailChrome above is
+        // `-mx-5 sm:-mx-6` too, so an inset band here would step in 24px from
+        // the chrome's accent underline and read as a seam. Body content
+        // re-insets itself with `px-5 sm:px-6`, landing back on the page gutter.
+        //
+        // `workspace-tab-panel` is deliberately NOT on this root: the two inner
+        // panels below carry it, and stacking the class at both levels would
+        // compound one entrance animation onto the other (0.7 * 0.7 opacity,
+        // 5px + 5px offset). Keeping it on the inner panels also lets the
+        // pager's `key={activeItem.id}` slide replay it on a contest-type swipe.
+        <CommunitySwipePager
+          items={LEAGUE_CONTEST_TABS}
+          activeId={activeContestTab}
+          onChange={handleContestTabChange}
+          ariaLabel="League contest types"
+          progressLabel="League contest type progress"
+          positionLabel="Contest view"
+          showPosition={false}
+          accent="sky"
+          controlsAccessory={
+            isCommissioner ? (
+              <button
+                ref={contestCreationTriggerRef}
+                type="button"
+                onClick={openContestCreation}
+                aria-haspopup="dialog"
+                aria-expanded={contestCreationOpen}
+                className={COMMUNITY_DETAIL_CONTEST_ACTION_CLASS_NAME}
+              >
+                Start contest
+              </button>
+            ) : undefined
+          }
+          className="-mt-3 sm:-mx-6"
+          panelId="league-contest-type-panel"
+          headerClassName="-mx-5 bg-blue-400/[0.055] bg-gradient-to-b from-black via-black/40 to-transparent px-5 py-4 sm:mx-0 sm:px-4 lg:[&_[data-community-pager-label-layout]]:pl-6 lg:[&_[data-community-pager-label]]:text-lg lg:[&_[data-community-pager-label]]:font-extrabold"
+        >
           {activeContestTab === "slip" ? (
-            <div
-              id="league-slip-contests-panel"
-              role="tabpanel"
-              aria-labelledby="league-slip-contests-tab"
-              className="space-y-6"
-            >
-              {isCommissioner && (
-                <ContestHubCreateAction
-                  href={
-                    createContestCheck.allowed
-                      ? `/league/${group?.id}/contests/create`
-                      : undefined
-                  }
-                  subtitle="Set sports, dates, and a standings container for this group."
-                  unavailableReason={
-                    createContestCheck.allowed ? undefined : createContestCheck.error
-                  }
-                  unavailableHint="Archive an active contest to open another one. Historical contests are unlimited."
-                />
-              )}
-
+            <div className="workspace-tab-panel">
               {/* The MVP's Slip contest accordion. Note it uses buttons + state
                   rather than the <details> the Feed hub uses, and rules the two
                   sections with `divide-y` on the container instead of a border
@@ -1057,18 +1223,7 @@ const LeagueDashboardPage = () => {
               </div>
             </div>
           ) : (
-            <div
-              id="league-feed-contests-panel"
-              role="tabpanel"
-              aria-labelledby="league-feed-contests-tab"
-              className="space-y-6"
-            >
-              {isCommissioner && (
-                <ContestHubCreateAction
-                  href={`/league/${group?.id}/feed-contests/create`}
-                  subtitle="Pick a format, a slate, and a deadline. Save it as a draft or publish it now."
-                />
-              )}
+            <div className="workspace-tab-panel">
               <FeedContestSections
                 title="League Feed contests"
                 sections={feedContestSections}
@@ -1101,7 +1256,7 @@ const LeagueDashboardPage = () => {
               />
             </div>
           )}
-        </div>
+        </CommunitySwipePager>
       )}
 
       {activeTab === "members" && (
@@ -1132,7 +1287,7 @@ const LeagueDashboardPage = () => {
           currentUserId={currentUser?.userId}
           className="-mt-3"
           initialFilter={initialFeedFilter}
-          standings={<LeagueFeedStandingsPanel />}
+          standings={<LeagueFeedStandingsPanel leagueId={leagueId} />}
         />
       )}
 
@@ -1313,6 +1468,93 @@ const LeagueDashboardPage = () => {
           onConfirm={handleConfirmDeleteGroup}
         />
       )}
+
+{/* Mirrors MVP league page:1093-1150. The FEED builder is mounted in the
+          drawer, as the MVP mounts its `surface="drawer"` create form; Fantasy
+          still links to its route, because that page is a route-only component
+          that does its own fetch, gate and redirect. */}
+      <ContestCreationDrawer
+          open={contestCreationOpen}
+          onClose={() => setContestCreationOpen(false)}
+          returnFocusRef={contestCreationTriggerRef}
+          accent="league"
+          content={
+            contestCreationStep === "fantasy"
+              ? {
+                  kind: "builder",
+                  label: "Fantasy Contest builder",
+                  onBack: () => setContestCreationStep("choice"),
+                  children: (
+                    <FantasyContestDrawerBuilder leagueId={group?.id ?? ""} />
+                  ),
+                }
+              : contestCreationStep === "feed"
+              ? {
+                  kind: "builder",
+                  label: "Feed Contest builder",
+                  // A League has two contest types, so the chooser is a real
+                  // step to come back to — the Arena, with one, has none.
+                  onBack: () => setContestCreationStep("choice"),
+                  children: (
+                    <FeedContestDrawerBuilder
+                      groupId={group?.id ?? ""}
+                      groupType="league"
+                      contextName={group?.name ?? "League"}
+                      backHref={`/league/${group?.id}?tab=contests&contestType=feed`}
+                      detailHref={(contestId) =>
+                        `/league/${group?.id}/feed-contests/${contestId}`
+                      }
+                    />
+                  ),
+                }
+              : {
+                  kind: "choice",
+                  contextName: group?.name ?? "this League",
+                  choices: [
+                    {
+                      id: "slip",
+                      title: "Fantasy Contest",
+                      description:
+                        "Set sports, dates, and a standings container for this group.",
+                      // Handled in place, like the Feed choice below — the form
+                      // opens in the drawer instead of navigating. The route
+                      // stays canonical for deep links.
+                      onSelect: () => setContestCreationStep("fantasy"),
+                      // The same gate the create card used, passed through untouched.
+                      allowed: createContestCheck.allowed,
+                      unavailableReason: createContestCheck.allowed
+                        ? undefined
+                        : createContestCheck.error,
+                      unavailableHint:
+                        "Archive an active contest to open another one. Historical contests are unlimited.",
+                    },
+                    {
+                      id: "feed",
+                      title: "Feed Contest",
+                      description:
+                        "Pick a format, a slate, and a deadline. Save it as a draft or publish it now.",
+                      // Handled in place — `onSelect` wins over `href`, so the
+                      // wizard opens in the drawer instead of navigating.
+                      onSelect: () => setContestCreationStep("feed"),
+                      // Ungated here, exactly as the card it replaces was. The MVP
+                      // gates this on a `createFeedContestCheck` + plan-upgrade
+                      // link; `canCreateFeedContestInLeague` exists in
+                      // lib/groups/limits.ts but has no callers and wants domain
+                      // `StructuredFeedContest` rows this page never builds, so
+                      // wiring it would be new business logic.
+                      allowed: true,
+                    },
+                  ],
+                }
+          }
+      />
+
+      <LeagueMemberGuideDialog
+        open={leagueGuideMode !== null}
+        leagueName={group?.name ?? "this League"}
+        onComplete={() => closeLeagueGuide("completed")}
+        onDismiss={() => closeLeagueGuide("dismissed")}
+      />
     </div>
   );
 };

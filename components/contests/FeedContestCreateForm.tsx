@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
@@ -30,13 +30,18 @@ import {
     fetchLeagueMatchupCountsRequest,
 } from "@/lib/redux/slices/leagueSlice";
 import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
+import { clearTdScorers, fetchTdScorersRequest } from "@/lib/redux/slices/tdScorersSlice";
+import { feedContestOddsRequestKey } from "@/lib/contests/feedContestOdds";
 import {
     addDateKeyDays,
     daysBetweenDateKeys,
     easternKickoffFormatter,
     FEED_CONTEST_LOCK_LEAD_MS,
     FEED_CONTEST_MAX_LEGS,
+    FEED_CONTEST_MAX_WINNING_PLACES,
     FEED_CONTEST_MIN_LEGS,
+    FEED_CONTEST_MIN_WINNING_PLACES,
+    clampFeedContestWinningPlaces,
     FEED_CONTEST_SPORTS,
     formatContestDateTime,
     formatSlateDate,
@@ -50,11 +55,11 @@ import {
     toFeedContestSportCounts,
     toScheduleDateSpec,
     toZonedDateKey,
-    zonedKickoffFormatter,
     type ContestGameOption,
     type FeedContestSport,
     type SundayPickemSlateMode,
 } from "@/lib/contests/feedContestCatalog";
+import { participationRulesForTemplate } from "@/lib/contests/participationRules";
 import ContestSlateBrowser from "./ContestSlateBrowser";
 import ContestSlateRangeCalendar from "./ContestSlateRangeCalendar";
 import {
@@ -72,6 +77,7 @@ import { useFeedContestGameCatalog } from "./useFeedContestGameCatalog";
 const ENTRY_MODEL_BY_TEMPLATE: Record<FeedContestTemplate, string> = {
     multi_pick: "multi_pick",
     sunday_pickem: "pickem_card",
+    td_psychic: "td_psychic_card",
 };
 
 /** The contest is expected to have settled this long after the last kickoff. */
@@ -98,6 +104,19 @@ const SUNDAY_PICKEM_WIZARD_STEPS: readonly { id: ContestWizardStep; label: strin
     { id: "rules", label: "Rules" },
     { id: "review", label: "Review" },
 ];
+/*
+ * TD Psychic reads like General Combo — a date range, then a matchup review —
+ * and differs in what it does NOT ask for: the slate is NFL by definition, so
+ * there is no sports step inside Slate, and the mechanics are fixed by the
+ * template, so Rules asks for nothing but the name.
+ */
+const TD_PSYCHIC_WIZARD_STEPS: readonly { id: ContestWizardStep; label: string }[] = [
+    { id: "style", label: "Style" },
+    { id: "slate", label: "Slate" },
+    { id: "matchups", label: "Matchups" },
+    { id: "rules", label: "Rules" },
+    { id: "review", label: "Review" },
+];
 
 /* ----------------------------------------------------------------------------
  * ACCESS is an ARENA-ONLY step, and the MVP inserts it in the same place for
@@ -116,6 +135,7 @@ const withAccessStep = (
 
 const ARENA_GENERAL_COMBO_WIZARD_STEPS = withAccessStep(GENERAL_COMBO_WIZARD_STEPS);
 const ARENA_SUNDAY_PICKEM_WIZARD_STEPS = withAccessStep(SUNDAY_PICKEM_WIZARD_STEPS);
+const ARENA_TD_PSYCHIC_WIZARD_STEPS = withAccessStep(TD_PSYCHIC_WIZARD_STEPS);
 
 /** The two Access choices, in the MVP's order. */
 const ENTRY_ACCESS_OPTIONS: readonly {
@@ -151,40 +171,67 @@ const contestParticipantSpotCopy = (participantLimit?: number | null) =>
         ? "one of this contest’s participant spots"
         : `one of this contest’s ${participantLimit} participant spots`;
 
-// Only these two templates can be created (FEED_CONTEST_CREATABLE_TEMPLATES).
+// Only these three templates can be created (FEED_CONTEST_CREATABLE_TEMPLATES).
+// Copy verbatim from the MVP's inline preset table (StructuredContestDetail.tsx:1999).
 const TEMPLATE_PRESETS: readonly {
     id: FeedContestTemplate;
     title: string;
     eyebrow: string;
     body: string;
+    /** The fourth line on the card — what this style asks of a member. */
+    helper: string;
 }[] = [
         {
             id: "multi_pick",
             title: "General Combo",
             eyebrow: "Flexible · multi-sport",
-            body: "Members build one 2–8 leg combo from the games and sports you include.",
+            body: `Members build one ${FEED_CONTEST_MIN_LEGS}–${FEED_CONTEST_MAX_LEGS} leg combo from the games and sports you include.`,
+            helper: "Configure the combo mechanics for your community.",
         },
         {
             id: "sunday_pickem",
             title: "NFL Sunday Pick’em",
             eyebrow: "Complete card · NFL",
-            body: "Members choose a winner for every included Sunday matchup. Shared odds are captured at lock.",
+            body: "Members choose a winner for every included Sunday matchup. Current moneyline odds are a guide; shared odds captured at lock govern scoring.",
+            helper: "Every included matchup gets one winner pick.",
+        },
+        {
+            id: "td_psychic",
+            title: "TD Psychic",
+            eyebrow: "NFL · 3 TD scorers",
+            body: "Pick exactly three players to score a rushing or receiving touchdown. Perfect cards rank first; 2-of-3 cards can fill remaining places without earning points.",
+            helper: "Current odds guide picks; shared lock-time odds break ties.",
         },
     ];
 
-// The only copy an organizer still writes. Both templates now generate their own
+// The only copy an organizer still writes. Both templates generate their own
 // member-facing description from the settings, so the rules field carries the
-// terms an entrant has to accept rather than a restatement of the mechanics.
-const CONTEST_PARTICIPATION_DISCLAIMER =
-    "Gotlocks does not handle money or wagers. All scoring is strictly for entertainment, leaderboard ranking, and personal bragging rights.";
+// terms an entrant has to accept rather than a restatement of the mechanics —
+// and it is seeded PER TEMPLATE, because the two score a pick differently.
+// See lib/contests/participationRules.
 
 const SUNDAY_PICKEM_DESCRIPTION =
     "Pick one winner for every included Sunday matchup. Most correct wins; shared cutoff odds plus 2 per correct pick break ties.";
+const TD_PSYCHIC_DESCRIPTION =
+    "Pick 3 players to score a rushing or receiving TD. More correct picks rank higher, with shared lock-time odds breaking ties.";
+
+/**
+ * Fixed by the template, not by the organizer.
+ *
+ * Every one of these is enforced server-side too, and `winning_places` and
+ * `locks_at` are IGNORED on the wire for this template — the lock is the shared
+ * price cutoff, so it is derived from the slate rather than chosen. They are
+ * still sent, because the payload type requires them and the server discards
+ * them; what matters is that the wizard never ASKS for either.
+ */
+const TD_PSYCHIC_SELECTION_COUNT = 3;
+const TD_PSYCHIC_WINNING_PLACES = 3;
 
 const SUNDAY_SLATE_MODES: readonly [SundayPickemSlateMode, string][] = [
     ["early_window", "Early"],
     ["late_window", "Late"],
     ["full_sunday", "Full Sunday"],
+    ["organizer_selected", "Organizer selected"],
 ];
 
 // Moved to ./contestFormStyles so the copy-edit screen renders the identical
@@ -212,7 +259,7 @@ const generalComboDescriptionText = ({
     winningPlaces: number;
 }) =>
     [
-        `Submit one ${minLegs}–${maxLegs} leg combo before entries lock. Every active leg must win.`,
+        `Each entry must have between ${minLegs} and ${maxLegs} legs. Submit before entries lock. Every leg must win.`,
         minimumCombinedOdds
             ? `The accepted combined price must be at least +${minimumCombinedOdds}.`
             : "There is no minimum combined price.",
@@ -270,7 +317,10 @@ const CREATE_SEED: DraftSeed = {
 };
 
 const isSlateMode = (value: unknown): value is SundayPickemSlateMode =>
-    value === "early_window" || value === "late_window" || value === "full_sunday";
+    value === "early_window" ||
+    value === "late_window" ||
+    value === "full_sunday" ||
+    value === "organizer_selected";
 
 const buildDraftSeed = ({
     contest,
@@ -286,7 +336,9 @@ const buildDraftSeed = ({
     if (!contest) return CREATE_SEED;
 
     const template: FeedContestTemplate | null =
-        contest.template === "multi_pick" || contest.template === "sunday_pickem"
+        contest.template === "multi_pick" ||
+        contest.template === "sunday_pickem" ||
+        contest.template === "td_psychic"
             ? contest.template
             : null;
 
@@ -297,7 +349,9 @@ const buildDraftSeed = ({
     // ends the wizard. So they are clamped forward into a usable window instead.
     let slateStartsOn = "";
     let slateEndsOn = "";
-    if (template === "multi_pick") {
+    // Both slate-window templates recover the same way; only Pick'em, whose
+    // slate is one Eastern Sunday rather than a drawn range, is handled below.
+    if (template === "multi_pick" || template === "td_psychic") {
         const raw = slateBoundsFromGames(contest.eligible_games_json, organizerTimeZone);
         if (raw.startsOn) {
             const startsOn =
@@ -403,6 +457,21 @@ export type FeedContestCreateFormProps = {
      * belongs to the copy-only `FeedContestEditForm`.
      */
     initialContest?: FeedContest;
+    /**
+     * WHERE this wizard is mounted, and the only thing that changes with it is
+     * its relationship to the URL.
+     *
+     * "page"   — the create routes. The current step lives in `?step=`, so a
+     *            refresh, a deep link and the browser's own Back all work, and
+     *            the screen owns a Back chevron to leave by.
+     * "drawer" — the "Start a contest" sidebar. There is no route to write to:
+     *            the host page is still underneath and owns the URL, so pushing
+     *            `?step=` here would rewrite ITS address and make the browser's
+     *            Back button step through a wizard the user has closed. The
+     *            drawer's own header carries the back and close affordances, so
+     *            the chevron is redundant too.
+     */
+    surface?: "page" | "drawer";
 };
 
 export const FeedContestCreateForm = ({
@@ -415,6 +484,7 @@ export const FeedContestCreateForm = ({
     publishDisabledReason,
     participantLimit = null,
     initialContest,
+    surface = "page",
 }: FeedContestCreateFormProps) => {
     /** TRUE when the wizard is reopening a saved draft rather than starting one. */
     const editingDraft = Boolean(initialContest);
@@ -470,7 +540,10 @@ export const FeedContestCreateForm = ({
     // `venueSetupOutstanding` and the publish gate it feeds are derived below,
     // once `entryAccessMode` exists — they read the answer, not just the venue.
 
-    const requestedStep = searchParams.get("step") as ContestWizardStep | null;
+    // In a drawer the query string belongs to the page underneath, so a
+    // `?step=` it happens to carry is not this wizard's.
+    const requestedStep =
+        surface === "page" ? (searchParams.get("step") as ContestWizardStep | null) : null;
 
     // Every calendar day the wizard names is read in the organizer's own zone —
     // the same one `X-Timezone` carries to the create endpoint. Frozen at mount so
@@ -514,18 +587,13 @@ export const FeedContestCreateForm = ({
     const easternHorizonEnd = addDateKeyDays(easternToday, SLATE_HORIZON_DAYS);
 
     /*
-     * Every Pick'em time on screen is stated on the league clock. For an
-     * organizer who is not ON that clock, an Eastern time alone is not readable —
-     * a 4:25pm ET kickoff is 1:55am the NEXT day in Kolkata — so each kickoff
-     * also carries its equivalent in the organizer's own zone, labelled. Both
-     * lines print `timeZoneName: "short"`, so neither can be mistaken for the
-     * other.
+     * Every Pick'em time on this step is stated on the LEAGUE clock, and only on
+     * it — the same clock the contest is scored on, and the same single line the
+     * MVP shows. An earlier pass here also printed each kickoff in the
+     * organizer's own zone (a 4:25pm ET kickoff is 1:55am the next day in
+     * Kolkata) plus a note explaining the two; both were additions this screen
+     * does not have in the MVP, so they are gone.
      */
-    const organizerKickoffFormatter = useMemo(
-        () => zonedKickoffFormatter(organizerTimeZone),
-        [organizerTimeZone]
-    );
-    const showsLocalKickoff = organizerTimeZone !== SCHEDULE_TIME_ZONE;
 
     // One pass, read by every initialiser below, so the whole draft lands on the
     // FIRST commit — `template`, the slate dates and the sports together decide
@@ -641,14 +709,22 @@ export const FeedContestCreateForm = ({
         // Compared as date keys rather than as a millisecond difference: a DST
         // change shortens the span by an hour and would slip past a numeric test.
         if (daysBetweenDateKeys(slateStartsOn, slateEndsOn) > MAX_SLATE_DAYS - 1) {
-            return `General Combo slates may cover at most ${MAX_SLATE_DAYS} days.`;
+            return `A contest slate may cover at most ${MAX_SLATE_DAYS} days.`;
         }
         return null;
     })();
 
     // The `date` spec the whole step-2 conversation is scoped to.
+    const usesSlateWindow = template === "multi_pick" || template === "td_psychic";
+    /**
+     * The date spec General Combo's step-2 conversation is scoped to.
+     *
+     * TD Psychic no longer rides on this: it reads the whole horizon instead
+     * (see catalogDateSpec below). The value is still computed for it, because
+     * the league matchup counts and the slate-window validity check key off it.
+     */
     const slateDateSpec =
-        template === "multi_pick" && !slateDateError
+        usesSlateWindow && !slateDateError
             ? toScheduleDateSpec(slateStartsOn, slateEndsOn)
             : "";
 
@@ -658,7 +734,7 @@ export const FeedContestCreateForm = ({
     // sport is fetched before it is chosen, and no day outside the slate.
     const catalogSports = useMemo<readonly FeedContestSport[]>(
         () =>
-            template === "sunday_pickem"
+            template === "sunday_pickem" || template === "td_psychic"
                 ? (["NFL"] as const)
                 : template === "multi_pick"
                     ? selectedComboSports
@@ -668,12 +744,26 @@ export const FeedContestCreateForm = ({
     const catalogDateSpec =
         template === "sunday_pickem"
             ? toScheduleDateSpec(easternToday, easternHorizonEnd)
-            : slateDateSpec;
+            : template === "td_psychic"
+                ? toScheduleDateSpec(organizerToday, organizerHorizonEnd)
+                : slateDateSpec;
     // Pinned to the league clock for Pick'em so the days the server buckets by
     // are the same days `catalogDateSpec` names. General Combo passes undefined
     // and keeps axiosInstance's browser-zone default.
+    /*
+     * Pick'em is pinned to the league clock because the server buckets its
+     * Sundays there. TD Psychic asks for the ORGANIZER's horizon, so it asks in
+     * the organizer's zone — otherwise the days requested and the days
+     * `contestGameOptions` filters back down to are two different calendars, and
+     * the edges of the window disagree. General Combo keeps axiosInstance's
+     * browser-zone default, as it always has.
+     */
     const catalogTimeZone =
-        template === "sunday_pickem" ? SCHEDULE_TIME_ZONE : undefined;
+        template === "sunday_pickem"
+            ? SCHEDULE_TIME_ZONE
+            : template === "td_psychic"
+                ? organizerTimeZone
+                : undefined;
     const {
         options: catalogOptions,
         loading: catalogLoading,
@@ -764,10 +854,14 @@ export const FeedContestCreateForm = ({
     const wizardSteps = isArenaContest
         ? template === "sunday_pickem"
             ? ARENA_SUNDAY_PICKEM_WIZARD_STEPS
-            : ARENA_GENERAL_COMBO_WIZARD_STEPS
+            : template === "td_psychic"
+                ? ARENA_TD_PSYCHIC_WIZARD_STEPS
+                : ARENA_GENERAL_COMBO_WIZARD_STEPS
         : template === "sunday_pickem"
             ? SUNDAY_PICKEM_WIZARD_STEPS
-            : GENERAL_COMBO_WIZARD_STEPS;
+            : template === "td_psychic"
+                ? TD_PSYCHIC_WIZARD_STEPS
+                : GENERAL_COMBO_WIZARD_STEPS;
 
     const generatedComboDescription = useMemo(
         () =>
@@ -781,7 +875,11 @@ export const FeedContestCreateForm = ({
         [allowSameGameLegs, maxLegs, minLegs, minimumCombinedOdds, winningPlaces]
     );
     const effectiveDescription =
-        template === "multi_pick" ? generatedComboDescription : SUNDAY_PICKEM_DESCRIPTION;
+        template === "multi_pick"
+            ? generatedComboDescription
+            : template === "td_psychic"
+                ? TD_PSYCHIC_DESCRIPTION
+                : SUNDAY_PICKEM_DESCRIPTION;
 
     // Sunday windows are named on the NFL league clock, so a card belongs to the
     // Eastern calendar Sunday its kickoffs fall on.
@@ -876,7 +974,7 @@ export const FeedContestCreateForm = ({
     // for both templates.
     const eligibleGameOptions = useMemo(
         () =>
-            (template === "multi_pick"
+            (template === "multi_pick" || template === "td_psychic"
                 ? scopedComboCatalogGames
                 : selectableGameOptions
             ).filter((option) => !excludedGameIds.includes(option.id)),
@@ -894,6 +992,104 @@ export const FeedContestCreateForm = ({
         [eligibleGameOptions]
     );
 
+    /* ---------- TD Psychic: is this slate actually playable? ----------
+     *
+     * A TD Psychic contest needs at least three DISTINCT eligible touchdown
+     * scorers across its whole slate, and `saveFeedContest` re-checks that
+     * server-side for a draft as well as a publish
+     * (`checkTdPsychicScorerAvailability`, feed.helper.ts:1599). So the number
+     * has to be read here rather than guessed: three games with two scorers each
+     * would pass any count-the-games test and still be refused at publish.
+     *
+     * Read from the SERVER's own count, not derived from the player rows. The
+     * saga recomputes the distinct union across chunks, which is the same figure
+     * the create endpoint arrives at — counting them a second way here is how a
+     * wizard ends up disagreeing with the endpoint that refuses it.
+     *
+     * Keyed on a synthetic contest id: `feedContestOddsRequestKey` is a cache
+     * key, not an identity, and the entry screen (the slot's other tenant) is
+     * never mounted at the same time as the wizard.
+     */
+    const tdScorers = useSelector((state: RootState) => state.tdScorers);
+    const tdScorerRequestKey = useMemo(
+        () =>
+            template === "td_psychic" && eligibleGameIds.length
+                ? feedContestOddsRequestKey(
+                      `create:${groupId}`,
+                      "fanduel",
+                      eligibleGameIds
+                  )
+                : "",
+        [eligibleGameIds, groupId, template]
+    );
+    // Keyed on the REQUEST KEY string, not on the id array: the array is a new
+    // identity every render and would loop.
+    const requestedScorerKeyRef = useRef("");
+    const dispatchScorerFetch = useCallback(() => {
+        if (!tdScorerRequestKey) return;
+        requestedScorerKeyRef.current = tdScorerRequestKey;
+        dispatch(
+            fetchTdScorersRequest({
+                contest_id: `create:${groupId}`,
+                game_ids: eligibleGameIds,
+                sportsbook: "fanduel",
+            })
+        );
+    }, [dispatch, eligibleGameIds, groupId, tdScorerRequestKey]);
+    useEffect(() => {
+        if (!tdScorerRequestKey) return;
+        if (requestedScorerKeyRef.current === tdScorerRequestKey) return;
+        dispatchScorerFetch();
+    }, [dispatchScorerFetch, tdScorerRequestKey]);
+    /**
+     * The RETRY, and the reason it has to exist.
+     *
+     * The effect above fires once per slate and latches the key, so a read that
+     * came back `partial` — or failed outright — is final for that slate. Since
+     * both of those block the Matchups step, the organizer would be told to "try
+     * again in a moment" by a screen with no way to try again: changing the slate
+     * to change the key and changing it back is the only escape, and that is not
+     * a thing anyone would guess.
+     */
+    const retryScorerFetch = () => {
+        requestedScorerKeyRef.current = "";
+        dispatchScorerFetch();
+    };
+
+    // Dropped on the way out — the slot is shared with the entry screen.
+    useEffect(() => () => { dispatch(clearTdScorers()); }, [dispatch]);
+
+    const tdScorersDescribeSlate =
+        Boolean(tdScorerRequestKey) && tdScorers.requestKey === tdScorerRequestKey;
+    /**
+     * Which of the selected games actually carry an eligible scorer — the MVP's
+     * `availabilityResolver`, answered from the board instead of a fixture flag.
+     *
+     * An empty set while the read is still in flight would paint every card
+     * amber, so the resolver below falls back to "available" until the answer
+     * describes this slate.
+     */
+    const tdGamesWithScorers = useMemo(
+        () =>
+            new Set(
+                tdScorersDescribeSlate
+                    ? tdScorers.events
+                          .filter((event) => (event.selections?.length ?? 0) > 0)
+                          .map((event) => event.game_id)
+                    : []
+            ),
+        [tdScorers.events, tdScorersDescribeSlate]
+    );
+    const tdPsychicSelectablePlayerCount = tdScorersDescribeSlate
+        ? tdScorers.distinctPlayerCount
+        : 0;
+    // "Not answered yet" is NOT "no scorers": the first reads as a spinner, the
+    // second as a slate the organizer has to widen.
+    const tdScorersLoading =
+        template === "td_psychic" &&
+        Boolean(tdScorerRequestKey) &&
+        (tdScorers.loading || (!tdScorersDescribeSlate && !tdScorers.error));
+
     // Inverts the draft's saved inclusion list into the wizard's exclusion list,
     // once, as soon as the live catalog can be compared against it.
     useEffect(() => {
@@ -909,7 +1105,9 @@ export const FeedContestCreateForm = ({
         }
 
         const visible =
-            template === "multi_pick" ? scopedComboCatalogGames : selectableGameOptions;
+            template === "multi_pick" || template === "td_psychic"
+                ? scopedComboCatalogGames
+                : selectableGameOptions;
         if (!visible.length) {
             // `catalogLoading` above already proves the fetch settled — an
             // in-flight window always reads as loading — so an empty slate here
@@ -1037,6 +1235,14 @@ export const FeedContestCreateForm = ({
         }
         if (!template) return "Choose a contest style first.";
         if (candidate === "slate") {
+            if (template === "td_psychic") {
+                if (slateDateError) return slateDateError;
+                if (catalogLoading) return "Loading the NFL schedule…";
+                if (catalogError) return catalogError;
+                return scopedComboCatalogGames.length === 0
+                    ? "No eligible NFL matchups are available for those dates."
+                    : null;
+            }
             if (template === "sunday_pickem") {
                 if (catalogLoading) return "Loading the NFL schedule…";
                 if (!selectedSundayDate) return "Choose an NFL Sunday date in Eastern Time.";
@@ -1061,6 +1267,29 @@ export const FeedContestCreateForm = ({
             if (template === "multi_pick" && eligibleGameIds.length === 0) {
                 return "Include at least one matchup from the selected slate.";
             }
+            if (template === "td_psychic") {
+                if (eligibleGameIds.length === 0) {
+                    return "Include at least one matchup from the selected slate.";
+                }
+                if (tdScorersLoading) return "Checking touchdown scorers for these games…";
+                if (tdScorers.error) return tdScorers.error;
+                /*
+                 * A PARTIAL read is an unknown count, not a low one.
+                 *
+                 * When a chunk fails the union under-counts, and blocking on the
+                 * under-count would refuse a slate the create endpoint — which
+                 * runs its own read — would accept. Blocking on the partiality
+                 * itself is the honest gate: retry, then answer.
+                 */
+                if (tdScorers.partial) {
+                    return "Some of these games' touchdown scorers could not be read. Try again in a moment.";
+                }
+                // The create endpoint's own gate, in the wizard's words. A slate
+                // it would refuse must not reach Review.
+                if (tdPsychicSelectablePlayerCount < TD_PSYCHIC_SELECTION_COUNT) {
+                    return `TD Psychic needs at least ${TD_PSYCHIC_SELECTION_COUNT} eligible touchdown scorers in the selected games.`;
+                }
+            }
             return null;
         }
         if (candidate === "rules") {
@@ -1081,8 +1310,13 @@ export const FeedContestCreateForm = ({
             }
             if (!effectiveDescription.trim()) return "Add a short contest description.";
             if (!rulesText.trim()) return "Add or keep the contest rules.";
-            if (!Number.isInteger(winningPlaces) || winningPlaces < 1 || winningPlaces > 5) {
-                return "Winning places must be between 1 and 5.";
+            if (
+                template !== "td_psychic" &&
+                (!Number.isInteger(winningPlaces) ||
+                    winningPlaces < FEED_CONTEST_MIN_WINNING_PLACES ||
+                    winningPlaces > FEED_CONTEST_MAX_WINNING_PLACES)
+            ) {
+                return `Winning places must be between ${FEED_CONTEST_MIN_WINNING_PLACES} and ${FEED_CONTEST_MAX_WINNING_PLACES}.`;
             }
             return null;
         }
@@ -1151,6 +1385,7 @@ export const FeedContestCreateForm = ({
         setHighestVisitedStepIndex((current) => Math.max(current, index));
         setError(undefined);
         setStep(nextStep);
+        if (surface === "drawer") return;
         const params = new URLSearchParams(searchParams.toString());
         params.set("step", nextStep);
         router.push(`?${params.toString()}`, { scroll: false });
@@ -1177,7 +1412,7 @@ export const FeedContestCreateForm = ({
         setHighestVisitedStepIndex(0);
         setExcludedGameIds([]);
         setSelectedComboSports([]);
-        if (nextTemplate === "multi_pick") {
+        if (nextTemplate === "multi_pick" || nextTemplate === "td_psychic") {
             setSlateStartsOn("");
             setSlateEndsOn("");
         } else {
@@ -1185,7 +1420,13 @@ export const FeedContestCreateForm = ({
             // chosen date itself and the endpoint derives them from the games.
             setSelectedSundayDate(sundayDateOptions[0] ?? "");
         }
-        setRulesText(CONTEST_PARTICIPATION_DISCLAIMER);
+        // Per template, as the MVP's PRESET_COPY does: General Combo takes the
+        // bare disclaimer, Sunday Pick'em the five-paragraph block that explains
+        // per-leg scoring, and TD Psychic the ten-paragraph block that has to
+        // spell out how a card can place and still earn nothing. Re-seeded on
+        // every style change, so switching templates never leaves the other
+        // one's terms in the field.
+        setRulesText(participationRulesForTemplate(nextTemplate));
         setError(undefined);
     };
 
@@ -1207,6 +1448,20 @@ export const FeedContestCreateForm = ({
             matchup: option.label,
             home_team: option.homeTeam,
             away_team: option.awayTeam,
+            /*
+             * TD PSYCHIC ONLY, and REQUIRED there. `parseEligibleGames` refuses a
+             * td_psychic slate whose snapshot omits either id or names the same
+             * team on both sides, because entry has to prove a picked player
+             * belongs to one of the two teams in the game — and the frozen
+             * snapshot, not the live feed, is what it checks against. Omitted for
+             * the other two templates, which store null and never read them.
+             */
+            ...(template === "td_psychic"
+                ? {
+                      home_team_id: option.homeTeamId,
+                      away_team_id: option.awayTeamId,
+                  }
+                : {}),
             kickoff_window: template === "sunday_pickem" ? option.sundayWindow : null,
         }));
 
@@ -1224,10 +1479,23 @@ export const FeedContestCreateForm = ({
             opens_at: new Date().toISOString(),
             locks_at: automaticLocksAt,
             expected_ends_at: automaticExpectedEnd,
-            winning_places: winningPlaces,
+            // Ignored server-side for td_psychic (the template fixes it at
+            // three); sent as three anyway so the request describes the contest
+            // the organizer was shown on the Review step.
+            winning_places:
+                template === "td_psychic" ? TD_PSYCHIC_WINNING_PLACES : winningPlaces,
             eligible_game_ids: eligibleGameIds,
             eligible_games_json: games,
             rules_text: rulesText.trim(),
+            /*
+             * The zone every date on this screen was computed in — the calendar's
+             * day boundaries, `scopedComboCatalogGames`, and the slate window
+             * below. The server buckets each kickoff in whatever `x-timezone`
+             * carries, so letting that default to the browser's would reject a
+             * slate this wizard itself drew whenever the organizer's account zone
+             * differs from their machine's.
+             */
+            time_zone: organizerTimeZone,
         };
 
         // Arena-only answers. Deliberately NOT sent from a League: the server
@@ -1240,6 +1508,27 @@ export const FeedContestCreateForm = ({
 
         if (template === "sunday_pickem") {
             payload.sunday_pickem_slate_mode = sundayPickemSlateMode;
+        } else if (template === "td_psychic") {
+            /*
+             * REQUIRED, and this is the one template that must send them: the
+             * server answers "slate_starts_on and slate_ends_on are required for
+             * TD Psychic!" without both. They are the organizer's LOCAL dates —
+             * read in the `x-timezone` the request carries — and every included
+             * kickoff is re-checked against them server-side.
+             */
+            payload.slate_starts_on = slateStartsOn;
+            payload.slate_ends_on = slateEndsOn;
+            /*
+             * The card is exactly three players and same-game players are always
+             * allowed, so these are stated rather than asked for. The endpoint
+             * does not require them for this template; sending the template's own
+             * fixed values keeps the stored row describing the contest that was
+             * actually created rather than leaving the columns null.
+             */
+            payload.minimum_legs = TD_PSYCHIC_SELECTION_COUNT;
+            payload.maximum_legs = TD_PSYCHIC_SELECTION_COUNT;
+            payload.allow_same_game_legs = true;
+            payload.minimum_odds = null;
         } else {
             // Leg limits describe a General Combo entry; a Pick'em card is always
             // one card and the endpoint ignores these for that template.
@@ -1315,10 +1604,17 @@ export const FeedContestCreateForm = ({
     // grey line under a value, used by the two Arena rows.
     const reviewRows: readonly [string, string, string?][] = template
         ? [
-            ["Style", template === "multi_pick" ? "General Combo" : "NFL Sunday Pick’em"],
+            [
+                "Style",
+                template === "multi_pick"
+                    ? "General Combo"
+                    : template === "td_psychic"
+                        ? "TD Psychic"
+                        : "NFL Sunday Pick’em",
+            ],
             ["Contest name", name],
             ["Description", effectiveDescription],
-            ...(template === "multi_pick"
+            ...(template === "multi_pick" || template === "td_psychic"
                 ? ([
                     [
                         "Date range",
@@ -1335,6 +1631,36 @@ export const FeedContestCreateForm = ({
                 `${eligibleGameIds.length} selected ${eligibleGameIds.length === 1 ? "matchup" : "matchups"
                 } · ${template === "multi_pick" ? selectedComboSports.join(", ") : "NFL"}`,
             ],
+            /*
+             * TD Psychic states its whole scoring model on the Review step, and
+             * every line answers a question the organizer would otherwise have to
+             * take on trust. Two of them are load-bearing and easy to get wrong:
+             * a 2-of-3 card can PLACE, and a 2-of-3 card earns NOTHING. An
+             * organizer who does not know both will read a runner-up worth zero
+             * points as a bug in their contest.
+             */
+            ...(template === "td_psychic"
+                ? ([
+                    [
+                        "Card",
+                        `Exactly ${TD_PSYCHIC_SELECTION_COUNT} different players · rushing or receiving touchdowns only`,
+                        "Passing touchdowns do not count. Multiple players from the same game are allowed.",
+                    ],
+                    ["Ranking", "More correct picks rank higher"],
+                    [
+                        "Placement",
+                        "3 of 3 cards rank first · 2 of 3 cards fill any remaining top-three places",
+                    ],
+                    [
+                        "Points",
+                        "Only a perfect 3 of 3 card earns League or Arena points",
+                    ],
+                    [
+                        "Tiebreak",
+                        "Shared lock-time odds break ties between cards with the same number correct",
+                    ],
+                ] as [string, string, string?][])
+                : []),
             [
                 "Entry lock",
                 `${formatContestDateTime(
@@ -1369,7 +1695,9 @@ export const FeedContestCreateForm = ({
         <div
             className={`flex flex-col gap-6 pb-10 ${accent === "arena" ? "arena-theme" : ""}`}
         >
-            <BackButton fallback={backHref} preferFallback />
+            {surface === "page" ? (
+                <BackButton fallback={backHref} preferFallback />
+            ) : null}
             <header className="space-y-2 border-b border-white/10 pb-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
                     {contextName} · Feed contest
@@ -1463,11 +1791,11 @@ export const FeedContestCreateForm = ({
                                     What kind of contest are you running?
                                 </h2>
                                 <p className="mt-2 text-sm leading-6 text-gray-400">
-                                    Both formats require a complete multi-pick entry. One-pick
-                                    contests are no longer offered.
+                                    Choose General Combo, NFL Sunday Pick&rsquo;em, or TD Psychic.
+                                    Each member submits one complete contest entry.
                                 </p>
                             </div>
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                                 {TEMPLATE_PRESETS.map((preset) => {
                                     const selected = template === preset.id;
                                     return (
@@ -1489,6 +1817,9 @@ export const FeedContestCreateForm = ({
                                             </span>
                                             <span className="mt-2 block text-sm leading-6 text-gray-400">
                                                 {preset.body}
+                                            </span>
+                                            <span className="mt-3 block text-xs leading-5 text-gray-500">
+                                                {preset.helper}
                                             </span>
                                             <span
                                                 className={`mt-4 block text-xs font-semibold ${selected ? accentClasses.textStrong : "text-gray-500"
@@ -1514,35 +1845,89 @@ export const FeedContestCreateForm = ({
                                 <h2 className="mt-2 text-2xl font-semibold text-white">
                                     {template === "multi_pick"
                                         ? "Choose dates and sports"
-                                        : "Build the Sunday card"}
+                                        : template === "td_psychic"
+                                            ? "Choose the NFL slate"
+                                            : "Build the Sunday card"}
                                 </h2>
                                 <p className="mt-2 text-sm leading-6 text-gray-400">
                                     {template === "multi_pick"
                                         ? `Choose up to ${MAX_SLATE_DAYS} consecutive game dates, then select every sport you want in the slate. All eligible matchups start included for review.`
-                                        : "All games in the selected Sunday window start included. Uncheck any matchup you want to exclude."}
+                                        : template === "td_psychic"
+                                            ? "Choose the game dates available for TD Psychic. You’ll select the exact matchups next."
+                                            : "All games in the selected Sunday window start included. Uncheck any matchup you want to exclude."}
                                 </p>
-                                {/* Stated once, up front: an organizer off the league clock is
-                                    about to read Eastern dates that do not match their own
-                                    calendar, and a card whose games run past their midnight is
-                                    correct rather than a mistake. */}
-                                {template === "sunday_pickem" && showsLocalKickoff ? (
-                                    <p
-                                        role="note"
-                                        className="mt-3 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs normal-case leading-5 text-gray-400"
-                                    >
-                                        Every date and kickoff on this step is the NFL league clock
-                                        (Eastern Time), the same clock the contest is scored on. In{" "}
-                                        <span className="font-semibold text-gray-200">
-                                            {organizerTimeZone.replaceAll("_", " ")}
-                                        </span>{" "}
-                                        the later games of an Eastern Sunday fall after midnight, so a
-                                        card can run into your Monday — each matchup below shows your
-                                        local time too.
-                                    </p>
-                                ) : null}
                             </div>
 
-                            {template === "multi_pick" ? (
+                            {template === "td_psychic" ? (
+                                <div className="space-y-6">
+                                    {!catalogLoading && contestGameOptions.length === 0 ? (
+                                        <p className="text-xs font-semibold normal-case text-amber-100">
+                                            No scheduled NFL matchups are available in this scheduling
+                                            window.
+                                        </p>
+                                    ) : null}
+                                    <fieldset>
+                                        <legend className={fieldLabelClasses}>
+                                            1 · NFL slate range
+                                        </legend>
+                                        <div className="mt-2">
+                                            <ContestSlateRangeCalendar
+                                                minDate={organizerToday}
+                                                maxDate={organizerHorizonEnd}
+                                                startDate={slateStartsOn}
+                                                endDate={slateEndsOn}
+                                                accent={accent}
+                                                onChange={chooseSlateDateRange}
+                                            />
+                                        </div>
+                                    </fieldset>
+
+                                    {!slateStartsOn || !slateEndsOn ? (
+                                        <div className="border-y border-white/10 py-5 text-sm normal-case leading-6 text-gray-500">
+                                            Choose one to three consecutive NFL game dates to continue.
+                                        </div>
+                                    ) : slateDateError ? (
+                                        <p role="alert" className="text-sm font-semibold text-red-200">
+                                            {slateDateError}
+                                        </p>
+                                    ) : catalogLoading ? (
+                                        <div className="rounded-2xl border border-white/10 bg-black/35">
+                                            <Loader
+                                                size={26}
+                                                message="Loading the NFL matchups for these dates…"
+                                            />
+                                        </div>
+                                    ) : catalogError ? (
+                                        <p
+                                            role="alert"
+                                            className="rounded-2xl border border-amber-300/25 bg-amber-500/10 p-5 text-sm normal-case leading-6 text-amber-100"
+                                        >
+                                            {catalogError}
+                                        </p>
+                                    ) : scopedComboCatalogGames.length === 0 ? (
+                                        <p
+                                            role="status"
+                                            className="text-xs font-semibold normal-case leading-5 text-amber-100"
+                                        >
+                                            No scheduled NFL matchups fall on the selected dates. Choose
+                                            another range to continue.
+                                        </p>
+                                    ) : (
+                                        <div className="rounded-xl border border-white/10 bg-black/25 px-4 py-4">
+                                            <p className="text-sm font-semibold normal-case text-white">
+                                                {scopedComboCatalogGames.length} scheduled NFL{" "}
+                                                {scopedComboCatalogGames.length === 1
+                                                    ? "matchup"
+                                                    : "matchups"}
+                                            </p>
+                                            <p className="mt-1 text-xs font-normal normal-case leading-5 text-gray-500">
+                                                Every eligible game starts included. You can remove
+                                                individual matchups on the next step.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : template === "multi_pick" ? (
                                 <div className="space-y-6">
                                     <fieldset>
                                         <legend className={fieldLabelClasses}>1 · Slate range</legend>
@@ -1618,16 +2003,31 @@ export const FeedContestCreateForm = ({
                                                         </div>
                                                     ) : (
                                                         <p className="mt-2 border-y border-white/10 py-5 text-sm normal-case leading-6 text-gray-500">
-                                                            No league has matchups on these dates. Choose
-                                                            another date or a longer slate.
+                                                            No eligible matchups are available in this date
+                                                            range.
                                                         </p>
                                                     )}
                                                 </>
                                             )}
                                             <p className="mt-3 text-xs normal-case leading-5 text-gray-500">
-                                                Select a sport to include all of its matchups. Select it again
-                                                to remove that sport from the slate.
+                                                Select a sport to include all of its eligible matchups. Select
+                                                it again to remove that sport from the slate.
                                             </p>
+                                            {selectedComboSports.length > 0 &&
+                                            !catalogLoading &&
+                                            !catalogError &&
+                                            scopedComboCatalogGames.length === 0 ? (
+                                                <p
+                                                    role="status"
+                                                    className="mt-2 text-xs font-semibold normal-case leading-5 text-amber-100"
+                                                >
+                                                    No scheduled matchups fall on the selected dates for
+                                                    {selectedComboSports.length === 1
+                                                        ? " this sport"
+                                                        : " these sports"}
+                                                    . Choose another range or add a sport.
+                                                </p>
+                                            ) : null}
                                             {matchupCounts?.partial && countsDescribeSlate ? (
                                                 <p className="mt-2 text-[11px] normal-case leading-5 text-amber-100">
                                                     One league’s schedule could not be read, so a sport may be
@@ -1674,7 +2074,7 @@ export const FeedContestCreateForm = ({
                                     </fieldset>
                                     <fieldset>
                                         <legend className={fieldLabelClasses}>2 · Sunday window</legend>
-                                        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                                        <div className="mt-2 grid gap-2 sm:grid-cols-4">
                                             {SUNDAY_SLATE_MODES.map(([mode, label]) => (
                                                 <button
                                                     key={mode}
@@ -1735,17 +2135,16 @@ export const FeedContestCreateForm = ({
                                                                     new Date(option.gameStartsAt)
                                                                 )}
                                                             </span>
-                                                            {/* An Eastern time alone is unreadable off that
-                                                                clock — a late kickoff is the NEXT day in
-                                                                Asia. Shown only when the zones differ. */}
-                                                            {showsLocalKickoff ? (
-                                                                <span className="mt-0.5 block text-[11px] font-medium text-gray-600">
-                                                                    Your time ·{" "}
-                                                                    {organizerKickoffFormatter.format(
-                                                                        new Date(option.gameStartsAt)
-                                                                    )}
-                                                                </span>
-                                                            ) : null}
+                                                            {/* The MVP's third line. Its catalog carries a
+                                                                per-game `hasOdds`; the schedule feed here
+                                                                carries no prices at all, which is the same
+                                                                reason the create payload omits `has_odds`
+                                                                and lets the server read its own default of
+                                                                true. So this states what the client already
+                                                                asserts rather than inventing a check. */}
+                                                            <span className="mt-1 block text-[11px] font-semibold text-emerald-200">
+                                                                Markets available
+                                                            </span>
                                                         </span>
                                                     </label>
                                                 );
@@ -1768,7 +2167,8 @@ export const FeedContestCreateForm = ({
                         </div>
                     ) : null}
 
-                    {step === "matchups" && template === "multi_pick" ? (
+                    {step === "matchups" &&
+                    (template === "multi_pick" || template === "td_psychic") ? (
                         <div className="space-y-6">
                             <div>
                                 <p
@@ -1777,12 +2177,14 @@ export const FeedContestCreateForm = ({
                                     Step 3 · Matchup review
                                 </p>
                                 <h2 className="mt-2 text-2xl font-semibold text-white">
-                                    Review eligible matchups
+                                    {template === "td_psychic"
+                                        ? "Choose TD Psychic matchups"
+                                        : "Review eligible matchups"}
                                 </h2>
                                 <p className="mt-2 text-sm leading-6 text-gray-400">
-                                    Move between your selected dates and sports to review the slate.
-                                    Every matchup starts included; remove only the games you do not
-                                    want entrants to use.
+                                    {template === "td_psychic"
+                                        ? "Every eligible NFL matchup starts included. Remove only the games whose touchdown scorers should not be available to members."
+                                        : "Move between your selected dates and sports to review the slate. Every matchup starts included; remove only the games you do not want entrants to use."}
                                 </p>
                             </div>
                             {catalogLoading ? (
@@ -1797,20 +2199,91 @@ export const FeedContestCreateForm = ({
                                     {catalogError}
                                 </p>
                             ) : (
-                                <ContestSlateBrowser
-                                    key={`${slateStartsOn}:${slateEndsOn}:${selectedComboSports.join(",")}`}
-                                    games={scopedComboCatalogGames}
-                                    selectedGameIds={eligibleGameIds}
-                                    onToggleGame={(gameId) =>
-                                        setExcludedGameIds((current) =>
-                                            current.includes(gameId)
-                                                ? current.filter((candidate) => candidate !== gameId)
-                                                : [...current, gameId]
-                                        )
-                                    }
-                                    accent={accent}
-                                    timeZone={organizerTimeZone}
-                                />
+                                <>
+                                    <ContestSlateBrowser
+                                        key={`${template}:${slateStartsOn}:${slateEndsOn}:${template === "td_psychic" ? "NFL" : selectedComboSports.join(",")}`}
+                                        games={scopedComboCatalogGames}
+                                        selectedGameIds={eligibleGameIds}
+                                        onToggleGame={(gameId) =>
+                                            setExcludedGameIds((current) =>
+                                                current.includes(gameId)
+                                                    ? current.filter(
+                                                          (candidate) => candidate !== gameId
+                                                      )
+                                                    : [...current, gameId]
+                                            )
+                                        }
+                                        accent={accent}
+                                        timeZone={organizerTimeZone}
+                                        availabilityResolver={
+                                            template === "td_psychic"
+                                                ? (game) =>
+                                                      !tdScorersDescribeSlate ||
+                                                      tdGamesWithScorers.has(game.id)
+                                                : undefined
+                                        }
+                                        availabilityLabels={
+                                            template === "td_psychic"
+                                                ? {
+                                                      available: "TD scorers available",
+                                                      unavailable:
+                                                          "TD scorer markets not posted yet",
+                                                  }
+                                                : undefined
+                                        }
+                                    />
+                                    {/*
+                                        THE GATE, stated out loud while the organizer is
+                                        still able to act on it. A TD Psychic contest needs
+                                        three DISTINCT eligible scorers across its whole
+                                        slate, and the create endpoint re-checks that for a
+                                        draft as well as a publish — so a slate of three
+                                        games with two scorers each would pass any
+                                        count-the-games test and still be refused. The
+                                        number is the SERVER's own, read from
+                                        /td-scorers-by-events.
+                                    */}
+                                    {template === "td_psychic" ? (
+                                        <p
+                                            aria-live="polite"
+                                            className={`text-xs font-semibold normal-case ${
+                                                tdScorersLoading
+                                                    ? "text-gray-400"
+                                                    : tdScorers.error
+                                                      ? "text-red-200"
+                                                      : tdScorers.partial
+                                                        ? "text-amber-100"
+                                                        : tdPsychicSelectablePlayerCount >=
+                                                            TD_PSYCHIC_SELECTION_COUNT
+                                                          ? "text-emerald-200"
+                                                          : "text-amber-100"
+                                            }`}
+                                        >
+                                            {tdScorersLoading
+                                                ? "Checking touchdown scorers for these games…"
+                                                : tdScorers.error
+                                                  ? tdScorers.error
+                                                  : tdScorers.partial
+                                                    ? "Some of these games’ touchdown scorers could not be read. Try again in a moment."
+                                                    : `${tdPsychicSelectablePlayerCount} distinct eligible TD ${
+                                                          tdPsychicSelectablePlayerCount === 1
+                                                              ? "scorer"
+                                                              : "scorers"
+                                                      } in the selected games`}
+                                        </p>
+                                    ) : null}
+                                    {template === "td_psychic" &&
+                                    !tdScorersLoading &&
+                                    (tdScorers.error || tdScorers.partial) ? (
+                                        <button
+                                            type="button"
+                                            onClick={retryScorerFetch}
+                                            className="rounded-lg border border-white/20 px-3 py-2 text-xs font-semibold normal-case text-white transition hover:border-white/40"
+                                        >
+                                            Try again
+                                        </button>
+                                    ) : null}
+                                </>
                             )}
                         </div>
                     ) : null}
@@ -1861,7 +2334,7 @@ export const FeedContestCreateForm = ({
                                         </legend>
                                         <div className="space-y-2 text-sm font-normal normal-case leading-7 text-gray-400">
                                             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                                <span>Submit one</span>
+                                                <span>Each entry must have between</span>
                                                 <label htmlFor="minimum-legs" className="sr-only">
                                                     Minimum legs
                                                 </label>
@@ -1875,7 +2348,7 @@ export const FeedContestCreateForm = ({
                                                     onBlur={() => setMinLegsInput(String(minLegs))}
                                                     className={`${inlineDescriptionInputClasses(accent)} w-10`}
                                                 />
-                                                <span aria-hidden="true">–</span>
+                                                <span>and</span>
                                                 <label htmlFor="maximum-legs" className="sr-only">
                                                     Maximum legs
                                                 </label>
@@ -1890,7 +2363,7 @@ export const FeedContestCreateForm = ({
                                                     className={`${inlineDescriptionInputClasses(accent)} w-10`}
                                                 />
                                                 <span>
-                                                    leg combo before entries lock. Every active leg must win.
+                                                    legs. Submit before entries lock. Every leg must win.
                                                 </span>
                                             </p>
 
@@ -1948,11 +2421,16 @@ export const FeedContestCreateForm = ({
                                                 <input
                                                     id="winning-places"
                                                     type="number"
-                                                    min={1}
-                                                    max={5}
+                                                    min={FEED_CONTEST_MIN_WINNING_PLACES}
+                                                    max={FEED_CONTEST_MAX_WINNING_PLACES}
                                                     value={winningPlaces}
                                                     onChange={(event) =>
                                                         setWinningPlaces(Number(event.target.value))
+                                                    }
+                                                    onBlur={() =>
+                                                        setWinningPlaces(
+                                                            clampFeedContestWinningPlaces(winningPlaces)
+                                                        )
                                                     }
                                                     className={`${inlineDescriptionInputClasses(accent)} w-10`}
                                                 />
@@ -1977,36 +2455,67 @@ export const FeedContestCreateForm = ({
                                 </p>
                             </section>
 
-                            <div>
-                                <label className={fieldLabelClasses}>
-                                    Rules participants must accept
-                                    <textarea
-                                        rows={4}
-                                        value={rulesText}
-                                        onChange={(event) => setRulesText(event.target.value)}
-                                        aria-describedby="contest-rules-help"
-                                        className={copyFieldClasses(accent)}
-                                    />
-                                </label>
-                                <p
-                                    id="contest-rules-help"
-                                    className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
+                            {template === "td_psychic" ? (
+                                <section
+                                    aria-label="Fixed TD Psychic rules"
+                                    className={`rounded-xl border p-4 ${accentClasses.previewSurface}`}
                                 >
-                                    Entrants must review and check that they accept this copy before
-                                    submitting an entry.
-                                </p>
-                            </div>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <h3 className={fieldLabelClasses}>
+                                            Rules participants must accept
+                                        </h3>
+                                        <span
+                                            className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] ${accentClasses.previewSurface} ${accentClasses.textStrong}`}
+                                        >
+                                            Fixed mechanics
+                                        </span>
+                                    </div>
+                                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-300">
+                                        {rulesText}
+                                    </p>
+                                    <p className="mt-3 text-xs leading-5 text-gray-500">
+                                        Every TD Psychic contest uses exactly three picks, allows
+                                        multiple players from the same game, and awards up to three
+                                        placement-eligible cards. Only a perfect card earns points.
+                                    </p>
+                                </section>
+                            ) : (
+                                <div>
+                                    <label className={fieldLabelClasses}>
+                                        Rules participants must accept
+                                        <textarea
+                                            rows={4}
+                                            value={rulesText}
+                                            onChange={(event) => setRulesText(event.target.value)}
+                                            aria-describedby="contest-rules-help"
+                                            className={copyFieldClasses(accent)}
+                                        />
+                                    </label>
+                                    <p
+                                        id="contest-rules-help"
+                                        className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
+                                    >
+                                        Entrants must review and check that they accept this copy
+                                        before submitting an entry.
+                                    </p>
+                                </div>
+                            )}
 
                             {template === "sunday_pickem" ? (
                                 <label className={`${fieldLabelClasses} max-w-48`}>
                                     Winning places
                                     <input
                                         type="number"
-                                        min={1}
-                                        max={5}
+                                        min={FEED_CONTEST_MIN_WINNING_PLACES}
+                                        max={FEED_CONTEST_MAX_WINNING_PLACES}
                                         value={winningPlaces}
                                         onChange={(event) =>
                                             setWinningPlaces(Number(event.target.value))
+                                        }
+                                        onBlur={() =>
+                                            setWinningPlaces(
+                                                clampFeedContestWinningPlaces(winningPlaces)
+                                            )
                                         }
                                         className={fieldClasses(accent)}
                                     />
@@ -2150,32 +2659,6 @@ export const FeedContestCreateForm = ({
                                     )}
                                 </section>
                             ) : null}
-
-                            {/* The reassuring counterpart: the venue IS live, so say which
-                                one and for how long a check-in lasts. */}
-                            {entryAccessMode === "venue_check_in_required" && hasActiveVenue ? (
-                                <section className="rounded-xl border border-emerald-300/20 bg-emerald-500/[0.07] p-5 text-emerald-50">
-                                    <h3 className="font-semibold">Venue Check-In is ready</h3>
-                                    <p className="mt-1 text-sm leading-6 text-emerald-100/75">
-                                        {scopedVenue?.venue_check_in.venue?.name}
-                                        {scopedVenue?.venue_check_in.venue?.display_address
-                                            ? ` · ${scopedVenue.venue_check_in.venue.display_address}`
-                                            : ""}
-                                        {scopedVenue?.venue_check_in.venue?.check_in_duration_minutes
-                                            ? ` · each check-in lasts ${scopedVenue.venue_check_in.venue.check_in_duration_minutes / 60} hours`
-                                            : ""}
-                                    </p>
-                                    {canConfigureVenue ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => setVenueSetupOpen(true)}
-                                            className="mt-4 rounded-xl border border-emerald-200/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-emerald-100 transition hover:bg-emerald-500/10"
-                                        >
-                                            Update Venue
-                                        </button>
-                                    ) : null}
-                                </section>
-                            ) : null}
                         </div>
                     ) : null}
 
@@ -2224,7 +2707,7 @@ export const FeedContestCreateForm = ({
                                 </p>
                             ) : null}
                             {rulesText.trim() ? (
-                                <div className="border-b border-white/10 pb-4">
+                                <div>
                                     <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
                                         Rules participants must accept
                                     </p>

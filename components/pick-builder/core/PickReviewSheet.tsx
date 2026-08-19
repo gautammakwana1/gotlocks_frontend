@@ -267,6 +267,8 @@ export function PickReviewSheet({
             <button
               type="button"
               onClick={() => onOpenChange(!isOpen)}
+              aria-expanded={isOpen}
+              aria-label={isOpen ? "Collapse pick review" : "Expand pick review"}
               className={`flex w-full items-center justify-between gap-3 px-4 py-4 text-left ${isOpen
                 ? "sticky top-0 z-10 bg-[#080a0f]"
                 : "min-h-[72px] sm:min-h-0"
@@ -296,8 +298,19 @@ export function PickReviewSheet({
                       </span>
                     </div>
                   )}
-                <span className="text-gray-400">
-                  <ChevronUpDownIcon direction={isOpen ? "down" : "up"} />
+                {/* The open/close affordance.
+                    Sized and rotated here rather than through a `direction`
+                    prop — the icon has none, so the old `direction` landed on
+                    the DOM as an inert attribute and the chevron never turned
+                    (nor rendered, having had no size class either). The base
+                    path points DOWN, which is the CLOSE direction, so it is the
+                    shut state that rotates. */}
+                <span
+                  aria-hidden
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-gray-200 transition-transform duration-200 ${isOpen ? "" : "rotate-180"
+                    }`}
+                >
+                  <ChevronUpDownIcon className="h-4 w-4" />
                 </span>
               </div>
             </button>

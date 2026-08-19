@@ -5,6 +5,14 @@ import type {
     DeleteFeedContestPayload,
     EnterFeedContestData,
     EnterFeedContestPayload,
+    EnterPickemFeedContestData,
+    EnterPickemFeedContestPayload,
+    ReplacePickemFeedContestEntryData,
+    ReplacePickemFeedContestEntryPayload,
+    EnterTdPsychicFeedContestData,
+    EnterTdPsychicFeedContestPayload,
+    ReplaceTdPsychicFeedContestEntryData,
+    ReplaceTdPsychicFeedContestEntryPayload,
     FeedContest,
     FeedContestDetailData,
     FeedContestEntriesData,
@@ -13,10 +21,12 @@ import type {
     FeedContestLifecycleData,
     FeedContestListData,
     FeedContestPicksData,
+    FeedContestPodiumListData,
     FeedContestSection,
     FeedContestStatsData,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
+    FetchFeedContestPodiumsPayload,
     FetchFeedContestEntriesPayload,
     FetchFeedContestLeaderboardPayload,
     FetchFeedContestPicksPayload,
@@ -50,6 +60,21 @@ const emptySection = (): FeedContestSectionState => ({
     page: 1,
     hasMore: false,
     total: 0,
+});
+
+/**
+ * The results-board slot. Same shape as a section list — it IS a paged list of
+ * finalized contests — plus the group it was fetched for, because the Feed tab
+ * mounts on navigation between groups and a stale board would attribute one
+ * group's winners to another. Read it through the `groupId` check.
+ */
+export type FeedContestPodiumState = FeedContestSectionState & {
+    groupId: string | null;
+};
+
+const emptyPodium = (): FeedContestPodiumState => ({
+    ...emptySection(),
+    groupId: null,
 });
 
 export type FeedContestState = {
@@ -150,6 +175,19 @@ export type FeedContestState = {
     groupPicksError: string | null;
 
     /**
+     * GET /list/finalized/podium — the group's results board, for the Feed tab's
+     * Winners block.
+     *
+     * Held APART from `sections.finalized` even though the two page the same
+     * contests in the same order, because only this endpoint stamps `podium` on
+     * a row. Merging them would make whether a card can draw a podium depend on
+     * which of the two fetches landed last, and the Contests tab (which reads
+     * `sections.finalized`) would start re-rendering whenever the Feed tab
+     * refetched.
+     */
+    podium: FeedContestPodiumState;
+
+    /**
      * GET /stats/:contest_id — the whole tally in one read, in its own slot for
      * the same reason `entries` is. Counts are public from the start even while
      * the picks behind them are hidden, so this can be read on a still-open
@@ -171,7 +209,14 @@ export type FeedContestState = {
     entrySubmitMessage: string | null;
     entrySubmitError: string | null;
     /** The accepted receipt, so the screen can render it before the refetch lands. */
-    submittedEntry: EnterFeedContestData | ReplaceFeedContestEntryData | null;
+    submittedEntry:
+        | EnterFeedContestData
+        | EnterPickemFeedContestData
+        | ReplaceFeedContestEntryData
+        | ReplacePickemFeedContestEntryData
+        | EnterTdPsychicFeedContestData
+        | ReplaceTdPsychicFeedContestEntryData
+        | null;
 };
 
 /**
@@ -220,6 +265,7 @@ const initialState: FeedContestState = {
         drafts: emptySection(),
         archived: emptySection(),
     },
+    podium: emptyPodium(),
     isOrganizer: false,
     createLoading: false,
     createdContest: null,
@@ -333,6 +379,65 @@ const feedContestSlice = createSlice({
             // A 403 on /list/drafts is the expected answer for a member, not a
             // reason to keep a stale organizer-only list on screen.
             if (section.contests === null) section.contests = [];
+        },
+
+        /* ---- The results board — GET /list/finalized/podium ---- */
+        fetchFeedContestPodiumsRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestPodiumsPayload>
+        ) => {
+            // Switching groups CLEARS rather than keeps: the Feed tab renders
+            // from this slot the moment it mounts, so carrying the previous
+            // group's board through the in-flight fetch would show one
+            // community another's winners for a beat.
+            if (state.podium.groupId !== action.payload.group_id) {
+                state.podium = emptyPodium();
+            }
+            state.podium.groupId = action.payload.group_id;
+            state.podium.loading = true;
+            state.podium.error = null;
+        },
+        fetchFeedContestPodiumsSuccess: (
+            state,
+            action: PayloadAction<{ groupId: string; data: FeedContestPodiumListData }>
+        ) => {
+            const { groupId, data } = action.payload;
+            // A reply for a group the viewer has already navigated away from is
+            // dropped, not written — takeLatest cancels the SAGA, not a response
+            // already in flight when the group changed.
+            if (state.podium.groupId !== groupId) return;
+
+            const incoming = data?.contests ?? [];
+            const page = data?.pagination?.page ?? 1;
+
+            state.podium.loading = false;
+            state.podium.error = null;
+            // Same page-1-replaces / later-pages-append rule the section lists
+            // use, de-duped by id.
+            if (page <= 1) {
+                state.podium.contests = incoming;
+            } else {
+                const seen = new Set((state.podium.contests ?? []).map((contest) => contest.id));
+                state.podium.contests = [
+                    ...(state.podium.contests ?? []),
+                    ...incoming.filter((contest) => !seen.has(contest.id)),
+                ];
+            }
+            state.podium.page = page;
+            state.podium.hasMore = data?.pagination?.hasMore ?? false;
+            state.podium.total = data?.pagination?.total ?? state.podium.contests.length;
+            state.isOrganizer = data?.viewer?.is_organizer ?? state.isOrganizer;
+        },
+        fetchFeedContestPodiumsFailure: (
+            state,
+            action: PayloadAction<{ groupId: string; error: string }>
+        ) => {
+            if (state.podium.groupId !== action.payload.groupId) return;
+            state.podium.loading = false;
+            state.podium.error = action.payload.error;
+            // Settled to [] so the block renders "nothing yet" rather than
+            // holding its skeleton open forever.
+            if (state.podium.contests === null) state.podium.contests = [];
         },
 
         createFeedContestRequest: (state, action: PayloadAction<CreateFeedContestPayload>) => {
@@ -819,9 +924,52 @@ const feedContestSlice = createSlice({
             state.entrySubmitMessage = null;
             state.entrySubmitError = null;
         },
+        /**
+         * The Sunday Pick'em card. A SEPARATE endpoint
+         * (`POST /enter-pickem/:contest_id`) rather than a mode of `/enter`,
+         * which refuses a `pickem_card` contest — so it needs its own request
+         * action. It deliberately shares the success/failure reducers and the
+         * one flag set below: exactly one entry write is ever in flight, and the
+         * entry screen's receipt reads the same slot either way.
+         */
+        enterPickemFeedContestRequest: (
+            state,
+            action: PayloadAction<EnterPickemFeedContestPayload>
+        ) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
+        /**
+         * The TD Psychic card — POST /enter-td-psychic/:contest_id, the THIRD
+         * entry endpoint. Its own request action for the same reason the other
+         * two have theirs: each endpoint refuses the other models' contests by
+         * name, so the choice is enforced server-side and cannot be a mode flag.
+         *
+         * Shares the success/failure reducers and the one flag set: exactly one
+         * entry write is ever in flight, and the entry screen reads the same
+         * slot whichever model wrote it.
+         */
+        enterTdPsychicFeedContestRequest: (
+            state,
+            action: PayloadAction<EnterTdPsychicFeedContestPayload>
+        ) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
         enterFeedContestSuccess: (
             state,
-            action: PayloadAction<{ data: EnterFeedContestData | null; message?: string }>
+            action: PayloadAction<{
+                data:
+                    | EnterFeedContestData
+                    | EnterPickemFeedContestData
+                    | EnterTdPsychicFeedContestData
+                    | null;
+                message?: string;
+            }>
         ) => {
             state.entrySubmitLoading = false;
             state.entrySubmitMessage =
@@ -846,9 +994,51 @@ const feedContestSlice = createSlice({
             state.entrySubmitMessage = null;
             state.entrySubmitError = null;
         },
+        /**
+         * The Sunday Pick'em swap — `PUT /replace-pickem-entry/:contest_id`.
+         *
+         * Its own request action for the same reason entering has one: the combo
+         * replace endpoint refuses a `pickem_card` contest by name. Success and
+         * failure are shared, because exactly one entry write is ever in flight
+         * and the screen reports them from one place.
+         */
+        replacePickemFeedContestEntryRequest: (
+            state,
+            action: PayloadAction<ReplacePickemFeedContestEntryPayload>
+        ) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
+        /**
+         * The TD Psychic swap — PUT /replace-td-psychic-entry/:contest_id.
+         *
+         * Refused by the server once the card carries lock prices, which is a
+         * stricter gate than either sibling's: a priced card is past the shared
+         * cutoff whatever its contest's status column says, and re-pricing one
+         * member's card after the capture would break the one guarantee this
+         * template rests on.
+         */
+        replaceTdPsychicFeedContestEntryRequest: (
+            state,
+            action: PayloadAction<ReplaceTdPsychicFeedContestEntryPayload>
+        ) => {
+            void action;
+            state.entrySubmitLoading = true;
+            state.entrySubmitMessage = null;
+            state.entrySubmitError = null;
+        },
         replaceFeedContestEntrySuccess: (
             state,
-            action: PayloadAction<{ data: ReplaceFeedContestEntryData | null; message?: string }>
+            action: PayloadAction<{
+                data:
+                    | ReplaceFeedContestEntryData
+                    | ReplacePickemFeedContestEntryData
+                    | ReplaceTdPsychicFeedContestEntryData
+                    | null;
+                message?: string;
+            }>
         ) => {
             state.entrySubmitLoading = false;
             state.entrySubmitMessage = action.payload.message ?? "Entry replaced.";
@@ -901,6 +1091,9 @@ export const {
     fetchFeedContestsRequest,
     fetchFeedContestsSuccess,
     fetchFeedContestsFailure,
+    fetchFeedContestPodiumsRequest,
+    fetchFeedContestPodiumsSuccess,
+    fetchFeedContestPodiumsFailure,
     createFeedContestRequest,
     createFeedContestSuccess,
     createFeedContestFailure,
@@ -948,9 +1141,13 @@ export const {
     fetchFeedContestStatsFailure,
     clearFeedContestStats,
     enterFeedContestRequest,
+    enterPickemFeedContestRequest,
+    enterTdPsychicFeedContestRequest,
     enterFeedContestSuccess,
     enterFeedContestFailure,
     replaceFeedContestEntryRequest,
+    replacePickemFeedContestEntryRequest,
+    replaceTdPsychicFeedContestEntryRequest,
     replaceFeedContestEntrySuccess,
     replaceFeedContestEntryFailure,
     clearFeedContestEntryMessage,

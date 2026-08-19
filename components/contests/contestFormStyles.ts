@@ -17,10 +17,12 @@ export const contestAccentClasses = {
         createButton: "bg-sky-500/25 text-sky-100 hover:bg-sky-500/35",
         selectedSurface: "border-sky-300/40 bg-sky-500/10",
         sportOptionSelected:
-            "border-sky-300/70 bg-gradient-to-b from-sky-500/25 via-sky-500/10 to-blue-900/20 text-white shadow-[0_6px_16px_-12px_rgba(59,130,246,0.8)]",
+            "border-sky-300/70 bg-gradient-to-b from-sky-500/25 via-sky-500/10 to-blue-900/20 text-white shadow-[0_6px_16px_-12px_rgba(96,165,250,0.8)]",
         toggleOn: "peer-checked:bg-sky-400/70 peer-focus-visible:ring-sky-300/70",
         textStrong: "text-sky-100",
         textSoft: "text-sky-200",
+        previewSurface: "border-sky-300/20 bg-sky-500/10",
+        previewLabel: "text-sky-100/65",
         lifecycleCurrent: "border-sky-300/50 bg-sky-500/15 text-sky-100",
     },
     arena: {
@@ -32,10 +34,12 @@ export const contestAccentClasses = {
         createButton: "bg-violet-500/25 text-violet-100 hover:bg-violet-500/35",
         selectedSurface: "border-violet-300/40 bg-violet-500/10",
         sportOptionSelected:
-            "border-violet-300/70 bg-gradient-to-b from-violet-500/25 via-violet-500/10 to-fuchsia-900/20 text-white shadow-[0_6px_16px_-12px_rgba(139,92,246,0.8)]",
+            "border-violet-300/70 bg-gradient-to-b from-violet-500/25 via-violet-500/10 to-fuchsia-900/20 text-white shadow-[0_6px_16px_-12px_rgba(167,139,250,0.8)]",
         toggleOn: "peer-checked:bg-violet-400/70 peer-focus-visible:ring-violet-300/70",
         textStrong: "text-violet-100",
         textSoft: "text-violet-200",
+        previewSurface: "border-violet-300/20 bg-violet-500/10",
+        previewLabel: "text-violet-100/65",
         lifecycleCurrent: "border-violet-300/50 bg-violet-500/15 text-violet-100",
     },
 } as const;

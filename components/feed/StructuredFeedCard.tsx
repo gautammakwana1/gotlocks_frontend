@@ -6,7 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import FeedList from "@/components/social/FeedList";
 import { PostReactionButtons } from "@/components/social/PostReactionButtons";
 import { FEED_DESKTOP_SIZING } from "@/components/social/feedDesktopSizing";
+import { getContestEntryFeedHeaderLabel } from "@/lib/feed/contestEntryHeader";
 import type { PickReaction, PickReactionSummary } from "@/lib/interfaces/interfaces";
+import {
+    AWARDED_POINTS_CARD_TONE,
+    CONTEST_POST_EDGE_TONES,
+    CONTEST_POST_HEADER_TONES,
+} from "@/lib/styles/postCards";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import {
@@ -37,15 +43,17 @@ export type StructuredFeedCardProps = {
 
 type FeedCardAccent = "sky" | "violet";
 
+// The League half of this map retones sky -> blue to match the MVP's card: the
+// sky-100/sky-200 family read as washed-out grey against the new header band.
 const feedCardAccentTone = {
     sky: {
-        subtleAction: "border-sky-300/30 text-sky-100 hover:bg-sky-500/10",
-        menuAction: "text-sky-100 hover:bg-sky-500/10 hover:text-sky-50",
-        profileHover: "group-hover:text-sky-100",
-        recordLabel: "text-sky-200",
-        announcementEdge: "border-b-sky-300/30",
-        pinned: "border-sky-300/25 bg-sky-500/10 text-sky-100",
-        metric: "text-sky-100",
+        subtleAction: "border-blue-400/30 text-blue-300 hover:bg-blue-400/10",
+        menuAction: "text-blue-300 hover:bg-blue-400/10 hover:text-blue-200",
+        profileHover: "group-hover:text-blue-300",
+        recordLabel: "text-blue-400",
+        announcementEdge: "border-b-blue-400/30",
+        pinned: "border-blue-400/25 bg-blue-400/10 text-blue-300",
+        metric: "text-blue-300",
     },
     violet: {
         subtleAction: "border-violet-300/30 text-violet-100 hover:bg-violet-500/10",
@@ -78,51 +86,69 @@ const PinIcon = ({ className = "h-3.5 w-3.5" }: { className?: string }) => (
 );
 
 /**
- * Contest entries and results title their card with a link into the contest
- * instead of the plain record label, so the entry is one tap from its standings.
+ * Contest entries title their card with a link into the contest instead of the
+ * plain record label, so the entry is one tap from its standings. Renders
+ * nothing when the row arrived without a contest join, so the card falls back to
+ * the plain record label rather than an empty eyebrow.
+ *
+ * `presentation` is OPTIONAL here, unlike the MVP: this app leaves it undefined
+ * on announcements, Staff Picks and Community Picks, so every read of it is
+ * guarded rather than assumed.
  */
-/**
- * Resolves the contest a record links to, preferring an explicit presentation
- * over the record's own contest join. Null when the row arrived without one, so
- * the card can fall back to the plain record label rather than an empty eyebrow.
- */
-const resolveContestLink = (record: StructuredFeedRecord) => {
+const resolveContestHeader = (record: StructuredFeedRecord) => {
     const presentation = record.presentation ?? { kind: "ordinary" as const };
     const scoped =
         presentation.kind === "slip_contest" || presentation.kind === "feed_contest";
     const href = scoped ? presentation.contestHref : record.contest?.href;
-    const name = scoped ? presentation.contestName : record.contest?.name;
-    if (!href || !name) return null;
+    const contestName = scoped ? presentation.contestName : record.contest?.name;
+    if (!href || !contestName) return null;
     return {
         href,
-        name,
+        contestName,
+        scoped,
+        // "<Contest> · Feed Pick'em Contest Entry" — naming the contest and the
+        // builder that produced the entry, so a feed of mixed contests reads.
         label:
             presentation.kind === "slip_contest"
-                ? "Slip Contest Entry"
+                ? getContestEntryFeedHeaderLabel({ format: "fantasy", contestName })
                 : presentation.kind === "feed_contest"
-                    ? "Feed Contest Entry"
+                    ? getContestEntryFeedHeaderLabel({
+                        // The picks read cannot always name the builder; General
+                        // Combo is the same fallback PickCardContent uses.
+                        format: presentation.entryFormat ?? "general_combo",
+                        contestName,
+                    })
                     : "Contest Entry",
+        // A Feed contest entry's eyebrow stays neutral because it already sits on
+        // the accent-tinted header bar; everything else keeps the accent text.
+        neutralLabelTone: presentation.kind === "feed_contest",
     };
 };
 
 const StructuredContestHeaderLink = ({
-    contest,
+    record,
     accent,
 }: {
-    contest: NonNullable<ReturnType<typeof resolveContestLink>>;
+    record: StructuredFeedRecord;
     accent: FeedCardAccent;
 }) => {
+    const contest = resolveContestHeader(record);
+    if (!contest) return null;
     const accentTone = feedCardAccentTone[accent];
-    const { href, name: contestName, label } = contest;
+    const { href, contestName, scoped, label } = contest;
+    const labelTone = contest.neutralLabelTone ? "text-slate-300" : accentTone.recordLabel;
 
     return (
         <Link
             data-feed-contest-entry-link
             href={href}
-            aria-label={`View ${contestName} contest`}
-            className={`inline-flex min-h-6 items-center gap-1 rounded-md text-[10px] font-semibold uppercase tracking-[0.13em] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${accentTone.recordLabel}`}
+            // A label that already names the contest is its own accessible name;
+            // only the unnamed fallback needs the "View … contest" phrasing.
+            aria-label={scoped ? undefined : `View ${contestName} contest`}
+            className={`inline-flex min-h-6 min-w-0 items-start gap-1 rounded-md text-left text-[10px] font-semibold uppercase tracking-[0.13em] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${labelTone}`}
         >
-            {label} <span aria-hidden="true">↗</span>
+            <span className="min-w-0 break-words">{label}</span>
+            <span aria-hidden="true" className="shrink-0">↗</span>
         </Link>
     );
 };
@@ -337,12 +363,56 @@ export const StructuredFeedCard = ({
         ? `@${record.author.handle.replace(/^@/, "")}`
         : record.author.displayName;
     const authorImage = generateProfileImageUrl(record.author.profileImage);
-    const contestLink = resolveContestLink(record);
+    // Every read of `presentation` is optional-chained: this app leaves it
+    // undefined on announcements, Staff Picks and Community Picks.
+    const feedEntryFormat =
+        record.presentation?.kind === "feed_contest"
+            ? record.presentation.entryFormat
+            : undefined;
+    const isContestEntry =
+        record.presentation?.kind === "feed_contest" ||
+        record.presentation?.kind === "slip_contest";
+    const contestBottomEdgeTone = CONTEST_POST_EDGE_TONES[accent];
+    // Null when the row arrived with no contest join at all — the eyebrow then
+    // falls back to the plain record label rather than rendering empty.
+    const hasContestHeaderLink = Boolean(resolveContestHeader(record));
     const canReplace = Boolean(record.actions?.canReplace && onReplace);
     const canDelete = Boolean(record.actions?.canDelete && onDelete);
     const canEdit = Boolean(isAnnouncement && record.actions?.canEdit && onEdit);
     const canPin = Boolean(isAnnouncement && record.actions?.canPin && onPin);
     const isPinned = Boolean(record.actions?.pinned);
+    // Points state drives BOTH the card tone and which of the two point lines is
+    // drawn. `undefined`/`null` awarded points means "not graded yet"; a graded
+    // zero is a real answer and must not read as pending.
+    const directPointsState =
+        record.selection?.awardedPoints === undefined ||
+            record.selection?.awardedPoints === null
+            ? "potential"
+            : record.selection.awardedPoints > 0
+                ? "awarded"
+                : "zero";
+    // Only the surfaces that actually bank the points celebrate them: a League
+    // Feed post's award is already told by its own contest board.
+    const hasHighlightedDirectAward =
+        directPointsState === "awarded" &&
+        (context.kind === "global" || context.kind === "arena");
+    const directSelectionState =
+        record.selection?.result === "win"
+            ? "win"
+            : record.selection?.result === "loss"
+                ? "loss"
+                : record.selection?.result === "void" ||
+                    record.selection?.result === "not_found"
+                    ? "neutral"
+                    : "pending";
+    const directSelectionTextTone =
+        directSelectionState === "win"
+            ? "text-emerald-200"
+            : directSelectionState === "loss"
+                ? "text-rose-200"
+                : directSelectionState === "neutral"
+                    ? "text-slate-300"
+                    : "text-white";
     // Reactions are resolved PER RECORD, not per feed: the host answers with a
     // summary only for kinds that actually carry counts (Community Picks today).
     // A null answer — an announcement, which isn't a `picks` row at all, or a
@@ -365,12 +435,140 @@ export const StructuredFeedCard = ({
             />
         ) : null;
 
+    // An entry that is still sealed gets its OWN compact row rather than the full
+    // card with a warning box in it: there is no pick to show, so the row is just
+    // the author, a padlock chip and when it reveals. Kept ahead of the pick
+    // branch so a row that arrives with a payload it should not be showing still
+    // renders sealed.
+    if (detailsHidden) {
+        return (
+            <article
+                aria-label={`${label} by ${authorLabel}`}
+                data-feed-entry-format={feedEntryFormat}
+                data-feed-entry-private={feedEntryFormat}
+                data-feed-entry-layout="sealed-compact"
+                className={`${className} py-4 ${FEED_DESKTOP_SIZING.row}`.trim()}
+            >
+                <header
+                    data-feed-post-header
+                    className={`flex items-center justify-between gap-3 px-5 pb-3 sm:px-6 ${FEED_DESKTOP_SIZING.header}`}
+                >
+                    <Link
+                        data-feed-post-author
+                        href={getProfilePath(record.author.id, currentUserId)}
+                        aria-label={`View ${feedAuthorName} profile`}
+                        className={`group -ml-1 flex min-w-0 items-center gap-3 rounded-xl border border-transparent py-1 pl-0 pr-2 text-left transition hover:border-white/15 hover:bg-white/5 ${FEED_DESKTOP_SIZING.authorTrigger}`}
+                    >
+                        <span
+                            data-feed-post-avatar
+                            aria-hidden
+                            className={`ml-1 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100 transition ${accentTone.profileHover} ${FEED_DESKTOP_SIZING.avatar}`}
+                        >
+                            {/* The MVP draws initials only; this app has a real
+                                avatar join, so keep it and fall back to initials. */}
+                            {authorImage ? (
+                                <Image
+                                    src={authorImage}
+                                    alt=""
+                                    width={56}
+                                    height={56}
+                                    className="h-full w-full rounded-full object-cover"
+                                    draggable={false}
+                                    onDragStart={(event) => event.preventDefault()}
+                                    unoptimized
+                                />
+                            ) : (
+                                feedAuthorName.slice(0, 2)
+                            )}
+                        </span>
+                        <span className="min-w-0">
+                            <span
+                                data-feed-post-author-name
+                                className={`block text-sm font-semibold text-[var(--app-text)] ${FEED_DESKTOP_SIZING.authorName}`}
+                            >
+                                <span className="sm:hidden">{compactFeedAuthorName}</span>
+                                <span className="hidden sm:inline">{feedAuthorName}</span>
+                            </span>
+                            <span className="block text-xs text-[var(--text-secondary)]">
+                                view profile
+                            </span>
+                        </span>
+                    </Link>
+
+                    <div
+                        data-feed-post-controls
+                        className={`flex shrink-0 items-center justify-end gap-2 ${FEED_DESKTOP_SIZING.controlCluster}`}
+                    >
+                        {reactionControls}
+                    </div>
+                </header>
+
+                <div className="px-5 sm:px-6 lg:px-8">
+                    <section
+                        aria-label="Sealed contest entry"
+                        data-feed-entry-state="sealed"
+                        className={`flex min-w-0 items-center gap-3 rounded-xl border border-white/10 border-b-2 bg-[#0b0b0b] px-3 py-2.5 ${contestBottomEdgeTone}`}
+                    >
+                        <span
+                            aria-hidden
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-dashed border-white/20 bg-white/[0.04] text-slate-400"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="h-3.5 w-3.5"
+                            >
+                                <rect x="5" y="10" width="14" height="10" rx="2" />
+                                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                            </svg>
+                        </span>
+                        <span className="min-w-0">
+                            <StructuredContestHeaderLink record={record} accent={accent} />
+                            <span className="mt-0.5 block text-[10px] leading-4 text-gray-500">
+                                {record.contest?.locksAtLabel
+                                    ? `Sealed · Reveals ${record.contest.locksAtLabel}`
+                                    : "Sealed until contest lock"}
+                            </span>
+                        </span>
+                    </section>
+
+                    <p
+                        className={`mt-2 text-right text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] ${FEED_DESKTOP_SIZING.footer}`}
+                    >
+                        Submitted {record.createdAtLabel}
+                    </p>
+
+                    {/* No sealed record carries actions today (only unrevealed
+                        Feed-contest entries reach here, and they arrive without
+                        an `actions` block) — kept so a row that ever does keeps
+                        its handlers rather than silently losing them. */}
+                    <RecordActions
+                        record={record}
+                        accent={accent}
+                        canReplace={canReplace}
+                        canDelete={canDelete}
+                        onReplace={onReplace}
+                        onDelete={onDelete}
+                    />
+                </div>
+            </article>
+        );
+    }
+
     // A revealed pick renders through the canonical pick card, so a Community
     // Pick in the Feed reads exactly like the same post on Global Social — with
     // the League / Arena points vocabulary swapped in.
-    if (record.pick && !detailsHidden) {
+    if (record.pick) {
         return (
-            <article aria-label={`${label} by ${authorLabel}`} className={className}>
+            <article
+                aria-label={`${label} by ${authorLabel}`}
+                data-feed-entry-format={feedEntryFormat}
+                className={className}
+            >
                 <FeedList
                     items={[record.pick]}
                     currentUserId={currentUserId}
@@ -424,9 +622,19 @@ export const StructuredFeedCard = ({
     return (
         <article
             aria-label={`${label} by ${authorLabel}`}
-            className={`${className} px-5 py-4 sm:px-6 ${FEED_DESKTOP_SIZING.structuredArticle}`.trim()}
+            data-feed-entry-format={feedEntryFormat}
+            className={`${className} px-5 pb-4 pt-4 sm:px-6 ${FEED_DESKTOP_SIZING.structuredArticle}`.trim()}
         >
-            <header className="flex flex-wrap items-center justify-between gap-3">
+            {/* A contest entry wears a full-bleed tinted header bar so the row
+                reads as belonging to that contest before the eyebrow is read.
+                The negative margins undo the article's own gutters. */}
+            <header
+                data-post-header-context={isContestEntry ? accent : undefined}
+                className={`flex flex-wrap items-center justify-between gap-3 ${isContestEntry
+                    ? `-mx-5 -mt-4 border-b border-white/10 px-5 py-3 sm:-mx-6 sm:px-6 ${CONTEST_POST_HEADER_TONES[accent]}`
+                    : ""
+                    }`}
+            >
                 {isAnnouncement ? (
                     <Link
                         href={getProfilePath(record.author.id, currentUserId)}
@@ -467,8 +675,8 @@ export const StructuredFeedCard = ({
                     </Link>
                 ) : (
                     <div className="min-w-0">
-                        {record.kind === "competitive_pick" && contestLink ? (
-                            <StructuredContestHeaderLink contest={contestLink} accent={accent} />
+                        {record.kind === "competitive_pick" && hasContestHeaderLink ? (
+                            <StructuredContestHeaderLink record={record} accent={accent} />
                         ) : (
                             <p
                                 className={`text-[10px] font-semibold uppercase tracking-[0.13em] ${accentTone.recordLabel}`}
@@ -508,108 +716,113 @@ export const StructuredFeedCard = ({
                 </div>
             </header>
 
-            {detailsHidden ? (
-                <div className="mt-4 rounded-xl border border-amber-300/20 bg-amber-500/10 px-4 py-3">
-                    <p className="text-sm font-semibold text-amber-100">Pick details hidden until lock</p>
-                    <p className="mt-1 text-xs leading-5 text-amber-100/70">
-                        This competitive entry becomes visible when the contest locks.
+            {/* A sealed entry never reaches here — it returns its own compact row
+                above — so everything below is the revealed body. */}
+            {record.body && isAnnouncement ? (
+                <section
+                    aria-label="Announcement content"
+                    className={`mt-4 rounded-xl border border-white/10 border-b-[3px] bg-[#0b0b0b] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-2px_0_rgba(255,255,255,0.08),inset_0_0_0_1px_rgba(255,255,255,0.04),0_2px_10px_rgba(0,0,0,0.18)] lg:mt-5 lg:p-5 ${accentTone.announcementEdge}`}
+                >
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            {label}
+                        </p>
+                        {isPinned ? (
+                            <span
+                                title="Pinned announcement"
+                                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${accentTone.pinned}`}
+                            >
+                                <PinIcon />
+                            </span>
+                        ) : null}
+                    </div>
+                    {record.title ? (
+                        <p className="mt-2 text-sm font-semibold text-white lg:text-base">
+                            {record.title}
+                        </p>
+                    ) : null}
+                    <div className="mt-3 h-px w-full bg-white/10" />
+                    <p
+                        className={`mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-100 ${FEED_DESKTOP_SIZING.structuredBody}`}
+                    >
+                        {record.body}
                     </p>
-                    {record.contest?.locksAtLabel ? (
-                        <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-100/60">
-                            Locks {record.contest.locksAtLabel}
+                </section>
+            ) : record.body ? (
+                <p
+                    className={`mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-200 ${FEED_DESKTOP_SIZING.structuredBody}`}
+                >
+                    {record.body}
+                </p>
+            ) : null}
+
+            {record.selection ? (
+                <div
+                    data-feed-entry-primary={isContestEntry ? feedEntryFormat : undefined}
+                    data-points-state={directPointsState}
+                    data-points-kind={context.kind === "global" ? "xp" : context.kind}
+                    className={`mt-4 rounded-xl border p-4 lg:mt-5 lg:p-5 ${hasHighlightedDirectAward
+                        ? AWARDED_POINTS_CARD_TONE
+                        : "border-white/10 bg-[#0b0b0b]"
+                        } ${isContestEntry ? `border-b-[3px] ${contestBottomEdgeTone}` : ""}`}
+                >
+                    {record.selection.marketLabel ? (
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                            {record.selection.marketLabel}
+                        </p>
+                    ) : null}
+                    <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
+                        <p
+                            data-pick-selection-state={directSelectionState}
+                            className={`font-semibold ${directSelectionTextTone} ${FEED_DESKTOP_SIZING.structuredSelection}`}
+                        >
+                            {record.selection.summary}
+                        </p>
+                        <span
+                            className={`shrink-0 font-mono text-sm font-semibold ${accentTone.metric} ${FEED_DESKTOP_SIZING.structuredSelection}`}
+                        >
+                            {formatStructuredFeedAmericanOdds(record.selection.acceptedAmericanOdds)}
+                        </span>
+                    </div>
+                    {isNoncompetitiveStaffPick ? (
+                        // Frontend-only: Staff Picks are noncompetitive here, and the
+                        // MVP has no such record kind to say so.
+                        <p className="mt-3 text-xs font-semibold text-amber-100">
+                            Staff Picks do not earn {pointLabel} or affect standings.
+                        </p>
+                    ) : directPointsState !== "potential" ? (
+                        // Once a pick is graded the potential is history: showing
+                        // both lines (as this card used to) reads as two awards.
+                        <>
+                            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                {pointLabel}
+                            </p>
+                            <p
+                                className={`mt-1 text-sm font-semibold ${directPointsState === "awarded" ? "text-emerald-200" : "text-slate-400"
+                                    } ${FEED_DESKTOP_SIZING.structuredSelection}`}
+                            >
+                                +{record.selection.awardedPoints} {pointLabel}
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                Potential {pointLabel}
+                            </p>
+                            <p
+                                className={`mt-1 text-sm font-semibold ${accentTone.metric} ${FEED_DESKTOP_SIZING.structuredSelection}`}
+                            >
+                                +{record.selection.potentialPoints} {pointLabel}
+                            </p>
+                        </>
+                    )}
+                    {record.selection.resultLabel ? (
+                        <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                            {record.selection.resultLabel}
                         </p>
                     ) : null}
                 </div>
-            ) : (
-                <>
-                    {record.body && isAnnouncement ? (
-                        <section
-                            aria-label="Announcement content"
-                            className={`mt-4 rounded-xl border border-white/10 border-b-[3px] bg-[#0b0b0b] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-2px_0_rgba(255,255,255,0.08),inset_0_0_0_1px_rgba(255,255,255,0.04),0_2px_10px_rgba(0,0,0,0.18)] lg:mt-5 lg:p-5 ${accentTone.announcementEdge}`}
-                        >
-                            <div className="flex items-center justify-between gap-3">
-                                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                                    {label}
-                                </p>
-                                {isPinned ? (
-                                    <span
-                                        title="Pinned announcement"
-                                        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${accentTone.pinned}`}
-                                    >
-                                        <PinIcon />
-                                    </span>
-                                ) : null}
-                            </div>
-                            {record.title ? (
-                                <p className="mt-2 text-sm font-semibold text-white lg:text-base">
-                                    {record.title}
-                                </p>
-                            ) : null}
-                            <div className="mt-3 h-px w-full bg-white/10" />
-                            <p
-                                className={`mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-100 ${FEED_DESKTOP_SIZING.structuredBody}`}
-                            >
-                                {record.body}
-                            </p>
-                        </section>
-                    ) : record.body ? (
-                        <p
-                            className={`mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-200 ${FEED_DESKTOP_SIZING.structuredBody}`}
-                        >
-                            {record.body}
-                        </p>
-                    ) : null}
-
-                    {record.selection ? (
-                        <div className="mt-4 rounded-xl border border-white/10 bg-[#0b0b0b] p-4 lg:mt-5 lg:p-5">
-                            {record.selection.marketLabel ? (
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                                    {record.selection.marketLabel}
-                                </p>
-                            ) : null}
-                            <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
-                                <p
-                                    className={`font-semibold text-white ${FEED_DESKTOP_SIZING.structuredSelection}`}
-                                >
-                                    {record.selection.summary}
-                                </p>
-                                <span
-                                    className={`shrink-0 font-mono text-sm font-semibold ${accentTone.metric} ${FEED_DESKTOP_SIZING.structuredSelection}`}
-                                >
-                                    {formatStructuredFeedAmericanOdds(record.selection.acceptedAmericanOdds)}
-                                </span>
-                            </div>
-                            {isNoncompetitiveStaffPick ? (
-                                <p className="mt-3 text-xs font-semibold text-amber-100">
-                                    Staff Picks do not earn {pointLabel} or affect standings.
-                                </p>
-                            ) : (
-                                <>
-                                    <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                        Potential {pointLabel}
-                                    </p>
-                                    <p
-                                        className={`mt-1 text-sm font-semibold ${accentTone.metric} ${FEED_DESKTOP_SIZING.structuredSelection}`}
-                                    >
-                                        +{record.selection.potentialPoints} {pointLabel}
-                                    </p>
-                                    {record.selection.awardedPoints !== undefined &&
-                                        record.selection.awardedPoints !== null ? (
-                                        <p className="mt-1 text-xs font-semibold text-emerald-200">
-                                            +{record.selection.awardedPoints} {pointLabel}
-                                        </p>
-                                    ) : null}
-                                </>
-                            )}
-                            {record.selection.resultLabel ? (
-                                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                    {record.selection.resultLabel}
-                                </p>
-                            ) : null}
-                        </div>
-                    ) : null}
-                </>
-            )}
+            ) : null}
 
             {isAnnouncement ? (
                 <div className="mt-3 flex justify-end text-right text-[11px] uppercase tracking-[0.18em] text-[var(--text-muted)]">

@@ -221,18 +221,87 @@ export const groupMarkets = (
  * The three-column main-line preview shown on every matchup row.
  * -------------------------------------------------------------------------- */
 
-const findPreviewSelection = (
+/** Every odd on this game that could stand in for one cell of the grid. */
+const previewCandidates = (
     selections: SelectionWithGame[],
     marketNames: readonly string[],
     side: string
 ) =>
-    selections.find(
+    selections.filter(
         ({ selection }) =>
             selection.playerId === null &&
             marketNames.includes(normalizeMarketName(selection.marketName)) &&
             (selection.side?.toLowerCase() === side ||
                 (side === "draw" && normalizeMarketName(selection.selectionName) === "draw"))
     );
+
+const lineOf = (entry: SelectionWithGame | undefined) =>
+    typeof entry?.selection.line === "number" ? entry.selection.line : null;
+
+/**
+ * The MAIN line for one market and side — never merely the first odd that
+ * matches it.
+ *
+ * OddsBlaze files alternates under the SAME market name (an alt spread is a
+ * "Point Spread" odd with `main: false`) and does not order the main one first,
+ * which is why every other builder in the repo tests the flag explicitly — see
+ * NbaPickBuilder's `odd.market === "Point Spread" && !odd.main` alt bucket and
+ * MlbPickBuilder's `if (!existing.odd.main && odd.main)` preference.
+ *
+ * Taking the first match was safe only while every board reaching here was
+ * main-only. It no longer is: per-game enrichment deliberately returns FULL
+ * boards — `main=false` on the targeted retry, no `main` filter at all on the
+ * by-match-id route — and for a game the batch never priced that full board is
+ * the ONLY board, so no main line sits in front of the alternates to mask this.
+ *
+ * `pairedLine` is the fallback for a board that flags no main at all: the two
+ * rows of the grid are one line quoted from both sides, so the second is matched
+ * to the first rather than resolved independently.
+ */
+const preferMainSelection = (
+    candidates: SelectionWithGame[],
+    pairedLine: number | null
+) => {
+    if (!candidates.length) return undefined;
+    const main = candidates.find(({ selection }) => selection.main);
+    if (main) return main;
+    if (pairedLine !== null) {
+        const paired = candidates.find(({ selection }) => selection.line === pairedLine);
+        if (paired) return paired;
+    }
+    return candidates[0];
+};
+
+const findPreviewSelection = (
+    selections: SelectionWithGame[],
+    marketNames: readonly string[],
+    side: string
+) => preferMainSelection(previewCandidates(selections, marketNames, side), null);
+
+/**
+ * The two sides of ONE two-way market, resolved TOGETHER so the grid can never
+ * show away -14.5 opposite home +2.5.
+ *
+ * `mirrored` is true for spreads/run lines/puck lines (away -3.5 pairs with home
+ * +3.5) and false for totals (over 45.5 pairs with under 45.5).
+ */
+const findPreviewPair = (
+    selections: SelectionWithGame[],
+    marketNames: readonly string[],
+    sides: readonly [string, string],
+    mirrored: boolean
+): readonly [SelectionWithGame | undefined, SelectionWithGame | undefined] => {
+    const firstCandidates = previewCandidates(selections, marketNames, sides[0]);
+    const secondCandidates = previewCandidates(selections, marketNames, sides[1]);
+    const mirror = (line: number | null) => (line === null ? null : mirrored ? -line : line);
+    // Anchored on whichever side actually flags a main line; a main on either
+    // side wins outright inside `preferMainSelection`, so this only decides what
+    // the OTHER side pairs against.
+    const mainSecond = secondCandidates.find(({ selection }) => selection.main);
+    const first = preferMainSelection(firstCandidates, mirror(lineOf(mainSecond)));
+    const second = preferMainSelection(secondCandidates, mirror(lineOf(first)));
+    return [first, second] as const;
+};
 
 export const getMainLinePreview = (
     game: ContestOddsGame,
@@ -265,12 +334,20 @@ export const getMainLinePreview = (
               ? ["total goals"]
               : ["total points", "game total"];
     const lineLabel = game.sport === "MLB" ? "Run" : game.sport === "NHL" ? "Puck" : "Spread";
-    const awayLine = findPreviewSelection(selections, lineMarketNames, "away");
-    const homeLine = findPreviewSelection(selections, lineMarketNames, "home");
+    const [awayLine, homeLine] = findPreviewPair(
+        selections,
+        lineMarketNames,
+        ["away", "home"],
+        true
+    );
     const awayMoney = findPreviewSelection(selections, ["moneyline"], "away");
     const homeMoney = findPreviewSelection(selections, ["moneyline"], "home");
-    const over = findPreviewSelection(selections, totalMarketNames, "over");
-    const under = findPreviewSelection(selections, totalMarketNames, "under");
+    const [over, under] = findPreviewPair(
+        selections,
+        totalMarketNames,
+        ["over", "under"],
+        false
+    );
 
     return {
         labels: [lineLabel, "Money", "Total"],

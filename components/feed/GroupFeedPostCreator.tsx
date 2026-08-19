@@ -18,17 +18,40 @@ import type {
 
 const ANNOUNCEMENT_MAX = 2000;
 
-type CreatorTab =
+// MVP counterpart: components/feed/GroupFeedAnnouncementCreator.tsx (its drawer,
+// GroupFeedAnnouncementDrawer.tsx, maps to GroupFeedPostDrawer here). The MVP cut
+// its composer down to a single announcement panel because its mock store has no
+// Community Pick / Staff Pick / contest-entry write path. Ours are live REST
+// wiring, so the announcement panel below is ported one-for-one and the tab strip
+// stays — the Feed header's "New Announcement" control opens this same drawer on
+// the announcement tab (see `initialTab`) instead of replacing it.
+export type GroupFeedPostCreatorTab =
     | "community_pick"
     | "announcement"
     | "staff_pick"
     | "competitive_pick";
+
+type CreatorTab = GroupFeedPostCreatorTab;
 
 const TAB_LABELS: Record<CreatorTab, string> = {
     community_pick: "Pick Post",
     announcement: "Announcement",
     staff_pick: "Staff Pick",
     competitive_pick: "Contest Entry",
+};
+
+// The drawer header now describes the panel below it rather than the composer as
+// a whole: one blanket sentence was wrong for three of the four panels, and the
+// MVP header only ever had to describe announcements. The announcement line is
+// the MVP's verbatim (GroupFeedAnnouncementCreator.tsx:55-57).
+const TAB_DESCRIPTIONS: Record<CreatorTab, string> = {
+    community_pick:
+        "Share an ordinary post with this community, your Profile, and Global. Contest entries are submitted from their Contest pages and stay inside this community.",
+    announcement: "Share an official update with everyone in this community.",
+    staff_pick:
+        "Share a noncompetitive Staff Pick — Staff Picks do not affect standings.",
+    competitive_pick:
+        "Submit an entry to an open contest. Entries stay inside this community.",
 };
 
 export type GroupFeedPostCreatorProps = {
@@ -39,6 +62,13 @@ export type GroupFeedPostCreatorProps = {
     selectionOptions: readonly StructuredFeedSelectionOption[];
     contestOptions?: readonly StructuredFeedContestOption[];
     communityPickWindow?: StructuredFeedRollingWindow;
+    /**
+     * Which panel opens first. The Feed header's announcement control is
+     * announcement-specific, so it passes "announcement"; every other entry point
+     * omits this and keeps the historic default (Pick Post when the viewer can
+     * post one). An unavailable tab still falls back to the first allowed one.
+     */
+    initialTab?: GroupFeedPostCreatorTab;
     /** Legacy composer path — announcements, Staff Picks, competitive entries. */
     onSubmit: (
         submission: StructuredFeedSubmission
@@ -58,6 +88,7 @@ export const GroupFeedPostCreator = ({
     selectionOptions,
     contestOptions = [],
     communityPickWindow,
+    initialTab,
     onSubmit,
     onSubmitBuiltPicks,
     onPostComplete,
@@ -82,7 +113,9 @@ export const GroupFeedPostCreator = ({
     }, [capabilities]);
 
     const [activeTab, setActiveTab] = useState<CreatorTab>(
-        () => (capabilities.canCreateCommunityPick ? "community_pick" : "announcement")
+        () =>
+            initialTab ??
+            (capabilities.canCreateCommunityPick ? "community_pick" : "announcement")
     );
     const resolvedTab = tabs.includes(activeTab) ? activeTab : tabs[0];
 
@@ -144,9 +177,7 @@ export const GroupFeedPostCreator = ({
                     {contextName}
                 </p>
                 <p className="max-w-2xl text-sm leading-6 text-gray-400">
-                    Share an ordinary post with this community, your Profile, and Global.
-                    Contest entries are submitted from their Contest pages and stay inside
-                    this community.
+                    {TAB_DESCRIPTIONS[resolvedTab]}
                 </p>
             </header>
 
@@ -239,6 +270,12 @@ export const GroupFeedPostCreator = ({
                 >
                     <div>
                         <h2 className="text-lg font-semibold text-white">Post an announcement</h2>
+                        {/* The MVP's subline here reads "Announcements and finalized
+                            contest results are the only posts shown in Community"
+                            (GroupFeedAnnouncementCreator.tsx:70-72). That is true of
+                            the MVP's feed taxonomy only — ours keeps Community Picks
+                            and Staff Picks in the same view — so it is deliberately
+                            not ported. */}
                         <p className="mt-1 text-sm text-gray-400">
                             Share an update with everyone in {contextName}.
                         </p>

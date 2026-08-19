@@ -18,6 +18,16 @@ export type ContestSlateRangeCalendarProps = {
     onChange: (startDate: string, endDate: string) => void;
 };
 
+/*
+ * NO PER-DAY MARKER. An earlier pass carried a `gameCounts` map and drew a dot
+ * under every date that had matchups. It is gone on purpose: the count is not
+ * knowable when the calendar is drawn — a multi-sport slate does not fetch its
+ * schedule until sports are chosen, which happens after this step — so most days
+ * rendered a blank dot that read as "no games here" when it only meant "not
+ * asked yet". The step says so in a sentence instead, once, where it can be
+ * accurate.
+ */
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const SLATE_LENGTHS = Array.from({ length: MAX_SLATE_DAYS }, (_, index) => index + 1);
@@ -52,18 +62,18 @@ const monthFormatter = new Intl.DateTimeFormat("en-US", {
 const accentClasses = {
     league: {
         selected:
-            "border-sky-200 bg-sky-200 text-slate-950 shadow-[0_8px_22px_-12px_rgba(125,211,252,0.95)]",
+            "border-sky-200 bg-sky-200 text-slate-950 shadow-[0_8px_22px_-12px_rgba(96,165,250,0.95)]",
         endpoint: "ring-1 ring-inset ring-white/70",
         duration:
-            "border-sky-300/55 bg-sky-500/20 text-sky-50 shadow-[0_8px_18px_-14px_rgba(56,189,248,0.9)]",
+            "border-sky-300/55 bg-sky-500/20 text-sky-50 shadow-[0_8px_18px_-14px_rgba(96,165,250,0.9)]",
         focus: "focus-visible:ring-sky-300",
     },
     arena: {
         selected:
-            "border-violet-200 bg-violet-200 text-violet-950 shadow-[0_8px_22px_-12px_rgba(196,181,253,0.95)]",
+            "border-violet-200 bg-violet-200 text-violet-950 shadow-[0_8px_22px_-12px_rgba(167,139,250,0.95)]",
         endpoint: "ring-1 ring-inset ring-white/70",
         duration:
-            "border-violet-300/55 bg-violet-500/20 text-violet-50 shadow-[0_8px_18px_-14px_rgba(139,92,246,0.9)]",
+            "border-violet-300/55 bg-violet-500/20 text-violet-50 shadow-[0_8px_18px_-14px_rgba(167,139,250,0.9)]",
         focus: "focus-visible:ring-violet-300",
     },
 } as const;
@@ -206,7 +216,7 @@ export const ContestSlateRangeCalendar = ({
                                     onKeyDown={(event) => moveFocus(event, index)}
                                     className={`relative flex min-h-[4.25rem] w-full flex-col items-center justify-center rounded-xl border px-1 py-2 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${colors.focus} ${inRange
                                         ? `${colors.selected} ${endpoint ? colors.endpoint : ""}`
-                                        : "border-white/10 bg-white/[0.025] text-gray-300 hover:border-white/20 hover:bg-white/[0.06]"
+                                        : "border-white/8 bg-white/[0.025] text-gray-300 hover:border-white/20 hover:bg-white/[0.06]"
                                         }`}
                                 >
                                     <span

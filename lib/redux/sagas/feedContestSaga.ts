@@ -10,6 +10,14 @@ import type {
     DeleteFeedContestPayload,
     EnterFeedContestData,
     EnterFeedContestPayload,
+    EnterPickemFeedContestData,
+    EnterPickemFeedContestPayload,
+    ReplacePickemFeedContestEntryData,
+    ReplacePickemFeedContestEntryPayload,
+    EnterTdPsychicFeedContestData,
+    EnterTdPsychicFeedContestPayload,
+    ReplaceTdPsychicFeedContestEntryData,
+    ReplaceTdPsychicFeedContestEntryPayload,
     FeedContest,
     FeedContestDetailData,
     FeedContestEntriesData,
@@ -18,10 +26,12 @@ import type {
     FeedContestLifecycleData,
     FeedContestListData,
     FeedContestPicksData,
+    FeedContestPodiumListData,
     FeedContestStatsData,
     FeedContestSection,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
+    FetchFeedContestPodiumsPayload,
     FetchFeedContestEntriesPayload,
     FetchFeedContestLeaderboardPayload,
     FetchFeedContestPicksPayload,
@@ -50,6 +60,10 @@ import {
     createFeedContestSuccess,
     enterFeedContestFailure,
     enterFeedContestRequest,
+    enterPickemFeedContestRequest,
+    enterTdPsychicFeedContestRequest,
+    replacePickemFeedContestEntryRequest,
+    replaceTdPsychicFeedContestEntryRequest,
     enterFeedContestSuccess,
     fetchFeedContestDetailFailure,
     fetchFeedContestDetailRequest,
@@ -69,6 +83,9 @@ import {
     fetchFeedContestsFailure,
     fetchFeedContestsRequest,
     fetchFeedContestsSuccess,
+    fetchFeedContestPodiumsFailure,
+    fetchFeedContestPodiumsRequest,
+    fetchFeedContestPodiumsSuccess,
     publishDraftFeedContestFailure,
     publishDraftFeedContestRequest,
     publishDraftFeedContestSuccess,
@@ -150,6 +167,58 @@ function* handleFetchFeedContests(
     }
 }
 
+/**
+ * GET /group/feed-contest/list/finalized/podium — the group's RESULTS BOARD,
+ * behind the Feed tab's Winners block.
+ *
+ * Mounted UNDER the finalized section path because it is that same list: same
+ * predicate, same order, same contest columns, plus a `podium` array per row. It
+ * is a separate call rather than a flag on the section fetch because it fans out
+ * one achievements query PER contest on the page server-side, which is also why
+ * the server caps `limit` at 25 — the page size IS the fan-out.
+ */
+function* handleFetchFeedContestPodiums(
+    action: PayloadAction<FetchFeedContestPodiumsPayload>
+): SagaIterator {
+    const { group_id, group_type, include_archived, page = 1, limit = 10 } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/list/finalized/podium`,
+            {
+                params: {
+                    group_id,
+                    group_type,
+                    page,
+                    limit,
+                    // Only sent when opted in: the server reads the flag as text
+                    // and treats anything but "true"/"1" as false, so an absent
+                    // param and `false` mean the same thing.
+                    ...(include_archived ? { include_archived: "true" } : {}),
+                },
+            }
+        );
+        const payload = response.data as { data?: FeedContestPodiumListData };
+        if (!payload?.data) {
+            yield put(
+                fetchFeedContestPodiumsFailure({
+                    groupId: group_id,
+                    error: "Failed to load contest winners",
+                })
+            );
+            return;
+        }
+        yield put(fetchFeedContestPodiumsSuccess({ groupId: group_id, data: payload.data }));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestPodiumsFailure({
+                groupId: group_id,
+                error: getErrorMessage(error, "Failed to load contest winners"),
+            })
+        );
+    }
+}
+
 // POST /group/feed-contest/create — publishes straight to 'open', so the hosting
 // / League-tier active-contest limit is charged here. The body is forwarded
 // as-is: every rule (organizer authority, template/entry agreement, the slate
@@ -157,12 +226,15 @@ function* handleFetchFeedContests(
 function* handleCreateFeedContest(
     action: PayloadAction<CreateFeedContestPayload>
 ): SagaIterator {
+    // The wizard's own zone wins over the browser's — see `time_zone` on the
+    // payload. Stripped from the body: the server reads it as a header.
+    const { time_zone, ...body } = action.payload;
     try {
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
             `${API_BASE_URL}/group/feed-contest/create`,
-            action.payload,
-            { headers: timeZoneHeader() }
+            body,
+            { headers: time_zone ? { "x-timezone": time_zone } : timeZoneHeader() }
         );
         const payload = response.data as {
             message?: string;
@@ -189,12 +261,13 @@ function* handleCreateFeedContest(
 function* handleCreateDraftFeedContest(
     action: PayloadAction<CreateFeedContestPayload>
 ): SagaIterator {
+    const { time_zone, ...body } = action.payload;
     try {
         const response: AxiosResponse<unknown> = yield call(
             axiosInstance.post,
             `${API_BASE_URL}/group/feed-contest/create-draft`,
-            action.payload,
-            { headers: timeZoneHeader() }
+            body,
+            { headers: time_zone ? { "x-timezone": time_zone } : timeZoneHeader() }
         );
         const payload = response.data as {
             message?: string;
@@ -651,6 +724,55 @@ function* handleEnterFeedContest(
     }
 }
 
+// POST /group/feed-contest/enter-pickem/:contest_id — the SUNDAY PICK'EM card:
+// accepts the rules, joins and submits one moneyline per slate game in ONE call.
+//
+// A separate endpoint from /enter rather than a mode of it, because the two
+// models score differently — a card sums each selection's award, a combo pays
+// only if every leg lands — and each endpoint refuses the other's contest by
+// name. Its leg contract also differs in one field that is easy to get wrong:
+// `side` must be the TEAM NAME, which the server checks against the slate
+// snapshot's home_team/away_team (feed.helper.ts:2930).
+//
+// Reuses the combo's success/failure actions on purpose: the response envelope
+// carries the same `contest` / `participant` / `pick`, which is all the reducer
+// and the entry screen's receipt read. Only `data.entry` differs, and nothing
+// re-derives that client-side.
+//
+// NOT idempotent — a second POST answers 409, and there is no replace path for a
+// card yet, so the screen must keep its button disabled on `entrySubmitLoading`.
+function* handleEnterPickemFeedContest(
+    action: PayloadAction<EnterPickemFeedContestPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/feed-contest/enter-pickem/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: EnterPickemFeedContestData;
+        };
+        yield put(
+            enterFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        // Re-read the field so the caller's own receipt is the server's copy
+        // rather than the echo, and so `entered_count` moves.
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            enterFeedContestFailure(
+                getErrorMessage(error, "Failed to submit your Pick'em card")
+            )
+        );
+    }
+}
+
 // PUT /group/feed-contest/replace-entry/:contest_id — swaps the combo already
 // submitted for a different one, in place, while the contest is still open.
 // `rules_version` is optional here: the acceptance stored on the participant row
@@ -686,10 +808,159 @@ function* handleReplaceFeedContestEntry(
     }
 }
 
+// PUT /group/feed-contest/replace-pickem-entry/:contest_id — swap a whole
+// SUNDAY PICK'EM card while the contest is still open.
+//
+// WHOLE CARD, never one pick: the replacement is validated exactly as a first
+// submission is (one moneyline per game, every game on the slate), which is what
+// keeps `total_picks` equal to the slate for every member on a ranked board.
+//
+// Its refusals are stricter than the combo path's in one way worth surfacing
+// verbatim: a card sits 'pending' while ANY selection is still playing, so the
+// server also refuses a card with ALREADY-GRADED legs (409, naming how many).
+// A combo never hits this — one graded leg settles the whole parlay.
+//
+// `rules_version` is optional; the participant's stored acceptance is checked.
+function* handleReplacePickemFeedContestEntry(
+    action: PayloadAction<ReplacePickemFeedContestEntryPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/replace-pickem-entry/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: ReplacePickemFeedContestEntryData;
+        };
+        yield put(
+            replaceFeedContestEntrySuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            replaceFeedContestEntryFailure(
+                getErrorMessage(error, "Failed to replace your Pick'em card")
+            )
+        );
+    }
+}
+
+// POST /group/feed-contest/enter-td-psychic/:contest_id — the TD PSYCHIC card:
+// accepts the rules, joins and submits three anytime-touchdown scorers in ONE
+// call.
+//
+// The THIRD entry endpoint, and separate from the other two for the reason they
+// are separate from each other: the model differs, not the configuration. What
+// makes this one distinct is what the body does NOT carry — no prices. A combo
+// and a Pick'em card are both priced from their legs at acceptance; a TD card
+// sends three player identities and is stored with every price null, because one
+// shared price per scorer is captured at the contest lock and is the same number
+// for every member holding that player.
+//
+// Each selection is re-resolved against the live market server-side, so a stale
+// id, an alternate line (2+, first scorer) or a passing-TD market is refused here
+// by name rather than discovered at settlement. Those 400s are worth surfacing
+// verbatim: they tell the member to refresh and pick again.
+//
+// Reuses the combo's success/failure actions on purpose: the envelope carries the
+// same `contest` / `participant` / `pick`, which is all the reducer and the
+// receipt read. Only `data.entry` differs — it reports `prices_captured_at`
+// instead of a points figure, precisely because no such figure exists yet.
+//
+// NOT idempotent — a second POST answers 409, so the screen must keep its button
+// disabled on `entrySubmitLoading` on top of the takeLatest below.
+function* handleEnterTdPsychicFeedContest(
+    action: PayloadAction<EnterTdPsychicFeedContestPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/feed-contest/enter-td-psychic/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: EnterTdPsychicFeedContestData;
+        };
+        yield put(
+            enterFeedContestSuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        // Re-read the field so the caller's own receipt is the server's copy
+        // rather than the echo, and so `entered_count` moves.
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            enterFeedContestFailure(
+                getErrorMessage(error, "Failed to submit your TD Psychic card")
+            )
+        );
+    }
+}
+
+// PUT /group/feed-contest/replace-td-psychic-entry/:contest_id — swap a whole TD
+// PSYCHIC card while the contest is still open.
+//
+// WHOLE CARD, never one scorer: the replacement is validated exactly as a first
+// submission is — three distinct players, each re-resolved against the live
+// market — because a patch that swapped one would have to re-prove the other two
+// anyway.
+//
+// Its refusals are stricter than either sibling's in one way worth surfacing
+// verbatim: the server also refuses a card that ALREADY CARRIES LOCK PRICES. A
+// priced card is past the shared cutoff whatever its contest's status column
+// says, and re-pricing one member's card after the capture would break the one
+// guarantee this whole template rests on.
+//
+// `rules_version` is optional; the participant's stored acceptance is checked.
+function* handleReplaceTdPsychicFeedContestEntry(
+    action: PayloadAction<ReplaceTdPsychicFeedContestEntryPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/replace-td-psychic-entry/${encodeURIComponent(contest_id)}`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: ReplaceTdPsychicFeedContestEntryData;
+        };
+        yield put(
+            replaceFeedContestEntrySuccess({
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+        yield put(fetchFeedContestEntriesRequest({ contest_id }));
+    } catch (error: unknown) {
+        yield put(
+            replaceFeedContestEntryFailure(
+                getErrorMessage(error, "Failed to replace your TD Psychic card")
+            )
+        );
+    }
+}
+
 export default function* feedContestSaga(): SagaIterator {
     // takeEvery, not takeLatest: the hub fires one request per section and they
     // must not cancel each other.
     yield takeEvery(fetchFeedContestsRequest.type, handleFetchFeedContests);
+    // takeLatest: one Winners block is on screen at a time, so a read for a group
+    // the viewer has navigated away from must never land after the one that
+    // replaced it. The reducer re-checks the group id anyway, since takeLatest
+    // cancels the saga rather than a response already in flight.
+    yield takeLatest(fetchFeedContestPodiumsRequest.type, handleFetchFeedContestPodiums);
     yield takeLatest(createFeedContestRequest.type, handleCreateFeedContest);
     yield takeLatest(createDraftFeedContestRequest.type, handleCreateDraftFeedContest);
     // One handler for both: same body, same shape of reply — only the path and
@@ -724,5 +995,18 @@ export default function* feedContestSaga(): SagaIterator {
     // cancel/archive these are NOT idempotent, so a second in-flight write is a
     // 409 rather than a harmless repeat.
     yield takeLatest(enterFeedContestRequest.type, handleEnterFeedContest);
+    yield takeLatest(enterPickemFeedContestRequest.type, handleEnterPickemFeedContest);
+    yield takeLatest(
+        enterTdPsychicFeedContestRequest.type,
+        handleEnterTdPsychicFeedContest
+    );
+    yield takeLatest(
+        replaceTdPsychicFeedContestEntryRequest.type,
+        handleReplaceTdPsychicFeedContestEntry
+    );
+    yield takeLatest(
+        replacePickemFeedContestEntryRequest.type,
+        handleReplacePickemFeedContestEntry
+    );
     yield takeLatest(replaceFeedContestEntryRequest.type, handleReplaceFeedContestEntry);
 }

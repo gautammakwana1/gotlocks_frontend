@@ -31,6 +31,13 @@ import type {
     ArenaHostingDetailsResponse,
     OwnedArenaHostingPayload,
     OwnedArenaHostingResponse,
+    ArenaSubscriptionResponse,
+    ArenaCheckoutPayload,
+    ArenaCheckoutStatusResponse,
+    ChangeArenaPlanPayload,
+    ArenaBillingActionResponse,
+    ArenaInvoice,
+    FetchArenaInvoicesPayload,
     ArenaMemberActionPayload,
     ArenaOwnershipTransfer,
     ArenaOwnershipTransferResponse,
@@ -215,6 +222,47 @@ const initialState: ArenaState = {
     joinArenaCrossType: false,
     joinArenaNotFound: false,
     joinedArena: null,
+    subscription: null,
+    subscriptionLoading: false,
+    subscriptionError: null,
+    checkoutLoading: false,
+    checkoutRedirecting: false,
+    checkoutError: null,
+    checkoutStatus: null,
+    checkoutArenaId: null,
+    checkoutStatusLoading: false,
+    checkoutStatusError: null,
+    billingActionLoading: false,
+    billingActionTier: null,
+    billingActionError: null,
+    billingActionMessage: null,
+    invoices: [],
+    invoicesLoading: false,
+    invoicesError: null,
+    invoicesHasMore: false,
+};
+
+/* ---------------------------------------------------------------------------
+ * Arena billing reducers. change-plan, cancel-hosting and resume-hosting all
+ * return the same { action, subscription } envelope and cannot run
+ * concurrently, so they share one loading slot rather than three.
+ * ------------------------------------------------------------------------- */
+const billingActionSuccess = (
+    state: ArenaState,
+    action: PayloadAction<{ data?: ArenaBillingActionResponse; message?: string }>
+) => {
+    state.billingActionLoading = false;
+    state.billingActionTier = null;
+    state.billingActionMessage = action.payload.message ?? null;
+    if (action.payload.data?.subscription) {
+        state.subscription = action.payload.data.subscription;
+    }
+};
+
+const billingActionFailure = (state: ArenaState, action: PayloadAction<string>) => {
+    state.billingActionLoading = false;
+    state.billingActionTier = null;
+    state.billingActionError = action.payload;
 };
 
 const hostingActionSuccess = (
@@ -1357,6 +1405,169 @@ const arenaSlice = createSlice({
             state.hostingActionMessage = null;
         },
 
+        /* -------------------------------------------------------------------
+         * ARENA BILLING — real Stripe money.
+         * ----------------------------------------------------------------- */
+
+        // GET /group/arena/subscription
+        fetchArenaSubscriptionRequest: (
+            state,
+            action: PayloadAction<ArenaHostingDetailsPayload>
+        ) => {
+            // Same rule the hosting read follows: drop the previous Arena's
+            // subscription immediately so a stale plan/limit can never be shown
+            // against a different Arena while the new read is in flight.
+            if (action.payload?.arena_id !== state.hostingForId) {
+                state.subscription = null;
+            }
+            state.subscriptionLoading = true;
+            state.subscriptionError = null;
+        },
+        fetchArenaSubscriptionSuccess: (
+            state,
+            action: PayloadAction<ArenaSubscriptionResponse | undefined>
+        ) => {
+            state.subscriptionLoading = false;
+            state.subscription = action.payload?.subscription ?? null;
+            if (action.payload?.hosting !== undefined) {
+                state.hosting = action.payload.hosting;
+            }
+            if (action.payload?.unlock !== undefined) {
+                state.unlock = action.payload.unlock;
+            }
+        },
+        fetchArenaSubscriptionFailure: (state, action: PayloadAction<string>) => {
+            state.subscriptionLoading = false;
+            state.subscriptionError = action.payload;
+        },
+
+        // POST /group/arena/checkout-session
+        createArenaCheckoutRequest: (state, action: PayloadAction<ArenaCheckoutPayload>) => {
+            void action;
+            state.checkoutLoading = true;
+            state.checkoutRedirecting = false;
+            state.checkoutError = null;
+        },
+        createArenaCheckoutSuccess: (
+            state,
+            action: PayloadAction<{ redirecting: boolean }>
+        ) => {
+            state.checkoutLoading = false;
+            // Stays TRUE through the navigation. The browser is unloading, so
+            // clearing it here would re-enable the confirm button for the last
+            // few hundred milliseconds and invite a second checkout.
+            state.checkoutRedirecting = action.payload.redirecting;
+        },
+        createArenaCheckoutFailure: (state, action: PayloadAction<string>) => {
+            state.checkoutLoading = false;
+            state.checkoutRedirecting = false;
+            state.checkoutError = action.payload;
+        },
+
+        // GET /group/arena/checkout-status — polled after returning from Stripe.
+        fetchArenaCheckoutStatusRequest: (state, action: PayloadAction<{ session_id: string }>) => {
+            void action;
+            state.checkoutStatusLoading = true;
+            state.checkoutStatusError = null;
+        },
+        fetchArenaCheckoutStatusSuccess: (
+            state,
+            action: PayloadAction<ArenaCheckoutStatusResponse | undefined>
+        ) => {
+            state.checkoutStatusLoading = false;
+            state.checkoutStatus = action.payload?.status ?? null;
+            // Which Arena the session actually belongs to, so the return banner
+            // can refuse to render against a different one.
+            state.checkoutArenaId = action.payload?.arena_id ?? null;
+            if (action.payload?.subscription) {
+                state.subscription = action.payload.subscription;
+            }
+        },
+        fetchArenaCheckoutStatusFailure: (state, action: PayloadAction<string>) => {
+            state.checkoutStatusLoading = false;
+            state.checkoutStatusError = action.payload;
+        },
+        clearArenaCheckoutState: (state) => {
+            state.checkoutStatus = null;
+            state.checkoutArenaId = null;
+            state.checkoutStatusError = null;
+            state.checkoutError = null;
+            state.checkoutRedirecting = false;
+        },
+
+        // POST /group/arena/change-plan
+        changeArenaPlanRequest: (state, action: PayloadAction<ChangeArenaPlanPayload>) => {
+            state.billingActionLoading = true;
+            state.billingActionTier = action.payload?.tier ?? null;
+            state.billingActionError = null;
+            state.billingActionMessage = null;
+        },
+        changeArenaPlanSuccess: billingActionSuccess,
+        changeArenaPlanFailure: billingActionFailure,
+
+        // POST /group/arena/cancel-hosting
+        cancelArenaHostingRequest: (state, action: PayloadAction<ArenaPausePayload>) => {
+            void action;
+            state.billingActionLoading = true;
+            state.billingActionError = null;
+            state.billingActionMessage = null;
+        },
+        cancelArenaHostingSuccess: billingActionSuccess,
+        cancelArenaHostingFailure: billingActionFailure,
+
+        // POST /group/arena/resume-hosting
+        resumeArenaHostingRequest: (state, action: PayloadAction<ArenaPausePayload>) => {
+            void action;
+            state.billingActionLoading = true;
+            state.billingActionError = null;
+            state.billingActionMessage = null;
+        },
+        resumeArenaHostingSuccess: billingActionSuccess,
+        resumeArenaHostingFailure: billingActionFailure,
+
+        // POST /group/arena/billing-portal — hands the browser to Stripe.
+        openArenaBillingPortalRequest: (state, action: PayloadAction<ArenaPausePayload>) => {
+            void action;
+            state.billingActionLoading = true;
+            state.billingActionError = null;
+        },
+        openArenaBillingPortalSuccess: (state) => {
+            state.billingActionLoading = false;
+        },
+        openArenaBillingPortalFailure: (state, action: PayloadAction<string>) => {
+            state.billingActionLoading = false;
+            state.billingActionError = action.payload;
+        },
+
+        clearArenaBillingActionMessage: (state) => {
+            state.billingActionError = null;
+            state.billingActionMessage = null;
+        },
+
+        // GET /group/arena/invoices
+        fetchArenaInvoicesRequest: (state, action: PayloadAction<FetchArenaInvoicesPayload>) => {
+            // Page 1 replaces; later pages append — so "load more" cannot
+            // duplicate rows if it is dispatched twice.
+            if ((action.payload?.page ?? 1) === 1) state.invoices = [];
+            state.invoicesLoading = true;
+            state.invoicesError = null;
+        },
+        fetchArenaInvoicesSuccess: (
+            state,
+            action: PayloadAction<{ transactions: ArenaInvoice[]; page: number; hasMore: boolean }>
+        ) => {
+            state.invoicesLoading = false;
+            state.invoices =
+                action.payload.page === 1
+                    ? action.payload.transactions
+                    : [...state.invoices, ...action.payload.transactions];
+            state.invoicesHasMore = action.payload.hasMore;
+        },
+        fetchArenaInvoicesFailure: (state, action: PayloadAction<string>) => {
+            state.invoicesLoading = false;
+            state.invoicesError = action.payload;
+        },
+
         initiateArenaDeleteRequest: (
             state,
             action: PayloadAction<InitiateArenaDeletePayload>
@@ -1653,6 +1864,32 @@ export const {
     cancelArenaPauseRequest,
     cancelArenaPauseSuccess,
     cancelArenaPauseFailure,
+    fetchArenaSubscriptionRequest,
+    fetchArenaSubscriptionSuccess,
+    fetchArenaSubscriptionFailure,
+    createArenaCheckoutRequest,
+    createArenaCheckoutSuccess,
+    createArenaCheckoutFailure,
+    fetchArenaCheckoutStatusRequest,
+    fetchArenaCheckoutStatusSuccess,
+    fetchArenaCheckoutStatusFailure,
+    clearArenaCheckoutState,
+    changeArenaPlanRequest,
+    changeArenaPlanSuccess,
+    changeArenaPlanFailure,
+    cancelArenaHostingRequest,
+    cancelArenaHostingSuccess,
+    cancelArenaHostingFailure,
+    resumeArenaHostingRequest,
+    resumeArenaHostingSuccess,
+    resumeArenaHostingFailure,
+    openArenaBillingPortalRequest,
+    openArenaBillingPortalSuccess,
+    openArenaBillingPortalFailure,
+    clearArenaBillingActionMessage,
+    fetchArenaInvoicesRequest,
+    fetchArenaInvoicesSuccess,
+    fetchArenaInvoicesFailure,
     clearArenaHostingActionMessage,
     initiateArenaDeleteRequest,
     initiateArenaDeleteSuccess,

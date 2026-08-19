@@ -3,7 +3,11 @@
 import dynamic from "next/dynamic";
 import type { ComponentType, RefObject } from "react";
 import { LeftWorkspaceDrawer } from "@/components/ui/LeftWorkspaceDrawer";
-import type { GroupFeedPostCreatorProps } from "./GroupFeedPostCreator";
+import type {
+    GroupFeedPostCreatorProps,
+    GroupFeedPostCreatorTab,
+} from "./GroupFeedPostCreator";
+import type { StructuredFeedCapabilities } from "./types";
 
 // The creator pulls in the whole Pick Builder, so it is only loaded once the
 // drawer is actually opened.
@@ -32,22 +36,56 @@ export type GroupFeedPostDrawerProps = GroupFeedPostCreatorProps & {
     returnFocusRef?: RefObject<HTMLElement | null>;
 };
 
+// MVP counterpart: components/feed/GroupFeedAnnouncementDrawer.tsx, which is
+// titled "New Announcement" because it can only ever hold an announcement. This
+// drawer still hosts the Pick Post / Staff Pick / Contest Entry tabs, so the
+// title follows the panel that will actually open: the MVP wording when the
+// viewer is opening the announcement panel (either because a caller asked for it
+// or because it is the only thing they may post), "New Post" otherwise. Getting
+// this wrong labels a Pick Builder as an announcement.
+const isAnnouncementOnlyDrawer = (
+    capabilities: StructuredFeedCapabilities,
+    initialTab?: GroupFeedPostCreatorTab,
+) => {
+    if (initialTab === "announcement") return true;
+    return (
+        capabilities.canCreateStaffPost &&
+        !capabilities.canCreateCommunityPick &&
+        !capabilities.canCreateStaffPick &&
+        !capabilities.canCreateCompetitivePick
+    );
+};
+
 export const GroupFeedPostDrawer = ({
     open,
     onClose,
     returnFocusRef,
     ...creatorProps
-}: GroupFeedPostDrawerProps) => (
-    <LeftWorkspaceDrawer
-        open={open}
-        onClose={onClose}
-        title="New Post"
-        returnFocusRef={returnFocusRef}
-        backdropLabel="Dismiss new community post workspace"
-        className={creatorProps.context.kind === "arena" ? "arena-theme" : undefined}
-    >
-        <DrawerGroupFeedPostCreator {...creatorProps} />
-    </LeftWorkspaceDrawer>
-);
+}: GroupFeedPostDrawerProps) => {
+    const announcementOnly = isAnnouncementOnlyDrawer(
+        creatorProps.capabilities,
+        creatorProps.initialTab,
+    );
+
+    return (
+        <LeftWorkspaceDrawer
+            open={open}
+            onClose={onClose}
+            title={announcementOnly ? "New Announcement" : "New Post"}
+            returnFocusRef={returnFocusRef}
+            backdropLabel={
+                announcementOnly
+                    ? "Dismiss new announcement workspace"
+                    : "Dismiss new community post workspace"
+            }
+            // The MVP pairs this with an explicit "league-theme" fallback, but that
+            // class has no rule in this app's globals.css — League brand tokens are
+            // the :root defaults here — so the League branch stays undefined.
+            className={creatorProps.context.kind === "arena" ? "arena-theme" : undefined}
+        >
+            <DrawerGroupFeedPostCreator {...creatorProps} />
+        </LeftWorkspaceDrawer>
+    );
+};
 
 export default GroupFeedPostDrawer;

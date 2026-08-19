@@ -287,13 +287,24 @@ export default function DateTimeWheelPicker({
 
         return () => {
             document.removeEventListener("keydown", onKey);
-            body.style.position = prev.position;
-            body.style.top = prev.top;
-            body.style.left = prev.left;
-            body.style.right = prev.right;
-            body.style.width = prev.width;
-            body.style.overflow = prev.overflow;
-            window.scrollTo(0, scrollY);
+            // Each property is handed back only if it still holds the value this
+            // picker wrote; anything another overlay has since changed is theirs.
+            const restore = (
+                key: "position" | "top" | "left" | "right" | "width" | "overflow",
+                applied: string
+            ) => {
+                if (body.style[key] !== applied) return false;
+                body.style[key] = prev[key];
+                return true;
+            };
+            const ownedPosition = restore("position", "fixed");
+            restore("top", `-${scrollY}px`);
+            restore("left", "0px");
+            restore("right", "0px");
+            restore("width", "100%");
+            restore("overflow", "hidden");
+            // Only the overlay that pinned the page may unpin it.
+            if (ownedPosition) window.scrollTo(0, scrollY);
         };
     }, [mounted, requestClose]);
 
@@ -334,7 +345,8 @@ export default function DateTimeWheelPicker({
 
             {mounted && createPortal(
                 <div
-                    className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center"
+                    data-datetime-wheel-portal
+                    className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center"
                     role="dialog"
                     aria-modal="true"
                     aria-label={label ?? (showTime ? "Select date and time" : "Select date")}

@@ -66,7 +66,8 @@ const NcaabPickBuilderSkeleton = () => {
                             }}
                         >
                             <div className="px-3">
-                                <div className="relative flex items-center h-px w-full overflow-hidden">
+                                <div className="relative flex items-center gap-2 w-full overflow-hidden">
+                                    <span className="shrink-0 text-[10px] font-semibold leading-none tracking-wide text-gray-700">at</span>
                                     <div className="flex-grow h-px bg-gradient-to-r from-transparent via-sky-700/50 to-transparent"></div>
                                 </div>
                             </div>

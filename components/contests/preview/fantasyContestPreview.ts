@@ -37,7 +37,7 @@ const ARTWORK_BY_SPORT: Record<string, FantasyContestArtworkKey> = {
 };
 
 /** One sport gets its own art; anything else — none, or several — is multi-sport. */
-const fantasyContestArtwork = (
+export const fantasyContestArtwork = (
     sports: readonly string[] | null | undefined
 ): FantasyContestArtworkKey => {
     if (!sports || sports.length !== 1) return "fantasy-multi-sport";

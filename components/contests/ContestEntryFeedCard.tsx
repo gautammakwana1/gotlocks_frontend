@@ -1,7 +1,10 @@
 "use client";
 
 import FeedList from "@/components/social/FeedList";
-import type { PickCardAccent } from "@/components/social/PickCardContent";
+import type {
+    FeedContestEntryFormat,
+    PickCardAccent,
+} from "@/components/social/PickCardContent";
 import type {
     FeedContestEntryPick,
     FeedContestEntryRow,
@@ -42,6 +45,9 @@ export const toContestEntryFeedItem = (
     user_id: row.member.id,
     description: pick.description ?? "",
     odds_bracket: pick.odds_bracket ?? "",
+    // Passed through for TD Psychic, whose Combo figure is a post-lock number
+    // rather than a formatted string — see `Pick.american_odds`.
+    american_odds: pick.american_odds ?? null,
     result: (pick.result ?? "pending") as PickResult,
     points: pick.points ?? 0,
     awardedPoints: pick.arena_points_awarded ?? undefined,
@@ -82,6 +88,17 @@ export type ContestEntryFeedCardProps = {
     currentUserId?: string;
     /** Keeps the card in step with its community shell; an Arena reads violet. */
     accent?: PickCardAccent;
+    /**
+     * Which builder produced the entry. All three models are stored as combos —
+     * one pick row, many legs — so nothing on the row itself says which of them
+     * it is; only the CONTEST knows, and it has to be told.
+     */
+    entryFormat?: FeedContestEntryFormat;
+    /** Sunday Pick'em only — splits each tile's total into odds + bonus. */
+    pickemCorrectBonus?: number | null;
+    /** Required by the feed_contest presentation; the entry's own contest page. */
+    contestHref?: string;
+    contestName?: string;
 };
 
 export const ContestEntryFeedCard = ({
@@ -90,6 +107,10 @@ export const ContestEntryFeedCard = ({
     contextualPointsLabel,
     currentUserId,
     accent = "sky",
+    entryFormat,
+    pickemCorrectBonus,
+    contestHref,
+    contestName,
 }: ContestEntryFeedCardProps) => (
     <FeedList
         items={[toContestEntryFeedItem(row, pick)]}
@@ -97,6 +118,24 @@ export const ContestEntryFeedCard = ({
         currentUserId={currentUserId}
         contextualPointsLabel={contextualPointsLabel}
         accent={accent}
+        // Only declared when the caller named a format. Without it the card
+        // keeps its plain combo rendering, which is the correct default for
+        // every General Combo entry and for any surface that cannot say.
+        getItemPresentation={
+            entryFormat
+                ? () => ({
+                      kind: "feed_contest" as const,
+                      contestHref: contestHref ?? "",
+                      contestName: contestName ?? "",
+                      contextualPointsLabel:
+                          contextualPointsLabel === "Arena Points"
+                              ? ("Arena Points" as const)
+                              : ("League Points" as const),
+                      entryFormat,
+                      pickemCorrectBonus,
+                  })
+                : undefined
+        }
         // Reactions belong to the Feed, not to a contest's field: an entry is a
         // competitive submission, and the MVP turns them off here for that reason.
         showReactions={false}

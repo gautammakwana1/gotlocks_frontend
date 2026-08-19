@@ -7,6 +7,9 @@ type Props = {
     fallback?: string;
     className?: string;
     preferFallback?: boolean;
+    alignSelf?: "start" | "center";
+    /** Intercepts the back action (e.g. to confirm unsaved changes) instead of navigating. */
+    onBack?: () => void;
 };
 
 export const BackButton = ({
@@ -14,10 +17,17 @@ export const BackButton = ({
     fallback = "/home",
     className,
     preferFallback = false,
+    alignSelf = "start",
+    onBack,
 }: Props) => {
     const router = useRouter();
 
     const handleBack = () => {
+        if (onBack) {
+            onBack();
+            return;
+        }
+
         if (!preferFallback && typeof window !== "undefined" && window.history.length > 1) {
             router.back();
             return;
@@ -29,7 +39,8 @@ export const BackButton = ({
         <button
             type="button"
             onClick={handleBack}
-            className={`self-start text-xs lowercase tracking-wide text-gray-400 transition hover:text-white ${className ?? ""}`}
+            className={`${alignSelf === "center" ? "self-center" : "self-start"
+                } text-xs lowercase tracking-wide text-gray-400 transition hover:text-white ${className ?? ""}`}
         >
             ← {label}
         </button>

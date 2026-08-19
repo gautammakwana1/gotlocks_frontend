@@ -1,8 +1,14 @@
+/* Accent ramps are the MVP's (MVP ContestPreviewCard.module.css:1-47): League
+   sits on blue-400 (96 165 250) rather than the old sky-300, and Arena on
+   violet-400 (167 139 250) rather than violet-300. Both `--preview-accent-text`
+   values are the accent itself, not the near-white tint they used to be. This is
+   what puts the cards on the same ramp as the hub band and the create button
+   above them. */
 .card {
-  --preview-accent-rgb: 125 211 252;
-  --preview-accent-soft: rgb(125 211 252 / 0.16);
-  --preview-accent-border: rgb(125 211 252 / 0.42);
-  --preview-accent-text: #e0f2fe;
+  --preview-accent-rgb: 96 165 250;
+  --preview-accent-soft: rgb(96 165 250 / 0.16);
+  --preview-accent-border: rgb(96 165 250 / 0.42);
+  --preview-accent-text: #60a5fa;
   --preview-solid-rail: #080b10;
   --preview-solid-title: #0a0d12;
   --preview-row-divider: rgb(255 255 255 / 0.16);
@@ -33,17 +39,17 @@
 }
 
 .league {
-  --preview-accent-rgb: 125 211 252;
-  --preview-accent-soft: rgb(125 211 252 / 0.16);
-  --preview-accent-border: rgb(125 211 252 / 0.42);
-  --preview-accent-text: #e0f2fe;
+  --preview-accent-rgb: 96 165 250;
+  --preview-accent-soft: rgb(96 165 250 / 0.16);
+  --preview-accent-border: rgb(96 165 250 / 0.42);
+  --preview-accent-text: #60a5fa;
 }
 
 .arena {
-  --preview-accent-rgb: 196 181 253;
+  --preview-accent-rgb: 167 139 250;
   --preview-accent-soft: rgb(167 139 250 / 0.18);
-  --preview-accent-border: rgb(196 181 253 / 0.44);
-  --preview-accent-text: #ede9fe;
+  --preview-accent-border: rgb(167 139 250 / 0.44);
+  --preview-accent-text: #a78bfa;
 }
 
 .card.poster {

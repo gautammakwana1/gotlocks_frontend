@@ -24,6 +24,8 @@ import {
     type TierMeta,
 } from "@/lib/utils/scoring";
 import { getFeedDesktopSizing } from "./feedDesktopSizing";
+import { PickemEntrySelectionCarousel } from "./PickemEntrySelections";
+import { TdPsychicEntrySelections } from "./TdPsychicEntrySelections";
 
 export type PickCardAccent = "sky" | "violet";
 
@@ -42,7 +44,7 @@ export type PickCardContestStanding =
     | { status: "unranked"; rank: null };
 
 /** Which builder produced the entry — names the card header in the MVP. */
-export type FeedContestEntryFormat = "general_combo" | "sunday_pickem";
+export type FeedContestEntryFormat = "general_combo" | "sunday_pickem" | "td_psychic";
 
 export type PickCardPresentation =
     | { kind: "ordinary" }
@@ -60,6 +62,13 @@ export type PickCardPresentation =
         standing?: PickCardContestStanding;
         /** Defaults to General Combo when the source cannot say. */
         entryFormat?: FeedContestEntryFormat;
+        /**
+         * The contest's flat per-correct-pick bonus. Sunday Pick'em only, and
+         * only so each selection tile can split its stored total into the odds
+         * share and the bonus — the entries read does not carry it, so the
+         * surface that already holds the contest row passes it down.
+         */
+        pickemCorrectBonus?: number | null;
     };
 
 export type PickCardContentProps = {
@@ -185,7 +194,9 @@ const ContestEntryHeader = ({
             ? `Fantasy Contest Entry - ${presentation.contestName}`
             : entryFormat === "sunday_pickem"
                 ? `Feed Contest Pick’em Entry - ${presentation.contestName}`
-                : `Feed Contest General Combo Entry - ${presentation.contestName}`;
+                : entryFormat === "td_psychic"
+                    ? `Feed Contest TD Psychic Entry - ${presentation.contestName}`
+                    : `Feed Contest General Combo Entry - ${presentation.contestName}`;
 
     return (
         <Link
@@ -350,6 +361,26 @@ export const PickCardContent = ({
         pick.source_tab ?? (pick.is_combo || pick.legs?.length ? "Combo" : "Pick");
     const normalizedSourceTabLabel = baseSourceTabLabel.toLowerCase();
     const showComboLegs = Boolean(pick.is_combo && pick.legs && pick.legs.length > 0);
+    /*
+     * A Pick'em card is stored as `is_combo` too — it is one pick row with many
+     * legs — but it must NOT render as a combo. Its selections score
+     * independently and are summed, so they get the MVP's paged team tiles
+     * instead of the parlay leg list.
+     */
+    const isSundayPickemEntry =
+        presentation.kind === "feed_contest" && presentation.entryFormat === "sunday_pickem";
+    const showPickemSelections = isSundayPickemEntry && showComboLegs;
+    /*
+     * A TD Psychic card is stored as `is_combo` too, and must not render as one
+     * either — but for a different reason than a Pick'em card. A card sums its
+     * selections; a TD card is all-or-nothing for POINTS yet still RANKS on how
+     * many it got right, so a losing one is neither a dead parlay nor a sum of
+     * parts. What it has to show is which three players, and which of them
+     * scored: the same ordered row of three squares every other TD surface uses.
+     */
+    const isTdPsychicEntry =
+        presentation.kind === "feed_contest" && presentation.entryFormat === "td_psychic";
+    const showTdPsychicSelections = isTdPsychicEntry && showComboLegs;
     const singleCategoryLabel =
         normalizedSourceTabLabel === "pick"
             ? resolveLegCategoryLabel(pick.selection?.market) ?? normalizedSourceTabLabel
@@ -639,7 +670,18 @@ export const PickCardContent = ({
                         )}
                     </div>
                     {showComboLegs && <div className="mt-3 h-px w-full bg-white/10" />}
-                    {showComboLegs ? (
+                    {showTdPsychicSelections ? (
+                        <TdPsychicEntrySelections pick={pick} />
+                    ) : showPickemSelections ? (
+                        <PickemEntrySelectionCarousel
+                            pick={pick}
+                            correctBonus={
+                                presentation.kind === "feed_contest"
+                                    ? presentation.pickemCorrectBonus
+                                    : null
+                            }
+                        />
+                    ) : showComboLegs ? (
                         <ul className={`mt-3 space-y-2 ${sizing.comboList}`}>
                             {pick.legs?.map((leg, index) => {
                                 const legPickLine = extractPickLine(leg.description);

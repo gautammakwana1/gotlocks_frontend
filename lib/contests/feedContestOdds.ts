@@ -12,9 +12,12 @@
 // date range; the entry screen asks "what can I bet on these specific games?".
 
 import type {
+    FeedContestGameOddsEntry,
+    FeedContestGameOddsSource,
     FeedContestGameSnapshot,
     FeedContestOddsEvent,
     FeedContestOddsGroup,
+    FeedContestSportsbook,
     OddsObject,
 } from "@/lib/interfaces/interfaces";
 import { FEED_CONTEST_SPORTS, type FeedContestSport } from "./feedContestCatalog";
@@ -104,6 +107,108 @@ export const FEED_CONTEST_ODDS_FEEDS: Readonly<
 
 /** The one call that spans leagues: `?events=<league>:<id>,…`. */
 export const MULTI_LEAGUE_ODDS_BY_EVENTS_PATH = "/leagues/schedules-with-odds-by-events";
+
+/** One callable league feed: which league id it answers for, and where it lives. */
+export type ContestOddsFeed = { league: string; competition: string; path: string };
+
+/**
+ * The odds-BY-MATCH-ID route behind each contest sport — the FULL market board
+ * for one game, because those controllers send no `main` filter upstream.
+ *
+ * Keyed by sportsbook because the book is baked into the PATH on this family:
+ * there is no `sportsbook` query param anywhere in it. Which is also why some
+ * cells are empty — NFL, NHL and MLB have no DraftKings by-match-id route at
+ * all. An empty cell means "no enrichment for this sport on this book", and the
+ * saga fails closed rather than guessing a URL: the un-suffixed `/odds` routes
+ * hardcode FanDuel, so pointing a DraftKings contest at one would quietly show
+ * a board priced by the other book.
+ *
+ * Soccer repeats the batch read's problem — `eligible_games_json` records only
+ * sport "Soccer" — so a soccer game has to be offered to each competition until
+ * one answers.
+ */
+export const FEED_CONTEST_MATCH_ODDS_FEEDS: Readonly<
+    Record<FeedContestSport, Readonly<Partial<Record<FeedContestSportsbook, readonly ContestOddsFeed[]>>>>
+> = {
+    NFL: {
+        fanduel: [{ league: "nfl", competition: "NFL", path: "/leagues/nfl/odds" }],
+    },
+    NBA: {
+        // NBA has no plain `/odds` — only the two book-suffixed routes.
+        fanduel: [{ league: "nba", competition: "NBA", path: "/leagues/nba/odds-fanduel" }],
+        draftkings: [
+            { league: "nba", competition: "NBA", path: "/leagues/nba/odds-draftkings" },
+        ],
+    },
+    NCAAB: {
+        // `/odds` and `/odds-fanduel` are the same implementation writing two
+        // cache entries; `/odds` is preferred so NCAAB warms the same one as
+        // NFL/NHL/MLB rather than a duplicate.
+        fanduel: [{ league: "ncaab", competition: "NCAAB", path: "/leagues/ncaab/odds" }],
+        draftkings: [
+            { league: "ncaab", competition: "NCAAB", path: "/leagues/ncaab/odds-draftkings" },
+        ],
+    },
+    NHL: {
+        fanduel: [{ league: "nhl", competition: "NHL", path: "/leagues/nhl/odds" }],
+    },
+    MLB: {
+        fanduel: [{ league: "mlb", competition: "MLB", path: "/leagues/mlb/odds" }],
+    },
+    Soccer: {
+        fanduel: [
+            {
+                league: "england-premier-league",
+                competition: "Premier League",
+                path: "/leagues/soccer/england-premier-league-odds-fanduel",
+            },
+            {
+                league: "germany-bundesliga",
+                competition: "Bundesliga",
+                path: "/leagues/soccer/germany-bundesliga-odds-fanduel",
+            },
+            {
+                league: "fifa-world-cup",
+                competition: "FIFA World Cup",
+                path: "/leagues/soccer/fifa-world-cup-odds-fanduel",
+            },
+        ],
+        draftkings: [
+            {
+                league: "england-premier-league",
+                competition: "Premier League",
+                path: "/leagues/soccer/england-premier-league-odds-draftkings",
+            },
+            {
+                league: "germany-bundesliga",
+                competition: "Bundesliga",
+                path: "/leagues/soccer/germany-bundesliga-odds-draftkings",
+            },
+            {
+                league: "fifa-world-cup",
+                competition: "FIFA World Cup",
+                path: "/leagues/soccer/fifa-world-cup-odds-draftkings",
+            },
+        ],
+    },
+};
+
+/** The by-match-id routes for one slate row. EMPTY means "cannot be enriched". */
+export const matchOddsFeedsFor = (
+    sport: string,
+    sportsbook: FeedContestSportsbook = "fanduel"
+): readonly ContestOddsFeed[] => {
+    const normalized = normalizeContestSport(sport);
+    if (!normalized) return [];
+    return FEED_CONTEST_MATCH_ODDS_FEEDS[normalized]?.[sportsbook] ?? [];
+};
+
+/** The by-events routes for one slate row — the same feeds the batch read uses. */
+export const oddsByEventsFeedsFor = (sport: string): readonly ContestOddsFeed[] => {
+    const normalized = normalizeContestSport(sport);
+    if (!normalized) return [];
+    return FEED_CONTEST_ODDS_FEEDS[normalized] ?? [];
+};
 
 /**
  * Soccer needs one call per competition because a slate row cannot say which of
@@ -385,4 +490,191 @@ export const buildContestOddsGames = (
             },
         ];
     });
+};
+
+/* ----------------------------------------------------------------------------
+ * PER-GAME enrichment.
+ *
+ * Two targeted calls sit beside the batch read: the full market board for the
+ * matchup a member opened (`/leagues/<sport>/odds?match_id=`), and a retry for a
+ * game the batch reported unpriced (`…schedules-with-odds-by-events` for that
+ * one id, with `main=false`). Both answers are stored in the SAME
+ * `FeedContestOddsGroup` shape the batch stores, so everything below this line
+ * — `buildContestOddsGames`, `selectionsForEvent`, the whole builder — keeps one
+ * vocabulary and one render path.
+ * -------------------------------------------------------------------------- */
+
+/** What a game that was never asked for reads as. */
+export const IDLE_CONTEST_GAME_ODDS: FeedContestGameOddsEntry = {
+    status: "idle",
+    source: null,
+    group: null,
+    hasOdds: false,
+    error: null,
+    fetchedAt: null,
+    attempts: {},
+};
+
+/** The enrichment record for one game, or the idle one. Never undefined. */
+export const contestGameOddsEntry = (
+    byGame: Readonly<Record<string, FeedContestGameOddsEntry>> | undefined,
+    gameId: string
+): FeedContestGameOddsEntry => byGame?.[gameId] ?? IDLE_CONTEST_GAME_ODDS;
+
+/**
+ * The one de-dupe predicate, shared by the dispatcher and the saga.
+ *
+ * A game gets at most ONE attempt per path per contest. A failure does not
+ * re-arm — these calls are enrichment, and a game whose board cannot be fetched
+ * must cost one request, not a retry loop. Only a member-initiated `force`
+ * (a tap on Retry) spends another.
+ */
+export const shouldFetchContestGameOdds = (
+    entry: FeedContestGameOddsEntry | undefined,
+    source: FeedContestGameOddsSource,
+    force = false
+): boolean => {
+    if (force) return true;
+    // Some path already came back with markets; there is nothing left to enrich.
+    if (entry?.hasOdds) return false;
+    return !entry?.attempts?.[source];
+};
+
+/**
+ * TRUE when an event carries the two team records every reader downstream
+ * dereferences without asking.
+ *
+ * `normalizeOddToLeg` reads `event.teams.home.id` and `event.teams.away.name`
+ * with no optional chaining (lib/sgp/validateParlay.ts), and `toParlayLeg` runs
+ * it on every tap. The batch read arrives through a typed schedule contract, but
+ * the by-match-id family passes the vendor's own payload straight through and is
+ * trusted only as far as being an array — so an event of a different shape is
+ * dropped HERE, where both enrichment paths meet, rather than rendering a
+ * tappable chip that throws on click.
+ */
+const hasUsableTeams = (event: FeedContestOddsEvent | undefined): boolean =>
+    typeof event?.teams?.home?.name === "string" &&
+    typeof event?.teams?.away?.name === "string";
+
+/**
+ * One enriched game wearing the batch read's group shape.
+ *
+ * Filtered to the requested id on purpose: the by-match-id route is scoped to
+ * one event already, but the targeted by-events retry echoes whatever that
+ * league chose to return, and a stray event would enter the builder's catalog as
+ * a matchup this contest never froze into its slate.
+ */
+export const contestGameOddsGroup = (input: {
+    sport: string;
+    competition: string;
+    league: string;
+    gameId: string;
+    events: readonly FeedContestOddsEvent[];
+    missingEventIds?: readonly string[];
+    partial?: boolean;
+}): FeedContestOddsGroup => {
+    const events = (input.events ?? []).filter(
+        (event) => event?.id === input.gameId && hasUsableTeams(event)
+    );
+    return {
+        sport: input.sport,
+        competition: input.competition,
+        league: input.league,
+        events,
+        missingEventIds: events.length
+            ? []
+            : [...(input.missingEventIds ?? [input.gameId])],
+        partial: Boolean(input.partial),
+    };
+};
+
+/** TRUE when a group actually carries a priced selection for that game. */
+export const groupHasPricedGame = (
+    group: FeedContestOddsGroup | null | undefined,
+    gameId: string
+): boolean =>
+    (group?.events ?? []).some((event) => event?.id === gameId && Boolean(event.odds?.length));
+
+/**
+ * Batch odds first, then whatever the enriched board adds that the batch did not
+ * already carry, matched on the book's own selection id.
+ *
+ * The BATCH copy of a line wins a tie deliberately. The by-match-id cache is 60
+ * minutes pregame — FIVE HOURS on MLB — against the by-events cache's 5, so its
+ * copy of a main line can be materially older, and a leg is submitted with the
+ * price its row showed. Enrichment adds markets; it does not re-price the ones
+ * already on screen.
+ */
+const mergeOdds = (
+    base: readonly OddsObject[] | undefined,
+    extra: readonly OddsObject[] | undefined
+): OddsObject[] => {
+    const seen = new Set((base ?? []).map((odd) => odd?.id).filter(Boolean));
+    return [
+        ...(base ?? []),
+        ...(extra ?? []).filter((odd) => odd?.id && !seen.has(odd.id)),
+    ];
+};
+
+/**
+ * The batch groups with every enriched game folded in — the ONE array to hand
+ * `buildContestOddsGames`.
+ *
+ * Only entries that actually came back with markets take part, so an empty or
+ * failed enrichment can never blank a game the batch had already priced. A game
+ * the batch never priced has no odds to prefer and renders entirely from its
+ * enriched answer, which is the point of the targeted retry. When nothing is
+ * enriched the input array is returned by identity, so a memo downstream does
+ * not churn.
+ */
+export const withEnrichedContestOdds = (
+    groups: readonly FeedContestOddsGroup[],
+    byGame: Readonly<Record<string, FeedContestGameOddsEntry>> | undefined
+): readonly FeedContestOddsGroup[] => {
+    const enriched = new Map<
+        string,
+        { entry: FeedContestGameOddsEntry; event: FeedContestOddsEvent }
+    >();
+    for (const [gameId, entry] of Object.entries(byGame ?? {})) {
+        if (!entry?.hasOdds || !entry.group) continue;
+        const event = (entry.group.events ?? []).find(
+            (candidate) => candidate?.id === gameId && Boolean(candidate.odds?.length)
+        );
+        if (event) enriched.set(gameId, { entry, event });
+    }
+    if (!enriched.size) return groups;
+
+    const folded = new Set<string>();
+    const merged = groups.map((group) => {
+        let changed = false;
+        const events = (group.events ?? []).map((event) => {
+            const match = event?.id ? enriched.get(event.id) : undefined;
+            if (!match) return event;
+            folded.add(event.id);
+            changed = true;
+            return { ...event, odds: mergeOdds(event.odds, match.event.odds) };
+        });
+        if (!changed) return group;
+        return {
+            ...group,
+            events,
+            // An id this group reported missing is no longer missing once the
+            // targeted call priced it.
+            missingEventIds: (group.missingEventIds ?? []).filter(
+                (eventId) => !enriched.has(eventId)
+            ),
+        };
+    });
+
+    // Games the batch returned no event for at all: their enriched answer is the
+    // only board they have, appended as its own group.
+    const extras = [...enriched.entries()]
+        .filter(([gameId]) => !folded.has(gameId))
+        .map(([, { entry, event }]) => ({
+            ...(entry.group as FeedContestOddsGroup),
+            events: [event],
+            missingEventIds: [],
+        }));
+
+    return extras.length ? [...merged, ...extras] : merged;
 };

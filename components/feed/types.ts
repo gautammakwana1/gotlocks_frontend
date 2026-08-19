@@ -1,6 +1,12 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import type { PickCardPresentation } from "@/components/social/PickCardContent";
-import type { BuiltPickPayload, Pick, PickReaction, PickReactionSummary } from "@/lib/interfaces/interfaces";
+import type {
+    BuiltPickPayload,
+    Pick,
+    PickReaction,
+    PickReactionSummary,
+    PickResult,
+} from "@/lib/interfaces/interfaces";
 
 export type StructuredFeedContextKind = "global" | "league" | "arena";
 
@@ -22,15 +28,29 @@ export type StructuredFeedCapabilities = {
 };
 
 /**
- * Two record filters, matching the MVP: "community" is everything the group
- * posts to itself (member picks, Staff Picks, announcements) and "competitive"
- * is contest entries. There is deliberately no "all" — the MVP opens on
- * Community and every record is reachable from one of the two.
+ * The Feed's VIEWS, matching the MVP's swipe pager: "updates" is everything the
+ * group posts to itself (member picks, Staff Picks, announcements) and "entries"
+ * is contest entries. There is deliberately no "all" — the Feed opens on Updates
+ * and every record kind is reachable from one of the two.
  *
- * `standings` is not a record filter — it swaps the feed body for the caller's
- * standings node, and the chip only renders when such a node is supplied.
+ * Renamed from the old "community" / "competitive" ids to match the MVP's
+ * labels. `structuredFeedRecordMatchesFilter` treats "updates" as the CATCH-ALL
+ * (`kind !== "competitive_pick"`) rather than as a list of kinds, so a record
+ * kind added later cannot fall out of every view and vanish from the Feed.
+ *
+ * `standings` is not a record view — it swaps the feed body for the caller's
+ * standings node, and the dot only appears when such a node is supplied.
  */
-export type StructuredFeedFilter = "community" | "competitive" | "standings";
+export type StructuredFeedFilter = "updates" | "entries" | "standings";
+
+/**
+ * The contest phase an entry is in, used by the Entries view's own filter drawer.
+ * A SECOND, independent axis layered on the view: the view chooses which records
+ * are listed, this chooses which of the contest entries survive.
+ */
+export type ContestEntryLifecycle = "open" | "locked_live" | "settled";
+
+export type ContestEntryLifecycleFilter = "all" | ContestEntryLifecycle;
 export type StructuredFeedComposerMode =
     | "community_pick"
     | "competitive_pick"
@@ -90,6 +110,12 @@ export type StructuredFeedRecordSelection = {
     acceptedAmericanOdds: number;
     potentialPoints: number;
     awardedPoints?: number | null;
+    /**
+     * Graded outcome, which tints the selection line emerald / rose / slate.
+     * Optional: a source that only carries `resultLabel` leaves this undefined
+     * and the line stays in its neutral pending tone.
+     */
+    result?: PickResult;
     resultLabel?: string;
 };
 
@@ -120,6 +146,13 @@ export type StructuredFeedRecord = {
     contest?: { id: string; name: string; locksAtLabel?: string; href?: string };
     staffRole?: StructuredFeedStaffRole;
     visibility?: "visible" | "hidden_until_lock";
+    /**
+     * Canonical contest-entry phase used by the Entries view's filter drawer.
+     * Only meaningful on `competitive_pick`. Left undefined when the source row
+     * cannot say — such a record stays reachable from "All entries" rather than
+     * being assigned a phase it may not be in.
+     */
+    entryLifecycle?: ContestEntryLifecycle;
     actions?: {
         canReplace?: boolean;
         canDelete?: boolean;
@@ -164,8 +197,33 @@ export type StructuredFeedProps = {
     contestOptions?: readonly StructuredFeedContestOption[];
     communityPickWindow?: StructuredFeedRollingWindow;
     initialFilter?: StructuredFeedFilter;
-    /** Supplying this adds the Standings chip and renders it in place of the posts. */
+    /** Supplying this adds the Standings page and renders it in place of the posts. */
     standings?: ReactNode;
+    /**
+     * An extra icon action shown in the header while the Standings view is
+     * active — the League uses it to flip between its two boards. Omitted means
+     * no button, and the header's reserved slot simply stays empty.
+     */
+    standingsAction?: {
+        ariaLabel: string;
+        onClick: () => void;
+        className?: string;
+    };
+    /**
+     * Opens a host-owned announcement workspace instead of this component's own
+     * four-tab composer drawer. Supplying it does NOT remove the other post
+     * types — the host has to keep a route to them — so the header trigger only
+     * changes owner, never scope.
+     */
+    onCreateAnnouncement?: () => void;
+    createAnnouncementOpen?: boolean;
+    createAnnouncementTriggerRef?: Ref<HTMLButtonElement>;
+    /**
+     * The finalized-contest Winners strip, drawn ABOVE the posts rather than in
+     * place of them — unlike `standings`, it adds no filter chip, because it is
+     * not a view of the feed but a banner over every view of it.
+     */
+    winners?: ReactNode;
     /** Resolves "view profile" links on pick cards to self vs other. */
     currentUserId?: string;
     /**

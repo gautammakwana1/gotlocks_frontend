@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import dockStyles from "@/components/layout/BottomDock.module.css";
+import { ChevronUpDownIcon } from "@/components/ui/SvgIcons";
 import {
     pickTableChipWidthClassName,
     tableOddsBoxClasses,
@@ -23,8 +24,11 @@ import {
 } from "@/components/pick-builder/contest/contestSelections";
 import {
     buildContestOddsGames,
+    contestGameOddsEntry,
+    isRequestableEventId,
     normalizeContestSport,
     selectionsForEvent,
+    shouldFetchContestGameOdds,
     type ContestOddsGame,
 } from "@/lib/contests/feedContestOdds";
 import type { FeedContestSport } from "@/lib/contests/feedContestCatalog";
@@ -32,6 +36,8 @@ import { quoteSlipOdds } from "@/lib/sgp/comboPricing";
 import { validateAddLeg } from "@/lib/sgp/validateParlay";
 import type {
     FeedContestEntryLegPayload,
+    FeedContestGameOddsEntry,
+    FeedContestGameOddsSource,
     FeedContestGameSnapshot,
     FeedContestOddsGroup,
 } from "@/lib/interfaces/interfaces";
@@ -48,8 +54,37 @@ export type ContestBuilderContext = {
     contestName?: string;
     /** `contest.eligible_games_json` — the frozen slate, and the kickoff authority. */
     slate: readonly FeedContestGameSnapshot[];
-    /** The priced answer for that slate, from `state.feedContestOdds.groups`. */
+    /**
+     * The priced answer for that slate, from `state.feedContestOdds.groups` —
+     * with every per-game enrichment already folded in by
+     * `withEnrichedContestOdds`. Merged upstream on purpose: the builder then has
+     * exactly ONE board to read, whether a game was enriched or not.
+     */
     oddsGroups: readonly FeedContestOddsGroup[];
+    /**
+     * `state.feedContestOdds.byGame` — the per-game enrichment LEDGER.
+     *
+     * Read for two things only: the "checking…" affordance on an unpriced row,
+     * and de-duping the targeted fetches below. The markets themselves never come
+     * through here; they arrive inside `oddsGroups`, which is what keeps an
+     * empty, failed or in-flight enrichment from changing anything on screen.
+     */
+    gameOdds?: Readonly<Record<string, FeedContestGameOddsEntry>>;
+    /**
+     * Asks for ONE game's markets. `match_odds` is the full board for a matchup
+     * the member opened; `by_events` is the targeted retry for a game the batch
+     * read reported unpriced.
+     *
+     * The dispatch itself lives in the shell because only the shell knows the
+     * contest request key every answer is scoped against. Omitting this prop
+     * turns enrichment off entirely and the builder behaves exactly as it did
+     * before these two calls existed.
+     */
+    onRequestGameOdds?: (request: {
+        gameId: string;
+        sport: string;
+        source: FeedContestGameOddsSource;
+    }) => void;
     /**
      * `contest.sports`, in the order the organizer declared them. It is what
      * orders the sport tab strip — deriving that order from the slate instead
@@ -111,6 +146,30 @@ const nextTabIndex = (
     if (event.key === "ArrowLeft") return (currentIndex - 1 + itemCount) % itemCount;
     return null;
 };
+
+/**
+ * How many list-view rows a single VIEW (one date, one sport) may ever spend on
+ * the targeted retry — a TOTAL, not a concurrency limit.
+ *
+ * Each of these is a FULL market board (`main=false` is what gets past the 60s
+ * negative-cache marker the batch just wrote, and it also disables the main-line
+ * filter), so the cost is measured in hundreds of KB per row to repaint three
+ * preview chips. Six is roughly one screenful of the `max-h-[640px]` list.
+ *
+ * A budget rather than a sliding window on purpose. Slicing the UNPRICED rows
+ * and re-running as answers land looks bounded but is not: every retry that
+ * comes back with markets drops its row out of `pricedGameIds`, admits the next
+ * one, and walks the whole view six-in-flight at a time — and "the retries work"
+ * is the case this feature exists for, not the pathological one. The ledger in
+ * `budgets` below is what makes the cap total: a row is charged when it is
+ * considered, whether or not the redux ledger still had an attempt to spend, so
+ * the head of the list cannot be re-walked and the tail cannot cascade.
+ */
+const MAX_UNPRICED_RETRIES_IN_VIEW = 6;
+
+/** Ordering key for a market's rows; a line-less selection sorts last. */
+const lineSortRank = (line: number | null) =>
+    line === null ? Number.MAX_SAFE_INTEGER : line;
 
 const focusTabAt = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     event.currentTarget
@@ -461,14 +520,137 @@ export const ContestPickBuilder = ({
         focusTabAt(event, nextIndex);
     };
 
-    const visibleGames = sortedGames.filter(
-        (game) => game.sport === activeSport && localDateKey(game.startsAt) === activeDateKey
+    // Memoised so the enrichment effect below is not re-armed by every unrelated
+    // re-render (a selection toggle, the review sheet opening).
+    const visibleGames = useMemo(
+        () =>
+            sortedGames.filter(
+                (game) =>
+                    game.sport === activeSport && localDateKey(game.startsAt) === activeDateKey
+            ),
+        [activeDateKey, activeSport, sortedGames]
     );
     const activeGame: ContestOddsGame | null =
         sortedGames.find((game) => game.id === activeGameId) ?? null;
     const activeSelections = activeGame
         ? selectable.filter((entry) => entry.game.id === activeGame.id)
         : [];
+
+    /* ---------- Targeted per-game odds ----------
+     *
+     * Two ENRICHMENT reads, both fired from an effect rather than from the row
+     * handlers: a matchup opens on a click AND on Enter/Space, and hanging the
+     * fetch off both would leave the mouse and keyboard paths free to drift
+     * apart. They key off what is on SCREEN instead, so there is one trigger.
+     *
+     * ONE effect, not two, because item 2's "an opened matchup costs one request,
+     * not two" guard cannot be written across an effect boundary: react-redux
+     * schedules a re-render, it does not apply one, so a second effect in the
+     * same commit still reads the PRE-dispatch `context.gameOdds` and would find
+     * no `match_odds` attempt to wait on. Sharing one pass makes what item 1 just
+     * dispatched readable directly.
+     *
+     * Neither read is a precondition for anything below. `shouldFetchContestGameOdds`
+     * is the same predicate the reducer and the saga gate on, so a game is asked
+     * at most once per path per contest and a failure never re-arms.
+     */
+    const requestGameOdds = context.onRequestGameOdds;
+    const gameOddsByGame = context.gameOdds;
+    /** Games the merged board can actually price — the rows' own render test. */
+    const pricedGameIds = useMemo(
+        () => new Set(selectable.map(({ game }) => game.id)),
+        [selectable]
+    );
+    /**
+     * Which rows each view has already CHARGED to its retry budget, keyed by
+     * `<date>|<sport>`. Kept in a ref rather than in state: it must not itself
+     * re-run the effect, and it must survive the re-render every answer causes,
+     * which is precisely what stops the budget from refilling as rows get priced.
+     */
+    const listRetryBudgets = useRef(new Map<string, Set<string>>());
+
+    useEffect(() => {
+        if (!requestGameOdds) return;
+
+        const ask = (game: ContestOddsGame, source: FeedContestGameOddsSource) => {
+            if (
+                !shouldFetchContestGameOdds(
+                    contestGameOddsEntry(gameOddsByGame, game.id),
+                    source
+                )
+            ) {
+                return false;
+            }
+            requestGameOdds({ gameId: game.id, sport: game.sport, source });
+            return true;
+        };
+
+        // ITEM 1 — the member opened a matchup, so pull its FULL market board.
+        // The batch read is main lines only (`schedules-with-odds-by-events`
+        // defaults `main=true`); this is what puts props and alternates in the
+        // detail panel. Fired even while the batch is still in flight: the slate
+        // rows render from the contest's own snapshot, so a matchup can be opened
+        // before any odds have landed.
+        const openedBoardJustAsked = activeGame ? ask(activeGame, "match_odds") : false;
+
+        // ITEM 2 — a game the batch answered as unpriced, re-asked against the
+        // per-league by-events route with `main=false`, which has been seen to
+        // return markets the batch call did not.
+        //
+        // While the batch is in flight EVERY row looks unpriced, and a failed
+        // batch has no board to compare against at all. Retrying in either state
+        // would be firing at a slate that has not settled yet.
+        if (context.loading || context.error) return;
+
+        // The detail panel REPLACES the matchup list, so only one of the two is
+        // ever on screen. With a matchup open the retry is for that matchup
+        // alone — and only once the richer by-match-id board has settled without
+        // markets, otherwise every opened game would cost two requests instead
+        // of one.
+        if (activeGame) {
+            if (activeSelections.length > 0) return;
+            const entry = contestGameOddsEntry(gameOddsByGame, activeGame.id);
+            if (openedBoardJustAsked || entry.attempts.match_odds?.status === "loading") {
+                return;
+            }
+            ask(activeGame, "by_events");
+            return;
+        }
+
+        // On the list, the retry covers the rows the member is actually looking
+        // at rather than only the one they open: a row reading "Markets not
+        // posted yet" is precisely the row nobody taps, so an active-game-only
+        // retry would leave the batch's misses permanently invisible. It is
+        // charged against this view's budget so the whole view can never be
+        // walked, however many of the retries succeed.
+        const viewKey = `${activeDateKey}|${activeSport ?? ""}`;
+        const spent = listRetryBudgets.current.get(viewKey) ?? new Set<string>();
+        listRetryBudgets.current.set(viewKey, spent);
+
+        for (const game of visibleGames) {
+            if (spent.size >= MAX_UNPRICED_RETRIES_IN_VIEW) break;
+            if (pricedGameIds.has(game.id) || spent.has(game.id)) continue;
+            // A `map:NFL:SPORTSDATAIO:123`-style key fails the endpoint's id
+            // grammar, so the saga throws before any HTTP call. Skipped rather
+            // than charged: it can never be rescued, and charging it would let a
+            // handful of them starve every rescuable row behind them.
+            if (!isRequestableEventId(game.id)) continue;
+            spent.add(game.id);
+            ask(game, "by_events");
+        }
+    }, [
+        activeDateKey,
+        activeGame,
+        activeSelections.length,
+        activeSport,
+        context.error,
+        context.loading,
+        gameOddsByGame,
+        pricedGameIds,
+        requestGameOdds,
+        visibleGames,
+    ]);
+
     const marketSections = groupMarkets(activeSelections, activeGame?.sport ?? null);
     const activeMarketSection =
         marketSections.find((section) => section.key === requestedMarketSection) ??
@@ -500,6 +682,19 @@ export const ContestPickBuilder = ({
         ? null
         : "Accept the contest rules to join and submit this entry.";
     const actionMessage = selectionError ?? validationMessage ?? rulesAcceptanceMessage;
+
+    /**
+     * The copy for a game with nothing pickable on it.
+     *
+     * A targeted read still in flight reads as "checking"; EVERY other state —
+     * never asked, answered empty, or failed — falls back to the caller's own
+     * line. A market the book has not posted is not an error the member can act
+     * on, so a failed enrichment is never surfaced as one.
+     */
+    const marketsPendingLabel = (gameId: string, settledLabel: string) =>
+        contestGameOddsEntry(gameOddsByGame, gameId).status === "loading"
+            ? "Checking for markets…"
+            : settledLabel;
 
     const renderSelectionChip = ({
         entry,
@@ -790,7 +985,10 @@ export const ContestPickBuilder = ({
                                             </p>
                                             {gameSelections.length === 0 ? (
                                                 <p className="mt-2 text-[11px] font-semibold text-amber-100">
-                                                    Markets not posted yet
+                                                    {marketsPendingLabel(
+                                                        game.id,
+                                                        "Markets not posted yet"
+                                                    )}
                                                 </p>
                                             ) : null}
                                         </div>
@@ -1163,6 +1361,21 @@ export const ContestPickBuilder = ({
                                     );
                                 }
 
+                                // The main line is lifted into the grid above, so
+                                // what is left under a game-lines heading is the
+                                // ALTERNATES — which OddsBlaze files under the same
+                                // market name, in vendor order, with the number only
+                                // in `selection.line`. Rendering the bare selection
+                                // name would list two dozen rows all reading the same
+                                // team at different prices, so the line is shown and
+                                // the rows are ordered by it.
+                                const rows = market.selections
+                                    .slice()
+                                    .sort(
+                                        (left, right) =>
+                                            lineSortRank(left.selection.line) -
+                                            lineSortRank(right.selection.line)
+                                    );
                                 return (
                                     <section
                                         key={market.name}
@@ -1186,7 +1399,7 @@ export const ContestPickBuilder = ({
                                                 <span className="py-2 pr-3">Selection</span>
                                                 <span className="py-2 text-center">Odds</span>
                                             </div>
-                                            {market.selections.map((entry, rowIndex) => (
+                                            {rows.map((entry, rowIndex) => (
                                                 <div
                                                     key={entry.selection.id}
                                                     className={`grid items-center gap-2 border-b border-white/5 ${
@@ -1201,6 +1414,7 @@ export const ContestPickBuilder = ({
                                                 >
                                                     <p className="truncate py-2.5 pr-3 text-sm font-semibold text-white">
                                                         {entry.selection.selectionName}
+                                                        {formatLine(entry.selection.line)}
                                                     </p>
                                                     {renderSelectionChip({ entry })}
                                                 </div>
@@ -1215,7 +1429,10 @@ export const ContestPickBuilder = ({
                                     role="status"
                                     className="px-5 py-6 text-sm text-amber-100 sm:px-6"
                                 >
-                                    Markets not posted yet.
+                                    {marketsPendingLabel(
+                                        activeGame.id,
+                                        "Markets not posted yet."
+                                    )}
                                 </div>
                             ) : null}
                         </div>
@@ -1224,7 +1441,7 @@ export const ContestPickBuilder = ({
                             role="status"
                             className="-mx-5 border-y border-white/10 px-5 py-6 text-sm text-amber-100 sm:-mx-6 sm:px-6"
                         >
-                            Markets not posted yet.
+                            {marketsPendingLabel(activeGame.id, "Markets not posted yet.")}
                         </div>
                     )}
                 </section>
@@ -1278,9 +1495,16 @@ export const ContestPickBuilder = ({
                                 aria-expanded={reviewOpen}
                                 disabled={!reviewOpen && selected.length === 0}
                                 onClick={() => setReviewOpen((current) => !current)}
-                                className="rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 {reviewOpen ? "Close review" : "Review entry"}
+                                {/* Base path points DOWN = close, so the shut
+                                    state is the one that rotates. Matches the
+                                    core PickReviewSheet's affordance. */}
+                                <ChevronUpDownIcon
+                                    className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${reviewOpen ? "" : "rotate-180"
+                                        }`}
+                                />
                             </button>
                         </div>
 

@@ -810,6 +810,29 @@ html:has([data-app-scale="desktop"]) {
 }
 
 /*
+ * Sport/category badge colors are semantic artwork, not community chrome. Any
+ * surface that themes Tailwind's sky/cyan/violet/blue ramps (Arena's violet
+ * identity below) must not repaint a badge medallion or a Capture the Badge
+ * card, so those scopes re-pin the ramps back to their stock values.
+ */
+.semantic-badge-palette {
+  --color-blue-100: #dbeafe;
+  --color-blue-300: #90c5ff;
+  --color-cyan-100: #cefafe;
+  --color-cyan-200: #a2f4fd;
+  --color-cyan-300: #53eafd;
+  --color-cyan-400: #00d2ef;
+  --color-sky-100: #dff2fe;
+  --color-sky-200: #b8e6fe;
+  --color-sky-300: #77d4ff;
+  --color-sky-400: #00bcfe;
+  --color-violet-100: #ede9fe;
+  --color-violet-200: #ddd6ff;
+  --color-violet-300: #c4b4ff;
+  --color-violet-400: #a685ff;
+}
+
+/*
  * Arena workspaces inherit the same shared controls as Leagues, but carry their
  * own violet product identity. Keep this scope on Arena routes so shared and
  * deeply nested controls (including the Pick Builder) do not fall back to the

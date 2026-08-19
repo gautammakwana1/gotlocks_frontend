@@ -357,6 +357,16 @@ export type Pick = {
     user_id: string;
     description: string;
     odds_bracket: string;
+    /**
+     * The card-level American price, as a NUMBER.
+     *
+     * Optional because most surfaces read `odds_bracket` (the same value already
+     * formatted) and never need it. TD Psychic does: its Combo figure is written
+     * by the shared lock capture and is genuinely ABSENT before it — a distinction
+     * `odds_bracket` cannot carry, since an empty string there is also what an
+     * unpriced combo looks like.
+     */
+    american_odds?: number | null;
     result: PickResult;
     points: number;
     bonus?: number;
@@ -530,6 +540,22 @@ export type GroupState = {
     unreadCounts: number;
     groupsCounts: GroupCounts | null;
     ownerPlan: GroupOwnerPlan | null;
+    /**
+     * The League Guide's state for the viewer. Single-tenant and stamped with
+     * `leagueGuideForId` — auto-opening a welcome dialog off the PREVIOUS
+     * League's answer is exactly the kind of thing that only shows up in
+     * production, and `state.group` is known to survive navigation between
+     * groups.
+     *
+     * `leagueGuide*`-prefixed throughout so it can never be read as the Arena
+     * guide (arenaSlice) or as anything on the sports-league slice.
+     */
+    leagueGuide: LeagueGuideView | null;
+    leagueGuideForId: string | null;
+    leagueGuideLoading: boolean;
+    leagueGuideError: string | null;
+    leagueGuideAckLoading: boolean;
+    leagueGuideAckError: string | null;
 }
 
 export type GroupSelector = {
@@ -1829,6 +1855,145 @@ export type ArenaPausePayload = {
     arena_id: string;
 };
 
+/* ---------------------------------------------------------------------------
+ * ARENA BILLING — real Stripe money.
+ *
+ * The $50 Arena creation fee INCLUDES the first month of Club. The owner also
+ * picks the plan that starts once that month ends. Both facts travel in ONE
+ * Stripe Checkout Session, so there is a single redirect and a single payment.
+ *
+ * Nothing in this file grants access. The backend flips entitlement only from
+ * the Stripe webhook (or from checkout-status, which calls the same idempotent
+ * fulfilment), so a user cannot end up with a working Arena without a confirmed
+ * payment — and the client never has to be trusted about what was paid.
+ * ------------------------------------------------------------------------- */
+
+/** The three self-service Arena plans. `custom` is contact-only and is not
+ *  selectable here — the endpoint rejects it with a 409. */
+export type ArenaPlanCode = "arena_50" | "arena_100" | "arena_250_plus";
+
+/** Mirrors Stripe's Subscription.status verbatim, which is also what the
+ *  backend stores. `trialing` is the INCLUDED Club month. */
+export type ArenaSubscriptionStatus =
+    | "incomplete"
+    | "incomplete_expired"
+    | "trialing"
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "unpaid"
+    | "paused";
+
+// POST /group/arena/checkout-session
+export type ArenaCheckoutPayload = {
+    arena_id: string;
+    tier: ArenaPlanCode;
+};
+
+export type ArenaCheckoutResponse = {
+    url: string | null;
+    session_id: string;
+    // True when an earlier, still-open session was handed back rather than a new
+    // one created — so a double-click cannot produce two payments.
+    reused: boolean;
+};
+
+// GET /group/arena/checkout-status?session_id=
+// `pending` means Stripe has the money but our side has not finished; the
+// client polls. `complete` is safe to navigate on.
+export type ArenaCheckoutStatusKind = "pending" | "complete" | "expired";
+
+export type ArenaCheckoutStatusResponse = {
+    status: ArenaCheckoutStatusKind;
+    arena_id: string | null;
+    subscription?: ArenaSubscription | null;
+};
+
+/** The client-safe view of arena_subscriptions. Raw Stripe ids are never sent. */
+export type ArenaSubscription = {
+    status: ArenaSubscriptionStatus;
+    stripe_status: string | null;
+    // What bills from month 2 onward — the plan the owner selected.
+    plan_code: ArenaPlanCode | "custom" | null;
+    // Always Club. What the Arena is ENTITLED to during the included month, which
+    // is a different thing from what it will be billed.
+    included_plan_code: ArenaPlanCode | null;
+    included_period_starts_at: string | null;
+    included_period_ends_at: string | null;
+    current_period_starts_at: string | null;
+    current_period_ends_at: string | null;
+    cancel_at_period_end: boolean;
+    cancel_at: string | null;
+    canceled_at: string | null;
+    // A downgrade waiting for the period boundary.
+    pending_plan_code: ArenaPlanCode | "custom" | null;
+    pending_plan_effective_at: string | null;
+    // Set when a scheduled downgrade could NOT be applied (e.g. too many
+    // members for the smaller plan), so the owner can be told why.
+    downgrade_blocked_reason: string | null;
+    // Dunning. During grace the Arena keeps its current limits.
+    grace_period_ends_at: string | null;
+    next_payment_attempt_at: string | null;
+    payment_failure_count: number;
+    billing_mode: "simulated" | "stripe";
+    in_included_month: boolean;
+};
+
+// POST /group/arena/change-plan
+export type ChangeArenaPlanPayload = {
+    arena_id: string;
+    tier: ArenaPlanCode;
+};
+
+export type ArenaBillingActionKind =
+    | "activated"
+    | "scheduled"
+    | "already_active"
+    | "cancel_scheduled"
+    | "already_scheduled"
+    | "resumed";
+
+export type ArenaBillingActionResponse = {
+    action: ArenaBillingActionKind;
+    effective_at?: string | null;
+    subscription: ArenaSubscription | null;
+    available_tiers?: ArenaAvailableTier[];
+};
+
+// GET /group/arena/subscription?arena_id=
+export type ArenaSubscriptionResponse = {
+    subscription: ArenaSubscription | null;
+    hosting: ArenaHostingDetails | null;
+    unlock: ArenaUnlockDetails | null;
+    available_tiers: ArenaAvailableTier[];
+};
+
+// GET /group/arena/invoices?arena_id=
+export type ArenaInvoice = {
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    transaction_type:
+        | "founding_pro"
+        | "arena_creation_fee"
+        | "arena_subscription"
+        | "arena_proration";
+    arena_plan_code: string | null;
+    billing_reason: string | null;
+    period_starts_at: string | null;
+    period_ends_at: string | null;
+    description: string | null;
+    receipt_url: string | null;
+    created_at: string;
+};
+
+export type FetchArenaInvoicesPayload = {
+    arena_id: string;
+    page?: number;
+    limit?: number;
+};
+
 // What activate-hosting actually did. A tier change during the free month, or any
 // downgrade, is deferred to renewal ("scheduled") rather than charged now.
 export type ArenaHostingActionKind =
@@ -1989,7 +2154,7 @@ export type FeedContestSection =
     | "archived";
 
 /** Only these two templates can be created; older ones stay on the legacy route. */
-export type FeedContestTemplate = "multi_pick" | "sunday_pickem";
+export type FeedContestTemplate = "multi_pick" | "sunday_pickem" | "td_psychic";
 
 /**
  * Where a contest may be entered from — `feed_contests.entry_access_mode`,
@@ -2508,6 +2673,18 @@ export type FeedContestGameSnapshot = {
     matchup: string | null;
     home_team: string | null;
     away_team: string | null;
+    /**
+     * TD PSYCHIC ONLY, and REQUIRED there — `parseEligibleGames` refuses a
+     * td_psychic slate whose snapshot omits either id or names the same team on
+     * both sides (feed.helper.ts:510). Its entry path has to prove a picked
+     * player belongs to one of the two teams in the game, and the frozen
+     * snapshot is the authority it checks against, not the live feed.
+     *
+     * Omitted for every other template: the server stores null and nothing reads
+     * them.
+     */
+    home_team_id?: string | null;
+    away_team_id?: string | null;
     /** Sunday Pick'em only; null for General Combo games. */
     kickoff_window: string | null;
 };
@@ -2569,6 +2746,26 @@ export type FeedContest = ArenaContest & {
      * Feed contests only. The Fantasy card deliberately shows no winner.
      */
     winner?: FeedContestWinner | Record<string, never>;
+    /**
+     * Placements 1..3 of a finalized contest, best first. Stamped ONLY by
+     * `/list/finalized/podium` — every other list leaves it undefined, so a card
+     * that wants a podium has to have been fed by that endpoint.
+     *
+     * NOT capped at three ROWS, and a client must not assume it is. Places are
+     * awarded with standard competition ranking, so 1..3 is a placement WINDOW:
+     * a two-way tie for 1st returns 1, 1, 3 (no 2nd exists) and a three-way tie
+     * for 2nd returns 1, 2, 2, 2 — four rows. `[]` is a real outcome too: a
+     * contest that finished with a field where nobody scored awarded no place.
+     */
+    podium?: FeedContestPodiumEntry[];
+    /** Rows actually returned in `podium` — NOT the number of distinct places. */
+    podium_count?: number;
+    /**
+     * TRUE only where a mega-tie overflowed the server's per-contest row cap,
+     * which also makes the last placement's `tied_count` a floor rather than an
+     * exact figure. False on every ordinary contest.
+     */
+    podium_is_truncated?: boolean;
 };
 
 /** The populated shape of `FeedContest.winner`; `{}` means "nothing was won". */
@@ -2589,6 +2786,47 @@ export type FeedContestWinner = {
     tied_count: number;
 };
 
+/**
+ * One row of `FeedContest.podium`. Structurally IDENTICAL to `FeedContestWinner`
+ * — the server builds both from the same `contest_achievements` column subset
+ * (CONTEST_PODIUM_COLUMNS is an alias of CONTEST_WINNER_COLUMNS) — so this is an
+ * alias rather than a copy: a field added to one is added to both, and the two
+ * cannot drift into describing the same row differently.
+ */
+export type FeedContestPodiumEntry = FeedContestWinner;
+
+/**
+ * GET /group/feed-contest/list/finalized/podium — the group's RESULTS BOARD.
+ *
+ * The same finalized contests `/list/finalized` pages, in the same order, each
+ * carrying its top three placements instead of only its champion.
+ */
+export type FetchFeedContestPodiumsPayload = {
+    group_id: string;
+    group_type: FeedGroupType;
+    /**
+     * TRUE also returns contests that finalized and were LATER archived. Default
+     * false, which matches exactly the set `/list/finalized` returns.
+     */
+    include_archived?: boolean;
+    page?: number;
+    /** Server-capped at 25 — the page size IS this endpoint's podium fan-out. */
+    limit?: number;
+};
+
+/**
+ * The podium response. Deliberately `FeedContestListData` plus `filters`: the
+ * contest rows carry the same columns and the same `winner` object as a
+ * `/list/finalized` row, so one client model deserializes both.
+ */
+export type FeedContestPodiumListData = FeedContestListData & {
+    filters: {
+        include_archived: boolean;
+        /** The server's placement ceiling — 3 today. */
+        max_placement: number;
+    };
+};
+
 // POST /group/feed-contest/create (publishes straight to 'open') and
 // /create-draft (parks it in 'draft' without taking an active slot). Identical
 // bodies — both run the full validation. The organizer's IANA zone rides along
@@ -2599,14 +2837,36 @@ export type CreateFeedContestPayload = {
     name: string;
     description?: string;
     template: FeedContestTemplate;
-    /** Must equal ENTRY_MODEL_BY_TEMPLATE[template]: multi_pick | pickem_card. */
+    /**
+     * Must equal ENTRY_MODEL_BY_TEMPLATE[template]:
+     * multi_pick | pickem_card | td_psychic_card.
+     */
     entry_model: string;
     sunday_pickem_slate_mode?: string;
     sports?: string[];
     season_id?: string;
     opens_at: string;
+    /**
+     * IGNORED for td_psychic, and not merely optional there: the lock IS that
+     * template's shared price cutoff, so the server derives it from the slate
+     * (earliest kickoff − 5 minutes) and overwrites whatever arrives. It is what
+     * the participation rules already promise members, so an organizer-chosen
+     * value would contradict the contract they accept.
+     */
     locks_at: string;
     expected_ends_at: string;
+    /**
+     * The organizer-local slate window, `YYYY-MM-DD`, read in the `x-timezone`
+     * the request carries.
+     *
+     * REQUIRED for td_psychic and optional for multi_pick — an asymmetry the
+     * server states outright ("slate_starts_on and slate_ends_on are required for
+     * TD Psychic!"), because multi_pick contests have been created without one
+     * since the endpoint shipped and making it mandatory would refuse every
+     * existing client. Sending either from sunday_pickem is a 400.
+     */
+    slate_starts_on?: string;
+    slate_ends_on?: string;
     /** General Combo only; required for the multi_pick template. */
     minimum_legs?: number;
     maximum_legs?: number;
@@ -2615,6 +2875,7 @@ export type CreateFeedContestPayload = {
     rules_text: string;
     eligible_game_ids: string[];
     eligible_games_json: FeedContestGameSnapshot[];
+    /** IGNORED for td_psychic — the template fixes it at three. */
     winning_places: number;
     /**
      * ARENA ONLY — the wizard's "Owner and manager participation" control. Send
@@ -2631,6 +2892,22 @@ export type CreateFeedContestPayload = {
      * one in an Arena with no configured venue is a 409 (drafts are exempt).
      */
     entry_access_mode?: FeedContestEntryAccessMode;
+    /**
+     * The zone the wizard's DATES were computed in, replayed as `x-timezone`.
+     * Stripped from the body by the saga — it is a header, not a field.
+     *
+     * Load-bearing for td_psychic and inert for the other two. The wizard reads
+     * the organizer's ACCOUNT zone when they have set one, falling back to the
+     * browser's; the server reads `slate_starts_on`/`slate_ends_on` and buckets
+     * every kickoff in whatever `x-timezone` says. Letting the header default to
+     * the browser zone therefore makes an organizer whose account zone differs
+     * from their machine's — anyone travelling — fail the create with
+     * "Match … kicks off on <date>, outside the selected slate dates!" for a
+     * slate the wizard itself drew.
+     *
+     * The draft-replace body carries the same field for the same reason.
+     */
+    time_zone?: string;
 };
 
 /**
@@ -3001,6 +3278,71 @@ export type ReplaceFeedContestEntryData = Omit<EnterFeedContestData, "participan
         leg_count?: number;
         combined_american_odds?: number;
         points?: number;
+    } | null;
+};
+
+/**
+ * POST /group/feed-contest/enter-pickem/:contest_id — the Sunday Pick'em card.
+ *
+ * Same body as the combo enter: `legs`, `rules_version`, and the optional copy.
+ * The SERVER's leg contract differs in one place — `side` must name the TEAM
+ * ("Chicago Bears"), not the home/away slot, because `validatePickemCardEntry`
+ * compares it against the slate snapshot's `home_team`/`away_team`.
+ */
+export type EnterPickemFeedContestPayload = EnterFeedContestPayload;
+
+/**
+ * The card's own envelope. Structurally the enter envelope with a DIFFERENT
+ * `entry` summary: a card has no combined price, so it reports what it pays if
+ * every selection lands rather than one parlay number. It also carries the
+ * standings row the write seeded.
+ */
+export type EnterPickemFeedContestData = Omit<EnterFeedContestData, "entry"> & {
+    entry: {
+        pick_count: number;
+        /** What the card pays if EVERY selection lands — not a promise. */
+        potential_points: number;
+        correct_bonus: number;
+        game_ids: string[];
+        sport: string | null;
+        earliest_kickoff_at: string;
+    };
+    /** NULL only when the standings write failed; the card is stored either way. */
+    leaderboard?: unknown | null;
+};
+
+/**
+ * PUT /group/feed-contest/replace-pickem-entry/:contest_id — swap a whole card.
+ *
+ * `rules_version` is OPTIONAL, like the combo replace: the acceptance stored on
+ * the participant row is what gets checked. Sent, it must AGREE — 409 otherwise.
+ */
+export type ReplacePickemFeedContestEntryPayload = Omit<
+    EnterPickemFeedContestPayload,
+    "rules_version"
+> & { rules_version?: string };
+
+/**
+ * The replace envelope. Like the enter one MINUS `participant` (the row is
+ * untouched but for its timestamp), PLUS what was displaced.
+ *
+ * `previous_entry` is shaped for a CARD, not a parlay: `pick_count` and per-leg
+ * `selections`, never the combo path's `leg_count`/`combined_american_odds` — a
+ * card has no combined price.
+ */
+export type ReplacePickemFeedContestEntryData = Omit<
+    EnterPickemFeedContestData,
+    "participant"
+> & {
+    previous_entry?: {
+        pick_count?: number;
+        points?: number | null;
+        selections?: {
+            game_id: string | null;
+            team: string | null;
+            external_pick_key: string | null;
+            american_odds: number | null;
+        }[];
     } | null;
 };
 
@@ -3822,6 +4164,82 @@ export type MarkArenaGuideViewedData = {
     guide: ArenaGuideView;
 };
 
+/* ----------------------------------------------------------------------------
+ * LEAGUE GUIDE — the same walkthrough, for a League instead of an Arena.
+ *
+ * Deliberately a PARALLEL set of types rather than a shared generic one: the
+ * two endpoints key their response on `arena` / `league` respectively, and the
+ * two acknowledgement rows are independent (a member of both sees both guides
+ * once each). Collapsing them would only hide that.
+ *
+ * The state for these lives on `GroupState` (groupsSlice) — the fantasy League
+ * record's slice — NOT on ArenaState and NOT on the sports-league slice, which
+ * despite the name holds NFL/NBA matchup counts. Hence the `leagueGuide*`
+ * prefix on every field and action.
+ * -------------------------------------------------------------------------- */
+
+/** Both silence the guide; the split only exists so "did they read it" stays answerable. */
+export type LeagueGuideAckStatus = "completed" | "dismissed";
+
+export type LeagueGuideView = {
+    version: number;
+    has_viewed_guide: boolean;
+    /**
+     * The ONLY field a client should gate the dialog on. Derived server-side so
+     * the read and the write can never disagree about what "viewed" means —
+     * never re-derive it from the timestamps below.
+     */
+    should_show_guide: boolean;
+    /**
+     * TRUE when they acknowledged an OLDER cut. Lets a screen open with "here's
+     * what's new" rather than "welcome" after LEAGUE_GUIDE_VERSION is bumped,
+     * without a second call.
+     */
+    has_viewed_any_version: boolean;
+    status: LeagueGuideAckStatus | null;
+    acknowledged_at: string | null;
+    completed_at: string | null;
+    dismissed_at: string | null;
+    updated_at: string | null;
+};
+
+/** GET /group/league/guide?league_id= — members only (403), leagues-only (404). */
+export type FetchLeagueGuideStatusPayload = {
+    league_id: string;
+};
+
+export type LeagueGuideStatusData = {
+    league: { id: string; name: string; group_type: string };
+    viewer: {
+        role: string;
+        is_owner: boolean;
+        /**
+         * Returned to word the screen, NOT to gate it: the guide is gated on
+         * acknowledgement rather than age, so a member who joined a year ago and
+         * never saw it still gets it.
+         */
+        joined_at: string | null;
+    };
+    guide: LeagueGuideView;
+};
+
+/**
+ * POST /group/league/guide/viewed — `status` defaults to 'completed'.
+ * Idempotent on purpose: a client that fires this on unmount will send it
+ * twice, and the second is not an error.
+ */
+export type MarkLeagueGuideViewedPayload = {
+    league_id: string;
+    status?: LeagueGuideAckStatus;
+};
+
+export type MarkLeagueGuideViewedData = {
+    league: { id: string; name: string; group_type: string };
+    already_acknowledged: boolean;
+    /** The row just written, in the same shape the GET returns. */
+    guide: LeagueGuideView;
+};
+
 export type ArenaState = {
     hosting: ArenaHostingDetails | null;
     unlock: ArenaUnlockDetails | null;
@@ -4022,6 +4440,37 @@ export type ArenaState = {
     // Which tier an activate-hosting call is in flight for, so only that card
     // shows a busy state.
     hostingActionTier: string | null;
+
+    /* ---- Arena billing (real Stripe) ---- */
+    // The live subscription for `hostingForId`.
+    subscription: ArenaSubscription | null;
+    subscriptionLoading: boolean;
+    subscriptionError: string | null;
+    // Checkout hand-off. `checkoutRedirecting` latches the confirm button
+    // through the navigation to Stripe — the browser is unloading, so without it
+    // the button flicks back to enabled and invites a second click.
+    checkoutLoading: boolean;
+    checkoutRedirecting: boolean;
+    checkoutError: string | null;
+    // Post-redirect polling. The webhook is the authority but can be a few
+    // seconds behind the browser, so the return page polls checkout-status.
+    checkoutStatus: ArenaCheckoutStatusKind | null;
+    // Which Arena the polled session belongs to, so the return banner cannot
+    // render against a different Arena.
+    checkoutArenaId: string | null;
+    checkoutStatusLoading: boolean;
+    checkoutStatusError: string | null;
+    // change-plan / cancel-hosting / resume-hosting share one slot; only one can
+    // run at a time. billingActionTier marks which card is busy.
+    billingActionLoading: boolean;
+    billingActionTier: string | null;
+    billingActionError: string | null;
+    billingActionMessage: string | null;
+    // Per-Arena invoice history.
+    invoices: ArenaInvoice[];
+    invoicesLoading: boolean;
+    invoicesError: string | null;
+    invoicesHasMore: boolean;
     // Two-step delete. otpSent gates the code dialog; deleted is terminal and
     // tells the page to navigate away.
     arenaDeleteLoading: boolean;
@@ -4092,6 +4541,8 @@ export type RootState = {
     feedContest: FeedContestState;
     feedContestSchedule: FeedContestScheduleState;
     feedContestOdds: FeedContestOddsState;
+    pickemMoneyline: PickemMoneylineState;
+    tdScorers: TdScorersState;
     memberCard: MemberCardState;
     venue: VenueState;
 };
@@ -4502,6 +4953,125 @@ export type FeedContestOddsGroup = {
     partial: boolean;
 };
 
+/* ----------------------------------------------------------------------------
+ * PER-GAME enrichment of that board.
+ *
+ * The batch read answers for the WHOLE slate, and it answers with main lines
+ * only: `schedules-with-odds-by-events` defaults `main=true`. Two things it
+ * therefore cannot do, and two targeted calls that can:
+ *
+ *   1. `GET /leagues/<sport>/odds?match_id=<id>` — odds BY MATCH ID. Those
+ *      controllers send no `main` filter upstream at all, so one game comes back
+ *      with its FULL market board (props, alternates, every non-main line). That
+ *      is what the detail panel shows once a member opens a matchup.
+ *   2. `GET /leagues/<sport>/schedules-with-odds-by-events?event_ids=<one id>`
+ *      with `main=false` — a TARGETED retry for a game the batch reported as
+ *      unpriced. The `main` flag is part of the server's per-event cache key, so
+ *      flipping it is also what gets past the 60s negative-cache marker the
+ *      batch just wrote for that id; a same-shaped retry would be served the
+ *      remembered miss.
+ *
+ * Both are pure ENRICHMENT: they are stored beside the batch answer, never
+ * instead of it, so a failure, an empty answer or a call still in flight leaves
+ * the slate rendering exactly as the batch left it.
+ * -------------------------------------------------------------------------- */
+
+/** Which of the two calls produced an answer — the UI needs them distinguishable. */
+export type FeedContestGameOddsSource = "match_odds" | "by_events";
+
+export type FeedContestGameOddsStatus = "idle" | "loading" | "loaded" | "error";
+
+/**
+ * One path's outcome for one game. This is the DE-DUPE ledger: a path that has
+ * already been tried for a game is never tried again under the same contest, so
+ * a failing game cannot spin the network.
+ */
+export type FeedContestGameOddsAttempt = {
+    status: Exclude<FeedContestGameOddsStatus, "idle">;
+    /** TRUE only when the answer actually carried priced markets. */
+    hasOdds: boolean;
+    error: string | null;
+    fetchedAt: number | null;
+};
+
+/** The best enrichment answer so far for one slate game, plus that ledger. */
+export type FeedContestGameOddsEntry = {
+    /** `loading` while EITHER path is in flight; `idle` for a game never asked for. */
+    status: FeedContestGameOddsStatus;
+    /** Which path produced `group`. */
+    source: FeedContestGameOddsSource | null;
+    /**
+     * The answer wearing the SAME shape the batch read stores, so
+     * `buildContestOddsGames` / `selectionsForEvent` parse it unchanged and the
+     * builder keeps exactly one render path.
+     */
+    group: FeedContestOddsGroup | null;
+    /** TRUE when `group` carries at least one priced selection for this game. */
+    hasOdds: boolean;
+    error: string | null;
+    /**
+     * The ENRICHMENT's own timestamp, deliberately separate from
+     * `FeedContestOddsState.fetchedAt`: the review sheet re-quotes off that one,
+     * and the by-match-id cache is up to 60 min (5 HOURS on MLB) against the
+     * by-events cache's 5 min. A stale enrichment must never age the board's
+     * re-quote clock.
+     */
+    fetchedAt: number | null;
+    attempts: Partial<Record<FeedContestGameOddsSource, FeedContestGameOddsAttempt>>;
+};
+
+/** `data.odds` of an odds-by-match-id response. */
+export type LeagueMatchOddsPayload = {
+    updated?: string;
+    league?: LeagueObject | null;
+    sportsbook?: SportsBookObject | { id: string };
+    /**
+     * `data.schedule` MINUS requested/missing/partial — so this route cannot say
+     * WHY it came back empty. An unpriced id and an unknown id both answer 200
+     * with `events: []`, and a vendor 404 surfaces as a 500. Nothing from here is
+     * ever shown to a member as an error.
+     */
+    events: FeedContestOddsEvent[];
+};
+
+export type FetchContestGameOddsPayload = {
+    /**
+     * The batch read's `requestKey` at dispatch time. Every per-game answer is
+     * checked against it, so one contest's enrichment can never land under
+     * another contest's slate.
+     */
+    contestRequestKey: string;
+    /** The CONTEST's stored `game_id` — the same id the batch read asked for. */
+    gameId: string;
+    /** The slate row's sport ("NFL" … "Soccer"); picks the route. */
+    sport: string;
+    /** Defaults to FanDuel, matching the batch read. */
+    sportsbook?: FeedContestSportsbook;
+    /**
+     * by-match-id only, and part of THAT route's cache key — pass it consistently
+     * or the same game warms two upstream entries.
+     */
+    isLive?: boolean;
+    /** A member-initiated retry: the only thing that re-arms a spent attempt. */
+    force?: boolean;
+};
+
+export type ContestGameOddsSuccessPayload = {
+    contestRequestKey: string;
+    gameId: string;
+    source: FeedContestGameOddsSource;
+    /** NULL when the call answered cleanly with nothing — not an error. */
+    group: FeedContestOddsGroup | null;
+    fetchedAt: number;
+};
+
+export type ContestGameOddsFailurePayload = {
+    contestRequestKey: string;
+    gameId: string;
+    source: FeedContestGameOddsSource;
+    error: string;
+};
+
 export type FeedContestOddsState = {
     /**
      * `<contestId>|<sportsbook>|<sorted game ids>` the stored groups describe.
@@ -4517,6 +5087,73 @@ export type FeedContestOddsState = {
     /** TRUE when at least one league feed failed outright. */
     partial: boolean;
     /** `Date.now()` of the last success — the review sheet re-quotes off it. */
+    fetchedAt: number | null;
+    loading: boolean;
+    error: string | null;
+    /**
+     * Per-game enrichment, keyed by the contest's `game_id`, scoped to
+     * `requestKey` and dropped the moment that key changes.
+     */
+    byGame: Record<string, FeedContestGameOddsEntry>;
+};
+
+/* ----------------------------------------------------------------------------
+ * GET /leagues/nfl/moneyline-odds — the Sunday Pick'em read.
+ *
+ * A narrower, faster sibling of `schedules-with-odds-by-events`: a Pick'em card
+ * asks one question per game (who wins), so this returns ONLY the moneyline and
+ * returns it already flattened into the fields a leg is built from, instead of
+ * the full mixed `odds[]` board the generic endpoint sends.
+ *
+ * Two behaviours differ from the generic endpoint and both matter here:
+ *   - `markets` ADDS to Moneyline rather than replacing it, so the one market
+ *     this endpoint exists for cannot be filtered away.
+ *   - `events_without_moneyline` is DISTINCT from `missing_event_ids`: the first
+ *     is "the book pulled this line", the second is "the provider has no such
+ *     event". Only the first can resolve by waiting.
+ * -------------------------------------------------------------------------- */
+
+/** One side of a moneyline, already paired to its team by the server. */
+export type PickemMoneylineSelection = {
+    side: "home" | "away" | null;
+    team: string;
+    team_abbreviation: string | null;
+    /** The book's own selection id — the grading key a leg must carry. */
+    external_pick_key: string;
+    /** NULL when the vendor sent an unparseable price; such a side is unpickable. */
+    american_odds: number | null;
+    price: string | null;
+    market: string;
+};
+
+export type PickemMoneylineEvent = {
+    game_id: string;
+    starts_at: string | null;
+    is_live: boolean;
+    matchup: string | null;
+    home_team: string | null;
+    away_team: string | null;
+    /** Exactly two, AWAY FIRST — the order a matchup is written and read in. */
+    selections: PickemMoneylineSelection[];
+};
+
+export type FetchPickemMoneylinePayload = {
+    contest_id: string;
+    /** The contest's frozen slate; its ids are what the endpoint is asked for. */
+    game_ids: string[];
+    sportsbook?: string;
+};
+
+export type PickemMoneylineState = {
+    /** `<contestId>|<sportsbook>|<sorted game ids>`, compared by the consumer. */
+    requestKey: string;
+    events: PickemMoneylineEvent[];
+    /** Ids the provider does not carry at all. */
+    missingGameIds: string[];
+    /** Ids it carries but with no moneyline posted right now. */
+    withoutMoneylineGameIds: string[];
+    /** TRUE when at least one chunk failed outright — a missing id is "unknown". */
+    partial: boolean;
     fetchedAt: number | null;
     loading: boolean;
     error: string | null;
@@ -5280,11 +5917,36 @@ export type PickSelectionMeta = {
     match_date?: string;
     external_pick_key?: string;
     league?: string;
+    /* ---------- TD PSYCHIC ----------
+     *
+     * A TD leg names a PLAYER, so its identity cannot be reconstructed from the
+     * fields above the way a moneyline leg's can: a Pick'em tile recovers its
+     * team from `side`/`description`, but "Jaylen Waddle" says nothing about
+     * which club to colour the square with. The server writes all four, and the
+     * member-facing read keeps them (only the provider ids are redacted).
+     */
+    playerName?: string;
+    position?: string | null;
+    teamName?: string | null;
+    teamAbbreviation?: string | null;
+    /**
+     * When the shared capture froze this scorer's price. Written by the capture
+     * and by nothing else, so its PRESENCE is the reliable "this card is past
+     * the lock" test — steadier than reading `american_odds`, which a voided
+     * card can be missing.
+     */
+    lockedOddsAt?: string | null;
 };
 
 export type PickLeg = {
     description: string;
     odds_bracket: string;
+    /**
+     * The leg's own American price. On a COMBO leg this only feeds the server's
+     * combined number; on a Sunday Pick'em selection it IS the award, which is
+     * why the card's tiles read it directly.
+     */
+    american_odds?: number | null;
     difficulty_label?: DifficultyLabel | null;
     difficulty_tier?: number;
     external_pick_key?: string;
@@ -5969,4 +6631,200 @@ export type MemberCardState = {
     achievements: FeedContestAchievementsData | null;
     achievementsLoading: boolean;
     achievementsError: string | null;
+};
+
+/* ----------------------------------------------------------------------------
+ * GET /leagues/nfl/td-scorers-by-events — the TD PSYCHIC read.
+ *
+ * The scorer-market twin of `/leagues/nfl/moneyline-odds` above, and separate
+ * from the generic by-events board for the same two reasons that one is: the
+ * market is GUARANTEED (`markets` adds to Player Touchdowns rather than
+ * replacing it), and the players arrive already flattened AND eligibility
+ * filtered — full-game `Over 0.5` only, so First/Last Scorer and the 2+/3+
+ * alternates never reach the picker. Filtering server-side is what stops the
+ * builder from offering a selection `/enter-td-psychic` would then refuse.
+ *
+ * What comes back per player is the PROVIDER IDENTITY a TD selection is built
+ * from — `player_id`, `team_id`, `provider_market_id`, `provider_selection_id` —
+ * plus a display-only `american_odds`. That price is NOT what a card scores at:
+ * one shared price per scorer is captured at the contest lock and is the same
+ * number for every member who picked that player.
+ * -------------------------------------------------------------------------- */
+
+/** One eligible anytime-touchdown scorer, as the server flattened them. */
+export type TdScorerSelection = {
+    player_id: string;
+    player_name: string;
+    position: string | null;
+    team_id: string;
+    team_name: string | null;
+    team_abbreviation: string | null;
+    /** Which half of the matchup the player is on — the server checked this. */
+    team_side: "home" | "away" | null;
+    /** Derived, stable: `<game_id>#Player Touchdowns`. */
+    provider_market_id: string;
+    /** The vendor's odds id. Doubles as the grader key at settlement. */
+    provider_selection_id: string;
+    /**
+     * DISPLAY ONLY, and NULL when the vendor sent an unparseable price. Shown as
+     * non-binding `Public data`; never sent back with a card, because the entry
+     * endpoint takes no prices at all.
+     */
+    american_odds: number | null;
+    price: string | null;
+    /** When the book last moved this quote. */
+    observed_at: string | null;
+    market: string;
+    side: string;
+    line: number;
+};
+
+export type TdScorerEvent = {
+    game_id: string;
+    starts_at: string | null;
+    is_live: boolean;
+    matchup: string | null;
+    home_team: string | null;
+    away_team: string | null;
+    /** Present so the card's team check can be made against the same two ids. */
+    home_team_id: string | null;
+    away_team_id: string | null;
+    /** Away side first, then home; alphabetical by player within each side. */
+    selections: TdScorerSelection[];
+};
+
+export type FetchTdScorersPayload = {
+    contest_id: string;
+    /** The contest's frozen slate; its ids are what the endpoint is asked for. */
+    game_ids: string[];
+    sportsbook?: string;
+};
+
+export type TdScorersState = {
+    /** `<contestId>|<sportsbook>|<sorted game ids>` — the key all three boards share. */
+    requestKey: string;
+    events: TdScorerEvent[];
+    /** Ids the provider does not carry at all. */
+    missingGameIds: string[];
+    /** Ids it carries, but with no anytime-TD line posted yet. */
+    withoutScorersGameIds: string[];
+    /**
+     * DISTINCT players across the whole slate, as the server counted them. A TD
+     * Psychic card needs three, so the builder gates on the server's own number
+     * rather than counting client-side and disagreeing with it.
+     */
+    distinctPlayerCount: number;
+    /** TRUE when at least one chunk failed outright — a missing id is "unknown". */
+    partial: boolean;
+    fetchedAt: number | null;
+    loading: boolean;
+    error: string | null;
+};
+
+/* ----------------------------------------------------------------------------
+ * POST /group/feed-contest/enter-td-psychic/:contest_id
+ * PUT  /group/feed-contest/replace-td-psychic-entry/:contest_id
+ *
+ * The third entry model, and the body is where it parts company with the other
+ * two: it carries NO PRICES. A combo and a Pick'em card both send
+ * `american_odds` per leg and are priced at acceptance; a TD card sends three
+ * player identities and is stored with every price null, because one shared
+ * price per scorer is captured at the contest lock — the same number for
+ * everyone holding that player, which is the only way the correct-scorer
+ * tiebreak can compare two cards at all.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * One of the three scorers, as the client submits them.
+ *
+ * Every id here is echoed from `/leagues/nfl/td-scorers-by-events`; nothing is
+ * derived. The server re-resolves all five parts against the live market and
+ * refuses the card if any one of them no longer names an eligible anytime line,
+ * so a stale or invented id fails at submission rather than at settlement.
+ */
+export type TdPsychicSelectionPayload = {
+    /** The contest's own stored event id, compared against `eligible_game_ids`. */
+    game_id: string;
+    /** Must be distinct across the three — the same scorer twice is a 400. */
+    player_id: string;
+    /** Checked against the frozen snapshot's home/away team ids for THIS game. */
+    team_id: string;
+    /** Optional; the server derives `<game_id>#Player Touchdowns` when omitted. */
+    provider_market_id?: string;
+    provider_selection_id: string;
+};
+
+export type EnterTdPsychicFeedContestPayload = {
+    contest_id: string;
+    /** Echo `contest.rules_version` verbatim; a stale one answers 409. */
+    rules_version: string;
+    /** EXACTLY three, all different players. */
+    selections: TdPsychicSelectionPayload[];
+    /** Absent - the server joins the three player names with a bullet. */
+    description?: string;
+    source_tab?: string;
+    /** Defaults to "ODDS" server-side. */
+    build_mode?: string;
+    scope?: string;
+    validation_status?: string;
+};
+
+/**
+ * The card's envelope. The enter shape with a THIRD `entry` summary: a TD card
+ * has neither a combined price (the combo's) nor a potential total (Pick'em's),
+ * because at acceptance it genuinely has no price. What it reports instead is
+ * WHEN the prices arrive.
+ */
+export type EnterTdPsychicFeedContestData = Omit<EnterFeedContestData, "entry"> & {
+    entry: {
+        pick_count: number;
+        game_ids: string[];
+        sport: string | null;
+        earliest_kickoff_at: string;
+        /**
+         * `contest.locks_at` — the single shared cutoff at which every scorer on
+         * every card is priced. Deliberately in place of `potential_points`:
+         * inventing a number here is one the capture then contradicts.
+         */
+        prices_captured_at: string;
+    };
+    /** NULL only when the standings write failed; the card is stored either way. */
+    leaderboard?: unknown | null;
+};
+
+/**
+ * PUT /group/feed-contest/replace-td-psychic-entry/:contest_id — swap a WHOLE
+ * card of three players, validated exactly as a first submission is.
+ *
+ * `rules_version` is OPTIONAL, like both siblings: the acceptance stored on the
+ * participant row is what gets checked. Refused additionally once the card
+ * carries lock prices — a priced card is past the shared cutoff whatever its
+ * contest's status column says.
+ */
+export type ReplaceTdPsychicFeedContestEntryPayload = Omit<
+    EnterTdPsychicFeedContestPayload,
+    "rules_version"
+> & { rules_version?: string };
+
+export type ReplaceTdPsychicFeedContestEntryData = Omit<
+    EnterTdPsychicFeedContestData,
+    "participant"
+> & {
+    /**
+     * What the swap displaced, shaped for a CARD OF PLAYERS.
+     *
+     * Neither sibling's shape: the combo replace reports `leg_count` at a
+     * `combined_american_odds`, and the Pick'em replace reports `pick_count` with
+     * a team and a price per selection. A TD card reports who was on it and
+     * carries no price at all — before the lock there is none to report, which is
+     * the whole point of the template.
+     */
+    previous_entry?: {
+        pick_count?: number;
+        selections?: {
+            game_id?: string | null;
+            player_id?: string | null;
+            player_name?: string | null;
+        }[];
+    } | null;
 };

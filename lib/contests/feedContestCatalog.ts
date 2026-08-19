@@ -25,6 +25,25 @@ export const FEED_CONTEST_SPORTS = [
 export type FeedContestSport = (typeof FEED_CONTEST_SPORTS)[number];
 
 /** FEED_CONTEST_MIN_LEGS / FEED_CONTEST_MAX_LEGS. */
+/**
+ * How many places a contest may pay. THREE is the floor, not one: every
+ * placement surface — the podium, the Winners block, the achievements — is built
+ * around a top three, and a one-place contest would render a podium with two
+ * empty steps. The MVP pins the same pair.
+ */
+export const FEED_CONTEST_MIN_WINNING_PLACES = 3;
+export const FEED_CONTEST_MAX_WINNING_PLACES = 5;
+
+/** Snaps a typed value back into range on blur, as the MVP's spinner does. */
+export const clampFeedContestWinningPlaces = (value: number) =>
+    Math.min(
+        FEED_CONTEST_MAX_WINNING_PLACES,
+        Math.max(
+            FEED_CONTEST_MIN_WINNING_PLACES,
+            Math.trunc(value) || FEED_CONTEST_MIN_WINNING_PLACES
+        )
+    );
+
 export const FEED_CONTEST_MIN_LEGS = 2;
 export const FEED_CONTEST_MAX_LEGS = 8;
 
@@ -46,7 +65,18 @@ export const SLATE_HORIZON_DAYS = 14;
 /** SUNDAY_PICKEM_KICKOFF_WINDOW. */
 export type SundayKickoffWindow = "international" | "early" | "late" | "sunday_night";
 
-export type SundayPickemSlateMode = "early_window" | "late_window" | "full_sunday";
+export type SundayPickemSlateMode =
+    | "early_window"
+    | "late_window"
+    | "full_sunday"
+    /**
+     * "Organizer selected" — every window is offered and the organizer unchecks
+     * whatever they do not want, rather than the shortcut picking for them. The
+     * backend maps it to the same window set as `full_sunday`
+     * (SUNDAY_PICKEM_WINDOWS_BY_SLATE_MODE, arenaConstant.ts:115); what differs
+     * is only what the STORED mode says about how the slate was arrived at.
+     */
+    | "organizer_selected";
 
 /**
  * The `schedules-for-all-tz` route behind each contest sport. Soccer is three
@@ -104,6 +134,17 @@ export type ContestGameOption = {
     /** Feed-supplied short codes (WSH, PHI) — never derived from the name. */
     homeAbbr: string;
     awayAbbr: string;
+    /**
+     * The feed's own team ids, carried through UNTOUCHED.
+     *
+     * TD Psychic only, and required rather than decorative: its create endpoint
+     * refuses a slate whose `eligible_games_json` omits distinct
+     * `home_team_id`/`away_team_id` (feed.helper.ts:510), because its entry path
+     * has to prove a picked player belongs to one of the two teams in the game.
+     * Every other template ignores them.
+     */
+    homeTeamId: string;
+    awayTeamId: string;
     gameStartsAt: string;
     /** NFL Sundays only; null for every other kickoff. */
     sundayWindow: SundayKickoffWindow | null;
@@ -155,17 +196,19 @@ const kickoffWindowFor = (hour: number): SundayKickoffWindow => {
     return "sunday_night";
 };
 
-// Mirrors `normalizeAbbr` in the pick builders: the feed's own code wins, and
-// initials are only a fallback for a competition that omits it.
-const teamAbbreviation = (team: { name: string; abbreviation?: string }) =>
-    team.abbreviation?.trim().toUpperCase() ||
-    team.name
-        .split(/\s+/)
-        .map((part) => part[0] ?? "")
-        .join("")
-        .slice(0, 3)
-        .toUpperCase() ||
-    "—";
+/**
+ * The feed's own code wins; the fallback is the MVP's rule, not initials.
+ *
+ * Both produce three letters, but from different places: initials give "Kansas
+ * City Chiefs" → KCC, where the MVP's first-three-alphanumerics gives KAN — the
+ * form a reader actually recognises, and the one the slate browser's team badge
+ * is sized for. Only reached for a competition whose feed omits the code.
+ */
+const teamAbbreviation = (team: { name: string; abbreviation?: string }) => {
+    const abbreviation = team.abbreviation?.trim();
+    if (abbreviation) return abbreviation.toUpperCase();
+    return team.name.replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "—";
+};
 
 export const toContestGameOption = (
     event: LeagueScheduleEvent,
@@ -182,6 +225,8 @@ export const toContestGameOption = (
         awayTeam: event.teams.away.name,
         homeAbbr: teamAbbreviation(event.teams.home),
         awayAbbr: teamAbbreviation(event.teams.away),
+        homeTeamId: event.teams.home.id ?? '',
+        awayTeamId: event.teams.away.id ?? '',
         gameStartsAt: event.date,
         sundayWindow:
             sport !== "NFL" || weekday !== "Sun" || !Number.isFinite(hour)
@@ -265,6 +310,7 @@ export const sundayWindowsForSlateMode = (
         ? ["early"]
         : mode === "late_window"
             ? ["late"]
+            // full_sunday AND organizer_selected: every window is on the table.
             : ["international", "early", "late", "sunday_night"];
 
 /**
@@ -381,10 +427,18 @@ export const easternKickoffFormatter = new Intl.DateTimeFormat("en-US", {
 const zonedKickoffFormatters = new Map<string, Intl.DateTimeFormat>();
 
 /** The same kickoff line as `gameKickoffFormatter`, pinned to one zone. */
+/**
+ * The slate browser's kickoff line — and its ONLY consumer, which is why the
+ * locale is the VIEWER's rather than the en-US every other formatter in this
+ * file pins. The MVP builds this one inline with `Intl.DateTimeFormat(undefined,
+ * …)`, so a non-US organizer reads "Sun 14 Sep, 13:00 EDT" instead of
+ * "Sun, Sep 14, 1:00 PM EDT". The zone is still explicit; only the rendering
+ * follows the reader.
+ */
 export const zonedKickoffFormatter = (timeZone: string) => {
     const cached = zonedKickoffFormatters.get(timeZone);
     if (cached) return cached;
-    const created = new Intl.DateTimeFormat("en-US", {
+    const created = new Intl.DateTimeFormat(undefined, {
         weekday: "short",
         month: "short",
         day: "numeric",

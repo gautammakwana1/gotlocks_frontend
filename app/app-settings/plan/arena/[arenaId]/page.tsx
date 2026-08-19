@@ -24,6 +24,7 @@ import {
     scheduleArenaPauseRequest,
 } from "@/lib/redux/slices/arenaSlice";
 import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
+import ArenaSubscriptionPanel from "@/components/billing/ArenaSubscriptionPanel";
 import { useToast } from "@/lib/state/ToastContext";
 import { formatDateTime } from "@/lib/utils/date";
 
@@ -151,27 +152,12 @@ const ArenaBillingDetailPage = () => {
                 </div>
             </header>
 
-            <section aria-labelledby="hosting-status-title" className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                            current status
-                        </p>
-                        <h2
-                            id="hosting-status-title"
-                            className="mt-1 text-lg font-semibold text-[var(--app-text)]"
-                        >
-                            {getArenaHostingStatusLabel(hosting)}
-                        </h2>
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-300">
-                        simulated billing
-                    </span>
-                </div>
+            {/* Stripe-billed Arenas render here and this panel owns their plan,
+                cancellation and card. It returns null for legacy simulated
+                Arenas, which keep the section below. */}
+            <ArenaSubscriptionPanel arenaId={arenaId} isOwner={isOwner} hosting={hosting} />
 
-                {/* hosting-details 500s rather than returning nulls when an Arena has
-                    no hosting/unlock row (legacy Arenas predating unlock-on-create),
-                    so say so instead of rendering an empty page. */}
+            <section aria-labelledby="hosting-status-title" className="space-y-4">
                 {arenaError && !hosting ? (
                     <div
                         role="alert"
@@ -180,200 +166,7 @@ const ArenaBillingDetailPage = () => {
                         {arenaError}
                     </div>
                 ) : null}
-
-                {locked ? (
-                    <div className="rounded-2xl border border-violet-300/25 bg-violet-500/10 p-5">
-                        <p className="text-sm leading-6 text-gray-200">
-                            This Arena is not unlocked yet. A permanent unlock is required before
-                            hosting can begin.
-                        </p>
-                        <Link
-                            href={`/arena/${arenaId}?tab=settings`}
-                            className="mt-4 inline-flex min-h-11 items-center rounded-xl border border-violet-300/50 bg-violet-500/20 px-4 py-2 text-sm font-semibold text-violet-50 transition hover:bg-violet-500/30"
-                        >
-                            Open Arena settings
-                        </Link>
-                    </div>
-                ) : hosting ? (
-                    <ArenaStatusBanner hosting={hosting} />
-                ) : null}
             </section>
-
-            {!locked && hosting ? (
-                <section aria-labelledby="hosting-tier-title" className="space-y-4">
-                    <div>
-                        <h2
-                            id="hosting-tier-title"
-                            className="text-lg font-semibold text-[var(--app-text)]"
-                        >
-                            Hosting tier
-                        </h2>
-                        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                            Capacity and price for this Arena&apos;s current tier.
-                        </p>
-                    </div>
-
-                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                                <p className="font-semibold text-white">Current hosting</p>
-                                <p className="mt-1 text-xs text-gray-500">
-                                    {getArenaHostingHeadline(hosting)}
-                                </p>
-                            </div>
-                            {monthlyLabel ? (
-                                <p className="text-sm text-gray-300">
-                                    {monthlyLabel}
-                                    <span className="text-xs text-gray-500"> / month</span>
-                                </p>
-                            ) : null}
-                        </div>
-
-                        <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
-                            {[
-                                { label: "members", value: hosting.participating_member_limit },
-                                { label: "managers", value: hosting.manager_limit },
-                                { label: "contests", value: hosting.active_contest_limit },
-                            ].map((item) => (
-                                <div
-                                    key={item.label}
-                                    className="rounded-lg border border-white/10 bg-black/30 px-2 py-2"
-                                >
-                                    <dt className="text-[10px] uppercase tracking-wide text-gray-500">
-                                        {item.label}
-                                    </dt>
-                                    <dd className="mt-0.5 text-sm font-semibold text-white">
-                                        {item.value}
-                                    </dd>
-                                </div>
-                            ))}
-                        </dl>
-
-                        <div className="mt-4 space-y-1 text-xs text-gray-500">
-                            {hosting.included_month_ends_at ? (
-                                <p>Included month ends {formatDateTime(hosting.included_month_ends_at)}</p>
-                            ) : null}
-                            {hosting.paid_through_at ? (
-                                <p>Paid through {formatDateTime(hosting.paid_through_at)}</p>
-                            ) : null}
-                            {hosting.period_ends_at ? (
-                                <p>Period ends {formatDateTime(hosting.period_ends_at)}</p>
-                            ) : null}
-                            {hosting.pause_scheduled_for ? (
-                                <p>Pause scheduled for {formatDateTime(hosting.pause_scheduled_for)}</p>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    {/* Read-only by design: this page reports which tier is active. It
-                        deliberately renders no upgrade/downgrade affordance, so it also
-                        never consults available_tiers — those verdicts carry CTA-phrased
-                        action_label / summary copy that would read as a tier switcher. */}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {SELF_SERVICE_ARENA_TIERS.map((tierId) => {
-                            const offer = getArenaHostingOffer(tierId);
-                            const isCurrent = hosting.tier === tierId;
-                            return (
-                                <article
-                                    key={tierId}
-                                    className={`rounded-2xl border p-4 ${isCurrent
-                                        ? "border-violet-300/40 bg-violet-500/10"
-                                        : "border-white/10 bg-white/[0.03]"
-                                        }`}
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <h3 className="font-semibold text-white">{offer.name}</h3>
-                                        {isCurrent ? (
-                                            <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-violet-200">
-                                                current
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <p className="mt-1 text-sm text-gray-300">
-                                        {offer.priceLabel}
-                                        <span className="text-xs text-gray-500"> / month</span>
-                                    </p>
-                                    <p className="mt-3 text-xs leading-5 text-gray-500">
-                                        {offer.summary ?? "—"}
-                                    </p>
-                                </article>
-                            );
-                        })}
-
-                        <article className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-4">
-                            <h3 className="font-semibold text-white">
-                                {getArenaHostingOffer("custom").name}
-                            </h3>
-                            <p className="mt-1 text-sm text-gray-400">
-                                {getArenaHostingOffer("custom").priceLabel} ·{" "}
-                                {getArenaHostingOffer("custom").cadenceLabel}
-                            </p>
-                            <p className="mt-3 text-xs leading-5 text-gray-500">
-                                {getArenaHostingOffer("custom").summary}
-                            </p>
-                            <span className="mt-3 inline-block text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                                Contact state
-                            </span>
-                        </article>
-                    </div>
-
-                    <p className="text-xs leading-5 text-[var(--text-muted)]">
-                        Tier changes are managed from the Arena&apos;s own settings.
-                    </p>
-
-                    {hosting.scheduled_tier ? (
-                        <div className="rounded-xl border border-sky-300/20 bg-sky-500/10 px-4 py-3 text-xs leading-5 text-sky-100">
-                            {arenaTierLabel(hosting.scheduled_tier)} is scheduled
-                            {hosting.status === "included_month"
-                                ? ` after the included month${hosting.included_month_ends_at
-                                    ? ` ends ${formatDateTime(hosting.included_month_ends_at)}`
-                                    : ""
-                                }.`
-                                : " for the next paid period."}
-                        </div>
-                    ) : null}
-                </section>
-            ) : null}
-
-            {!locked && hosting && isOwner ? (
-                <section aria-labelledby="hosting-controls-title" className="space-y-3">
-                    <h2
-                        id="hosting-controls-title"
-                        className="text-lg font-semibold text-[var(--app-text)]"
-                    >
-                        Hosting controls
-                    </h2>
-
-                    {canSchedulePause ? (
-                        <button
-                            type="button"
-                            onClick={() => setPauseConfirmOpen(true)}
-                            disabled={hostingActionLoading}
-                            className="min-h-11 rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Pause at period end
-                        </button>
-                    ) : null}
-
-                    {canCancelPause ? (
-                        <button
-                            type="button"
-                            onClick={handleCancelPause}
-                            disabled={hostingActionLoading}
-                            className="min-h-11 rounded-xl border border-emerald-300/30 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            Cancel scheduled pause
-                        </button>
-                    ) : null}
-
-                    {!canSchedulePause && !canCancelPause ? (
-                        <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                            No hosting controls are available while this Arena is{" "}
-                            {getArenaHostingStatusLabel(hosting).toLowerCase()}.
-                        </p>
-                    ) : null}
-                </section>
-            ) : null}
 
             <details className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
                 <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-white">

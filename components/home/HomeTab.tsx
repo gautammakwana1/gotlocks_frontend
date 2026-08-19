@@ -10,14 +10,19 @@ import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
 import { clearJoinedGroupByInviteCodeMessage, fetchAllGroupsRequest, joinedGroupByInviteCodeRequest } from "@/lib/redux/slices/groupsSlice";
 import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchGlobalPendingTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
-import { fetchMyTutorialProgressRequest, fetchProgressByUserIdRequest, updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
+// TUTORIAL DISABLED 2026-08-17 — superseded by the per-League/per-Arena Guides.
+// `fetchProgressByUserIdRequest` stays: that is the XP/points read the rest of
+// the app needs, NOT the tutorial. Only the two tutorial actions are off.
+import { fetchProgressByUserIdRequest } from "@/lib/redux/slices/progressSlice";
+// import { fetchMyTutorialProgressRequest, updateTutorialProgressRequest } from "@/lib/redux/slices/progressSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { getGroupPath } from "@/lib/utils/profileNavigation";
 import ScrollUpButton from "../ui/ScrollUpButton";
 import { MembersIcon, RightArrowIcon, SlipIcon } from "../ui/SvgIcons";
-import OnboardingModal from "../modals/OnboardingModal";
+// TUTORIAL DISABLED 2026-08-17
+// import OnboardingModal from "../modals/OnboardingModal";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
-import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+// import { WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import Image from "next/image";
 import HomeTabSkeleton from "../skeletons/home/HomeTabSkeleton";
 import { getActiveContestCountsLabel, getCombinedContestCapacityLabel, getGroupCapacityLabel, getGroupTypeLabel, getHostingTierLabel } from "@/lib/groups/limits";
@@ -160,7 +165,8 @@ const HomeTab = () => {
     const [groupPage, setGroupPage] = useState(1);
     const [activityTab, setActivityTab] = useState<ActivityTab>("posts");
     const [showScrollTop, setShowScrollTop] = useState(false);
-    const [showOnboarding, setShowOnboarding] = useState(false);
+    // TUTORIAL DISABLED 2026-08-17
+    // const [showOnboarding, setShowOnboarding] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
@@ -171,18 +177,24 @@ const HomeTab = () => {
     // The hub no longer renders the level bar / stat tiles, so only the intro
     // flags and the loading gate are read here. The progress fetch below still
     // hydrates the slice for the screens that do show those numbers.
-    const { hasSeenIntro, loading: progressLoading } = useSelector((state: RootState) => state.progress);
-    const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
+    const { loading: progressLoading } = useSelector((state: RootState) => state.progress);
+    // TUTORIAL DISABLED 2026-08-17. `progressLoading` above is kept — it gates the
+    // skeleton and is not tutorial state. The intro flags below all DEFAULT TO
+    // TRUE in progressSlice, so with the tutorial-progress fetch off, every gate
+    // that used to read them ("actionsLocked", the guided nav) resolves to
+    // unlocked rather than stuck.
+    // const { hasSeenIntro } = useSelector((state: RootState) => state.progress);
+    // const { hasSeenWelcomeIntro, hasSeenGroupIntro } = useSelector((state: RootState) => state.progress);
 
-    const actionsLocked = !hasSeenGroupIntro;
-    const handleLockedActionTap = useCallback(() => {
-        setToast({
-            id: Date.now(),
-            type: "info",
-            message: "Tap the groups tab to continue the tour.",
-            duration: 3000
-        });
-    }, [setToast]);
+    // const actionsLocked = !hasSeenGroupIntro;
+    // const handleLockedActionTap = useCallback(() => {
+    //     setToast({
+    //         id: Date.now(),
+    //         type: "info",
+    //         message: "Tap the groups tab to continue the tour.",
+    //         duration: 3000
+    //     });
+    // }, [setToast]);
 
     const fetchData = useCallback((pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
@@ -194,7 +206,8 @@ const HomeTab = () => {
         dispatch(fetchAllGroupsRequest({ page: 1, limit: 10 }));
         fetchData(1);
         dispatch(fetchProgressByUserIdRequest({ user_id: currentUserId }));
-        dispatch(fetchMyTutorialProgressRequest());
+        // TUTORIAL DISABLED 2026-08-17 — stops GET /progress/tutorial-progress.
+        // dispatch(fetchMyTutorialProgressRequest());
     }, [dispatch, currentUserId, fetchData]);
 
     useEffect(() => {
@@ -204,9 +217,10 @@ const HomeTab = () => {
         fetchData(1, page * limit);
     }, [pickLoader, pickMessage, dispatch, page, limit, fetchData]);
 
-    useEffect(() => {
-        setShowOnboarding(!hasSeenIntro);
-    }, [hasSeenIntro]);
+    // TUTORIAL DISABLED 2026-08-17
+    // useEffect(() => {
+    //     setShowOnboarding(!hasSeenIntro);
+    // }, [hasSeenIntro]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -558,13 +572,14 @@ const HomeTab = () => {
         }
     };
 
-    const handleCompleteWelcomeIntro = () => {
-        // setShowOnboarding(false);
-        // if (!hasSeenIntro) {
-        //     dispatch(completeIntroRequest({}));
-        // }
-        dispatch(updateTutorialProgressRequest({ tutorial_key: "home" }));
-    };
+    // TUTORIAL DISABLED 2026-08-17 — stops POST /progress/tutorial-update.
+    // const handleCompleteWelcomeIntro = () => {
+    //     // setShowOnboarding(false);
+    //     // if (!hasSeenIntro) {
+    //     //     dispatch(completeIntroRequest({}));
+    //     // }
+    //     dispatch(updateTutorialProgressRequest({ tutorial_key: "home" }));
+    // };
 
     const isInitialLoading = groupLoading || progressLoading;
 
@@ -821,12 +836,13 @@ const HomeTab = () => {
                 </Suspense>
             </section>
 
+            {/* TUTORIAL DISABLED 2026-08-17
             <OnboardingModal
                 open={!hasSeenWelcomeIntro}
                 steps={WELCOME_TUTORIAL}
                 onClose={handleCompleteWelcomeIntro}
                 finalCtaLabel="finish"
-            />
+            /> */}
             {
                 joinOpen && (
                     <ModalShell onClose={closeJoinModal} maxWidthClass="max-w-sm">

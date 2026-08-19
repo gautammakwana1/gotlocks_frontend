@@ -83,7 +83,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "biggest-hit",
         name: "Biggest Hit",
         category: "generic",
-        description: "Highest positive-odds winning pick.",
+        description: "Awarded to the player who records the highest-odds winning pick.",
         metric: "highest-positive-odds-win",
         minimum: 100,
         eligibleSports: [],
@@ -94,7 +94,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "hot-hand",
         name: "Hot Hand",
         category: "generic",
-        description: "Longest win streak across finalized contest slips.",
+        description: "Awarded to the player who records the longest consecutive win streak.",
         metric: "longest-win-streak",
         minimum: 3,
         eligibleSports: [],
@@ -105,7 +105,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "accuracy-crown",
         name: "Accuracy Crown",
         category: "generic",
-        description: "Best win percentage with at least four resolved picks.",
+        description: "Awarded to the player with the highest win percentage.",
         metric: "best-win-percentage",
         minimum: 4,
         eligibleSports: [],
@@ -116,7 +116,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "underdog-hunter",
         name: "Underdog Hunter",
         category: "generic",
-        description: "Most positive-odds winning picks across any market.",
+        description: "Awarded to the player who records the most wins on positive-odds picks.",
         metric: "positive-odds-win-count",
         minimum: 2,
         eligibleSports: [],
@@ -127,7 +127,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "spread-surgeon",
         name: "Spread Surgeon",
         category: "generic",
-        description: "Most winning spread picks across any sport.",
+        description: "Awarded to the player who records the most wins on spread picks.",
         metric: "spread-win-count",
         minimum: 2,
         eligibleSports: [],
@@ -138,7 +138,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "dog-caller",
         name: "Dog Caller",
         category: "generic",
-        description: "Most positive-odds moneyline wins.",
+        description: "Awarded to the player who records the most wins on positive-odds moneyline picks.",
         metric: "positive-odds-moneyline-win-count",
         minimum: 1,
         eligibleSports: [],
@@ -149,7 +149,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "total-tactician",
         name: "Total Tactician",
         category: "generic",
-        description: "Most winning over/under total picks.",
+        description: "Awarded to the player who records the most wins on total picks.",
         metric: "total-win-count",
         minimum: 2,
         eligibleSports: [],
@@ -160,7 +160,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "air-raid",
         name: "Air Raid",
         category: "football",
-        description: "Most winning passing-related player props.",
+        description: "Awarded to the player who records the most wins on passing props.",
         metric: "football-passing-win-count",
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
@@ -171,7 +171,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "ground-game",
         name: "Ground Game",
         category: "football",
-        description: "Most winning rushing-related player props.",
+        description: "Awarded to the player who records the most wins on rushing props.",
         metric: "football-rushing-win-count",
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
@@ -182,7 +182,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "hands-team",
         name: "Hands Team",
         category: "football",
-        description: "Most winning receiving-related player props.",
+        description: "Awarded to the player who records the most wins on receiving props.",
         metric: "football-receiving-win-count",
         minimum: 2,
         eligibleSports: ["NFL", "NCAAF"],
@@ -193,9 +193,9 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "td-sniper",
         name: "TD Sniper",
         category: "football",
-        description: "Highest positive-odds winning touchdown scorer pick.",
+        description: "Awarded to the player who records the highest-odds winning touchdown scorer pick.",
         metric: "td-scorer-positive-odds-win",
-        minimum: 1,
+        minimum: 100,
         eligibleSports: ["NFL", "NCAAF"],
         suggestedPoints: 10,
         display: display("crosshair", "Touchdown hits", "neon-green", "text-emerald-100", "border-emerald-300/30", "shadow-[0_0_28px_rgba(16,185,129,0.14)]", "#10b981"),
@@ -204,7 +204,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "bucket-getter",
         name: "Bucket Getter",
         category: "nba",
-        description: "Most winning NBA player-points props.",
+        description: "Awarded to the player who records the most wins on player points props.",
         metric: "nba-points-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -215,7 +215,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "board-man",
         name: "Board Man",
         category: "nba",
-        description: "Most winning NBA player-rebounds props.",
+        description: "Awarded to the player who records the most wins on rebound props.",
         metric: "nba-rebounds-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -226,7 +226,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "dime-dropper",
         name: "Dime Dropper",
         category: "nba",
-        description: "Most winning NBA player-assists props.",
+        description: "Awarded to the player who records the most wins on assist props.",
         metric: "nba-assists-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -237,7 +237,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "from-deep",
         name: "From Deep",
         category: "nba",
-        description: "Most winning NBA made-threes props.",
+        description: "Awarded to the player who records the most wins on made-threes props.",
         metric: "nba-threes-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -248,7 +248,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "triple-threat",
         name: "Triple Threat",
         category: "nba",
-        description: "Most winning NBA combo-stat props, such as PRA, PR, PA, or RA.",
+        description: "Awarded to the player who records the most wins on combo-stat props.",
         metric: "nba-combo-stat-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -259,7 +259,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "two-way-menace",
         name: "Two-Way Menace",
         category: "nba",
-        description: "Most winning NBA defensive props, such as steals, blocks, or steals + blocks.",
+        description: "Awarded to the player who records the most wins on defensive props.",
         metric: "nba-defensive-win-count",
         minimum: 2,
         eligibleSports: ["NBA"],
@@ -270,7 +270,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "ace",
         name: "Ace",
         category: "mlb",
-        description: "Most winning MLB pitcher strikeout props.",
+        description: "Awarded to the player who records the most wins on strikeout props.",
         metric: "mlb-strikeout-win-count",
         minimum: 2,
         eligibleSports: ["MLB"],
@@ -281,7 +281,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "contact-hitter",
         name: "Contact Hitter",
         category: "mlb",
-        description: "Most winning MLB batter hits props.",
+        description: "Awarded to the player who records the most wins on hits-related props.",
         metric: "mlb-hits-win-count",
         minimum: 2,
         eligibleSports: ["MLB"],
@@ -292,7 +292,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "rbi-machine",
         name: "RBI Machine",
         category: "mlb",
-        description: "Most winning MLB runs-batted-in props.",
+        description: "Awarded to the player who records the most wins on RBI-related props.",
         metric: "mlb-rbi-win-count",
         minimum: 2,
         eligibleSports: ["MLB"],
@@ -303,7 +303,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "total-bases-boss",
         name: "Total Bases Boss",
         category: "mlb",
-        description: "Most winning MLB total-bases props.",
+        description: "Awarded to the player who records the most wins on total bases props.",
         metric: "mlb-total-bases-win-count",
         minimum: 2,
         eligibleSports: ["MLB"],
@@ -314,7 +314,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "long-ball",
         name: "Long Ball",
         category: "mlb",
-        description: "Most winning MLB home run props.",
+        description: "Awarded to the player who records the most wins on home run props.",
         metric: "mlb-homerun-win-count",
         minimum: 1,
         eligibleSports: ["MLB"],
@@ -325,7 +325,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "sniper-nhl",
         name: "Sniper",
         category: "nhl",
-        description: "Most winning NHL goal-scorer props.",
+        description: "Awarded to the player who records the most wins on goal-scorer props.",
         metric: "nhl-goals-win-count",
         minimum: 1,
         eligibleSports: ["NHL"],
@@ -336,7 +336,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "playmaker-nhl",
         name: "Playmaker",
         category: "nhl",
-        description: "Most winning NHL assist props.",
+        description: "Awarded to the player who records the most wins on assist props.",
         metric: "nhl-assists-win-count",
         minimum: 2,
         eligibleSports: ["NHL"],
@@ -347,7 +347,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "sharpshooter-nhl",
         name: "Sharpshooter",
         category: "nhl",
-        description: "Most winning NHL shots-on-goal props.",
+        description: "Awarded to the player who records the most wins on shots-on-goal props.",
         metric: "nhl-shots-win-count",
         minimum: 2,
         eligibleSports: ["NHL"],
@@ -358,7 +358,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "point-machine-nhl",
         name: "Point Machine",
         category: "nhl",
-        description: "Most winning NHL player-points props.",
+        description: "Awarded to the player who records the most wins on player points props.",
         metric: "nhl-points-win-count",
         minimum: 2,
         eligibleSports: ["NHL"],
@@ -369,7 +369,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "brick-wall-nhl",
         name: "Brick Wall",
         category: "nhl",
-        description: "Most winning NHL goalie saves props.",
+        description: "Awarded to the player who records the most wins on goalie saves props.",
         metric: "nhl-saves-win-count",
         minimum: 2,
         eligibleSports: ["NHL"],
@@ -380,7 +380,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "striker",
         name: "Striker",
         category: "soccer",
-        description: "Most winning soccer goal-scorer props.",
+        description: "Awarded to the player who records the most wins on goal-scorer props.",
         metric: "soccer-goals-win-count",
         minimum: 1,
         eligibleSports: ["Soccer"],
@@ -391,7 +391,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "assist-artist",
         name: "Assist Artist",
         category: "soccer",
-        description: "Most winning soccer assist props.",
+        description: "Awarded to the player who records the most wins on assist props.",
         metric: "soccer-assists-win-count",
         minimum: 2,
         eligibleSports: ["Soccer"],
@@ -402,7 +402,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "shot-caller",
         name: "Shot Caller",
         category: "soccer",
-        description: "Most winning soccer shots and shots-on-target props.",
+        description: "Awarded to the player who records the most wins on shots or shots-on-target props.",
         metric: "soccer-shots-win-count",
         minimum: 2,
         eligibleSports: ["Soccer"],
@@ -413,7 +413,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "clean-sheet",
         name: "Clean Sheet",
         category: "soccer",
-        description: "Most winning soccer clean sheet and both-teams-to-score props.",
+        description: "Awarded to the player who records the most wins on clean sheet or both-teams-to-score picks.",
         metric: "soccer-clean-sheet-win-count",
         minimum: 2,
         eligibleSports: ["Soccer"],
@@ -424,7 +424,7 @@ export const BADGE_CATALOG: BadgeCatalogDefinition[] = [
         id: "card-shark",
         name: "Card Shark",
         category: "soccer",
-        description: "Most winning soccer cards and bookings props.",
+        description: "Awarded to the player who records the most wins on cards or bookings props.",
         metric: "soccer-cards-win-count",
         minimum: 2,
         eligibleSports: ["Soccer"],
@@ -919,12 +919,37 @@ export const formatBadgeValueLabel = (
     }
 };
 
+/**
+ * The entry bar a badge card prints under its description ("Minimum: +100
+ * odds"). Distinct from `getBadgeMarkToBeat`, which describes the mark a
+ * challenger needs to take the badge off its current holder.
+ *
+ * Structurally typed on purpose: the badge board renders the definitions the
+ * API ships (`BadgeDefinition`), whose `category` is a plain string.
+ */
+export const getBadgeMinimumLabel = (badge: Pick<ContestBadgeDefinition, "id" | "minimum">) => {
+    if (badge.id === "biggest-hit" || badge.id === "td-sniper") {
+        return `${formatOdds(badge.minimum)} odds`;
+    }
+    if (badge.id === "hot-hand") return `${badge.minimum} straight wins`;
+    if (badge.id === "accuracy-crown") {
+        return `${badge.minimum} resolved picks`;
+    }
+    return plural(badge.minimum, "qualifying win");
+};
+
 export const getBadgeMarkToBeat = (badge: ContestBadgeDefinition, value?: number | null) => {
     if (value === null || value === undefined) {
-        if (badge.id === "biggest-hit") return "+100 odds or higher";
-        if (badge.id === "hot-hand") return "3 straight wins";
-        if (badge.id === "accuracy-crown") return "4 resolved picks";
-        if (badge.id === "td-sniper") return "1 TD scorer win";
+        if (badge.id === "biggest-hit") {
+            return `${formatOdds(badge.minimum)} odds or higher`;
+        }
+        if (badge.id === "hot-hand") return `${badge.minimum} straight wins`;
+        if (badge.id === "accuracy-crown") {
+            return `${badge.minimum} resolved picks`;
+        }
+        if (badge.id === "td-sniper") {
+            return `${formatOdds(badge.minimum)} odds or higher TD hit`;
+        }
         return `${badge.minimum} ${badge.minimum === 1 ? "win" : "wins"}`;
     }
     if (badge.id === "biggest-hit") return `${formatOdds(value + 1)} or higher`;

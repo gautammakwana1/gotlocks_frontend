@@ -21,6 +21,8 @@ import arenaSaga from "./sagas/arenaSaga";
 import feedContestSaga from "./sagas/feedContestSaga";
 import feedContestScheduleSaga from "./sagas/feedContestScheduleSaga";
 import feedContestOddsSaga from "./sagas/feedContestOddsSaga";
+import pickemMoneylineSaga from "./sagas/pickemMoneylineSaga";
+import tdScorersSaga from "./sagas/tdScorersSaga";
 import memberCardSaga from "./sagas/memberCardSaga";
 import venueSaga from "./sagas/venueSaga";
 
@@ -48,6 +50,8 @@ export default function* rootSaga() {
 		fork(feedContestSaga),
 		fork(feedContestScheduleSaga),
 		fork(feedContestOddsSaga),
+		fork(pickemMoneylineSaga),
+		fork(tdScorersSaga),
 		fork(memberCardSaga),
 		fork(venueSaga),
 	]);

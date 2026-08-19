@@ -11,16 +11,19 @@ import {
 } from "@/lib/redux/slices/notificationSlice";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
-import type { CurrentUser, RootState, TutorialKeys } from "@/lib/interfaces/interfaces";
+// TUTORIAL DISABLED 2026-08-17 — `TutorialKeys` dropped from this import.
+import type { CurrentUser, RootState } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import Image from "next/image";
-import OnboardingModal from "../modals/OnboardingModal";
+// TUTORIAL DISABLED 2026-08-17
+// import OnboardingModal from "../modals/OnboardingModal";
 import NotificationsFeed from "../home/NotificationFeed";
 import DrawerCloseButton from "../ui/DrawerCloseButton";
 import { SIDE_DRAWER_MOTION } from "../ui/sideDrawerMotion";
 import { TrashIcon } from "../ui/SvgIcons";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
-import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
+// TUTORIAL DISABLED 2026-08-17
+// import { GLOBAL_TUTORIAL, GROUP_TUTORIAL, WELCOME_TUTORIAL } from "@/lib/onboarding/tutorials";
 import {
   isPrimaryNavigationHidden,
   isPrimaryNavigationTabActive,
@@ -103,27 +106,29 @@ export const TopNav = () => {
   const dispatch = useAppDispatch();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [tutorialStage, setTutorialStage] = useState<TutorialKeys>(null);
+  // TUTORIAL DISABLED 2026-08-17
+  // const [tutorialStage, setTutorialStage] = useState<TutorialKeys>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const menuCloseRef = useRef<HTMLButtonElement | null>(null);
   const menuDrawerRef = useRef<HTMLElement | null>(null);
   const notificationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const notificationCloseRef = useRef<HTMLButtonElement | null>(null);
   const notificationDrawerRef = useRef<HTMLElement | null>(null);
-  const tutorialSteps =
-    tutorialStage === "home"
-      ? WELCOME_TUTORIAL
-      : tutorialStage === "group"
-        ? GROUP_TUTORIAL
-        : tutorialStage === "global"
-          ? GLOBAL_TUTORIAL
-          : WELCOME_TUTORIAL;
-  const tutorialFinalCta = tutorialStage === "global" ? "let's go 🔒" : "finish";
-  const advanceTutorial = () => {
-    setTutorialStage((prev) =>
-      prev === "home" ? "group" : prev === "group" ? "global" : null
-    );
-  };
+  // TUTORIAL DISABLED 2026-08-17
+  // const tutorialSteps =
+  //   tutorialStage === "home"
+  //     ? WELCOME_TUTORIAL
+  //     : tutorialStage === "group"
+  //       ? GROUP_TUTORIAL
+  //       : tutorialStage === "global"
+  //         ? GLOBAL_TUTORIAL
+  //         : WELCOME_TUTORIAL;
+  // const tutorialFinalCta = tutorialStage === "global" ? "let's go 🔒" : "finish";
+  // const advanceTutorial = () => {
+  //   setTutorialStage((prev) =>
+  //     prev === "home" ? "group" : prev === "group" ? "global" : null
+  //   );
+  // };
 
   const { setToast } = useToast();
 
@@ -624,6 +629,9 @@ export const TopNav = () => {
                 draggable={false}
               />
             </Link>
+            {/* TUTORIAL DISABLED 2026-08-17 — the sidebar entry point.
+                Superseded by the per-League and per-Arena Guides, which each
+                group reaches from its own header. Uncomment to restore.
             <button
               type="button"
               onClick={() => {
@@ -641,7 +649,7 @@ export const TopNav = () => {
                 className="transition-transform duration-300 group-hover:scale-110 group-hover:[transform:rotateY(180deg)]"
                 draggable={false}
               />
-            </button>
+            </button> */}
             <Link
               href="/feedback"
               className="group flex items-center justify-end gap-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 transition hover:border-white/25 hover:bg-white/10"
@@ -681,12 +689,13 @@ export const TopNav = () => {
         </aside>
       </div>
 
+      {/* TUTORIAL DISABLED 2026-08-17
       <OnboardingModal
         open={tutorialStage !== null}
         steps={tutorialSteps}
         onClose={advanceTutorial}
         finalCtaLabel={tutorialFinalCta}
-      />
+      /> */}
     </>
   );
 };

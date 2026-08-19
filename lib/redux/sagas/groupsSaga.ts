@@ -1,7 +1,7 @@
 import { call, put, takeLatest, takeLeading } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure, fetchLeagueGuideStatusRequest, fetchLeagueGuideStatusSuccess, fetchLeagueGuideStatusFailure, markLeagueGuideViewedRequest, markLeagueGuideViewedSuccess, markLeagueGuideViewedFailure } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
@@ -40,6 +40,10 @@ import type {
 	FetchGroupOwnerPlanPayload,
 	GroupType,
 	JoinedCommunity,
+	FetchLeagueGuideStatusPayload,
+	LeagueGuideStatusData,
+	MarkLeagueGuideViewedPayload,
+	MarkLeagueGuideViewedData,
 } from "@/lib/interfaces/interfaces";
 
 type ApiErrorResponse = {
@@ -644,6 +648,80 @@ function* handleFetchGroupOwnerPlanDetails(action: PayloadAction<FetchGroupOwner
 	}
 }
 
+/* ----------------------------------------------------------------------------
+ * LEAGUE GUIDE — the welcome walkthrough for a newly joined League member.
+ *
+ * Per-LEAGUE, which is why it is not a `tutorial_key` on the progress slice:
+ * user_tutorial_progress has no group column, so joining a second League would
+ * never show the guide again. Mirrors the Arena pair in arenaSaga.ts.
+ * -------------------------------------------------------------------------- */
+
+/**
+ * GET /group/league/guide?league_id= — members only (403), Leagues only (404),
+ * 410 for a deleted one.
+ *
+ * `should_show_guide` is derived server-side and is the ONLY field the screen
+ * gates on; everything else in `guide` is there to word the dialog.
+ */
+function* handleFetchLeagueGuideStatus(
+	action: PayloadAction<FetchLeagueGuideStatusPayload>
+): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/league/guide`,
+			{ params: { league_id: action.payload.league_id } }
+		);
+		const payload = response.data as { data?: LeagueGuideStatusData };
+		// No guide in the payload is a FAILURE, not an empty success: the
+		// reducer's failure path nulls the slot, and "unknown" must never reach
+		// the screen as a definite answer either way.
+		if (!payload?.data?.guide) {
+			yield put(fetchLeagueGuideStatusFailure("Failed to load the League guide status"));
+			return;
+		}
+		yield put(fetchLeagueGuideStatusSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(
+			fetchLeagueGuideStatusFailure(
+				getErrorMessage(error, "Failed to load the League guide status")
+			)
+		);
+	}
+}
+
+/**
+ * POST /group/league/guide/viewed — `status` is 'completed' when they read it
+ * through and 'dismissed' when they closed it early. Both silence the guide;
+ * the split only exists so "how many members actually read it" stays an
+ * answerable question.
+ *
+ * Idempotent server-side, so a double-fire on unmount is not an error.
+ */
+function* handleMarkLeagueGuideViewed(
+	action: PayloadAction<MarkLeagueGuideViewedPayload>
+): SagaIterator {
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			`${API_BASE_URL}/group/league/guide/viewed`,
+			action.payload
+		);
+		const payload = response.data as { data?: MarkLeagueGuideViewedData };
+		if (!payload?.data?.guide) {
+			yield put(markLeagueGuideViewedFailure("Failed to update the League guide status"));
+			return;
+		}
+		yield put(markLeagueGuideViewedSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(
+			markLeagueGuideViewedFailure(
+				getErrorMessage(error, "Failed to update the League guide status")
+			)
+		);
+	}
+}
+
 export default function* groupSaga() {
 	// takeLeading, not takeLatest: takeLatest cancels the first saga, but its POST is
 	// already on the wire and the server has already committed the group (and, for an
@@ -684,4 +762,6 @@ export default function* groupSaga() {
 	yield takeLatest(fetchUnreadCountsByLeagueIdRequest.type, handleFetchUnreadCountsByLeagueId);
 	yield takeLatest(fetchOwnGroupsCountsRequest.type, handleFetchOwnGroupsCounts);
 	yield takeLatest(fetchGroupOwnerPlanDetailsRequest.type, handleFetchGroupOwnerPlanDetails);
+	yield takeLatest(fetchLeagueGuideStatusRequest.type, handleFetchLeagueGuideStatus);
+	yield takeLatest(markLeagueGuideViewedRequest.type, handleMarkLeagueGuideViewed);
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { ARENA_INCLUDED_TIER_LABEL } from "@/lib/arenas/tierLabels";
@@ -70,8 +70,17 @@ import LeaguePageSkeleton from "../skeletons/leagues/LeaguePageSkeleton";
 import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
 import { ArenaShellActions } from "./types";
 import { groupPreviewMetaTextClassName } from "../group/GroupPreviewChip";
-import ContestHubCreateAction from "../contests/ContestHubCreateAction";
+import ContestCreationDrawer from "../contests/ContestCreationDrawer";
+import FeedContestDrawerBuilder from "../contests/FeedContestDrawerBuilder";
 import FeedContestSections from "../contests/FeedContestSections";
+import { COMMUNITY_DETAIL_ARENA_CONTEST_ACTION_CLASS_NAME } from "../community/CommunityDetailChrome";
+import {
+    STANDINGS_CARD_STYLES,
+    StandingIdentity,
+    StandingPrimaryMetric,
+    StandingRank,
+    StandingsCard,
+} from "../community/StandingsCard";
 import {
     fetchFeedContestsRequest,
     resetFeedContests,
@@ -89,6 +98,14 @@ import {
     memberDirectoryListClassName,
     type MemberDirectoryView,
 } from "../community/MemberDirectoryControls";
+import {
+    COMMUNITY_DETAIL_HEADER_PRIMARY_ACTION_CLASS_NAME,
+    CommunityDetailChrome,
+    CommunityDetailHeader,
+    CommunityDetailIndicatorSeparator,
+    CommunityDetailTabBar,
+    CommunityDetailTabStrip,
+} from "../community/CommunityDetailChrome";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import useScopedGroup from "@/lib/groups/useScopedGroup";
 
@@ -104,6 +121,7 @@ const ARENA_TABS = [
 ] as const;
 
 type ArenaTabId = (typeof ARENA_TABS)[number]["id"];
+type ArenaTab = (typeof ARENA_TABS)[number];
 
 const LEADERBOARD_PERIODS: Array<{
     id: CommunityLeaderboardPeriodKind;
@@ -224,7 +242,12 @@ const ArenaDetailsLabel = ({
                 <span
                     id={detailsId}
                     role="tooltip"
-                    className="absolute right-0 top-full z-40 mt-2 w-72 max-w-[calc(100vw-2.5rem)] rounded-xl border border-white/15 bg-[#090d16] p-3 text-left font-sans text-xs font-normal normal-case tracking-normal text-gray-300 shadow-2xl shadow-black/50"
+                    // whitespace-normal is load-bearing: the header metadata row
+                    // this label sits in sets `lg:whitespace-nowrap`, and
+                    // white-space inherits — without the reset the hosting
+                    // message renders on one line and spills straight out of the
+                    // w-72 box on desktop.
+                    className="absolute right-0 top-full z-40 mt-2 w-72 max-w-[calc(100vw-2.5rem)] whitespace-normal break-words rounded-xl border border-white/15 bg-[#090d16] p-3 text-left font-sans text-xs font-normal normal-case tracking-normal text-gray-300 shadow-2xl shadow-black/50"
                 >
                     <span className="flex items-start justify-between gap-3">
                         <span className="font-semibold text-amber-100">
@@ -251,45 +274,27 @@ const ArenaDetailsLabel = ({
 
 /**
  * The shared folder-tab strip used by the League and contest detail pages, in
- * the Arena's violet accent. The `after:` sliver on the active tab paints over
- * the section's bottom border so the tab reads as continuous with the panel —
- * that is the whole effect, so it has to stay in step with the `border-b` on
- * the wrapping <section>.
+ * the Arena's violet accent. The raised "notch" on the selected tab, the accent
+ * underline it notches into, and the violet itself all come from
+ * CommunityDetailChrome.module.css — which is why nothing here names a colour:
+ * the accent is the `--community-accent-rgb` token that
+ * <CommunityDetailChrome accent="arena"> sets on the surface.
  */
 const ArenaTabStrip = ({
+    tabs,
     activeTab,
     onChange,
 }: {
+    tabs: readonly ArenaTab[];
     activeTab: ArenaTabId;
     onChange: (tab: ArenaTabId) => void;
 }) => (
-    <nav aria-label="Arena sections">
-        <div
-            className="grid w-full items-end gap-1"
-            style={{
-                gridTemplateColumns: `repeat(${ARENA_TABS.length}, minmax(0, 1fr))`,
-            }}
-        >
-            {ARENA_TABS.map((tab) => {
-                const active = activeTab === tab.id;
-                return (
-                    <button
-                        key={tab.id}
-                        type="button"
-                        aria-label={tab.label}
-                        aria-current={active ? "page" : undefined}
-                        onClick={() => onChange(tab.id)}
-                        className={`relative flex h-10 min-w-0 items-center justify-center rounded-t-xl border border-b-0 px-1 text-center text-[13px] font-semibold transition-colors duration-200 ease-out sm:px-3 sm:text-sm motion-reduce:transition-none ${active
-                            ? "border-white/10 bg-black text-violet-100 after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-black after:content-['']"
-                            : "border-transparent bg-black text-gray-400 hover:border-white/10 hover:text-white"
-                            }`}
-                    >
-                        <span className="truncate">{tab.label}</span>
-                    </button>
-                );
-            })}
-        </div>
-    </nav>
+    <CommunityDetailTabBar
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={onChange}
+        ariaLabel="Arena sections"
+    />
 );
 
 const EmptyPanel = ({ title, body }: { title: string; body: string }) => (
@@ -305,7 +310,7 @@ const ArenaFeedPanel = ({
     role,
     writable,
     currentUserId,
-    initialFilter = "community",
+    initialFilter = "updates",
 }: {
     /**
      * Route param. Required (not optional) so a record id — which can belong to the
@@ -367,12 +372,15 @@ const ArenaFeedPanel = ({
  * -------------------------------------------------------------------------- */
 const ArenaContestsPanel = ({
     arenaId,
+    arenaName,
     role,
     hosting,
     unlock,
 }: {
     /** Route param — never the record's id, which can belong to the previous group. */
     arenaId: string;
+    /** Interpolated into the builder's header — "<name> · Feed contest". */
+    arenaName: string;
     role: string;
     hosting: ArenaHostingDetails | null;
     unlock: ArenaUnlockDetails | null;
@@ -380,6 +388,19 @@ const ArenaContestsPanel = ({
     const dispatch = useDispatch();
     const sections = useSelector((state: RootState) => state.feedContest.sections);
     const staff = isArenaStaffRole(role);
+    // The Start-a-contest workspace, with the wizard mounted INSIDE it.
+    //
+    // An Arena has exactly one contest type, so the drawer opens straight into
+    // the builder rather than onto a one-item chooser — the MVP does the same
+    // (its ArenaDashboard passes `kind: "structured"` with no choice step).
+    //
+    // /arena/:id/feed-contests/create stays exactly as it was and is still the
+    // canonical deep link: it owns the group fetch, the staff gate and the
+    // redirect for anyone arriving by URL. Here the dashboard has already done
+    // all three, so the wizard is handed its answers directly.
+    const [contestCreationOpen, setContestCreationOpen] = useState(false);
+    const contestCreationTriggerRef = useRef<HTMLButtonElement>(null);
+    const contestCreationUnavailableId = useId();
 
     const loadSection = useCallback(
         (section: FeedContestSection, page: number) => {
@@ -467,20 +488,65 @@ const ArenaContestsPanel = ({
             {/* The MVP's violet band above the hub — the same slot the League
                 page fills with its sky one. It renders even for a member, so the
                 accordion keeps its distance from the tab strip either way. */}
-            <div className="-mx-5 bg-violet-950/20 bg-gradient-to-b from-black via-black/40 to-transparent px-5 py-4 sm:mx-0 sm:px-4">
-                {staff ? (
-                    <ContestHubCreateAction
-                        href={
-                            createDisabledReason
-                                ? undefined
-                                : `/arena/${arenaId}/feed-contests/create`
-                        }
-                        unavailableReason={createDisabledReason}
-                        unavailableHint={createDisabledHint}
-                        accent="violet"
-                    />
-                ) : null}
-            </div>
+            {/* Bleeds to the viewport at every width (`sm:-mx-6` cancels the
+                AppShell's `sm:px-6`) because it butts directly against the
+                CommunityDetailChrome above, which is full-bleed too — the
+                settings panel below does the same. An `sm:mx-0` here would step
+                in 24px from the chrome's accent underline and read as a seam. */}
+            {/* Now the MVP's header shape (MVP ArenaDashboard:286-303): an h2
+                naming the surface with the Start-contest BUTTON inline at the
+                right, in place of the full-width create card. The band keeps its
+                `sm:-mx-6` bleed rather than the MVP's `sm:mx-0` — see the note
+                above; this app's chrome above it is full-bleed. */}
+            <header
+                data-arena-contest-type-header
+                className="-mx-5 border-b border-white/15 bg-violet-400/[0.055] bg-gradient-to-b from-black via-black/40 to-transparent px-5 py-4 sm:-mx-6 sm:px-6"
+            >
+                <div className="flex min-h-10 items-center justify-between gap-3">
+                    <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-violet-100/80 lg:pl-6 lg:text-lg lg:font-extrabold">
+                        Feed Contests
+                    </h2>
+                    {staff ? (
+                        <div data-arena-contest-type-action className="shrink-0">
+                            {/* MVP:1373-1402 verbatim in behaviour: the disabled
+                                state is aria-disabled + title + an sr-only
+                                description rather than a real `disabled`, so the
+                                reason stays reachable to a screen reader and the
+                                button stays focusable. */}
+                            <button
+                                ref={contestCreationTriggerRef}
+                                type="button"
+                                onClick={() => {
+                                    if (createDisabledReason) return;
+                                    setContestCreationOpen(true);
+                                }}
+                                aria-disabled={Boolean(createDisabledReason)}
+                                aria-haspopup="dialog"
+                                aria-expanded={contestCreationOpen}
+                                aria-describedby={
+                                    createDisabledReason
+                                        ? contestCreationUnavailableId
+                                        : undefined
+                                }
+                                title={createDisabledReason}
+                                className={
+                                    createDisabledReason
+                                        ? `${COMMUNITY_DETAIL_ARENA_CONTEST_ACTION_CLASS_NAME} cursor-not-allowed opacity-40`
+                                        : COMMUNITY_DETAIL_ARENA_CONTEST_ACTION_CLASS_NAME
+                                }
+                            >
+                                Start contest
+                            </button>
+                            {createDisabledReason ? (
+                                <span id={contestCreationUnavailableId} className="sr-only">
+                                    {createDisabledReason}
+                                    {createDisabledHint ? ` ${createDisabledHint}` : ""}
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
+            </header>
 
             <FeedContestSections
                 title="Arena contests"
@@ -508,6 +574,46 @@ const ArenaContestsPanel = ({
                 participantLimit={hosting?.participating_member_limit ?? null}
                 accent="violet"
             />
+
+            {/* MOUNTED, not linked — the wizard renders in the sidebar over the
+                dashboard, as the MVP's does (ArenaDashboard:1431-1445).
+
+                `createDisabledReason` still travels even though the trigger above
+                is already disabled by it: the hosting read is deliberately
+                optimistic while /hosting is in flight, so the drawer can be
+                opened a moment before the block is known, and the wizard's own
+                "Contest creation unavailable" panel is what states it.
+
+                The drawer renders null until it is opened, so the wizard's lazy
+                chunk is still only fetched on the first open — no outer gate
+                needed, and the closing animation survives. */}
+            {staff ? (
+                <ContestCreationDrawer
+                    open={contestCreationOpen}
+                    onClose={() => setContestCreationOpen(false)}
+                    returnFocusRef={contestCreationTriggerRef}
+                    accent="arena"
+                    content={{
+                        kind: "builder",
+                        label: "Arena Contest builder",
+                        children: (
+                            <FeedContestDrawerBuilder
+                                groupId={arenaId}
+                                groupType="arena"
+                                contextName={arenaName}
+                                backHref={`/arena/${arenaId}?tab=contests`}
+                                detailHref={(contestId) =>
+                                    `/arena/${arenaId}/feed-contests/${contestId}`
+                                }
+                                participantLimit={
+                                    hosting?.participating_member_limit ?? null
+                                }
+                                createDisabledReason={createDisabledReason}
+                            />
+                        ),
+                    }}
+                />
+            ) : null}
         </div>
     );
 };
@@ -568,13 +674,23 @@ const SAMPLE_ARENA_LEADERBOARD: Record<
     ],
 };
 
+/** Shared by the column header and every row, per the MVP (MVP:392). */
+const ARENA_STANDINGS_GRID_CLASS_NAME =
+    "grid-cols-[3rem_minmax(0,1fr)_auto] sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]";
+
 const ArenaLeaderboardPanel = () => {
     const [period, setPeriod] = useState<CommunityLeaderboardPeriodKind>("lifetime");
     const rows = SAMPLE_ARENA_LEADERBOARD[period];
 
     return (
+        // StructuredFeed bleeds the whole Standings view now (`-mx-5 sm:mx-0`),
+        // and StandingsCard carries its own `px-5 sm:px-4`. The pills and the
+        // eligibility note have to repeat that inset or they run to the edge.
         <div className="space-y-4">
-            <div className="flex gap-2 overflow-x-auto pb-1" aria-label="Leaderboard period">
+            <div
+                className="flex gap-2 overflow-x-auto px-5 pb-1 sm:px-4"
+                aria-label="Leaderboard period"
+            >
                 {LEADERBOARD_PERIODS.map((option) => (
                     <button
                         key={option.id}
@@ -594,42 +710,64 @@ const ArenaLeaderboardPanel = () => {
                 ))}
             </div>
 
-            <p className="text-xs leading-5 text-gray-500">
+            <p className="px-5 text-xs leading-5 text-gray-500 sm:px-4">
                 Only eligible participating members rank here. Arena owners and managers are excluded.
             </p>
 
-            {rows.length ? (
-                <div className="overflow-hidden rounded-xl border border-white/10">
-                    <div className="grid grid-cols-[3rem_minmax(0,1fr)_auto] gap-3 border-b border-white/10 bg-white/[0.04] px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]">
-                        <span>Rank</span>
-                        <span>Member</span>
-                        <span className="hidden text-right sm:block">Successful</span>
-                        <span className="text-right">Arena Points</span>
+            {/* The MVP's gold StandingsCard (MVP ArenaDashboard:375-406) in place
+                of the white/10 bordered table. Columns mirror the MVP's except
+                the third, which stays "Successful" — that is the figure these
+                rows actually carry; the MVP's "Contests" has no equivalent here.
+                Rows are NOT wrapped in a member-card Link the way the MVP's are:
+                this board is still static sample data whose user ids resolve to
+                nothing, so a link would be dead. That is exactly why StandingsCard
+                is layout-only and the row is caller-owned. */}
+            <StandingsCard
+                rows={rows}
+                getRowKey={(row) => row.userId}
+                columns={[
+                    { key: "rank", label: "Rank" },
+                    { key: "member", label: "Member" },
+                    {
+                        key: "successful",
+                        label: "Successful",
+                        className: "hidden text-right sm:block",
+                    },
+                    { key: "points", label: "Arena Points", className: "text-right" },
+                ]}
+                gridClassName={ARENA_STANDINGS_GRID_CLASS_NAME}
+                boardId="arena-feed"
+                leaderboardDataId="arena-feed"
+                scrollDataId="arena-feed"
+                presentation="page"
+                noTitle
+                emptyState={
+                    <div className="px-5 py-6 sm:px-4">
+                        <EmptyPanel
+                            title="No ranked results in this period"
+                            body="Eligible settled Arena activity will populate this Community Leaderboard."
+                        />
                     </div>
-                    {rows.map((row) => (
-                        <div
-                            key={row.userId}
-                            className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/5 px-4 py-4 last:border-b-0 sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]"
-                        >
-                            <span className="font-semibold text-violet-100">#{row.rank}</span>
-                            <span className="truncate text-sm font-semibold text-white">
-                                @{row.username}
-                            </span>
-                            <span className="hidden text-right text-sm text-gray-400 sm:block">
-                                {row.successful}
-                            </span>
-                            <span className="text-right text-sm font-semibold text-white">
-                                {row.points}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <EmptyPanel
-                    title="No ranked results in this period"
-                    body="Eligible settled Arena activity will populate this Community Leaderboard."
-                />
-            )}
+                }
+                renderRow={(row) => (
+                    <div
+                        data-lifetime-standing-row
+                        data-lifetime-standing-theme="gold"
+                        className={`grid min-h-[3.3125rem] ${ARENA_STANDINGS_GRID_CLASS_NAME} ${STANDINGS_CARD_STYLES.fullPageRow}`}
+                    >
+                        <StandingRank rank={row.rank} />
+                        <StandingIdentity
+                            displayName={row.username}
+                            handle={row.username}
+                            rank={row.rank}
+                        />
+                        <span className="hidden text-right text-sm text-gray-400 sm:block">
+                            {row.successful}
+                        </span>
+                        <StandingPrimaryMetric value={row.points} />
+                    </div>
+                )}
+            />
         </div>
     );
 };
@@ -1655,7 +1793,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
     // the Feed's Standings view now that Leaderboard is no longer a tab —
     // normalizeTab already falls it through to "feed". Mirrors the League page.
     const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
-        searchParams.get("tab") === "leaderboard" ? "standings" : "community"
+        searchParams.get("tab") === "leaderboard" ? "standings" : "updates"
     );
     /**
      * The Arena Guide, exactly as the MVP drives it: `"automatic"` is the
@@ -1796,73 +1934,80 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
 
     return (
         <div className="flex flex-col gap-3 pb-10">
-            <div className="-mx-5 flex items-center justify-between gap-3 px-5 sm:mx-0 sm:px-0">
-                <BackButton label="back to arenas" fallback="/arena" preferFallback />
-                {arena?.invite_code ? (
-                    <InviteCodeCopy code={arena?.invite_code} className="-mr-[5px]" />
-                ) : (
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">
-                        Invite locked
-                    </span>
-                )}
-            </div>
-
-            {/* No border-b here: the tab strip's <section> owns the single rule
-                the active folder tab notches into, so a second one above it
-                reads as a double line. Same as the League detail header. */}
-            <header className="-mx-5 px-5 pb-3 sm:mx-0 sm:px-0">
-                <div className="relative min-w-0">
-                    <div
-                        className={`flex items-start justify-between gap-3 text-gray-400 ${groupPreviewMetaTextClassName}`}
-                    >
-                        <div className="flex min-w-0 flex-wrap gap-2">
-                            {arena && (
-                                <>
-                                    <span>{getGroupCapacityLabel(arena, memberCount)}</span>
-                                    <span>
-                                        {getCombinedContestCapacityLabel(
-                                            arena,
-                                            [],
-                                            []
-                                        )}
-                                    </span>
-                                </>
-                            )}
-                        </div>
+            {/* accent="arena" is the whole colour story: it sets
+                --community-accent-rgb to 167 139 250 on the surface, and the
+                gradient backdrop, the tab strip's underline and the selected
+                tab's border all read that token. Nothing below names violet. */}
+            <CommunityDetailChrome accent="arena">
+                <CommunityDetailHeader
+                    backAction={
+                        <BackButton
+                            label="back to arenas"
+                            fallback="/arena"
+                            preferFallback
+                            alignSelf="center"
+                        />
+                    }
+                    inviteIndicator={
+                        arena?.invite_code ? (
+                            <InviteCodeCopy
+                                code={arena.invite_code}
+                                accent="arena"
+                                className="-mr-[5px] lg:-mr-[3px] lg:text-[11px]"
+                            />
+                        ) : (
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600 lg:text-[11px]">
+                                Invite locked
+                            </span>
+                        )
+                    }
+                    metadataClassName={groupPreviewMetaTextClassName}
+                    metadataStart={
+                        arena ? (
+                            <>
+                                <span>{getGroupCapacityLabel(arena, memberCount)}</span>
+                                <CommunityDetailIndicatorSeparator />
+                                <span>
+                                    {getCombinedContestCapacityLabel(arena, [], [])}
+                                </span>
+                            </>
+                        ) : null
+                    }
+                    metadataEnd={
                         <ArenaDetailsLabel
                             role={arena?.current_user_member?.role ?? "member"}
                             hosting={hosting}
                             managerCount={arena?.manager_count ?? 0}
                             managerLimit={managerLimit}
                         />
-                    </div>
-                    {/* Violet→fuchsia, not the shared white/silver
-                        displayNameGradientStyle — Arena display names carry
-                        their own gradient everywhere they appear. */}
-                    <h1 className="allow-caps mt-1.5 bg-gradient-to-r from-white via-violet-100 to-fuchsia-200 bg-clip-text text-2xl font-extrabold text-transparent sm:text-3xl">
-                        {arena?.name}
-                    </h1>
-                    {arena?.description ? (
-                        <p className="mt-1.5 max-w-2xl truncate text-xs text-gray-500">
-                            {arena.description}
-                        </p>
-                    ) : null}
-                    {/* Sits directly under the name/description, where the MVP
-                        puts it — outside the description guard, so an Arena that
-                        never set one still offers the guide. */}
-                    <button
-                        type="button"
-                        onClick={() => setArenaGuideMode("manual")}
-                        className="mt-2 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400 transition hover:bg-white/5 hover:text-white"
-                    >
-                        Arena guide
-                    </button>
-                </div>
-            </header>
+                    }
+                    title={arena?.name}
+                    titleClassName="bg-gradient-to-r from-white via-violet-100 to-violet-200"
+                    description={arena?.description}
+                    mobileActionsLayout="end"
+                    actions={
+                        // The Arena guide re-open. It lives in the header's action
+                        // row now rather than under the description — outside any
+                        // description guard either way, so an Arena that never set
+                        // one still offers the guide.
+                        <button
+                            type="button"
+                            onClick={() => setArenaGuideMode("manual")}
+                            className={`${COMMUNITY_DETAIL_HEADER_PRIMARY_ACTION_CLASS_NAME} w-[calc(50%_-_var(--spacing))]`}
+                        >
+                            Arena guide
+                        </button>
+                    }
+                />
 
-            <section className="-mx-5 -mt-3 border-b border-white/10 px-1 pb-0 pt-2 sm:mx-0">
-                <ArenaTabStrip activeTab={activeTab} onChange={handleTabChange} />
-            </section>
+                <CommunityDetailTabStrip>
+                    <ArenaTabStrip
+                        tabs={ARENA_TABS}
+                        activeTab={activeTab}
+                        onChange={handleTabChange}
+                    />
+                </CommunityDetailTabStrip>
+            </CommunityDetailChrome>
 
             {/* key={activeTab} restarts the workspace-tab-panel enter animation
                 on every switch — without it React reuses the node and the panel
@@ -1888,6 +2033,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                 {activeTab === "contests" ? (
                     <ArenaContestsPanel
                         arenaId={arenaId}
+                        arenaName={arena?.name ?? "Arena"}
                         role={currentMembership}
                         hosting={hosting}
                         unlock={unlock}

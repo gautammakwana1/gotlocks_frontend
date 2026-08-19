@@ -21,6 +21,8 @@ import arenaReducer from "./slices/arenaSlice";
 import feedContestReducer from "./slices/feedContestSlice";
 import feedContestScheduleReducer from "./slices/feedContestScheduleSlice";
 import feedContestOddsReducer from "./slices/feedContestOddsSlice";
+import pickemMoneylineReducer from "./slices/pickemMoneylineSlice";
+import tdScorersReducer from "./slices/tdScorersSlice";
 import memberCardReducer from "./slices/memberCardSlice";
 import venueReducer from "./slices/venueSlice";
 
@@ -47,6 +49,8 @@ const appReducer = combineReducers({
 	feedContest: feedContestReducer,
 	feedContestSchedule: feedContestScheduleReducer,
 	feedContestOdds: feedContestOddsReducer,
+	pickemMoneyline: pickemMoneylineReducer,
+	tdScorers: tdScorersReducer,
 	memberCard: memberCardReducer,
 	venue: venueReducer,
 });

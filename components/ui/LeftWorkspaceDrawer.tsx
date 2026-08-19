@@ -5,15 +5,30 @@ import {
     useId,
     useRef,
     useState,
+    useSyncExternalStore,
     type ReactNode,
     type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { SIDE_DRAWER_DESKTOP_WIDTH } from "@/components/layout/sideDrawerSizing";
+import {
+    SIDE_DRAWER_MOTION,
+    SIDE_DRAWER_TRANSITION_MS,
+} from "@/components/ui/sideDrawerMotion";
 
 export type LeftWorkspaceDrawerProps = {
     open: boolean;
     onClose: () => void;
+    /**
+     * An in-workspace BACK step, for a drawer whose body has more than one
+     * screen. Escape and the backdrop still close outright — this only changes
+     * what the header chevron does.
+     *
+     * Without it a multi-step drawer has to draw its own second back control in
+     * the body, which leaves two stacked affordances doing different things: a
+     * header "back" that closes and a body one that steps. The MVP has one.
+     */
+    onBack?: () => void;
     title: ReactNode;
     children: ReactNode;
     returnFocusRef?: RefObject<HTMLElement | null>;
@@ -40,15 +55,77 @@ const isUsableFocusTarget = (element: HTMLElement) =>
     element.getAttribute("aria-hidden") !== "true" &&
     !element.closest('[aria-hidden="true"]');
 
-// The confidence control renders through its own portal, so its options live
-// outside the drawer node. Fold that portal into the focus scope or Tab escapes
-// the dialog the moment the dropdown opens.
+/**
+ * Portals that render ABOVE this drawer and own the keyboard while they are up.
+ *
+ * They live outside the drawer node — each mounts at document.body — so without
+ * folding them in, Tab escapes the dialog the moment one opens and Escape closes
+ * the whole drawer instead of the thing the user actually meant to dismiss.
+ *
+ * The date/time wheel joined the list when the contest forms moved inside the
+ * drawer: its sheet is how Starts and Ends are set, and Escape over it was
+ * closing the entire builder.
+ */
+const ABOVE_DRAWER_PORTAL_SELECTOR =
+    "[data-confidence-dropdown-portal],[data-datetime-wheel-portal]";
+
+/* ----------------------------------------------------------------------------
+ * WHICH DRAWER IS ON TOP.
+ *
+ * Drawers nest for real now: the contest wizard opens inside this drawer, and
+ * its Access step opens the venue-setup dialog, which is another one. Every
+ * mounted instance listens on the document, so without a stack they all act at
+ * once — an Escape meant for the venue sheet also tore down the whole contest
+ * wizard, and each Tab press was fought over by two focus traps, pinning focus
+ * on the inner drawer's first control.
+ *
+ * The body scroll lock has the same shape of bug: per-drawer capture and restore
+ * means an outer drawer closing while an inner one is still open hands the page
+ * its scrollbar back. So the lock belongs to the STACK — captured when it goes
+ * from empty to one, restored only when it empties.
+ * -------------------------------------------------------------------------- */
+let drawerStack: number[] = [];
+let nextDrawerId = 0;
+let overflowBeforeDrawers: string | null = null;
+const stackListeners = new Set<() => void>();
+
+const notifyStack = () => stackListeners.forEach((listener) => listener());
+
+const registerDrawer = (id: number) => {
+    if (drawerStack.includes(id)) return;
+    if (drawerStack.length === 0) {
+        overflowBeforeDrawers = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+    }
+    drawerStack = [...drawerStack, id];
+    notifyStack();
+};
+
+const unregisterDrawer = (id: number) => {
+    if (!drawerStack.includes(id)) return;
+    drawerStack = drawerStack.filter((candidate) => candidate !== id);
+    if (drawerStack.length === 0) {
+        document.body.style.overflow = overflowBeforeDrawers ?? "";
+        overflowBeforeDrawers = null;
+    }
+    notifyStack();
+};
+
+const isTopmostDrawer = (id: number) => drawerStack[drawerStack.length - 1] === id;
+
+const subscribeToStack = (listener: () => void) => {
+    stackListeners.add(listener);
+    return () => {
+        stackListeners.delete(listener);
+    };
+};
+
+const readStackSnapshot = () => drawerStack.join(",");
+const readServerStackSnapshot = () => "";
 const getFocusScopeElements = (drawer: HTMLElement | null) => {
     const containers: HTMLElement[] = drawer ? [drawer] : [];
     containers.push(
-        ...Array.from(
-            document.querySelectorAll<HTMLElement>("[data-confidence-dropdown-portal]")
-        )
+        ...Array.from(document.querySelectorAll<HTMLElement>(ABOVE_DRAWER_PORTAL_SELECTOR))
     );
 
     const seen = new Set<HTMLElement>();
@@ -66,12 +143,13 @@ const getFocusScopeElements = (drawer: HTMLElement | null) => {
 const isWithinFocusScope = (element: Element | null, drawer: HTMLElement | null) => {
     if (!element) return false;
     if (drawer?.contains(element)) return true;
-    return Boolean(element.closest("[data-confidence-dropdown-portal]"));
+    return Boolean(element.closest(ABOVE_DRAWER_PORTAL_SELECTOR));
 };
 
 export const LeftWorkspaceDrawer = ({
     open,
     onClose,
+    onBack,
     title,
     children,
     returnFocusRef,
@@ -83,6 +161,15 @@ export const LeftWorkspaceDrawer = ({
     backdropLabel = "Dismiss workspace",
 }: LeftWorkspaceDrawerProps) => {
     const titleId = useId();
+    const drawerIdRef = useRef<number>(-1);
+    if (drawerIdRef.current === -1) drawerIdRef.current = nextDrawerId++;
+    /*
+     * Re-renders this drawer whenever the stack changes, so `isTopmost` below is
+     * never stale after a sibling opened or closed on top of it. The snapshot
+     * itself is only a change token; the flag is derived from it.
+     */
+    useSyncExternalStore(subscribeToStack, readStackSnapshot, readServerStackSnapshot);
+    const isTopmost = open && isTopmostDrawer(drawerIdRef.current);
     const drawerRef = useRef<HTMLElement>(null);
     const backButtonRef = useRef<HTMLButtonElement>(null);
     const onCloseRef = useRef(onClose);
@@ -104,7 +191,10 @@ export const LeftWorkspaceDrawer = ({
         setEntered(false);
         if (!mounted) return;
 
-        const exitTimer = window.setTimeout(() => setMounted(false), 300);
+        const exitTimer = window.setTimeout(
+            () => setMounted(false),
+            SIDE_DRAWER_TRANSITION_MS
+        );
         return () => window.clearTimeout(exitTimer);
     }, [mounted, open]);
 
@@ -120,17 +210,23 @@ export const LeftWorkspaceDrawer = ({
         const previouslyFocused =
             returnFocusRef?.current ??
             (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-        const previousOverflow = document.body.style.overflow;
+        const drawerId = drawerIdRef.current;
+        // Registering is what takes the body scroll lock, and only for the first
+        // drawer on the stack.
+        registerDrawer(drawerId);
         const focusFrame = window.requestAnimationFrame(() => {
-            backButtonRef.current?.focus();
+            // A drawer opening BEHIND another must not steal focus from it.
+            if (isTopmostDrawer(drawerId)) backButtonRef.current?.focus();
         });
 
-        document.body.style.overflow = "hidden";
-
         const handleKeyDown = (event: KeyboardEvent) => {
+            // A covered drawer stays mounted and keeps listening, but must not
+            // act: one Escape should dismiss one thing, and one Tab trap should
+            // own the focus ring.
+            if (!isTopmostDrawer(drawerId)) return;
             if (event.key === "Escape") {
-                // Confidence controls render in a portal and own the first Escape press.
-                if (document.querySelector("[data-confidence-dropdown-portal]")) return;
+                // A portal stacked above this drawer owns the first Escape press.
+                if (document.querySelector(ABOVE_DRAWER_PORTAL_SELECTOR)) return;
                 event.preventDefault();
                 onCloseRef.current();
                 return;
@@ -174,8 +270,14 @@ export const LeftWorkspaceDrawer = ({
         return () => {
             window.cancelAnimationFrame(focusFrame);
             document.removeEventListener("keydown", handleKeyDown);
-            document.body.style.overflow = previousOverflow;
-            if (previouslyFocused?.isConnected) previouslyFocused.focus();
+            const wasTopmost = isTopmostDrawer(drawerId);
+            // Hands the lock back only if this was the LAST drawer standing.
+            unregisterDrawer(drawerId);
+            // Returning focus from a drawer that was not on top would yank it out
+            // of the one still open above it.
+            if (wasTopmost && previouslyFocused?.isConnected) {
+                previouslyFocused.focus();
+            }
         };
     }, [open, returnFocusRef]);
 
@@ -193,25 +295,31 @@ export const LeftWorkspaceDrawer = ({
     const headerToneClass = tone === "neutral" ? "bg-neutral-950" : "bg-[#080c18]";
     const focusToneClass =
         tone === "neutral" ? "focus-visible:ring-white/70" : "focus-visible:ring-sky-300/70";
-    const closedTransformClass = side === "left" ? "-translate-x-full" : "translate-x-full";
+    const closedTransformClass =
+        side === "left"
+            ? SIDE_DRAWER_MOTION.closedLeft
+            : SIDE_DRAWER_MOTION.closedRight;
 
+    // Inerted when this drawer is not the TOPMOST, not merely when it is closed:
+    // a covered drawer that stays focusable and screen-reader visible is a second
+    // dialog the user can Tab into by accident.
     return createPortal(
-        <div className="fixed inset-0 z-[100]" aria-hidden={!open} inert={!open}>
+        <div className="fixed inset-0 z-[100]" aria-hidden={!isTopmost} inert={!isTopmost}>
             <button
                 type="button"
                 aria-label={backdropLabel}
                 tabIndex={-1}
                 onClick={onClose}
-                className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 motion-reduce:transition-none ${entered ? "opacity-100" : "opacity-0"
+                className={`absolute inset-0 ${SIDE_DRAWER_MOTION.backdrop} ${entered ? SIDE_DRAWER_MOTION.backdropOpen : SIDE_DRAWER_MOTION.backdropClosed
                     }`}
             />
             <aside
                 ref={drawerRef}
                 role="dialog"
-                aria-modal="true"
+                aria-modal={isTopmost ? "true" : undefined}
                 aria-labelledby={titleId}
                 tabIndex={-1}
-                className={`absolute inset-y-0 flex w-full max-w-none flex-col border-white/10 transition-transform duration-300 ease-out motion-reduce:transition-none ${edgeClass} ${sizeClass} ${panelToneClass} ${entered ? "translate-x-0" : closedTransformClass
+                className={`absolute inset-y-0 flex w-full max-w-none flex-col border-white/10 ${SIDE_DRAWER_MOTION.panel} ${edgeClass} ${sizeClass} ${panelToneClass} ${entered ? SIDE_DRAWER_MOTION.open : closedTransformClass
                     } ${className}`}
             >
                 <header
@@ -220,8 +328,8 @@ export const LeftWorkspaceDrawer = ({
                     <button
                         ref={backButtonRef}
                         type="button"
-                        onClick={onClose}
-                        className={`inline-flex min-h-11 items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-gray-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none ${focusToneClass}`}
+                        onClick={onBack ?? onClose}
+                        className={`inline-flex min-h-11 items-center gap-2 px-1 text-xs font-semibold tracking-[0.14em] text-gray-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none ${focusToneClass}`}
                     >
                         <svg
                             aria-hidden
@@ -233,7 +341,7 @@ export const LeftWorkspaceDrawer = ({
                         >
                             <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        Back
+                        back
                     </button>
 
                     <h2

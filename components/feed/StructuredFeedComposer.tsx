@@ -50,6 +50,18 @@ const getSubmitLabel = (mode: StructuredFeedComposerMode) => {
     return "Post Announcement";
 };
 
+// The MVP deleted this composer along with Staff Picks and in-feed contest
+// entries, so there is nothing to port into it. It is kept because the Staff Pick
+// path is live REST wiring, and only re-dressed to match the announcement panel
+// it now sits beside inside GroupFeedPostCreator: one heading per mode instead of
+// a generic one, the same panel frame, and the same accent submit button.
+const getComposerHeading = (mode: StructuredFeedComposerMode) => {
+    if (mode === "community_pick") return "Publish a Pick Post";
+    if (mode === "competitive_pick") return "Submit a contest entry";
+    if (mode === "staff_pick") return "Post a Staff Pick";
+    return "Post an announcement";
+};
+
 type PendingPriceChange = {
     submission: StructuredFeedPickSubmission;
     previousQuote: StructuredFeedQuote;
@@ -103,6 +115,7 @@ export const StructuredFeedComposer = ({
         }
     }, [availableModes, mode]);
 
+    const isArena = context.kind === "arena";
     const isPickMode = mode !== "staff_post";
     const pickMode = isPickMode ? (mode as StructuredFeedPickComposerMode) : null;
     const availableSelections = useMemo(
@@ -228,11 +241,16 @@ export const StructuredFeedComposer = ({
     return (
         <section
             aria-label="Feed composer"
-            className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"
+            className={`rounded-2xl border p-5 sm:p-6 ${isArena
+                ? "border-violet-300/15 bg-violet-500/[0.055]"
+                : "border-white/10 bg-white/[0.04]"
+                }`}
         >
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className="font-semibold text-white">Create for this Feed</h2>
+                    <h2 className="text-lg font-semibold text-white">
+                        {getComposerHeading(mode)}
+                    </h2>
                     <p className="mt-1 text-xs text-gray-500">
                         Posting as {getStructuredFeedRoleLabel(currentRole)}
                     </p>
@@ -242,26 +260,31 @@ export const StructuredFeedComposer = ({
                 </span>
             </div>
 
-            <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Composer mode">
-                {availableModes.map((option) => (
-                    <button
-                        key={option.id}
-                        type="button"
-                        aria-pressed={mode === option.id}
-                        onClick={() => {
-                            setMode(option.id);
-                            setPendingPriceChange(null);
-                            setFeedback(undefined);
-                        }}
-                        className={`shrink-0 rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${mode === option.id
-                                ? "border-sky-300/50 bg-sky-500/15 text-sky-100"
-                                : "border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-200"
-                            }`}
-                    >
-                        {option.label}
-                    </button>
-                ))}
-            </div>
+            {/* GroupFeedPostCreator hands this composer exactly one capability per
+                tab, so the chip row is a single chip that repeats the tab above it.
+                Only show it when the composer really has a choice to offer. */}
+            {availableModes.length > 1 ? (
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Composer mode">
+                    {availableModes.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            aria-pressed={mode === option.id}
+                            onClick={() => {
+                                setMode(option.id);
+                                setPendingPriceChange(null);
+                                setFeedback(undefined);
+                            }}
+                            className={`shrink-0 rounded-full border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${mode === option.id
+                                    ? "border-sky-300/60 bg-sky-500/15 text-sky-100"
+                                    : "border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-200"
+                                }`}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
 
             {mode === "community_pick" && communityPickWindow ? (
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-xs leading-5 text-gray-400">
@@ -445,14 +468,21 @@ export const StructuredFeedComposer = ({
                 </p>
             ) : null}
 
-            <button
-                type="button"
-                disabled={submitDisabled || Boolean(pendingPriceChange)}
-                onClick={submitDraft}
-                className="mt-4 rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-                {submitting ? "Submitting…" : getSubmitLabel(mode)}
-            </button>
+            {/* Same shape and accent as the announcement panel's Post button, so
+                switching tabs inside the drawer does not switch design language. */}
+            <div className="mt-4 flex justify-end">
+                <button
+                    type="button"
+                    disabled={submitDisabled || Boolean(pendingPriceChange)}
+                    onClick={submitDraft}
+                    className={`rounded-xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${isArena
+                        ? "border-violet-300/45 bg-violet-500/20 text-violet-50 hover:border-violet-200/70 hover:bg-violet-500/30"
+                        : "ui-accent-button"
+                        }`}
+                >
+                    {submitting ? "Submitting…" : getSubmitLabel(mode)}
+                </button>
+            </div>
         </section>
     );
 };

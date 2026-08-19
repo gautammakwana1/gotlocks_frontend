@@ -16,6 +16,12 @@ import type {
     StructuredFeedSubmitResponse,
 } from "./types";
 
+// No MVP counterpart: the MVP dropped the Replace flow entirely (its
+// StructuredFeed passes no onReplace/onReplaceSubmit and its card has no "Replace
+// pick" action). This file is kept because the replacement path is live REST
+// wiring (updateCommunityPickRequest), and it is left visually untouched on
+// purpose — the amber warning tone is what separates an in-place correction from
+// the accent-toned create panels in GroupFeedPostCreator.
 const replacementModeFor = (
     record: StructuredFeedRecord,
 ): StructuredFeedPickComposerMode | null => {

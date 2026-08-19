@@ -88,7 +88,7 @@ export const FeedContestEditRouter = ({
     const editableDraft =
         contest.lifecycle_status === "draft" &&
         scoped.viewer?.is_organizer &&
-        ["multi_pick", "sunday_pickem"].includes(contest.template) &&
+        ["multi_pick", "sunday_pickem", "td_psychic"].includes(contest.template) &&
         !contest.canceled_at &&
         !contest.archived_at;
 

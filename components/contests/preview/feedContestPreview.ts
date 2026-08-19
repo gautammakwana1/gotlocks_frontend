@@ -22,10 +22,10 @@ const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
     `${count} ${count === 1 ? singular : plural}`;
 
 /**
- * This app's templates are `multi_pick` and `sunday_pickem`; the MVP's are
- * `general_combo`, `sunday_pickem` and `td_psychic`. The artwork keys stay the
- * MVP's, so `multi_pick` maps onto the General Combo art rather than renaming a
- * file that other surfaces may come to share.
+ * This app's templates are `multi_pick`, `sunday_pickem` and `td_psychic`; the
+ * MVP names the first of those `general_combo`. The artwork keys stay the MVP's,
+ * so `multi_pick` maps onto the General Combo art rather than renaming a file
+ * that other surfaces may come to share.
  */
 const ARTWORK_BY_TEMPLATE: Record<string, ContestPreviewArtworkKey> = {
     multi_pick: "general_combo",
@@ -87,6 +87,18 @@ const mechanicLabel = (contest: FeedContest) => {
             contest.eligible_game_ids?.length ?? 0,
             "game"
         )} · Pick every winner`;
+    }
+    /*
+     * The leg range below would read "3 legs" here, which is true and useless: a
+     * TD card's three picks are three PLAYERS across the slate, not three legs of
+     * one parlay, and the card is the one surface where a member decides whether
+     * to open the contest at all.
+     */
+    if (contest.template === "td_psychic") {
+        return `${pluralize(
+            contest.eligible_game_ids?.length ?? 0,
+            "game"
+        )} · Pick 3 TD scorers`;
     }
     const min = contest.minimum_legs ?? 2;
     const max = contest.maximum_legs ?? min;
@@ -213,7 +225,11 @@ export const buildFeedContestPreviewModel = ({
         now < Date.parse(contest.locks_at)
     ) {
         const label =
-            contest.template === "sunday_pickem" ? "Make Picks" : "Build Entry";
+            contest.template === "sunday_pickem"
+                ? "Make Picks"
+                : contest.template === "td_psychic"
+                  ? "Pick Scorers"
+                  : "Build Entry";
         action = { label, href: entryHref, ariaLabel: `${label} for ${contest.name}` };
     }
 

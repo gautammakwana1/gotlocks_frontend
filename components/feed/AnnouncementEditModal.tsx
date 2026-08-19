@@ -6,6 +6,13 @@ export type AnnouncementEditModalProps = {
     initialTitle: string;
     initialBody: string;
     busy: boolean;
+    /**
+     * Arena announcements get the violet accent the rest of the announcement flow
+     * uses. Optional and default-false so the League look is unchanged for callers
+     * that do not pass it; this modal is rendered outside any `.arena-theme`
+     * ancestor, so it cannot infer the surface on its own.
+     */
+    isArena?: boolean;
     onSave: (text: string, title: string) => void;
     onClose: () => void;
 };
@@ -18,10 +25,16 @@ const BODY_MAX = 2000;
 
 // Lightweight edit dialog for a staff announcement. Body is required (matches the
 // backend, which rejects empty text); title is optional/clearable.
+//
+// No MVP counterpart: the MVP's record action menu offers Pin/Unpin and Delete
+// only, and its types carry no onEdit. Kept because the edit route is live REST
+// wiring on both surfaces; only its accent was brought in line with the ported
+// announcement panel.
 export const AnnouncementEditModal = ({
     initialTitle,
     initialBody,
     busy,
+    isArena = false,
     onSave,
     onClose,
 }: AnnouncementEditModalProps) => {
@@ -37,6 +50,9 @@ export const AnnouncementEditModal = ({
     }, [busy, onClose]);
 
     const canSave = Boolean(body.trim()) && !busy;
+    const fieldAccentClass = isArena
+        ? "caret-violet-300 focus:border-violet-300/60"
+        : "focus:border-sky-300/60";
 
     return (
         <div
@@ -49,7 +65,8 @@ export const AnnouncementEditModal = ({
             }}
         >
             <div
-                className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0f1a] p-5 shadow-xl"
+                className={`w-full max-w-lg rounded-2xl border border-white/10 bg-[#0b0f1a] p-5 shadow-xl ${isArena ? "arena-theme" : ""
+                    }`}
                 onClick={(event) => event.stopPropagation()}
             >
                 <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-white">
@@ -63,7 +80,7 @@ export const AnnouncementEditModal = ({
                         maxLength={TITLE_MAX}
                         onChange={(event) => setTitle(event.target.value)}
                         placeholder="Optional heading"
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-300/60"
+                        className={`mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition ${fieldAccentClass}`}
                     />
                 </label>
 
@@ -75,7 +92,7 @@ export const AnnouncementEditModal = ({
                         value={body}
                         onChange={(event) => setBody(event.target.value)}
                         placeholder="Update the announcement"
-                        className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-300/60"
+                        className={`mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition ${fieldAccentClass}`}
                     />
                 </label>
 
@@ -92,7 +109,10 @@ export const AnnouncementEditModal = ({
                         type="button"
                         disabled={!canSave}
                         onClick={() => onSave(body.trim(), title.trim())}
-                        className="rounded-lg bg-sky-500/25 px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-sky-100 transition hover:bg-sky-500/35 disabled:cursor-not-allowed disabled:opacity-40"
+                        className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.08em] transition disabled:cursor-not-allowed disabled:opacity-40 ${isArena
+                            ? "bg-violet-500/25 text-violet-100 hover:bg-violet-500/35"
+                            : "bg-sky-500/25 text-sky-100 hover:bg-sky-500/35"
+                            }`}
                     >
                         {busy ? "Saving…" : "Save changes"}
                     </button>

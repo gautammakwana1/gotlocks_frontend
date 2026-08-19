@@ -6,6 +6,31 @@ export const LOSING_POST_CARD_TONE =
 
 export const NEUTRAL_POST_CARD_SURFACE = "bg-[#0b0b0b]";
 
+/**
+ * The accent-tinted chrome a CONTEST post wears, keyed by the Feed's own accent
+ * ("sky" for a League, "violet" for an Arena) rather than by group_type, so a
+ * component takes the accent it was already given instead of re-deriving it.
+ *
+ * Ported verbatim from the MVP's lib/styles/postCards. Kept here rather than
+ * inlined in the results card because the MVP shares these three across every
+ * contest-owned post surface, and a second consumer that re-spells them is how
+ * two contest cards end up with almost-matching borders.
+ */
+export const CONTEST_POST_EDGE_TONES = {
+    sky: "border-b-blue-400/[0.18]",
+    violet: "border-b-violet-400/[0.18]",
+} as const;
+
+export const CONTEST_POST_PRIMARY_TONES = {
+    sky: `border-white/10 border-b-[3px] ${CONTEST_POST_EDGE_TONES.sky} bg-[#0b0b0b] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_2px_10px_rgba(0,0,0,0.18)]`,
+    violet: `border-white/10 border-b-[3px] ${CONTEST_POST_EDGE_TONES.violet} bg-[#0b0b0b] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_2px_10px_rgba(0,0,0,0.18)]`,
+} as const;
+
+export const CONTEST_POST_HEADER_TONES = {
+    sky: "bg-blue-400/[0.18]",
+    violet: "bg-violet-400/[0.18]",
+} as const;
+
 export const PENDING_POST_CARD_TONE =
     "border border-white/10 border-b-[3px] border-b-white/20 bg-[#0b0b0b] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-2px_0_rgba(255,255,255,0.08),inset_0_0_0_1px_rgba(255,255,255,0.04),0_2px_10px_rgba(0,0,0,0.18)]";
 

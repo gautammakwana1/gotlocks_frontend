@@ -29,6 +29,14 @@ import type {
     ArenaHostingDetailsResponse,
     OwnedArenaHostingPayload,
     OwnedArenaHostingResponse,
+    ArenaSubscriptionResponse,
+    ArenaCheckoutPayload,
+    ArenaCheckoutResponse,
+    ArenaCheckoutStatusResponse,
+    ChangeArenaPlanPayload,
+    ArenaBillingActionResponse,
+    ArenaInvoice,
+    FetchArenaInvoicesPayload,
     ArenaMemberActionPayload,
     ArenaOwnershipTransfer,
     ArenaOwnershipTransferResponse,
@@ -162,6 +170,30 @@ import {
     cancelArenaPauseFailure,
     cancelArenaPauseRequest,
     cancelArenaPauseSuccess,
+    fetchArenaSubscriptionRequest,
+    fetchArenaSubscriptionSuccess,
+    fetchArenaSubscriptionFailure,
+    createArenaCheckoutRequest,
+    createArenaCheckoutSuccess,
+    createArenaCheckoutFailure,
+    fetchArenaCheckoutStatusRequest,
+    fetchArenaCheckoutStatusSuccess,
+    fetchArenaCheckoutStatusFailure,
+    changeArenaPlanRequest,
+    changeArenaPlanSuccess,
+    changeArenaPlanFailure,
+    cancelArenaHostingRequest,
+    cancelArenaHostingSuccess,
+    cancelArenaHostingFailure,
+    resumeArenaHostingRequest,
+    resumeArenaHostingSuccess,
+    resumeArenaHostingFailure,
+    openArenaBillingPortalRequest,
+    openArenaBillingPortalSuccess,
+    openArenaBillingPortalFailure,
+    fetchArenaInvoicesRequest,
+    fetchArenaInvoicesSuccess,
+    fetchArenaInvoicesFailure,
     confirmArenaDeleteFailure,
     confirmArenaDeleteRequest,
     confirmArenaDeleteSuccess,
@@ -1322,6 +1354,208 @@ const handleCancelArenaPause = arenaHostingActionSaga(
     "Failed to cancel the scheduled pause"
 );
 
+/* ============================================================================
+ * ARENA BILLING — real Stripe money.
+ *
+ * The client never grants anything. It starts a Checkout Session, hands the
+ * browser to Stripe, and afterwards asks the backend what happened. Entitlement
+ * is written by the webhook, so nothing here can be spoofed by a user who
+ * replays a request or edits a response.
+ * ========================================================================== */
+
+function* handleFetchArenaSubscription(
+    action: PayloadAction<ArenaHostingDetailsPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/subscription`,
+            { params: { arena_id: action.payload.arena_id } }
+        );
+        const payload = response.data as { data?: ArenaSubscriptionResponse };
+        yield put(fetchArenaSubscriptionSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaSubscriptionFailure(
+                getErrorMessage(error, "Failed to load this Arena's billing details")
+            )
+        );
+    }
+}
+
+/**
+ * Creates the Checkout Session and hands the browser to Stripe.
+ *
+ * Mirrors the League flow deliberately: dispatch success BEFORE assigning
+ * window.location so the confirm button is already latched when the page starts
+ * unloading. A `null` url means the backend decided there was nothing to pay
+ * for, in which case we re-read rather than navigate.
+ */
+function* handleCreateArenaCheckout(action: PayloadAction<ArenaCheckoutPayload>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/arena/checkout-session`,
+            action.payload
+        );
+        const payload = response.data as { data?: ArenaCheckoutResponse };
+        const url = payload.data?.url;
+        const redirecting = Boolean(url) && typeof window !== "undefined";
+
+        yield put(createArenaCheckoutSuccess({ redirecting }));
+
+        if (redirecting) {
+            window.location.href = url as string;
+        } else {
+            yield put(fetchArenaSubscriptionRequest({ arena_id: action.payload.arena_id }));
+        }
+    } catch (error: unknown) {
+        yield put(
+            createArenaCheckoutFailure(getErrorMessage(error, "Could not start Arena checkout"))
+        );
+    }
+}
+
+/**
+ * Asks the backend what became of a completed checkout.
+ *
+ * This exists because the webhook and the browser race: Stripe redirects the
+ * user back immediately, but the webhook that actually provisions the Arena may
+ * land a second or two later — or, if it fails, not at all. The endpoint calls
+ * the SAME idempotent fulfilment the webhook calls, so polling it is both safe
+ * and self-healing rather than merely informational.
+ */
+function* handleFetchArenaCheckoutStatus(
+    action: PayloadAction<{ session_id: string }>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/checkout-status`,
+            { params: { session_id: action.payload.session_id } }
+        );
+        const payload = response.data as { data?: ArenaCheckoutStatusResponse };
+        yield put(fetchArenaCheckoutStatusSuccess(payload.data));
+
+        // Once complete, re-read the Arena's billing so the screen behind the
+        // redirect is correct rather than showing pre-payment state.
+        if (payload.data?.status === "complete" && payload.data.arena_id) {
+            yield put(fetchArenaSubscriptionRequest({ arena_id: payload.data.arena_id }));
+        }
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaCheckoutStatusFailure(
+                getErrorMessage(error, "Could not confirm your payment")
+            )
+        );
+    }
+}
+
+/** change-plan / cancel-hosting / resume-hosting share one envelope and one
+ *  loading slot, so they share one saga factory. */
+const arenaBillingActionSaga = (
+    endpoint: "change-plan" | "cancel-hosting" | "resume-hosting",
+    onSuccess: ActionCreatorWithPayload<
+        { data?: ArenaBillingActionResponse; message?: string },
+        string
+    >,
+    onFailure: ActionCreatorWithPayload<string, string>,
+    fallbackError: string
+) =>
+    function* (
+        action: PayloadAction<ChangeArenaPlanPayload | ArenaPausePayload>
+    ): SagaIterator {
+        const { arena_id } = action.payload;
+        try {
+            const response: AxiosResponse<unknown> = yield call(
+                axiosInstance.post,
+                `${API_BASE_URL}/group/arena/${endpoint}`,
+                action.payload
+            );
+            const payload = response.data as {
+                message?: string;
+                data?: ArenaBillingActionResponse;
+            };
+            yield put(onSuccess({ data: payload?.data, message: payload?.message }));
+            // The response carries the subscription but not the projected
+            // hosting row (limits, status) — re-read so the tier cards and the
+            // limit copy cannot render a pre-change verdict.
+            yield put(fetchArenaSubscriptionRequest({ arena_id }));
+        } catch (error: unknown) {
+            yield put(onFailure(getErrorMessage(error, fallbackError)));
+        }
+    };
+
+const handleChangeArenaPlan = arenaBillingActionSaga(
+    "change-plan",
+    changeArenaPlanSuccess,
+    changeArenaPlanFailure,
+    "Failed to change this Arena's plan"
+);
+
+const handleCancelArenaHosting = arenaBillingActionSaga(
+    "cancel-hosting",
+    cancelArenaHostingSuccess,
+    cancelArenaHostingFailure,
+    "Failed to cancel hosting"
+);
+
+const handleResumeArenaHosting = arenaBillingActionSaga(
+    "resume-hosting",
+    resumeArenaHostingSuccess,
+    resumeArenaHostingFailure,
+    "Failed to resume hosting"
+);
+
+function* handleOpenArenaBillingPortal(action: PayloadAction<ArenaPausePayload>): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/arena/billing-portal`,
+            action.payload
+        );
+        const payload = response.data as { data?: { url?: string | null } };
+        yield put(openArenaBillingPortalSuccess());
+        if (payload.data?.url && typeof window !== "undefined") {
+            window.location.href = payload.data.url;
+        }
+    } catch (error: unknown) {
+        yield put(
+            openArenaBillingPortalFailure(
+                getErrorMessage(error, "Could not open the billing portal")
+            )
+        );
+    }
+}
+
+function* handleFetchArenaInvoices(
+    action: PayloadAction<FetchArenaInvoicesPayload>
+): SagaIterator {
+    try {
+        const { arena_id, page = 1, limit = 10 } = action.payload;
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/invoices`,
+            { params: { arena_id, page, limit } }
+        );
+        const payload = response.data as {
+            data?: { transactions?: ArenaInvoice[]; pagination?: { hasMore?: boolean } };
+        };
+        const transactions = payload.data?.transactions ?? [];
+        yield put(
+            fetchArenaInvoicesSuccess({
+                transactions,
+                page,
+                hasMore: payload.data?.pagination?.hasMore ?? transactions.length === limit,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaInvoicesFailure(getErrorMessage(error, "Failed to load Arena invoices"))
+        );
+    }
+}
+
 function* handleLeaveArena(action: PayloadAction<LeaveArenaPayload>): SagaIterator {
     try {
         // No list refresh on success: the caller stops being a member, so the
@@ -1656,6 +1890,19 @@ export default function* arenaSaga() {
     yield takeLatest(activateArenaHostingRequest.type, handleActivateArenaHosting);
     yield takeLatest(scheduleArenaPauseRequest.type, handleScheduleArenaPause);
     yield takeLatest(cancelArenaPauseRequest.type, handleCancelArenaPause);
+
+    /* ---- Arena billing (Stripe) ---- */
+    yield takeLatest(fetchArenaSubscriptionRequest.type, handleFetchArenaSubscription);
+    // takeLeading, not takeLatest: a cancelled checkout request may still have
+    // created a Session server-side, and a second one would litter Stripe with
+    // parallel sessions for the same Arena.
+    yield takeLeading(createArenaCheckoutRequest.type, handleCreateArenaCheckout);
+    yield takeLatest(fetchArenaCheckoutStatusRequest.type, handleFetchArenaCheckoutStatus);
+    yield takeLeading(changeArenaPlanRequest.type, handleChangeArenaPlan);
+    yield takeLeading(cancelArenaHostingRequest.type, handleCancelArenaHosting);
+    yield takeLeading(resumeArenaHostingRequest.type, handleResumeArenaHosting);
+    yield takeLeading(openArenaBillingPortalRequest.type, handleOpenArenaBillingPortal);
+    yield takeLatest(fetchArenaInvoicesRequest.type, handleFetchArenaInvoices);
     yield takeLatest(initiateArenaDeleteRequest.type, handleInitiateArenaDelete);
     yield takeLatest(confirmArenaDeleteRequest.type, handleConfirmArenaDelete);
     yield takeLatest(leaveArenaRequest.type, handleLeaveArena);
