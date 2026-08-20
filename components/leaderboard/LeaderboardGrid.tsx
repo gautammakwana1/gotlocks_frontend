@@ -43,9 +43,51 @@ type Props = {
     loadingMore?: boolean;
     isArchived: boolean;
     contestName?: string;
+    /**
+     * Opens the create-slip flow from the empty-state column. Supplied only for
+     * a viewer who may actually create one; without it the placeholder column
+     * still renders, just inert.
+     */
+    onCreateSlip?: () => void;
+    createSlipOpen?: boolean;
 };
 
 export const LEADERBOARD_DESKTOP_QUERY = "(min-width: 1024px)";
+
+/* ----------------------------------------------------------------------------
+ * The board's PREMIUM surface, ported from the MVP.
+ *
+ * The board is no longer a bordered, rounded card floating on the page. It runs
+ * edge to edge and reads as one continuous surface with the tab strip above it:
+ * a dark title strip that starts at pure black — so it meets the tabs with no
+ * seam — then a body gradient that holds a flat near-black through the middle
+ * and dissolves back into `--app-bg` at the bottom, so the board has no closing
+ * border at all.
+ *
+ * A FINALIZED contest swaps the blue cast for amber, which is the only signal
+ * that the standings are frozen rather than live.
+ * -------------------------------------------------------------------------- */
+const LEADERBOARD_ACTIVE_BOARD_SURFACE_CLASS_NAME =
+    "bg-[linear-gradient(to_bottom,#111820_0%,#0b0d10_5rem,#0b0d10_calc(100%_-_5rem),var(--app-bg)_100%)]";
+const LEADERBOARD_FINAL_BOARD_SURFACE_CLASS_NAME =
+    "bg-[linear-gradient(to_bottom,#201604_0%,#0b0d10_5rem,#0b0d10_calc(100%_-_5rem),var(--app-bg)_100%)]";
+const LEADERBOARD_ACTIVE_TITLE_SURFACE_CLASS_NAME =
+    "bg-[linear-gradient(to_bottom,#000000_0%,#111820_100%)]";
+const LEADERBOARD_FINAL_TITLE_SURFACE_CLASS_NAME =
+    "bg-[linear-gradient(to_bottom,#000000_0%,rgba(245,158,11,0.12)_100%)]";
+const LEADERBOARD_SPORT_CHIP_CLASS_NAME =
+    "inline-flex h-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-300";
+
+/**
+ * The COLUMN separators.
+ *
+ * Absolutely positioned hairlines rather than `border-r`, because the columns
+ * now sit on a shared gradient: a real border paints a hard edge over it, while
+ * a `w-px` overlay at `z-20` rides above every cell — including the sticky
+ * column — and keeps the grid reading as one surface ruled into cells.
+ */
+const LEADERBOARD_VERTICAL_DIVIDER_CLASS_NAME =
+    "pointer-events-none absolute inset-y-0 z-20 w-px bg-sky-200/[0.06]";
 
 /**
  * The 1024px step the MVP added above this grid's existing mobile/tablet
@@ -445,8 +487,8 @@ const PlayerCell = ({
                                 {cumulative}
                             </span>
                             <span className={LEADERBOARD_CARD_SIZING.playerPointSuffix}>
-                                <span className="sm:hidden">total pts</span>
-                                <span className="hidden sm:inline">total points</span>
+                                <span className="sm:hidden">total FP</span>
+                                <span className="hidden sm:inline">total Fantasy Points</span>
                             </span>
                         </span>
                     </div>
@@ -603,9 +645,6 @@ const SlipCellCard = ({
     const tierName = tierMeta?.name ?? EM_DASH;
     const tierRange = tierMeta?.rangeLabel ?? EM_DASH;
     const oddsCopy = pick?.odds_bracket ?? EM_DASH;
-    const legsCount = 0;
-    const legsCopy =
-        legsCount > 0 ? `${legsCount} legs` : null;
     const matchupCopy = isMobile && pick?.selection?.away_abbr && pick?.selection?.home_abbr ? `${pick?.selection?.away_abbr} @ ${pick?.selection?.home_abbr}` : pick?.selection?.matchup ?? matchupCandidate ?? EM_DASH;
     const gameTimeCopy = formatDateTime(pick?.selection?.gameStartTime);
     const showGameTime = gameTimeCopy !== EM_DASH;
@@ -638,6 +677,17 @@ const SlipCellCard = ({
                         ? "win"
                         : "loss";
     const showPointsSuffix = pointsDisplay !== EM_DASH;
+    /*
+     * "Fantasy Points", not a bare "points". The MVP renamed the whole League
+     * scoring vocabulary so a slip cell cannot be read as the contextual League
+     * / Arena Points a Feed contest awards — they are different currencies on
+     * the same screen. Screen-reader only: the visible chip stays "FP".
+     */
+    const pointsFooterText = showPointsSuffix
+        ? isPending
+            ? "Potential Fantasy Points"
+            : "Fantasy Points"
+        : "No Fantasy Points awarded";
     const tierCardStyle = tierMeta
         ? { backgroundImage: getGroupTierGradient(tierMeta.tier) }
         : undefined;
@@ -650,8 +700,17 @@ const SlipCellCard = ({
                 : (pick?.pick_result === "not_found" || pick?.pick_result === "void")
                     ? "border-amber-400/30 bg-amber-500/15 text-amber-50"
                     : "border-white/12 bg-white/[0.06] text-slate-100";
+    /*
+     * A combo reads as "pick" here, not "combo".
+     *
+     * The cell already shows its legs and its combined price, so the chip was
+     * repeating what the card said and stealing the room the market name needs.
+     * Only a genuinely non-combo `sourceTab` still names itself.
+     */
     const sourceTabLabel = (
-        pick?.pick_source_tab ?? (pick?.is_combo || pick?.pick_leg?.length ? "Combo" : "Pick")
+        pick?.pick_source_tab?.trim().toLowerCase() === "combo"
+            ? "Pick"
+            : pick?.pick_source_tab ?? "Pick"
     ).toLowerCase();
 
     return (
@@ -681,18 +740,9 @@ const SlipCellCard = ({
                             >
                                 {sourceTabLabel}
                             </span>
-                            {legsCopy && (
-                                <>
-                                    <span className="text-slate-500" aria-hidden>
-                                        ·
-                                    </span>
-                                    <span
-                                        className={`inline-flex shrink-0 items-center font-semibold uppercase tracking-[0.14em] text-slate-400 ${LEADERBOARD_CARD_SIZING.legsChip}`}
-                                    >
-                                        {legsCopy}
-                                    </span>
-                                </>
-                            )}
+                            {/* The separate leg-count chip went with the combo
+                                relabel above — the legs are already listed in
+                                the cell body, so it only crowded the row. */}
                         </div>
                         {/* Accepted odds, right-aligned in the header. The flip
                             tile still shows them on its front face by design —
@@ -747,7 +797,7 @@ const SlipCellCard = ({
                                     <span
                                         role="button"
                                         tabIndex={0}
-                                        aria-label="View scoring tiers"
+                                        aria-label="View Fantasy Point tiers"
                                         onClick={(event) => {
                                             event.stopPropagation();
                                             setShowTierInfo(true);
@@ -813,12 +863,20 @@ const SlipCellCard = ({
                             {pointsDisplay}
                             {showPointsSuffix && (
                                 <span
+                                    aria-label="Fantasy Points"
                                     className={`ml-0.5 font-semibold uppercase tracking-wide text-slate-100/70 ${LEADERBOARD_CARD_SIZING.statLabel}`}
                                 >
-                                    pts
+                                    FP
                                 </span>
                             )}
                         </div>
+                        {/* SCREEN READERS ONLY — never `hidden` + statFooter.
+                            That class carries `sm:static sm:block` because it
+                            was written for the absolutely-positioned flip hint,
+                            so pairing it with `hidden` un-hides this from 640px
+                            up and adds a third line to a card sized for two:
+                            the label and the value then overflow and clip. */}
+                        <span className="sr-only">{pointsFooterText}</span>
                     </div>
                 </div>
             </div>
@@ -840,6 +898,8 @@ export const LeaderboardGrid = ({
     loadingMore,
     isArchived,
     contestName,
+    onCreateSlip,
+    createSlipOpen = false,
 }: Props) => {
     const isMobile = useIsMobile();
     const isDesktop = useIsDesktop();
@@ -1000,54 +1060,168 @@ export const LeaderboardGrid = ({
         );
     }
 
-    if (!leaderboardAllSlips.length) {
-        return (
-            <div className="space-y-2 text-sm text-gray-400">
-                <p className="text-base font-semibold text-white">{label}</p>
-                <p>
-                    No leaderboard slips yet. Create one to start tracking standings.
-                </p>
-            </div>
-        );
-    }
+    /*
+     * A slipless contest still renders the BOARD, not a sentence.
+     *
+     * The MVP dropped its "No League Slips yet" early return here in favour of a
+     * placeholder slip column, so a commissioner sees the shape of what they are
+     * about to create — every member already in rank order, one empty pick slot
+     * each — instead of an empty page that says the feature exists somewhere
+     * else. The create action then sits in the same cell the first real pick
+     * will occupy.
+     */
+    const isEmptyPreview = leaderboardAllSlips.length === 0;
+
+    /* ---------- The premium surface's own derived state ---------- */
+    const standingsFinalized = isArchived;
+    const leaderboardTheme = standingsFinalized ? "gold" : "blue";
+    const boardSurfaceClassName = standingsFinalized
+        ? LEADERBOARD_FINAL_BOARD_SURFACE_CLASS_NAME
+        : LEADERBOARD_ACTIVE_BOARD_SURFACE_CLASS_NAME;
+    const titleSurfaceClassName = standingsFinalized
+        ? LEADERBOARD_FINAL_TITLE_SURFACE_CLASS_NAME
+        : LEADERBOARD_ACTIVE_TITLE_SURFACE_CLASS_NAME;
+    const standingsHeadingId = "fantasy-contest-rank-heading";
+    const playerCountLabel = `${leaderboard.length} active ${leaderboard.length === 1 ? "player" : "players"
+        }`;
+    const slipCountLabel = `${leaderboardAllSlips.length} contest ${leaderboardAllSlips.length === 1 ? "slip" : "slips"
+        }`;
+    // Sports ride on the slips here; the grid is not handed the contest row.
+    // An archived slip carries no `sports`, so the chips simply do not render
+    // on an archived board rather than the whole strip failing.
+    const contestSports = Array.from(
+        new Set(
+            leaderboardAllSlips.flatMap((slip) =>
+                "sports" in slip ? slip.sports ?? [] : []
+            )
+        )
+    ).filter(Boolean);
+    const standingsSportLabels =
+        contestSports.length > 1 ? ["Multi"] : contestSports;
+
+    /*
+     * The horizontal rules, EXTENDED INTO THE GUTTER.
+     *
+     * The grid itself is inset by the page gutter, so its own row borders stop
+     * short of the full-bleed surface and the board reads as a floating table
+     * again. This layer redraws each rule as a `w-5 sm:w-6` stub — exactly the
+     * gutter width — hard against both edges, so every line runs the full width
+     * of the screen and the board reads as one ruled surface.
+     *
+     * Offsets are computed from the SAME geometry the columns are laid out
+     * with, so nothing here changes a width or a height.
+     */
+    const dividerExtensions = [
+        {
+            key: "header",
+            top: HEADER_H - 1,
+            leftTone: standingsFinalized ? "bg-amber-200/10" : "bg-sky-200/10",
+            rightTone: standingsFinalized ? "bg-amber-200/10" : "bg-sky-200/10",
+        },
+        ...leaderboard.slice(0, -1).map((_, rowIndex) => ({
+            key: `row-${rowIndex + 1}`,
+            top: HEADER_H + (rowIndex + 1) * ROW_H - 1,
+            leftTone: "bg-white/10",
+            rightTone: "bg-white/10",
+        })),
+        {
+            key: "tally",
+            top: HEADER_H + leaderboard.length * ROW_H,
+            leftTone: "bg-sky-200/10",
+            rightTone: "bg-white/10",
+        },
+    ];
 
     return (
-        <div ref={setContainerEl} className="space-y-3 opacity-100 transition-opacity duration-300">
-            {/* `frame` supplies the border colour (white/15, up from white/10),
-                the rounding step and the MVP's layered shadow — a top inner
-                highlight plus a wide, very soft drop that lifts the whole grid
-                off the page. */}
+        <div
+            data-leaderboard-surface="league-rank"
+            data-leaderboard-theme={leaderboardTheme}
+            className="-mx-5 min-w-0 sm:-mx-6"
+        >
+            {/* Title strip. Starts at pure black so it butts against the tab
+                strip with no visible seam, and carries the board's counts and
+                sport chips instead of a heading nobody needed twice. */}
+            <div data-leaderboard-title-row className={titleSurfaceClassName}>
+                <div className="flex min-h-12 items-center justify-between gap-3 px-5 py-2.5 sm:px-6">
+                    <h2 id={standingsHeadingId} className="sr-only">
+                        Contest standings
+                    </h2>
+                    <p
+                        data-leaderboard-helper
+                        className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-xs"
+                    >
+                        {slipCountLabel} · {playerCountLabel}
+                    </p>
+                    {standingsSportLabels.length > 0 && (
+                        <div className="flex shrink-0 items-center justify-end gap-1.5">
+                            {standingsSportLabels.map((sport) => (
+                                <span key={sport} className={LEADERBOARD_SPORT_CHIP_CLASS_NAME}>
+                                    {sport}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div
-                className={`overflow-hidden border bg-gradient-to-br from-white/10 via-white/5 to-white/[0.03] ${LEADERBOARD_CARD_SIZING.frame}`}
+                data-leaderboard-table-backdrop
+                className={`relative ${boardSurfaceClassName}`}
             >
-                <div
-                    ref={scrollerRef}
-                    className={`leaderboard-scroll w-full min-w-0 ${leaderboardAllSlips.length > 1
-                        ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
-                        : "overflow-x-hidden"
-                        }`}
-                    style={
-                        leaderboardAllSlips.length > 1
-                            ? { scrollPaddingLeft: STICKY_WIDTH }
-                            : undefined
-                    }
-                >
+                {/*
+                 * RE-INSET TO THE ORIGINAL GUTTER.
+                 *
+                 * The gradient above is full-bleed, but the measured element
+                 * below sits back at `mx-5 sm:mx-6` — exactly the width it had
+                 * before this frame existed. That is deliberate: `containerEl`
+                 * feeds STICKY_WIDTH and SLIP_WIDTH, so measuring the bled
+                 * width would widen every column by the page gutter.
+                 */}
+                <div className="relative z-10 mx-5 min-w-0 sm:mx-6">
+                    <div
+                        ref={setContainerEl}
+                        className="min-w-0 space-y-3 opacity-100 transition-opacity duration-300"
+                    >
+                        <div
+                            ref={scrollerRef}
+                            className={`leaderboard-scroll w-full min-w-0 ${leaderboardAllSlips.length > 1
+                                ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain scroll-smooth"
+                                : "overflow-x-hidden"
+                                }`}
+                            style={
+                                leaderboardAllSlips.length > 1
+                                    ? { scrollPaddingLeft: STICKY_WIDTH }
+                                    : undefined
+                            }
+                        >
                     <div className={`min-w-max text-white ${LEADERBOARD_CARD_SIZING.gridText}`}>
                         <div className="flex">
                             {/* Sticky Rank + Player */}
                             <div
-                                className="sticky left-0 z-10 flex flex-col self-start border-r border-white/10 bg-[#151515] box-border"
+                                data-leaderboard-player-column
+                                className={`sticky left-0 z-10 box-border flex flex-col self-start border-r border-transparent ${boardSurfaceClassName}`}
                                 style={{
                                     width: STICKY_WIDTH
                                 }}
                             >
+                                <span
+                                    data-leaderboard-vertical-divider="left"
+                                    aria-hidden="true"
+                                    className={`left-0 ${LEADERBOARD_VERTICAL_DIVIDER_CLASS_NAME}`}
+                                />
+                                <span
+                                    data-leaderboard-vertical-divider="player"
+                                    aria-hidden="true"
+                                    className={`right-0 ${LEADERBOARD_VERTICAL_DIVIDER_CLASS_NAME}`}
+                                />
                                 <div
-                                    className={`box-border flex items-center border-b border-white/10 px-2 uppercase tracking-wide text-gray-500 sm:px-3 ${LEADERBOARD_CARD_SIZING.columnHeader}`}
+                                    data-leaderboard-column-header="player"
+                                    className={`box-border flex items-center border-b border-sky-200/10 px-2 uppercase tracking-wide text-gray-500 sm:px-3 ${LEADERBOARD_CARD_SIZING.columnHeader}`}
                                     style={{ height: HEADER_H }}
                                 >
                                     <span>Player</span>
                                 </div>
-                                {leaderboard.map(({ cumulative_points, badge_points, badge_awards, profile_image, username, user_id, win, loss }, rowIndex) => {
+                                {leaderboard.map(({ cumulative_points, badge_points, badge_awards, profile_image, username, user_id, win, loss, rank }, rowIndex) => {
                                     const rowBand = "bg-transparent";
                                     const isLastRow = rowIndex === leaderboard.length - 1;
                                     return (
@@ -1060,7 +1234,7 @@ export const LeaderboardGrid = ({
                                             <PlayerCell
                                                 key={user_id}
                                                 username={username ?? "Member"}
-                                                rank={rowIndex + 1}
+                                                rank={rank ?? rowIndex + 1}
                                                 cumulative={cumulative_points}
                                                 badgeBonus={badge_points}
                                                 badgeAwards={badge_awards}
@@ -1074,8 +1248,14 @@ export const LeaderboardGrid = ({
                                         </div>
                                     );
                                 })}
+                                {/* TRANSPARENT, not the board gradient. The
+                                    gradient is sized to the whole board; painting
+                                    it again on a ~60px cell compresses every stop
+                                    into that box and the colour visibly breaks
+                                    from the column above it. */}
                                 <div
-                                    className="box-border border-t border-white/10 bg-[#151515]"
+                                    data-leaderboard-player-tally
+                                    className="box-border border-t border-sky-200/10 bg-transparent"
                                     style={{ height: TALLY_H }}
                                     aria-hidden
                                 />
@@ -1114,7 +1294,12 @@ export const LeaderboardGrid = ({
                                         return (
                                             <div
                                                 key={slip.id}
-                                                className={`relative box-border flex-shrink-0 snap-start overflow-hidden border-white/10 ${slipBg} ${isLastSlip ? "border-r-0" : "border-r"
+                                                data-leaderboard-slip-column
+                                                // The border stays for its WIDTH — removing it
+                                                // would reflow the columns — but goes transparent
+                                                // so the hairline overlay is the only visible
+                                                // separator rather than a second line beside it.
+                                                className={`relative box-border flex-shrink-0 snap-start overflow-hidden ${slipBg} ${isLastSlip ? "border-r-0" : "border-r border-transparent"
                                                     }`}
                                                 // All three, as the MVP sets them.
                                                 // `width` alone is only a
@@ -1133,8 +1318,14 @@ export const LeaderboardGrid = ({
                                                     maxWidth: `${SLIP_WIDTH}px`,
                                                 }}
                                             >
+                                                <span
+                                                    data-leaderboard-vertical-divider="slip"
+                                                    aria-hidden="true"
+                                                    className={`right-0 ${LEADERBOARD_VERTICAL_DIVIDER_CLASS_NAME}`}
+                                                />
                                                 <div
-                                                    className={`box-border flex flex-col justify-center gap-0.5 border-b border-white/10 px-2 py-1.5 uppercase tracking-wide sm:px-3 ${LEADERBOARD_CARD_SIZING.columnHeader} ${slipTone}`}
+                                                    data-leaderboard-column-header="slip"
+                                                    className={`box-border flex flex-col justify-center gap-0.5 border-b border-sky-200/10 px-2 py-1.5 uppercase tracking-wide sm:px-3 ${LEADERBOARD_CARD_SIZING.columnHeader} ${slipTone}`}
                                                     style={{ height: HEADER_H }}
                                                 >
                                                     <div className="flex min-w-0 items-center justify-between gap-2 leading-tight">
@@ -1255,12 +1446,122 @@ export const LeaderboardGrid = ({
                                             </div>
                                         );
                                     })}
+                                    {isEmptyPreview && (
+                                        <div
+                                            data-leaderboard-empty-slip-column
+                                            className="relative box-border flex-shrink-0 overflow-hidden"
+                                            style={{
+                                                width: `${SLIP_WIDTH}px`,
+                                                minWidth: `${SLIP_WIDTH}px`,
+                                                maxWidth: `${SLIP_WIDTH}px`,
+                                            }}
+                                        >
+                                            <span
+                                                data-leaderboard-vertical-divider="empty-slip"
+                                                aria-hidden="true"
+                                                className={`right-0 ${LEADERBOARD_VERTICAL_DIVIDER_CLASS_NAME}`}
+                                            />
+                                            <div
+                                                data-leaderboard-column-header="empty-slip"
+                                                className={`box-border flex flex-col justify-center gap-0.5 border-b border-sky-200/10 px-2 py-1.5 uppercase tracking-wide text-slate-400 sm:px-3 ${LEADERBOARD_CARD_SIZING.columnHeader}`}
+                                                style={{ height: HEADER_H }}
+                                            >
+                                                <div className="flex min-w-0 items-center justify-between gap-2 leading-tight">
+                                                    <span
+                                                        className={`allow-caps min-w-0 truncate font-semibold leading-tight text-slate-200 ${LEADERBOARD_CARD_SIZING.slipTitle}`}
+                                                    >
+                                                        First contest slip
+                                                    </span>
+                                                    <span className="shrink-0 text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-[10px]">
+                                                        not open
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {leaderboard.map((member, rowIndex) => {
+                                                const isLastRow = rowIndex === leaderboard.length - 1;
+                                                const canCreateSlip =
+                                                    currentUserId === member.user_id && Boolean(onCreateSlip);
+                                                return (
+                                                    <div
+                                                        key={`empty-${member.user_id}`}
+                                                        data-leaderboard-empty-slip-row
+                                                        className={`border-white/10 ${LEADERBOARD_CARD_SIZING.slipRow} ${isLastRow ? "border-b-0" : "border-b"
+                                                            }`}
+                                                        style={{ height: ROW_H }}
+                                                    >
+                                                        {canCreateSlip ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={onCreateSlip}
+                                                                aria-label="Open first slip"
+                                                                aria-haspopup="dialog"
+                                                                aria-expanded={createSlipOpen}
+                                                                data-leaderboard-empty-pick-slot
+                                                                data-leaderboard-empty-pick-action
+                                                                className={`group flex h-full w-full flex-col items-start justify-between border border-dashed border-sky-400/40 bg-gradient-to-br from-sky-500/[0.1] via-sky-500/[0.03] to-transparent py-2 text-left text-sky-100 transition hover:border-sky-300/80 hover:from-sky-500/[0.18] ${LEADERBOARD_CARD_SIZING.emptyCard}`}
+                                                            >
+                                                                <span
+                                                                    className={`inline-flex items-center gap-1 font-semibold leading-tight text-sky-50 ${LEADERBOARD_CARD_SIZING.emptyCopy}`}
+                                                                >
+                                                                    Open first slip
+                                                                    <span
+                                                                        className="transition-transform group-hover:translate-x-0.5"
+                                                                        aria-hidden="true"
+                                                                    >
+                                                                        →
+                                                                    </span>
+                                                                </span>
+                                                                <span className="mt-auto inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-sky-200/80 md:text-[8px]">
+                                                                    <span
+                                                                        className="h-1 w-1 animate-pulse rounded-full bg-sky-300"
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                    start rank preview
+                                                                </span>
+                                                            </button>
+                                                        ) : (
+                                                            <div
+                                                                data-leaderboard-empty-pick-slot
+                                                                className={`flex h-full w-full flex-col items-start justify-between border border-dashed border-sky-200/15 bg-white/[0.015] py-2 text-slate-500 ${LEADERBOARD_CARD_SIZING.emptyCard}`}
+                                                                aria-hidden="true"
+                                                            >
+                                                                <span
+                                                                    className={`font-semibold leading-tight ${LEADERBOARD_CARD_SIZING.emptyCopy}`}
+                                                                >
+                                                                    Pick slot
+                                                                </span>
+                                                                <span className="text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-600 sm:text-[9px]">
+                                                                    waiting for slip
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+
+                                            <div
+                                                data-leaderboard-empty-slip-tally
+                                                className="box-border border-t border-white/10 px-2 py-1.5 sm:px-3"
+                                                style={{ height: TALLY_H }}
+                                                aria-hidden="true"
+                                            >
+                                                <div className="flex h-full items-center justify-between rounded-lg border border-dashed border-white/10 bg-white/[0.025] px-3 text-slate-500 sm:rounded-xl">
+                                                    <span className="text-[9px] font-semibold uppercase tracking-wide sm:text-[10px] lg:text-xs">
+                                                        Slip totals
+                                                    </span>
+                                                    <span className="text-base font-semibold tabular-nums sm:text-lg lg:text-xl">
+                                                        {EM_DASH}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
             {hasMore && (
                 <div className="flex justify-center pt-2">
@@ -1285,6 +1586,33 @@ export const LeaderboardGrid = ({
                     Standings count finalized slips only.
                 </div>
             )}
+                    </div>
+                </div>
+
+                {/* Sits on the BACKDROP, not inside the inset content, so its
+                    stubs can reach the screen edges the content cannot. */}
+                <div
+                    data-leaderboard-divider-layer
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 z-20"
+                >
+                    {dividerExtensions.map((divider) => (
+                        <div
+                            key={divider.key}
+                            data-leaderboard-divider-extension={divider.key}
+                            className="absolute inset-x-0 h-px"
+                            style={{ top: divider.top }}
+                        >
+                            <span
+                                className={`absolute inset-y-0 left-0 w-5 sm:w-6 ${divider.leftTone}`}
+                            />
+                            <span
+                                className={`absolute inset-y-0 right-0 w-5 sm:w-6 ${divider.rightTone}`}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
             <BadgeAwardModal award={selectedBadge} onClose={() => setSelectedBadge(null)} />
             {shareSlipId && (
                 <LeaderboardSlipShareModal

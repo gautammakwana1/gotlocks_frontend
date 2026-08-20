@@ -302,7 +302,7 @@ export const ArenaHub = () => {
             <ScoringModal
                 open={scoringOpen}
                 onClose={() => setScoringOpen(false)}
-                variant="league"
+                variant="arena"
             />
         </div>
     );

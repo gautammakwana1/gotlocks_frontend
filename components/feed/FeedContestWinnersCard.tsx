@@ -10,6 +10,8 @@ import {
 } from "@/lib/styles/postCards";
 import type { FeedContestPodiumCard, FeedContestPodiumPlacement } from "@/lib/contests/feedContestPodium";
 import type { StructuredFeedContextMetadata } from "./types";
+import { BadgeIcon } from "@/components/badges/BadgeIcon";
+import type { ContestBadgeCategory } from "@/lib/interfaces/interfaces";
 
 /**
  * ONE finalized Feed contest's podium, as the MVP's Feed draws it.
@@ -249,6 +251,47 @@ const StagePlacement = ({
                         {pointsLabel}
                     </span>
                 </span>
+
+                {/* FANTASY ONLY. The badges this member finished holding, with
+                    what they contributed to the score above — the MVP's
+                    EarnedBadgeRail at podium scale. Rendered only when the
+                    endpoint carried badges: a Feed contest podium has none, and
+                    an empty rail on every Feed result would read as a bug.
+
+                    Non-interactive by design. The rail on the standings board
+                    opens a BadgeAwardModal, but that modal states the mark that
+                    won the badge and the mark needed to take it — neither of
+                    which this payload carries, and neither of which means
+                    anything on a contest that is already frozen. */}
+                {placement.badges?.length ? (
+                    <div
+                        data-feed-contest-result-badges={placement.badges.length}
+                        className="mt-2 flex w-full min-w-0 flex-col items-center"
+                    >
+                        <div className="flex max-w-full flex-wrap items-center justify-center gap-1">
+                            {placement.badges.map((badge) => (
+                                <span
+                                    key={badge.badge_id}
+                                    data-earned-badge={badge.badge_id}
+                                    title={`${badge.badge_name} · +${badge.points_awarded} Fantasy Points`}
+                                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center"
+                                >
+                                    <BadgeIcon
+                                        category={badge.badge_category as ContestBadgeCategory}
+                                        alt={badge.badge_name}
+                                        glow={false}
+                                        className="h-4 w-4"
+                                    />
+                                </span>
+                            ))}
+                        </div>
+                        <span className="mt-1 text-[7px] font-semibold uppercase leading-none tracking-[0.08em] text-sky-200/80 sm:text-[8px]">
+                            {placement.badges.length} badge
+                            {placement.badges.length === 1 ? "" : "s"}
+                            {placement.badgePoints ? ` · +${placement.badgePoints}` : ""}
+                        </span>
+                    </div>
+                ) : null}
 
                 {/* A shared place is stated rather than implied by two members
                     wearing the same medal — "tied" is the only thing that makes

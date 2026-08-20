@@ -2,6 +2,9 @@ import type {
     FeedContest,
     FeedContestPodiumEntry,
     FeedGroupType,
+    FantasyPodiumBadge,
+    FantasyPodiumEntry,
+    FinalizedFantasyContestPodium,
 } from "@/lib/interfaces/interfaces";
 
 /**
@@ -39,6 +42,16 @@ export type FeedContestPodiumPlacement = {
     isOwn: boolean;
     isTie: boolean;
     tiedCount: number;
+    /**
+     * FANTASY CONTESTS ONLY — the badges this member finished holding, and what
+     * they contributed. Absent on a Feed contest podium, whose endpoint carries
+     * no badge data at all; the card renders the rail only when it is present
+     * rather than drawing an empty one on every Feed result.
+     */
+    badges?: FantasyPodiumBadge[];
+    badgePoints?: number;
+    /** Avatar url, where the podium row carried one. */
+    avatarUrl?: string | null;
 };
 
 export type FeedContestPodiumCard = {
@@ -159,6 +172,82 @@ export const buildFeedContestPodiumCards = (
 ): FeedContestPodiumCard[] =>
     (contests ?? [])
         .map((contest) => buildFeedContestPodiumCard({ contest, groupType, groupId }))
+        .filter((card): card is FeedContestPodiumCard => card !== null);
+
+/* ----------------------------------------------------------------------------
+ * FANTASY contests — the same card, off a different endpoint.
+ *
+ * `/contest-leaderboard/list/finalized/podium` returns a richer row than the
+ * Feed one: it carries the badges each member finished holding and the points
+ * those badges contributed, which is what lets the Fantasy card draw the rail
+ * the Feed card has to leave out.
+ *
+ * Ranking is again the SERVER's. Placements are shared on ties, so a two-way
+ * tie for 1st arrives as two rows both ranked 1 with no 2nd — the card must
+ * present that, never renumber it.
+ * -------------------------------------------------------------------------- */
+
+const fantasyDisplayName = (
+    entry: FantasyPodiumEntry,
+    currentUserId?: string
+): string => {
+    const handle = entry.username?.trim();
+    if (handle) return handle.startsWith("@") ? handle : `@${handle}`;
+    return entry.user_id === currentUserId ? "You" : "Member";
+};
+
+export const buildFantasyPodiumCard = ({
+    contest,
+    groupId,
+    currentUserId,
+}: {
+    contest: FinalizedFantasyContestPodium;
+    groupId: string;
+    currentUserId?: string;
+}): FeedContestPodiumCard | null => {
+    const rows = contest.podium ?? [];
+    // A finalized contest nobody scored in has an empty podium. That is a real,
+    // settled answer — and an unrenderable one, so it produces no card.
+    if (!rows.length) return null;
+
+    const visible = rows.slice(0, FEED_CONTEST_PODIUM_VISIBLE_PLACEMENTS);
+    // Shared placements: how many rows carry each rank, so the card can say
+    // "tied" instead of silently showing two members in one medal slot.
+    const countByRank = rows.reduce<Record<number, number>>((acc, row) => {
+        acc[row.rank] = (acc[row.rank] ?? 0) + 1;
+        return acc;
+    }, {});
+
+    return {
+        contestId: contest.contest_id,
+        contestName: contest.contest_name?.trim() || "Fantasy Contest",
+        headerLabel: `${contest.contest_name?.trim() || "Contest"} · Fantasy Contest`,
+        detailHref: `/league/${groupId}/contests/${contest.contest_id}?tab=standings`,
+        placements: visible.map((entry) => ({
+            rank: entry.rank,
+            userId: entry.user_id,
+            displayName: fantasyDisplayName(entry, currentUserId),
+            // `cumulative_points` is the total awarded, badges included — the
+            // same number the frozen board ranked on.
+            points: entry.cumulative_points,
+            isOwn: entry.user_id === currentUserId,
+            isTie: (countByRank[entry.rank] ?? 1) > 1,
+            tiedCount: countByRank[entry.rank] ?? 1,
+            badges: entry.badges ?? [],
+            badgePoints: entry.badge_points,
+            avatarUrl: entry.profile_image,
+        })),
+        hasMorePlacements: rows.length > visible.length,
+    };
+};
+
+export const buildFantasyPodiumCards = (
+    contests: FinalizedFantasyContestPodium[] | null,
+    groupId: string,
+    currentUserId?: string
+): FeedContestPodiumCard[] =>
+    (contests ?? [])
+        .map((contest) => buildFantasyPodiumCard({ contest, groupId, currentUserId }))
         .filter((card): card is FeedContestPodiumCard => card !== null);
 
 export default buildFeedContestPodiumCard;

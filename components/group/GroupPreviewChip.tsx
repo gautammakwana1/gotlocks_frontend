@@ -17,6 +17,29 @@ type GroupPreviewChipProps = {
 type GroupTypeMetaLabelProps = GroupPreviewChipProps & {
     textClassName?: string;
     showTitle?: boolean;
+    /**
+     * The viewer's membership in THIS community, appended as "· Owner".
+     *
+     * Opt-in rather than always-on: the detail-page headers want it, but the
+     * Home / Profile / Hub cards this label also renders on already carry the
+     * viewer's role elsewhere on the card and would only repeat it.
+     */
+    role?: string | null;
+};
+
+/**
+ * The stored role -> what a member is CALLED.
+ *
+ * `commissioner` is the database's word and appears nowhere in the UI: a League
+ * commissioner and an Arena owner are the same standing, and every other
+ * surface already says "Owner". Anything unrecognised reads as "Member", which
+ * is the safe direction — it never grants a title the viewer does not hold.
+ */
+export const communityRoleLabel = (role?: string | null) => {
+    const normalized = role?.trim().toLowerCase();
+    if (normalized === "commissioner" || normalized === "owner") return "Owner";
+    if (normalized === "manager") return "Manager";
+    return "Member";
 };
 
 type GroupPreviewCornerMetaProps = GroupPreviewChipProps & {
@@ -161,6 +184,7 @@ export const GroupTypeMetaLabel = ({
     className = "",
     textClassName = groupPreviewMetaTextClassName,
     showTitle = true,
+    role,
 }: GroupTypeMetaLabelProps) => {
     const isArena = group?.group_type === "arena";
     const isProOwner = ownerPlan
@@ -170,7 +194,7 @@ export const GroupTypeMetaLabel = ({
 
     return (
         <span
-            className={`${textClassName} ${colorClassName} ${className}`}
+            className={`${textClassName} ${className}`}
             title={
                 showTitle
                     ? isArena
@@ -181,7 +205,19 @@ export const GroupTypeMetaLabel = ({
                     : undefined
             }
         >
-            {getGroupTypeLabel(group?.group_type ?? "league").toUpperCase()}
+            {/* The tier tint belongs to the TYPE word only. The role that may
+                follow is not tier-coded — an Owner of a Free League is still an
+                Owner — so it takes the neutral tone and the two never blur into
+                one coloured phrase. */}
+            <span className={colorClassName}>
+                {getGroupTypeLabel(group?.group_type ?? "league").toUpperCase()}
+            </span>
+            {role ? (
+                <span data-community-role={communityRoleLabel(role)} className="text-gray-300">
+                    {" · "}
+                    {communityRoleLabel(role)}
+                </span>
+            ) : null}
         </span>
     );
 };

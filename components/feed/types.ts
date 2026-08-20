@@ -1,7 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import type { PickCardPresentation } from "@/components/social/PickCardContent";
 import type {
-    BuiltPickPayload,
     Pick,
     PickReaction,
     PickReactionSummary,
@@ -241,13 +240,6 @@ export type StructuredFeedProps = {
     ) => PickReactionSummary | null;
     onSubmit: (
         submission: StructuredFeedSubmission,
-    ) => StructuredFeedSubmitResponse | Promise<StructuredFeedSubmitResponse>;
-    /**
-     * Community Picks come from the full Pick Builder in the New-post drawer, so
-     * they arrive as built payloads rather than a dropdown selection id.
-     */
-    onSubmitBuiltPicks: (
-        picks: BuiltPickPayload[],
     ) => StructuredFeedSubmitResponse | Promise<StructuredFeedSubmitResponse>;
     onReplaceSubmit?: (
         record: StructuredFeedRecord,

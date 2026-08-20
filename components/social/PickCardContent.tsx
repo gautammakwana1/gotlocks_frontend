@@ -675,6 +675,11 @@ export const PickCardContent = ({
                     ) : showPickemSelections ? (
                         <PickemEntrySelectionCarousel
                             pick={pick}
+                            pointsLabel={
+                                presentation.kind === "feed_contest"
+                                    ? presentation.contextualPointsLabel
+                                    : undefined
+                            }
                             correctBonus={
                                 presentation.kind === "feed_contest"
                                     ? presentation.pickemCorrectBonus

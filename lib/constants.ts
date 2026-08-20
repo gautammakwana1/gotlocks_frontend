@@ -1,6 +1,7 @@
 import { League } from "./interfaces/interfaces";
 
 export const APP_NAME = "gotlocks?"
+export const APP_LLC_NAME = "GOTLOCKS LLC"
 export const TAGLINE = "trust your gut. 🔒 it in. climb the rankings."
 
 export const ALLOWED_API_KEYS = [
@@ -217,6 +218,99 @@ export const ODDS_BRACKETS = [
     points: 300,
     name: "LEGENDARY",
     color: "from-[#F07B00]/70 via-[#F07B00]/35 to-[#F07B00]/15",
+  },
+] as const;
+
+/* ----------------------------------------------------------------------------
+ * Fantasy Contest scoring, ported from the MVP's lib/constants.ts.
+ *
+ * Deliberately NOT ODDS_BRACKETS. Fantasy Contests are the one surface that
+ * still scores in fixed tiers instead of the continuous accepted-odds formula,
+ * and this table is far shorter and tops out sooner: seven tiers ending at a
+ * hard 60-point maximum for +851 and everything longer, where ODDS_BRACKETS
+ * keeps climbing to 300 across fourteen. Sharing one table would silently
+ * re-tier every Fantasy pick, so they stay separate.
+ *
+ * `displayName` exists because these render title-cased on the card while the
+ * all-caps `name` is what scoring and the API speak.
+ * -------------------------------------------------------------------------- */
+export const FANTASY_POINT_TIERS = [
+  {
+    tier: 1,
+    tierIndex: 1,
+    label: "-300 or shorter",
+    minOdds: null,
+    maxOdds: -300,
+    points: 10,
+    name: "SAFE",
+    displayName: "Safe",
+    color: "from-[#8A5BFF]/60 via-[#8A5BFF]/30 to-[#8A5BFF]/12",
+  },
+  {
+    tier: 2,
+    tierIndex: 2,
+    label: "-299 to -150",
+    minOdds: -299,
+    maxOdds: -150,
+    points: 15,
+    name: "LOCK",
+    displayName: "Lock",
+    color: "from-[#5B6CFF]/60 via-[#5B6CFF]/30 to-[#5B6CFF]/12",
+  },
+  {
+    tier: 3,
+    tierIndex: 3,
+    label: "-149 to +150",
+    minOdds: -149,
+    maxOdds: 150,
+    points: 20,
+    name: "EVEN",
+    displayName: "Even",
+    color: "from-[#4C7BFF]/60 via-[#4C7BFF]/30 to-[#4C7BFF]/12",
+  },
+  {
+    tier: 4,
+    tierIndex: 4,
+    label: "+151 to +300",
+    minOdds: 151,
+    maxOdds: 300,
+    points: 30,
+    name: "EDGE",
+    displayName: "Edge",
+    color: "from-[#007BFF]/70 via-[#007BFF]/35 to-[#007BFF]/15",
+  },
+  {
+    tier: 5,
+    tierIndex: 5,
+    label: "+301 to +500",
+    minOdds: 301,
+    maxOdds: 500,
+    points: 40,
+    name: "RISKY",
+    displayName: "Risky",
+    color: "from-[#00B6FF]/70 via-[#00B6FF]/35 to-[#00B6FF]/15",
+  },
+  {
+    tier: 6,
+    tierIndex: 6,
+    label: "+501 to +850",
+    minOdds: 501,
+    maxOdds: 850,
+    points: 50,
+    name: "EPIC",
+    displayName: "Epic",
+    color: "from-[#00E6FF]/70 via-[#00E6FF]/35 to-[#00E6FF]/15",
+  },
+  {
+    tier: 7,
+    tierIndex: 7,
+    label: "+851 or longer",
+    minOdds: 851,
+    maxOdds: null,
+    points: 60,
+    name: "LEGEND",
+    displayName: "Legend",
+    color: "from-[#52FF75]/75 via-[#52FF75]/40 to-[#52FF75]/18",
   },
 ] as const;
 

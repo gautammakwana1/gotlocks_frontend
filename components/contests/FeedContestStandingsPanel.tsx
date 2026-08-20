@@ -180,12 +180,28 @@ const StandingRow = ({
      * with the award — so it stands in, gated on a settled, unreversed row.
      */
     const awarded = isFrozenFinal && !reversed && Boolean(row.achievement_id);
+    /*
+     * A SETTLED ROW WORTH NOTHING IS NOT A PENDING ROW WORTH NOTHING.
+     *
+     * The zero test is checked BEFORE the frozen test, which is the ordering the
+     * MVP settled on: a card that has already lost or voided reads "No pts
+     * earned · 0" the moment it settles, instead of showing an amber "+0" that
+     * looks like a potential award still in play. TD Psychic makes this the
+     * common case rather than the edge — a 2-of-3 card places on the podium and
+     * still earns nothing, so an amber +0 beside a bronze marker reads as a bug.
+     *
+     * TODO(api): the MVP also settles a row mid-grading, off the entry's own
+     * `result` / `pendingCount` / `voidCount`. This endpoint returns none of the
+     * three (see the header note on the missing entry payload), so a dead card
+     * here keeps the potential styling until the whole contest freezes.
+     */
+    const noPointsEarned = !reversed && isFrozenFinal && points <= 0;
     const pointsState = reversed
         ? "reversed"
-        : !isFrozenFinal
-            ? "potential"
-            : points <= 0
-                ? "zero"
+        : noPointsEarned
+            ? "zero"
+            : !isFrozenFinal
+                ? "potential"
                 : awarded
                     ? "awarded"
                     : "confirmed";
@@ -289,6 +305,13 @@ const StandingRow = ({
                     <div
                         data-standing-metric="points"
                         data-points-state={pointsState}
+                        aria-label={
+                            noPointsEarned
+                                ? `No ${pointsLabel} earned`
+                                : !isFrozenFinal
+                                    ? `Potential ${pointsLabel}`
+                                    : pointsLabel
+                        }
                         className={`min-w-0 rounded-lg border px-2.5 py-2 ${reversed
                             ? "border-red-300/20 bg-red-500/[0.08]"
                             : awarded
@@ -296,20 +319,35 @@ const StandingRow = ({
                                 : "border-white/10 bg-black/25"
                             }`}
                     >
-                        <dt className="text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-[9px]">
-                            {pointsLabel}
+                        <dt
+                            className={
+                                noPointsEarned
+                                    ? "whitespace-nowrap text-[7px] font-semibold normal-case leading-none tracking-normal text-slate-400 sm:text-[9px]"
+                                    : "text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-[9px]"
+                            }
+                        >
+                            {/* Abbreviated on purpose: the full "League Points"
+                                overflows this chip at 360px, and the unabbreviated
+                                label rides on the group's aria-label instead. */}
+                            {noPointsEarned
+                                ? "No pts earned"
+                                : !isFrozenFinal
+                                    ? "Potential pts"
+                                    : pointsLabel}
                         </dt>
                         <dd
-                            className={`mt-1 truncate text-sm font-semibold tabular-nums ${reversed
-                                ? "text-red-200 line-through"
-                                : awarded
-                                    ? "text-emerald-200"
-                                    : isFrozenFinal
-                                        ? "text-slate-300"
-                                        : "text-amber-200"
+                            className={`mt-1 truncate text-sm font-semibold tabular-nums ${noPointsEarned
+                                ? "text-slate-300"
+                                : reversed
+                                    ? "text-red-200 line-through"
+                                    : awarded
+                                        ? "text-emerald-200"
+                                        : isFrozenFinal
+                                            ? "text-slate-300"
+                                            : "text-amber-200"
                                 }`}
                         >
-                            +{points}
+                            {noPointsEarned ? "0" : `+${points}`}
                         </dd>
                     </div>
                 </dl>

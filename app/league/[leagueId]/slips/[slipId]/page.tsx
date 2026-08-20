@@ -13,26 +13,26 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
 import BackButton from "@/components/ui/BackButton";
-import { JAGGED_CLIP_PATH, MAXIMUM_PICK_POINTS, MINIMUM_PICK_POINTS } from "@/lib/constants";
+import { JAGGED_CLIP_PATH } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils/date";
 import DateTimeWheelPicker from "@/components/ui/DateTimeWheelPicker";
 import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
-import { GradingPayload, GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
+import { GroupSelector, LeaderboardList, Pick, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllLeaderboardsRequest, fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
-import { autoGradingPicksRequest, clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest, resetPicksScoringPointsRequest, updatePicksRequest } from "@/lib/redux/slices/pickSlice";
+import { clearCreatePickMessage, clearUpdatePicksMessage, deletePickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
 import { assignToSecondaryLeaderboardRequest, clearDeleteSlipMessage, clearUpdateSlipsMessage, deleteSlipRequest, fetchSlipByIdRequest, markFinalizeSlipRequest, reOpenSlipRequest, updateSlipConflictModeRequest, updateSlipsRequest } from "@/lib/redux/slices/slipSlice";
 import Image from "next/image";
-import { getPickPoints, LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
+import { LEAGUE_CAP_POINTS, LEAGUE_CAP_TIER, parseAmericanOdds } from "@/lib/utils/scoring";
 import { X } from "lucide-react";
 import PickListCard from "@/components/slips/PickListCard";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import { canCommissionerReview, canFinalize, canUserEditSlipPicks, getSlipConflictWarningMode, isSlipFinal, isSlipTimeLocked, normalizePickResult, slipShowsConflictWarnings } from "@/lib/slips/state";
+import { canFinalize, canUserEditSlipPicks, getSlipConflictWarningMode, isSlipFinal, isSlipTimeLocked, normalizePickResult, slipShowsConflictWarnings } from "@/lib/slips/state";
 import { createPortal } from "react-dom";
 import ScoringModal from "@/components/modals/ScoringModal";
 import SlipShareModal from "@/components/slips/SlipShareModal";
-import { checkAnyRestrictedWords, generateProfileImageUrl, useIsMobile } from "@/lib/utils/helpers";
+import { checkAnyRestrictedWords, generateProfileImageUrl } from "@/lib/utils/helpers";
 import { UserIcon } from "@/components/layout/MainTabBar";
 import { extractPickLine } from "@/lib/utils/pickDescription";
 import { EditPencilIcon, ShareIcon } from "@/components/ui/SvgIcons";
@@ -40,31 +40,13 @@ import { analyzeSlipPicks } from "@/lib/slips/pickConflicts";
 import { getLeagueComboOddsSummary } from "@/lib/slips/groupComboOdds";
 import SlipDetailsSkeleton from "@/components/skeletons/slips/SlipDetailsSkeleton";
 import { fetchContestByIdRequest } from "@/lib/redux/slices/contestSlice";
-import { canUseProLeagueScoringControls, isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
-import { useUserPlan } from "@/lib/plan/useUserPlan";
-import Link from "next/link";
+import { isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
 
 interface FormErrors {
     name?: string;
 }
 
-type SlipTab = "picks" | "review" | "actions";
-
-type PointsDraft = Record<string, string>;
-
-const buildInitialPointsDraft = (
-    picks: Pick[],
-    mode: "global" | "leagueLeaderboard"
-): PointsDraft =>
-    picks.reduce<PointsDraft>((acc, pick) => {
-        const normalized = normalizePickResult(pick.result);
-        if (normalized === "pending") return acc;
-        const fallbackPoints = getPickPoints(pick, mode);
-        const pointsValue =
-            typeof pick.points === "number" ? pick.points : fallbackPoints;
-        acc[pick.id] = String(pointsValue);
-        return acc;
-    }, {});
+type SlipTab = "picks" | "actions";
 
 const sortPicksByOdds = (picks: Pick[]) => {
     const sorted = [...picks];
@@ -87,34 +69,13 @@ const deepJaggedStyle: CSSProperties & Record<"--jagged-valley" | "--jagged-tip"
     "--jagged-tip": "0px",
 };
 
-const PICK_RESULT_ACCENTS = {
-    win: {
-        text: "text-emerald-200",
-    },
-    loss: {
-        text: "text-rose-200",
-    },
-    void: {
-        text: "text-amber-100",
-    },
-    not_found: {
-        text: "text-amber-100",
-    },
-    pending: {
-        text: "text-slate-200",
-    },
-} as const;
-
 const SlipDetailsPage = () => {
     const dispatch = useDispatch();
-    const isMobile = useIsMobile();
     const params = useParams<{ leagueId: string; slipId: string }>();
     const router = useRouter();
     const { setToast } = useToast();
     const currentUser = useCurrentUser();
-    const plan = useUserPlan();
     const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
     const { slips, loading: slipLoader, message: slipMessage, error: slipError, deleteLoading, deleteMessage, deleteError } = useSelector((state: RootState) => state.slip);
     const { picks: pickList, loading: pickLoader, message: pickMessage, error: pickError } = useSelector((state: RootState) => state.pick);
@@ -197,7 +158,6 @@ const SlipDetailsPage = () => {
     const [pickDeadlineDraft, setPickDeadlineDraft] = useState(
         () => slip?.pick_deadline_at ?? ""
     );
-    const [pointsDraft, setPointsDraft] = useState<PointsDraft>({});
     const [activeTab, setActiveTab] = useState<SlipTab>("picks");
     const [isRenamingSlip, setIsRenamingSlip] = useState(false);
     const [errors, setErrors] = useState<FormErrors>({});
@@ -254,7 +214,6 @@ const SlipDetailsPage = () => {
         [members]
     );
 
-    const scoringMode = slip?.isGraded ? "leagueLeaderboard" : "global";
 
     const userPicks = useMemo(
         () => slipPicks.filter((pick: Pick) => pick.user_id === currentUser?.userId),
@@ -277,7 +236,7 @@ const SlipDetailsPage = () => {
     );
 
     useEffect(() => {
-        if (params.slipId && (activeTab === "picks" || activeTab === "review")) {
+        if (params.slipId && activeTab === "picks") {
             dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
         }
     }, [params.slipId, dispatch, activeTab]);
@@ -448,10 +407,6 @@ const SlipDetailsPage = () => {
     }, [isSlateWindowDropdownOpen]);
 
     useEffect(() => {
-        setPointsDraft(buildInitialPointsDraft(slipPicks, scoringMode));
-    }, [scoringMode, slipPicks]);
-
-    useEffect(() => {
         if (!group || !isSlipFinal(slip)) return;
         if (!slip) {
             router.replace(`/league/${group.id}?tab=contests`);
@@ -466,14 +421,6 @@ const SlipDetailsPage = () => {
             return;
         }
     }, [canView, group, slip, router]);
-
-    useEffect(() => {
-        return () => {
-            if (debounceRef.current) {
-                clearTimeout(debounceRef.current);
-            }
-        };
-    }, []);
 
     const picksByMember = useMemo(() => {
         const map = new Map<string, Pick[]>();
@@ -520,7 +467,15 @@ const SlipDetailsPage = () => {
     const availableSports = Array.isArray(slip?.sports) && slip.sports.length > 0
         ? slip.sports
         : [DEFAULT_SPORT];
-    const showReviewTab = Boolean(slip && slip.isGraded && preflightIsCommissioner && isSlipTimeLocked(slip));
+    /*
+     * NO "Slip review" TAB.
+     *
+     * Grading is automatic: once the pick deadline passes the Slip starts
+     * resolving, results and Fantasy Points land from the settled game, and the
+     * Slip finalizes itself when every pick is terminal. There is no step for
+     * staff to perform, so the tab that used to host one is gone and the Picks
+     * tab explains what is happening instead (see the "Automatic results" card).
+     */
     const showActionsTab = Boolean(
         slip && preflightIsCommissioner
     );
@@ -528,23 +483,17 @@ const SlipDetailsPage = () => {
         const baseTabs: { id: SlipTab; label: string }[] = [
             { id: "picks", label: "League picks" },
         ];
-        if (showReviewTab) {
-            baseTabs.push({ id: "review", label: "Slip review" });
-        }
         if (showActionsTab) {
             baseTabs.push({ id: "actions", label: "Slip actions" });
         }
         return baseTabs;
-    }, [showReviewTab, showActionsTab]);
+    }, [showActionsTab]);
 
     useEffect(() => {
-        if (!showReviewTab && activeTab === "review") {
-            setActiveTab("picks");
-        }
         if (!showActionsTab && activeTab === "actions") {
             setActiveTab("picks");
         }
-    }, [activeTab, showActionsTab, showReviewTab]);
+    }, [activeTab, showActionsTab]);
 
     const validate = useCallback((): boolean => {
         const nextErrors: FormErrors = {};
@@ -579,21 +528,11 @@ const SlipDetailsPage = () => {
     // const isCreator = slip.created_by === currentUser.userId;
     // const isContestManager = contest?.created_by === currentUser.userId;
     // const hasVibeControl = !slip.isGraded && isCreator;
-    const hasProScoringControls = canUseProLeagueScoringControls({
-        league: group,
-        actor: currentUser,
-        actorId: currentUser.userId,
-        sessionUserId: currentUser.userId,
-        plan: plan
-    }).allowed;
     const hasReviewControl = isCommissioner;
     const limitValue = slip.pick_limit === "unlimited" ? Infinity : slip.pick_limit;
     const isTimeLocked = isSlipTimeLocked(slip);
     const canManagePicks = canUserEditSlipPicks(slip);
     const canAddPick = canManagePicks && userPicks.length < limitValue;
-    const canReview = canCommissionerReview(slip);
-    const canAdjustPoints = hasProScoringControls && canReview;
-    const canResetScoring = canAdjustPoints;
     const canReopen = hasReviewControl && isTimeLocked && !isFinalized;
     const canFinalizeSlip = canFinalize(slip, {
         isCommissioner,
@@ -617,7 +556,6 @@ const SlipDetailsPage = () => {
     const pickDeadlinePassed = Number.isFinite(pickDeadlineTime)
         ? Date.now() >= pickDeadlineTime
         : false;
-    const showReviewSection = canReview;
     const totalMembers = members.length;
     const isUnlimitedPickLimit = slip.pick_limit === "unlimited";
     const totalPossiblePicks = isUnlimitedPickLimit ? Infinity : Number(slip.pick_limit) * totalMembers;
@@ -677,13 +615,6 @@ const SlipDetailsPage = () => {
             ? "Deadline is locked. Use Reopen slip in Review to reset picks and set a new deadline."
             : "Deadline is locked for this vibe slip. Use Reopen to reset picks and set a new deadline."
         : null;
-
-    const handleResetScoring = () => {
-        if (!canResetScoring) return;
-        if (slip.id) {
-            dispatch(resetPicksScoringPointsRequest({ slip_id: slip.id }));
-        }
-    };
 
     const openFinalizeModal = () => {
         if (!canFinalizeSlip) return;
@@ -790,68 +721,6 @@ const SlipDetailsPage = () => {
         setIsReopenModalOpen(false);
     };
 
-    const handlePointsDraftChange = (pickId: string, value: string) => {
-        setPointsDraft((prev) => ({ ...prev, [pickId]: value }));
-    };
-
-    const debouncedUpdatePoints = (pickId: string, value: number, pick: Pick) => {
-        if (debounceRef.current) {
-            clearTimeout(debounceRef.current);
-        }
-
-        debounceRef.current = setTimeout(() => {
-            const gradingPayload: GradingPayload = [
-                {
-                    id: pickId,
-                    points: value,
-                    bonus: 0,
-                    result: pick.result,
-                },
-            ];
-
-            if (group?.id && slip.id) {
-                dispatch(
-                    updatePicksRequest({
-                        grading: gradingPayload,
-                        group_id: group.id,
-                        slip_id: slip.id,
-                    })
-                );
-            }
-        }, 500);
-    };
-
-    const persistAwardedPoints = (pickId: string, pick: Pick) => {
-        if (!canAdjustPoints) return;
-        const raw = pointsDraft[pickId];
-        if (raw === undefined) return;
-        const trimmed = raw.trim();
-        if (!trimmed) {
-            setPointsDraft(buildInitialPointsDraft(slipPicks, scoringMode));
-            return;
-        }
-        const parsed = Number(trimmed);
-        if (!Number.isFinite(parsed)) {
-            setToast({
-                id: Date.now(),
-                type: "error",
-                message: "Enter a valid points value.",
-                duration: 3000
-            });
-            setPointsDraft(buildInitialPointsDraft(slipPicks, scoringMode));
-            return;
-        }
-        if (pick.points === parsed) return;
-        const gradingPayload: GradingPayload = [{
-            id: pick.id,
-            points: parsed,
-            bonus: 0,
-            result: pick.result,
-        }]
-        setPointsDraft(buildInitialPointsDraft(slipPicks, scoringMode));
-        if (group?.id && slip.id) dispatch(updatePicksRequest({ grading: gradingPayload, group_id: group?.id, slip_id: slip.id }));
-    };
-
     const startAddFlow = () => {
         if (!canAddPick) return;
         router.push(`/league/${group.id}/slips/${slip.id}/add-pick`);
@@ -872,43 +741,6 @@ const SlipDetailsPage = () => {
         return aName.localeCompare(bName, undefined, { sensitivity: "base" });
     });
     const otherMembers = orderedMembers.filter((member) => member.user_id !== currentUser.userId);
-    const reviewMembers = orderedMembers.map((member) => ({
-        member,
-        picks: member.user_id ? picksByMember.get(member.user_id) ?? [] : [],
-    }));
-    const hasReviewPicks = reviewMembers.some(({ picks }) => picks.length > 0);
-    const formatResultLabel = (result: ReturnType<typeof normalizePickResult>) =>
-        result === "not_found" ? "n/a" : result;
-    const resultTone = (result: ReturnType<typeof normalizePickResult>) => {
-        if (result === "win") {
-            return "border-emerald-400/40 bg-gradient-to-br from-emerald-500/30 via-emerald-400/10 to-black/40 text-emerald-100";
-        }
-        if (result === "loss") {
-            return "border-rose-400/40 bg-gradient-to-br from-rose-500/30 via-rose-400/10 to-black/40 text-rose-100";
-        }
-        if (result === "void" || result === "not_found") {
-            return "border-yellow-300/60 bg-yellow-500/15 text-yellow-100";
-        }
-        return "border-white/10 bg-white/5 text-gray-300";
-    };
-    const pickCardTone = (result: ReturnType<typeof normalizePickResult>) => {
-        if (result === "win") {
-            return "border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 via-emerald-400/5 to-black/40";
-        }
-        if (result === "loss") {
-            return "border-rose-400/30 bg-gradient-to-br from-rose-500/20 via-rose-400/5 to-black/40";
-        }
-        if (result === "void" || result === "not_found") {
-            return "border-yellow-300/30 bg-gradient-to-br from-yellow-500/15 via-yellow-500/5 to-black/40";
-        }
-        return "border-white/10 bg-white/[0.04]";
-    };
-    const pointsTextTone = (result: ReturnType<typeof normalizePickResult>) => {
-        if (result === "win") return "text-emerald-100";
-        if (result === "loss") return "text-red-100";
-        if (result === "void" || result === "not_found") return "text-yellow-100";
-        return "text-gray-300";
-    };
 
     if (slipLoader) {
         return (
@@ -1020,6 +852,38 @@ const SlipDetailsPage = () => {
 
                             {activeTab === "picks" && (
                                 <div className="space-y-6">
+                                    {/* What used to be the Slip review tab, reduced to
+                                        the one thing a member actually needs once the
+                                        deadline passes: an explanation that nothing is
+                                        waiting on anyone. The `i` opens the League
+                                        scoring rules, which is the only place the old
+                                        tab's scoring detail still needs to live. */}
+                                    {isTimeLocked ? (
+                                        <section className="rounded-2xl border border-sky-300/20 bg-sky-400/[0.07] p-4">
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-sky-100">
+                                                    Automatic results
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowScoringModal(true)}
+                                                    className="flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
+                                                    aria-label="League scoring"
+                                                >
+                                                    i
+                                                </button>
+                                            </div>
+                                            <p className="mt-2 text-xs leading-5 text-gray-300">
+                                                This Slip is resolving. Results and Fantasy Points update
+                                                automatically, and the Slip finalizes as soon as every pick
+                                                has a terminal result.
+                                            </p>
+                                            <p className="mt-2 text-[11px] text-gray-500">
+                                                Pending or postponed games keep the Slip resolving. No owner
+                                                action is required.
+                                            </p>
+                                        </section>
+                                    ) : null}
                                     {showProgressBar && (
                                         <section className="space-y-1">
                                             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-gray-300">
@@ -1425,6 +1289,21 @@ const SlipDetailsPage = () => {
                                                                     reopen
                                                                 </button>
                                                             )}
+                                                            {/* MOVED HERE from the removed Slip review tab.
+                                                                Finalizing is a lifecycle action, not a scoring
+                                                                one — it belongs beside Reopen, and losing it
+                                                                with that tab would have left a commissioner
+                                                                unable to close a Slip whose games never
+                                                                settled on their own. */}
+                                                            {canFinalizeSlip && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={openFinalizeModal}
+                                                                    className="ui-accent-button rounded-2xl px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-60"
+                                                                >
+                                                                    finalize
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 type="submit"
                                                                 disabled={!canEditDeadlines}
@@ -1571,392 +1450,6 @@ const SlipDetailsPage = () => {
                                                 )}
                                             </section>
                                         </>
-                                    )}
-                                </div>
-                            )}
-
-                            {activeTab === "review" && showReviewTab && (
-                                <div className="space-y-5">
-                                    <section className="space-y-3">
-                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                            <div>
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="text-xs uppercase tracking-wide text-gray-400">
-                                                            Review &amp; grading
-                                                        </p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowScoringModal(true)}
-                                                            className="flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold text-gray-300 transition hover:border-white/40 hover:text-white"
-                                                            aria-label="League scoring"
-                                                        >
-                                                            i
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-xs text-gray-500">
-                                                        {isTimeLocked
-                                                            ? hasProScoringControls
-                                                                ? "Slip is locked by the pick deadline. Adjust awarded points, or reset them back to the default scoring."
-                                                                : "Slip is locked by the pick deadline. Standard Slip Points apply automatically on Free."
-                                                            : "Review unlocks once the pick deadline passes."
-                                                        }
-                                                    </p>
-                                                    {isTimeLocked && !hasProScoringControls && (
-                                                        <Link
-                                                            href="/fantasy"
-                                                            className="inline-flex text-xs font-semibold text-amber-200 transition hover:text-amber-100"
-                                                        >
-                                                            Upgrade to Pro for manual Slip Point controls
-                                                        </Link>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex w-full flex-nowrap items-center gap-2">
-                                                {hasProScoringControls && (
-                                                    <ActionButton
-                                                        label="Reset"
-                                                        onClick={handleResetScoring}
-                                                        disabled={!canResetScoring || pickLoader}
-                                                        className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
-                                                    />
-                                                )}
-                                                < ActionButton
-                                                    label="Reopen"
-                                                    onClick={openReopenModal}
-                                                    disabled={!canReopen}
-                                                    className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-rose-400/40 bg-gradient-to-br from-rose-500/30 via-rose-400/10 to-black/40 px-3 py-2 text-[11px] text-rose-100 hover:border-rose-300/70 hover:text-white"
-                                                />
-                                                <ActionButton
-                                                    label="Finalize"
-                                                    onClick={openFinalizeModal}
-                                                    disabled={!canFinalizeSlip}
-                                                    className="flex h-9 min-w-0 flex-1 items-center justify-center whitespace-nowrap border-sky-400/40 bg-gradient-to-br from-sky-500/30 via-sky-400/10 to-black/40 px-3 py-2 text-[11px] text-sky-100 hover:border-sky-300/70 hover:text-white"
-                                                />
-                                            </div>
-                                        </div>
-                                        {!isTimeLocked && (
-                                            <p className="text-xs text-gray-500">
-                                                Picks stay editable until the deadline hits. The slip locks automatically.
-                                            </p>
-                                        )}
-                                    </section>
-                                    <div className="h-px w-full bg-white/10" />
-
-                                    {showReviewSection ? (
-                                        <section className="space-y-4">
-                                            <div className="flex justify-end text-xs font-semibold text-sky-100">
-                                                Changes save automatically, finalize when finished.
-                                            </div>
-
-                                            {!hasReviewPicks ? (
-                                                <p className="text-sm text-gray-400">No picks to review yet.</p>
-                                            ) : (
-                                                <div className="space-y-4">
-                                                    {reviewMembers.map(({ member, picks }) => {
-                                                        const displayName = member.profiles?.username ?? "Member";
-                                                        const headerPick = picks[0];
-                                                        const headerResult = headerPick
-                                                            ? normalizePickResult(headerPick.result)
-                                                            : "pending";
-                                                        const headerIsPending = headerResult === "pending";
-                                                        const headerPointsValue = headerPick
-                                                            ? pointsDraft[headerPick.id] ??
-                                                            (headerIsPending ? "" : String(getPickPoints(headerPick, scoringMode)))
-                                                            : "";
-                                                        const headerPointsDisabled = !canAdjustPoints || headerIsPending;
-                                                        const headerParsedPoints = Number(headerPointsValue);
-                                                        const headerCurrentPoints =
-                                                            headerPick && Number.isFinite(headerParsedPoints)
-                                                                ? headerParsedPoints
-                                                                : headerPick
-                                                                    ? getPickPoints(headerPick, scoringMode)
-                                                                    : 0;
-                                                        const showPointsAdjuster = slip.isGraded && Boolean(headerPick);
-                                                        const adjustHeaderPoints = (delta: number) => {
-                                                            if (!headerPick || headerPointsDisabled) return;
-
-                                                            const nextValue = headerCurrentPoints + delta;
-                                                            const validValue = Math.max(
-                                                                MINIMUM_PICK_POINTS,
-                                                                Math.min(MAXIMUM_PICK_POINTS, nextValue)
-                                                            );
-
-                                                            handlePointsDraftChange(headerPick.id, String(validValue));
-
-                                                            debouncedUpdatePoints(headerPick.id, validValue, headerPick);
-                                                        };
-                                                        const memberProfilePicture = generateProfileImageUrl(member.profiles?.profile_image);
-                                                        return (
-                                                            <div
-                                                                key={member.id}
-                                                                className="overflow-hidden rounded-2xl border border-white/10 bg-black/40"
-                                                            >
-                                                                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-                                                                    <div className="flex min-w-0 items-center gap-3">
-                                                                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-xs font-semibold uppercase text-slate-100">
-                                                                            {memberProfilePicture ? (
-                                                                                <Image
-                                                                                    src={memberProfilePicture}
-                                                                                    alt="Profile image"
-                                                                                    width={56}
-                                                                                    height={56}
-                                                                                    className={`tracking-wide rounded-full object-cover h-8 w-8`}
-                                                                                    draggable={false}
-                                                                                    onDragStart={(e) => e.preventDefault()}
-                                                                                    unoptimized
-                                                                                />
-                                                                            ) : (
-                                                                                <UserIcon className="h-6 w-6 text-white/80 sm:h-6 sm:w-6" />
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <p className="truncate text-sm font-semibold text-white">
-                                                                                {displayName}
-                                                                            </p>
-                                                                            <p className="text-[10px] uppercase tracking-wide text-gray-400">
-                                                                                {`${picks.length} pick${picks.length === 1 ? "" : "s"}`}
-                                                                            </p>
-                                                                        </div>
-                                                                    </div>
-                                                                    {showPointsAdjuster && (
-                                                                        <div className="flex flex-shrink-0 items-center">
-                                                                            {hasProScoringControls ? (
-                                                                                <div className="grid grid-cols-[26px_1fr_26px] items-center rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-white">
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => adjustHeaderPoints(-1)}
-                                                                                        disabled={headerPointsDisabled}
-                                                                                        className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                                                                        aria-label="Decrease points"
-                                                                                    >
-                                                                                        –
-                                                                                    </button>
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        step="1"
-                                                                                        value={headerPointsValue}
-                                                                                        placeholder={headerIsPending ? "—" : undefined}
-                                                                                        onChange={(event) => {
-                                                                                            const raw = event.target.value;
-                                                                                            if (raw === "" || raw === "-") {
-                                                                                                handlePointsDraftChange(headerPick.id, raw);
-                                                                                                return;
-                                                                                            }
-                                                                                            const nextValue = Number(raw);
-                                                                                            if (Number.isNaN(nextValue)) return;
-                                                                                            const validValue = Math.max(
-                                                                                                MINIMUM_PICK_POINTS,
-                                                                                                Math.min(MAXIMUM_PICK_POINTS, nextValue)
-                                                                                            );
-
-                                                                                            handlePointsDraftChange(headerPick.id, String(validValue));
-
-                                                                                            debouncedUpdatePoints(headerPick.id, validValue, headerPick);
-                                                                                        }}
-                                                                                        max={100}
-                                                                                        min={-100}
-                                                                                        onBlur={() => persistAwardedPoints(headerPick.id, headerPick)}
-                                                                                        onKeyDown={(event) => {
-                                                                                            if (event.key === "Enter") {
-                                                                                                event.currentTarget.blur();
-                                                                                            }
-                                                                                        }}
-                                                                                        disabled={headerPointsDisabled}
-                                                                                        className={`w-11 bg-transparent text-center text-[15px] font-semibold leading-none tabular-nums outline-none placeholder:text-slate-500 disabled:text-gray-300 ${pointsTextTone(
-                                                                                            headerResult
-                                                                                        )}`}
-                                                                                    />
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => adjustHeaderPoints(1)}
-                                                                                        disabled={headerPointsDisabled}
-                                                                                        className="flex h-5 w-5 items-center justify-center text-[12px] font-semibold text-white/80 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                                                                        aria-label="Increase points"
-                                                                                    >
-                                                                                        +
-                                                                                    </button>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-right">
-                                                                                    <p className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">
-                                                                                        Slip Points
-                                                                                    </p>
-                                                                                    <p
-                                                                                        className={`text-[15px] font-semibold leading-none tabular-nums ${pointsTextTone(
-                                                                                            headerResult
-                                                                                        )}`}
-                                                                                    >
-                                                                                        {headerIsPending
-                                                                                            ? "—"
-                                                                                            : `${headerCurrentPoints > 0 ? "+" : ""}${headerCurrentPoints}`}
-                                                                                    </p>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                {picks.length === 0 ? (
-                                                                    <div className="px-4 py-4 text-xs text-gray-400">
-                                                                        No picks to review yet.
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="divide-y divide-white/10">
-                                                                        {picks.map((pick) => {
-                                                                            const normalizedResult = normalizePickResult(pick.result);
-                                                                            const displayPick = pick.description ?? "No pick was submitted";
-                                                                            const pickLine = extractPickLine(displayPick);
-                                                                            // const matchupLabel = extractMatchup(
-                                                                            //     displayPick,
-                                                                            //     pick?.matchup ??
-                                                                            //     (pick.selection?.gameId
-                                                                            //         ? matchupByGameId.get(pick.selection.gameId)
-                                                                            //         : null)
-                                                                            // );
-                                                                            const matchupTag = isMobile && pick?.selection?.away_abbr && pick?.selection?.home_abbr
-                                                                                ? `${pick?.selection?.away_abbr} @ ${pick?.selection?.home_abbr}` : `${pick?.selection?.matchup ?? ""}`
-                                                                            const timeLabel = formatDateTime(pick.match_date);
-                                                                            const showTime = timeLabel !== "—";
-                                                                            const showMatchup = Boolean(matchupTag);
-                                                                            const sourceTabLabel = (
-                                                                                pick.source_tab ??
-                                                                                (pick.is_combo || pick.legs?.length ? "Combo" : "Pick")
-                                                                            ).toLowerCase();
-                                                                            const oddsCopy = pick.odds_bracket ?? "—";
-                                                                            const accent = PICK_RESULT_ACCENTS[normalizedResult] ?? PICK_RESULT_ACCENTS.pending;
-                                                                            return (
-                                                                                <div key={pick.id} className="px-3 py-3 sm:px-4 sm:py-4">
-                                                                                    <div className="sm:hidden">
-                                                                                        <div className="grid grid-cols-[minmax(0,58px)_minmax(0,1fr)] items-stretch gap-2">
-                                                                                            <div className="flex flex-col gap-1">
-                                                                                                <div className="flex min-h-[48px] text-left">
-                                                                                                    <div
-                                                                                                        className={`flex w-full flex-col items-start justify-center overflow-hidden rounded-lg border px-1 py-1 text-left ${resultTone(
-                                                                                                            normalizedResult
-                                                                                                        )} shadow-[inset_0_0_10px_rgba(15,23,42,0.25)]`}
-                                                                                                    >
-                                                                                                        <span className="text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                                                                                            result
-                                                                                                        </span>
-                                                                                                        <span className="text-[12px] font-semibold uppercase tracking-wide">
-                                                                                                            {formatResultLabel(normalizedResult)}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                                <div className="flex min-h-[48px] text-left">
-                                                                                                    <div className="flex w-full flex-col items-start justify-center rounded-lg border border-white/10 bg-white/[0.05] px-1 py-1 text-left text-white shadow-[inset_0_0_10px_rgba(15,23,42,0.25)]">
-                                                                                                        <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-300">
-                                                                                                            odds
-                                                                                                        </span>
-                                                                                                        <span className="text-[12px] font-semibold text-white">
-                                                                                                            {oddsCopy}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div className="h-[104px]">
-                                                                                                <div
-                                                                                                    className={`flex h-full flex-col overflow-hidden rounded-xl border p-2.5 ${pickCardTone(
-                                                                                                        normalizedResult
-                                                                                                    )}`}
-                                                                                                >
-                                                                                                    <div className="min-w-0">
-                                                                                                        {sourceTabLabel && (
-                                                                                                            <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                                                                                                {sourceTabLabel}
-                                                                                                            </span>
-                                                                                                        )}
-                                                                                                        <p
-                                                                                                            className={`min-w-0 text-[13px] font-semibold leading-snug line-clamp-2 ${accent.text}`}
-                                                                                                            title={displayPick}
-                                                                                                        >
-                                                                                                            {pickLine}
-                                                                                                        </p>
-                                                                                                    </div>
-                                                                                                    {(showMatchup || showTime) && (
-                                                                                                        <div className="mt-auto min-w-0 space-y-0.5 text-[10px] text-slate-400">
-                                                                                                            {showMatchup && <p className="truncate">{matchupTag}</p>}
-                                                                                                            {showTime && (
-                                                                                                                <p className="truncate text-slate-500">{timeLabel}</p>
-                                                                                                            )}
-                                                                                                        </div>
-                                                                                                    )}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="hidden sm:grid sm:grid-cols-[minmax(0,110px)_minmax(0,1fr)] sm:items-stretch sm:gap-1">
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <div className="flex min-h-[56px] text-left">
-                                                                                                <div
-                                                                                                    className={`flex w-full flex-col items-start justify-center overflow-hidden rounded-lg border px-1.5 py-1 text-left ${resultTone(
-                                                                                                        normalizedResult
-                                                                                                    )} shadow-[inset_0_0_10px_rgba(15,23,42,0.25)]`}
-                                                                                                >
-                                                                                                    <span className="text-[9px] font-semibold uppercase tracking-wide opacity-80">
-                                                                                                        result
-                                                                                                    </span>
-                                                                                                    <span className="text-[13px] font-semibold uppercase tracking-wide">
-                                                                                                        {formatResultLabel(normalizedResult)}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div className="flex min-h-[56px] text-left">
-                                                                                                <div className="flex w-full flex-col items-start justify-center rounded-lg border border-white/10 bg-white/[0.05] px-1.5 py-1 text-left text-white shadow-[inset_0_0_10px_rgba(15,23,42,0.25)]">
-                                                                                                    <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-300">
-                                                                                                        odds
-                                                                                                    </span>
-                                                                                                    <span className="text-[13px] font-semibold text-white">
-                                                                                                        {oddsCopy}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <div className="h-full">
-                                                                                            <div
-                                                                                                className={`flex h-full flex-col rounded-xl border p-3 ${pickCardTone(
-                                                                                                    normalizedResult
-                                                                                                )}`}
-                                                                                            >
-                                                                                                <div>
-                                                                                                    {sourceTabLabel && (
-                                                                                                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-slate-400">
-                                                                                                            {sourceTabLabel}
-                                                                                                        </span>
-                                                                                                    )}
-                                                                                                    <p
-                                                                                                        className={`min-w-0 text-[16px] font-semibold leading-snug ${accent.text}`}
-                                                                                                        title={displayPick}
-                                                                                                    >
-                                                                                                        {pickLine}
-                                                                                                    </p>
-                                                                                                </div>
-                                                                                                {(showMatchup || showTime) && (
-                                                                                                    <div className="mt-auto space-y-0.5 text-[10px] text-slate-400">
-                                                                                                        {showMatchup && <p>{matchupTag}</p>}
-                                                                                                        {showTime && (
-                                                                                                            <p className="text-slate-500">{timeLabel}</p>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </section>
-                                    ) : (
-                                        <section className="rounded-3xl border border-white/10 bg-white/5 p-4 text-sm text-gray-400">
-                                            Review opens when the pick deadline passes.
-                                        </section>
                                     )}
                                 </div>
                             )}
@@ -2406,27 +1899,6 @@ const DeadlinesOverviewModal = ({
         </div>
     );
 };
-
-const ActionButton = ({
-    label,
-    onClick,
-    disabled,
-    className = "",
-}: {
-    label: string;
-    onClick: () => void;
-    disabled?: boolean;
-    className?: string;
-}) => (
-    <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className={`rounded-2xl border border-white/10 bg-black/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-sky-400/60 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
-    >
-        {label}
-    </button>
-);
 
 const ModalShell = ({
     children,

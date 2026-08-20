@@ -149,11 +149,14 @@ const LeagueTabStrip = ({
 
 const LeagueTierDetailsLabel = ({
   league,
+  role,
   memberCapacityLabel,
   standardContestCapacityLabel,
   feedContestCapacityLabel,
 }: {
   league: Group;
+  /** The viewer's membership in this League, shown beside the type label. */
+  role?: string | null;
   memberCapacityLabel: string;
   standardContestCapacityLabel: string;
   feedContestCapacityLabel: string;
@@ -216,7 +219,7 @@ const LeagueTierDetailsLabel = ({
         }}
         className="cursor-help rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300/70"
       >
-        <GroupTypeMetaLabel group={league} showTitle={false} />
+        <GroupTypeMetaLabel group={league} showTitle={false} role={role} />
       </button>
 
       {open && (
@@ -885,11 +888,16 @@ const LeagueDashboardPage = () => {
       preview={buildFantasyContestPreviewModel({
         contest,
         detailHref: `/league/${group?.id}/contests/${contest.id}`,
-        // Only offered while the contest's latest slip is actually taking
-        // picks — `last_slip.is_accepting_picks` is the server's own verdict
-        // with the pick deadline already applied.
-        addPickHref: (slip) =>
-          `/league/${group?.id}/contests/${contest.id}/slips/${slip.id}/add-pick`,
+        /*
+         * NO `addPickHref` — the card always opens the contest.
+         *
+         * It used to jump an open contest straight into the pick builder,
+         * which skipped the contest entirely: you could not reach the Rank
+         * board, the slips, or the badges without backing out again. Entering
+         * a pick is the LEADERBOARD's job — `SlipCellCard` renders an "Add your
+         * pick" cell on the viewer's own row for every open slip, which is
+         * where the MVP puts it too.
+         */
       })}
     />
   );
@@ -965,6 +973,18 @@ const LeagueDashboardPage = () => {
             group?.group_type === "league" ? (
               <LeagueTierDetailsLabel
                 league={group}
+                /*
+                 * `current_user_member` is optional on the group payload, so
+                 * the creator falls back to commissioner — the same fallback
+                 * `isCommissioner` above uses. Without it a League owner whose
+                 * membership row did not come back would read as "Member".
+                 */
+                role={
+                  group.current_user_member?.role ??
+                  (currentUser && group.created_by === currentUser.userId
+                    ? "commissioner"
+                    : undefined)
+                }
                 memberCapacityLabel={getRegularMemberCapacityLabel(group)}
                 standardContestCapacityLabel={getActiveContestCapacityLabel(
                   group,

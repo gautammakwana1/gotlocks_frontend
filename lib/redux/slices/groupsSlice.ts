@@ -54,6 +54,8 @@ import type {
 	LeagueGuideStatusData,
 	MarkLeagueGuideViewedPayload,
 	MarkLeagueGuideViewedData,
+	FantasyContestPodiumData,
+	FantasyContestPodiumState,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -84,6 +86,8 @@ type GroupState = {
 	leaveMessage: string | null;
 	hasMoreLeaderboard: boolean;
 	leaderboardPagination?: PaginationMetadata;
+	/** The Feed tab.s Fantasy winners strip. Its own slot, guarded by groupId. */
+	fantasyPodium: FantasyContestPodiumState;
 	loadingMembers: boolean;
 	membersPagination?: PaginationMetadata;
 	hasMore: boolean;
@@ -169,6 +173,7 @@ const initialState: GroupState = {
 	leaveLoading: false,
 	leaveMessage: null,
 	hasMoreLeaderboard: false,
+	fantasyPodium: { groupId: null, contests: null, loading: false, error: null },
 	loadingMembers: false,
 	hasMore: false,
 	myGroups: null,
@@ -544,6 +549,34 @@ const groupSlice = createSlice({
 		clearFetchLeaderboardMessage(state) {
 			state.error = null;
 			state.message = null;
+		},
+
+		/* ---- The Fantasy results board — /contest-leaderboard/list/finalized/podium ----
+		 *
+		 * Its own slot rather than a field on `leaderboard`, and guarded by its
+		 * own `groupId`: the Feed renders on the same tick the group changes, so
+		 * an unguarded read would show the previous League's winners until the
+		 * refetch landed.
+		 */
+		fetchFantasyPodiumsRequest: (state, action: PayloadAction<{ group_id: string; page?: number; limit?: number }>) => {
+			if (state.fantasyPodium.groupId !== action.payload.group_id) {
+				state.fantasyPodium = { groupId: null, contests: null, loading: false, error: null };
+			}
+			state.fantasyPodium.groupId = action.payload.group_id;
+			state.fantasyPodium.loading = true;
+			state.fantasyPodium.error = null;
+		},
+		fetchFantasyPodiumsSuccess: (state, action: PayloadAction<FantasyContestPodiumData | undefined>) => {
+			// A reply for a group we have since navigated away from is dropped
+			// rather than written over the current one.
+			if (!action.payload || state.fantasyPodium.groupId !== action.payload.group_id) return;
+			state.fantasyPodium.loading = false;
+			state.fantasyPodium.error = null;
+			state.fantasyPodium.contests = action.payload.contests ?? [];
+		},
+		fetchFantasyPodiumsFailure: (state, action: PayloadAction<string>) => {
+			state.fantasyPodium.loading = false;
+			state.fantasyPodium.error = action.payload;
 		},
 
 		// Archived Leaderboard
@@ -1043,6 +1076,9 @@ export const {
 	fetchLeaderboardSuccess,
 	fetchLeaderboardFailure,
 	clearFetchLeaderboardMessage,
+	fetchFantasyPodiumsRequest,
+	fetchFantasyPodiumsSuccess,
+	fetchFantasyPodiumsFailure,
 	fetchArchivedLeaderboardListRequest,
 	fetchArchivedLeaderboardListSuccess,
 	fetchArchivedLeaderboardListFailure,

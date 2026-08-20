@@ -203,6 +203,18 @@ export const FeedContestEditForm = ({
         CONTEST_EDITABLE_STATUSES.includes(contest.lifecycle_status) &&
         !contest.canceled_at &&
         !contest.archived_at;
+    /*
+     * RENAME OUTLIVES THE COPY EDIT — the detail page's split, applied to the
+     * form it links to. The name stays writable until the contest finalizes;
+     * description and rules freeze once it leaves `open`, because from that
+     * point an entrant has accepted the terms on record.
+     *
+     * The server freezes the copy one step earlier still — at the first accepted
+     * entry, which no response tells us about — so an open contest that already
+     * has an entrant renders enabled here and gets a 409 on save, surfaced
+     * verbatim. Disabling on phase is the half we can know.
+     */
+    const copyEditable = editable && contest.lifecycle_status === "open";
 
     if (!editable) {
         return (
@@ -241,11 +253,16 @@ export const FeedContestEditForm = ({
                     {scoped?.group?.name?.trim() || "League"} · Feed contest
                 </p>
                 <h1 className="text-3xl font-semibold text-white">
-                    {isDraft ? "Edit contest draft" : "Edit contest copy"}
+                    {isDraft
+                        ? "Edit contest draft"
+                        : copyEditable
+                            ? "Edit contest copy"
+                            : "Rename contest"}
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-gray-500">
-                    Update the member-facing name and rules before the first member
-                    joins. Description, mechanics, slate, and timing stay read-only.
+                    {copyEditable
+                        ? "Update the member-facing name and rules before the first member joins. Mechanics, slate, and timing stay read-only."
+                        : "Update the contest name. Description, rules, mechanics, slate, and timing are read-only after entry or lock."}
                 </p>
             </header>
 
@@ -288,7 +305,7 @@ export const FeedContestEditForm = ({
                                 Description
                             </h3>
                             <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                Editable copy
+                                {copyEditable ? "Editable copy" : "Read-only copy"}
                             </span>
                         </div>
                         {/* The MVP now edits published copy as plain prose. A
@@ -301,7 +318,7 @@ export const FeedContestEditForm = ({
                             rows={4}
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
-                            disabled={updateLoading}
+                            disabled={updateLoading || !copyEditable}
                             className={copyFieldClasses(accent)}
                         />
                         <p
@@ -320,8 +337,8 @@ export const FeedContestEditForm = ({
                                 rows={4}
                                 value={rulesText}
                                 onChange={(event) => setRulesText(event.target.value)}
+                                disabled={updateLoading || !copyEditable}
                                 aria-describedby="contest-rules-help"
-                                disabled={updateLoading}
                                 className={copyFieldClasses(accent)}
                             />
                         </label>

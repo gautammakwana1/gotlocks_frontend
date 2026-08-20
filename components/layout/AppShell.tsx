@@ -69,7 +69,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
           : wideWorkspace
             ? "max-w-4xl lg:max-w-7xl"
             : "max-w-4xl"
-          } ${dockStyles.appContentClearance} px-5 ${topPadding} sm:px-6`}
+          } ${dockStyles.appContentClearance} px-5 sm:px-6`}
       >
         {children}
       </main>

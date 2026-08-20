@@ -1,9 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import PickBuilderShell from "@/components/pick-builder/core/PickBuilderShell";
-import { useCurrentUser } from "@/lib/auth/useCurrentUser";
-import type { BuiltPickPayload, League, PostDestinationGroups } from "@/lib/interfaces/interfaces";
 import { StructuredFeedComposer } from "./StructuredFeedComposer";
 import type {
     StructuredFeedCapabilities,
@@ -19,14 +16,16 @@ import type {
 const ANNOUNCEMENT_MAX = 2000;
 
 // MVP counterpart: components/feed/GroupFeedAnnouncementCreator.tsx (its drawer,
-// GroupFeedAnnouncementDrawer.tsx, maps to GroupFeedPostDrawer here). The MVP cut
-// its composer down to a single announcement panel because its mock store has no
-// Community Pick / Staff Pick / contest-entry write path. Ours are live REST
-// wiring, so the announcement panel below is ported one-for-one and the tab strip
-// stays — the Feed header's "New Announcement" control opens this same drawer on
-// the announcement tab (see `initialTab`) instead of replacing it.
+// GroupFeedAnnouncementDrawer.tsx, maps to GroupFeedPostDrawer here).
+//
+// COMMUNITY PICK CREATION IS GONE from this drawer. The Pick Post panel — a full
+// PickBuilderShell wired to `POST /create-community-pick` — was removed on
+// 2026-08-19; a member no longer composes a pick here. Only the announcement
+// panel and, on an Arena, the Staff Pick panel remain. The redux slice and saga
+// for community picks are deliberately untouched: existing picks still render in
+// the Feed and are still REPLACEABLE from their own card, which is a different
+// endpoint and a different flow.
 export type GroupFeedPostCreatorTab =
-    | "community_pick"
     | "announcement"
     | "staff_pick"
     | "competitive_pick";
@@ -34,19 +33,15 @@ export type GroupFeedPostCreatorTab =
 type CreatorTab = GroupFeedPostCreatorTab;
 
 const TAB_LABELS: Record<CreatorTab, string> = {
-    community_pick: "Pick Post",
     announcement: "Announcement",
     staff_pick: "Staff Pick",
     competitive_pick: "Contest Entry",
 };
 
-// The drawer header now describes the panel below it rather than the composer as
-// a whole: one blanket sentence was wrong for three of the four panels, and the
-// MVP header only ever had to describe announcements. The announcement line is
-// the MVP's verbatim (GroupFeedAnnouncementCreator.tsx:55-57).
+// The drawer header describes the panel below it rather than the composer as a
+// whole. The announcement line is the MVP's verbatim
+// (GroupFeedAnnouncementCreator.tsx:55-57).
 const TAB_DESCRIPTIONS: Record<CreatorTab, string> = {
-    community_pick:
-        "Share an ordinary post with this community, your Profile, and Global. Contest entries are submitted from their Contest pages and stay inside this community.",
     announcement: "Share an official update with everyone in this community.",
     staff_pick:
         "Share a noncompetitive Staff Pick — Staff Picks do not affect standings.",
@@ -63,19 +58,14 @@ export type GroupFeedPostCreatorProps = {
     contestOptions?: readonly StructuredFeedContestOption[];
     communityPickWindow?: StructuredFeedRollingWindow;
     /**
-     * Which panel opens first. The Feed header's announcement control is
-     * announcement-specific, so it passes "announcement"; every other entry point
-     * omits this and keeps the historic default (Pick Post when the viewer can
-     * post one). An unavailable tab still falls back to the first allowed one.
+     * Which panel opens first. Announcement is both the default and what the
+     * Feed header's announcement control asks for; an unavailable tab still
+     * falls back to the first allowed one.
      */
     initialTab?: GroupFeedPostCreatorTab;
-    /** Legacy composer path — announcements, Staff Picks, competitive entries. */
+    /** The composer path — announcements, Staff Picks, competitive entries. */
     onSubmit: (
         submission: StructuredFeedSubmission
-    ) => StructuredFeedSubmitResponse | Promise<StructuredFeedSubmitResponse>;
-    /** Community Picks are built in the full Pick Builder, not the odds dropdown. */
-    onSubmitBuiltPicks: (
-        picks: BuiltPickPayload[]
     ) => StructuredFeedSubmitResponse | Promise<StructuredFeedSubmitResponse>;
     onPostComplete: () => void;
 };
@@ -90,13 +80,10 @@ export const GroupFeedPostCreator = ({
     communityPickWindow,
     initialTab,
     onSubmit,
-    onSubmitBuiltPicks,
     onPostComplete,
 }: GroupFeedPostCreatorProps) => {
-    const currentUser = useCurrentUser();
     const isArena = context.kind === "arena";
 
-    const [activeLeague, setActiveLeague] = useState<League>("NFL");
     const [announcementBody, setAnnouncementBody] = useState("");
     const [publishing, setPublishing] = useState(false);
     const [error, setError] = useState<string>();
@@ -105,7 +92,6 @@ export const GroupFeedPostCreator = ({
     // League member sees one panel and never an empty tab strip.
     const tabs = useMemo<CreatorTab[]>(() => {
         const next: CreatorTab[] = [];
-        if (capabilities.canCreateCommunityPick) next.push("community_pick");
         if (capabilities.canCreateStaffPost) next.push("announcement");
         if (capabilities.canCreateStaffPick) next.push("staff_pick");
         if (capabilities.canCreateCompetitivePick) next.push("competitive_pick");
@@ -113,29 +99,9 @@ export const GroupFeedPostCreator = ({
     }, [capabilities]);
 
     const [activeTab, setActiveTab] = useState<CreatorTab>(
-        () =>
-            initialTab ??
-            (capabilities.canCreateCommunityPick ? "community_pick" : "announcement")
+        () => initialTab ?? "announcement"
     );
     const resolvedTab = tabs.includes(activeTab) ? activeTab : tabs[0];
-
-    const publishBuiltPicks = async (picks: BuiltPickPayload[], reset?: () => void) => {
-        if (!picks.length || publishing) return;
-        setPublishing(true);
-        setError(undefined);
-        const response = await onSubmitBuiltPicks(picks);
-        setPublishing(false);
-        if (response.status !== "accepted") {
-            setError(
-                response.status === "rejected"
-                    ? response.message
-                    : "That price moved. Rebuild the pick and try again."
-            );
-            return;
-        }
-        reset?.();
-        onPostComplete();
-    };
 
     const publishAnnouncement = async () => {
         const body = announcementBody.trim();
@@ -221,44 +187,7 @@ export const GroupFeedPostCreator = ({
                 </p>
             ) : null}
 
-            {resolvedTab === "community_pick" ? (
-                <section
-                    id="group-feed-community_pick-panel"
-                    role={tabs.length > 1 ? "tabpanel" : undefined}
-                    aria-labelledby={tabs.length > 1 ? "group-feed-community_pick-tab" : undefined}
-                >
-                    {communityPickWindow ? (
-                        <p className="mb-4 text-xs text-gray-500">
-                            {communityPickWindow.used}/{communityPickWindow.limit} community picks
-                            used{communityPickWindow.windowHours ? ` in the last ${communityPickWindow.windowHours}h` : ""}.
-                        </p>
-                    ) : null}
-                    {/* The same shell the Slip and standalone builders use, in its
-                        standalone "post" intent. Nothing about the Slip flow changes:
-                        this is a new consumer, not a modification. */}
-                    <PickBuilderShell
-                        compact
-                        surface="drawer"
-                        initialLeague={activeLeague}
-                        context={{
-                            mode: "standalone",
-                            currentUser,
-                            slip: [],
-                            intent: "post",
-                            onComplete: (payload: BuiltPickPayload) => {
-                                void publishBuiltPicks([payload]);
-                            },
-                            onSelectPostDestination: (
-                                groups: PostDestinationGroups,
-                                reset: () => void
-                            ) => {
-                                void publishBuiltPicks(groups.profilePayloads, reset);
-                            },
-                            onSelectActiveLeague: setActiveLeague,
-                        }}
-                    />
-                </section>
-            ) : resolvedTab === "announcement" ? (
+            {resolvedTab === "announcement" ? (
                 <section
                     id="group-feed-announcement-panel"
                     role={tabs.length > 1 ? "tabpanel" : undefined}

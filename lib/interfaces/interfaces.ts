@@ -529,6 +529,8 @@ export type GroupState = {
     leaveMessage: string | null;
     hasMoreLeaderboard: boolean;
     leaderboardPagination?: PaginationMetadata;
+    /** The Feed tab's Fantasy winners strip. Its own slot, guarded by groupId. */
+    fantasyPodium: FantasyContestPodiumState;
     loadingMembers: boolean;
     membersPagination?: PaginationMetadata;
     chatMessages: ChatMessage[] | null;
@@ -1430,6 +1432,14 @@ export type Leaderboard = {
     slip_id: string;
     user_id: string;
     slip_points: number;
+    /**
+     * Placement as the precomputed board computed it — tie-aware, and correct
+     * on every page. Derive from the row index only as a fallback: an index is
+     * page-local, so page 2 would restart the board at #1.
+     */
+    rank?: number;
+    /** Points before badge bonuses. Additive on the precomputed board. */
+    base_cumulative?: number;
     cumulative_points: number;
     badge_points: number;
     badge_awards: ContestBadgeAward[];
@@ -1440,8 +1450,79 @@ export type Leaderboard = {
     slips?: leaderboardSlip[];
 }
 
+/* ----------------------------------------------------------------------------
+ * GET /group/contest-leaderboard/list/finalized/podium — the FANTASY results
+ * board, read entirely from the frozen tables.
+ *
+ * Two things this payload asserts that a client must not flatten:
+ *   - `podium` is NOT always three entries. Placements are SHARED on ties, so a
+ *     two-way tie for 1st returns two entries both ranked 1 and no 2nd, and a
+ *     contest nobody scored in returns an empty podium.
+ *   - `winner` is NULL whenever the top placement is shared. Naming one of two
+ *     tied members champion is exactly the claim the tie denies.
+ * -------------------------------------------------------------------------- */
+
+export type FantasyPodiumBadge = {
+    badge_id: string;
+    badge_name: string;
+    badge_category: string;
+    points_awarded: number;
+};
+
+export type FantasyPodiumEntry = {
+    /** Competition placement — shared on ties, so NOT unique within a podium. */
+    rank: number;
+    user_id: string;
+    username: string;
+    profile_image: string | null;
+    /** Points before badge bonuses; `cumulative_points` is the total awarded. */
+    base_cumulative: number;
+    badge_points: number;
+    cumulative_points: number;
+    win: number;
+    loss: number;
+    badges: FantasyPodiumBadge[];
+};
+
+export type FinalizedFantasyContestPodium = {
+    contest_id: string;
+    contest_name: string | null;
+    starts_at: string | null;
+    ends_at: string | null;
+    finalized_at: string;
+    /** TRUE when the frozen board was rebuilt rather than captured at finalize. */
+    is_reconstructed: boolean;
+    total_participants: number;
+    total_slips: number;
+    winner: FantasyPodiumEntry | null;
+    podium: FantasyPodiumEntry[];
+};
+
+export type FantasyContestPodiumData = {
+    group_id: string;
+    contests: FinalizedFantasyContestPodium[];
+    pagination: PaginationMetadata;
+};
+
+export type FantasyContestPodiumState = {
+    /** Guarded like the Feed podium slot — see the note on that one. */
+    groupId: string | null;
+    contests: FinalizedFantasyContestPodium[] | null;
+    loading: boolean;
+    error: string | null;
+};
+
 export type LeaderboardData = {
     group_id: string;
+    /** Additive on the precomputed board; absent on any cached legacy payload. */
+    contest_id?: string;
+    /** TRUE once the contest is settled and the board is the frozen snapshot. */
+    finalized?: boolean;
+    /**
+     * TRUE when the stored board was behind and had to be repaired to serve this
+     * read. Purely diagnostic — the rows are correct either way.
+     */
+    stale?: boolean;
     slips: Slip[];
     leaderboard: Leaderboard[];
     pagination: PaginationMetadata;

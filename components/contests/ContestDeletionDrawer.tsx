@@ -45,6 +45,12 @@ export type ContestDeletionDrawerProps = {
     entrantCount: number;
     /** TRUE for a finalized contest, whose points and badges get clawed back. */
     reversesAwards: boolean;
+    /**
+     * What the clawed-back points are CALLED on this surface. Defaults off the
+     * accent so an Arena drawer reads "Arena Points" without every caller having
+     * to pass it; "Fantasy Points" is here for the League Slip contests.
+     */
+    pointsLabel?: "Fantasy Points" | "League Points" | "Arena Points";
     organizerHandle: string;
     onDelete: (
         organizerNote: string
@@ -88,6 +94,7 @@ export const ContestDeletionDrawer = ({
     organizerHandle,
     onDelete,
     accent = "league",
+    pointsLabel = accent === "arena" ? "Arena Points" : "League Points",
 }: ContestDeletionDrawerProps) => {
     const [step, setStep] = useState<DeletionStep>("review");
     const [organizerNote, setOrganizerNote] = useState(DEFAULT_ORGANIZER_NOTE);
@@ -266,7 +273,7 @@ export const ContestDeletionDrawer = ({
                                         className="mt-2 h-1 w-1 shrink-0 rounded-full bg-red-300"
                                     />
                                     <span>
-                                        Points and achievements already awarded will be reversed.
+                                        {pointsLabel} and achievements already awarded will be reversed.
                                     </span>
                                 </li>
                             ) : null}
@@ -378,7 +385,7 @@ export const ContestDeletionDrawer = ({
                             <span>
                                 I understand this permanently deletes the contest
                                 {reversesAwards
-                                    ? " and reverses any points and achievements already awarded."
+                                    ? ` and reverses any ${pointsLabel} and achievements already awarded.`
                                     : "."}
                             </span>
                         </label>

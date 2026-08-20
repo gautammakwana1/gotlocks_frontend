@@ -1,7 +1,7 @@
 import { call, put, takeLatest, takeLeading } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure, fetchLeagueGuideStatusRequest, fetchLeagueGuideStatusSuccess, fetchLeagueGuideStatusFailure, markLeagueGuideViewedRequest, markLeagueGuideViewedSuccess, markLeagueGuideViewedFailure } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure, fetchLeagueGuideStatusRequest, fetchLeagueGuideStatusSuccess, fetchLeagueGuideStatusFailure, markLeagueGuideViewedRequest, markLeagueGuideViewedSuccess, markLeagueGuideViewedFailure, fetchFantasyPodiumsRequest, fetchFantasyPodiumsSuccess, fetchFantasyPodiumsFailure } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
@@ -44,7 +44,11 @@ import type {
 	LeagueGuideStatusData,
 	MarkLeagueGuideViewedPayload,
 	MarkLeagueGuideViewedData,
+	FantasyContestPodiumData,
 } from "@/lib/interfaces/interfaces";
+
+/** Small first page: the strip sits above the Feed, it is not the results page. */
+export const FANTASY_PODIUM_PAGE_SIZE = 5;
 
 type ApiErrorResponse = {
 	message?: string;
@@ -325,21 +329,64 @@ function* handleConfirmDeleteGroup(action: PayloadAction<ConfirmDeletePayload>):
 	}
 }
 
+/**
+ * The Fantasy contest board, from the PRECOMPUTED tables.
+ *
+ * Repointed from `GET /group/leaderboard`, which recomputed every member's
+ * standing from raw picks on each call. The replacement reads a stored board,
+ * repairing it first if it is stale, and answers a finalized contest from a
+ * frozen snapshot instead.
+ *
+ * The response is key-for-key identical to the endpoint it replaces — same
+ * `{ group_id, slips, leaderboard, pagination }` — so the reducer and the grid
+ * are untouched. Two additive keys ride along: `finalized` and `stale`.
+ *
+ * `leaderboard_id` is deliberately NOT sent. There is one Main Leaderboard per
+ * contest now; the server accepts the param and ignores it.
+ */
 function* handleFetchLeaderboard(action: PayloadAction<LeaderboardPayload | undefined>): SagaIterator {
 	try {
-		const { groupId = "", contest_id = "", leaderboard_id = "", page = 1, limit = 10 } = action.payload || {};
+		const { contest_id = "", page = 1, limit = 10 } = action.payload || {};
 
 		const response: AxiosResponse<unknown> = yield call(
 			axiosInstance.get,
-			`${API_BASE_URL}/group/leaderboard`,
+			`${API_BASE_URL}/group/contest-leaderboard/${contest_id}`,
 			{
-				params: { groupId, contest_id, leaderboard_id, page, limit }
+				params: { page, limit }
 			}
 		);
 		const payload = response.data as { data?: unknown };
 		yield put(fetchLeaderboardSuccess(payload.data as LeaderboardData));
 	} catch (error: unknown) {
 		yield put(fetchLeaderboardFailure(getErrorMessage(error, "Leaderboard Fetching Failed")))
+	}
+}
+
+/**
+ * GET /group/contest-leaderboard/list/finalized/podium — the League's FANTASY
+ * results board, for the Feed tab's Winners strip.
+ *
+ * Reads only the frozen tables, so a contest appears here the moment it is
+ * finalized and never before: a live contest has no winners, only a current
+ * leader, and every badge is an argmax that can still change hands.
+ */
+function* handleFetchFantasyPodiums(
+	action: PayloadAction<{ group_id: string; page?: number; limit?: number }>
+): SagaIterator {
+	try {
+		const { group_id, page = 1, limit = FANTASY_PODIUM_PAGE_SIZE } = action.payload;
+
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/contest-leaderboard/list/finalized/podium`,
+			{
+				params: { group_id, page, limit }
+			}
+		);
+		const payload = response.data as { data?: FantasyContestPodiumData };
+		yield put(fetchFantasyPodiumsSuccess(payload.data));
+	} catch (error: unknown) {
+		yield put(fetchFantasyPodiumsFailure(getErrorMessage(error, "Fantasy winners fetch failed")));
 	}
 }
 
@@ -742,6 +789,7 @@ export default function* groupSaga() {
 	yield takeLatest(initialGroupDeleteRequest.type, handleInitialGroupDelete);
 	yield takeLatest(confirmDeleteGroupRequest.type, handleConfirmDeleteGroup);
 	yield takeLatest(fetchLeaderboardRequest.type, handleFetchLeaderboard);
+	yield takeLatest(fetchFantasyPodiumsRequest.type, handleFetchFantasyPodiums);
 	yield takeLatest(fetchArchivedLeaderboardListRequest.type, handleFetchArchivedLeaderboardList);
 	yield takeLatest(fetchArchivedLeaderboardByIdRequest.type, handleFetchArchivedLeaderboardById);
 	yield takeLatest(updateGroupRequest.type, handleUpdateGroup);

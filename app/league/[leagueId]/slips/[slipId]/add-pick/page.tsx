@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PickBuilderShell } from "@/components/pick-builder/core/PickBuilderShell";
 import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
@@ -8,7 +8,9 @@ import { useToast } from "@/lib/state/ToastContext";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { BuiltPickPayload, GroupSelector, League, Pick, RootState } from "@/lib/interfaces/interfaces";
-import { createPickRequest } from "@/lib/redux/slices/pickSlice";
+import { createPickRequest, fetchAllPicksRequest } from "@/lib/redux/slices/pickSlice";
+import { fetchSlipByIdRequest } from "@/lib/redux/slices/slipSlice";
+import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
 import { analyzeSlipPayloadAgainstPicks, getSlipConflictMessage } from "@/lib/slips/pickConflicts";
 import { isLeagueMember, isSlipInLeague } from "@/lib/permissions/leaguePermissions";
 
@@ -23,23 +25,60 @@ const SlipAddPickPage = () => {
     const [isReturningToSlip, setIsReturningToSlip] = useState(false);
 
     const { group } = useSelector((state: GroupSelector) => state.group);
-    const { slips } = useSelector((state: RootState) => state.slip);
+    const { slips, loading: slipLoader } = useSelector((state: RootState) => state.slip);
     const { picks: pickList } = useSelector((state: RootState) => state.pick);
 
-    // useEffect(() => {
-    //     if (!params.slipId) return;
-    //     dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
-    //     if (params.leagueId) {
-    //         dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
-    //         dispatch(fetchAllSlipsRequest({ group_id: params.leagueId }));
-    //     }
-    // }, [dispatch, params.slipId, params.leagueId]);
+    /* ---------- This page fetches its own data ----------
+     *
+     * It used to read `group`, `slips` and `picks` straight out of redux with no
+     * fetch of its own, which only worked when the viewer arrived from the slip
+     * detail screen — that page is what populates all three. Reached any other
+     * way (the "Make Pick" button on the League Contests tab, a shared link, a
+     * refresh) the store was empty, `slip` came back undefined, and the guard
+     * below bounced straight to `?tab=contests`.
+     *
+     * `fetchSlipByIdRequest` rather than the list read the old commented-out
+     * block used: nothing in the app dispatches `fetchAllSlipsRequest`, and one
+     * slip is all this screen needs.
+     */
+    useEffect(() => {
+        if (!params.slipId || !params.leagueId || !currentUser) return;
+        dispatch(fetchGroupByIdRequest({ groupId: params.leagueId }));
+        dispatch(fetchSlipByIdRequest({ slip_id: params.slipId }));
+        // Without these the pick-limit check counts zero picks and
+        // `analyzeSlipPayloadAgainstPicks` compares against an empty list, so
+        // duplicate detection in `handleSavePick` silently never fires.
+        dispatch(fetchAllPicksRequest({ slip_id: params.slipId }));
+    }, [dispatch, params.leagueId, params.slipId, currentUser]);
 
-    // const slips: Slips = useMemo(() => {
-    //     if (!group?.id || !slipData?.slips?.length) return [];
+    /*
+     * "Has THIS slip's read come back yet?" — deliberately not `slips !== null`.
+     * `fetchSlipByIdSuccess` REPLACES the whole array, so arriving from another
+     * slip leaves a populated-but-wrong list in the store; treating that as
+     * resolved would redirect before our own reply lands. Only the falling edge
+     * of the loading flag counts, and it is re-armed per slip id.
+     */
+    const requestedSlipIdRef = useRef<string | null>(null);
+    const wasLoadingRef = useRef(false);
+    const [resolvedSlipId, setResolvedSlipId] = useState<string | null>(null);
 
-    //     return slipData?.slips;
-    // }, [slipData, group?.id]);
+    useEffect(() => {
+        requestedSlipIdRef.current = params.slipId ?? null;
+        wasLoadingRef.current = false;
+        setResolvedSlipId(null);
+    }, [params.slipId]);
+
+    useEffect(() => {
+        if (slipLoader) {
+            wasLoadingRef.current = true;
+            return;
+        }
+        if (!wasLoadingRef.current) return;
+        wasLoadingRef.current = false;
+        setResolvedSlipId(requestedSlipIdRef.current);
+    }, [slipLoader]);
+
+    const slipResolved = Boolean(params.slipId) && resolvedSlipId === params.slipId;
 
     const slip = useMemo(() => {
         if (!Array.isArray(slips) || !params?.slipId) return null;
@@ -72,10 +111,11 @@ const SlipAddPickPage = () => {
 
     useEffect(() => {
         if (!currentUser) return;
-        if (!group || !currentUser) {
-            router.replace("/home");
-            return;
-        }
+        // NOTHING redirects until both reads have landed. A falsy `group` or
+        // `slip` before that means "not fetched yet", never "does not exist" —
+        // acting on it is what made a direct visit bounce to the Contests tab.
+        if (!slipResolved || !group) return;
+
         if (!slip) {
             router.replace(`/league/${group.id}?tab=contests`);
             return;
@@ -87,7 +127,7 @@ const SlipAddPickPage = () => {
         if (isSlipFinal(slip)) {
             router.replace(`/league/${group.id}/slips/${slip.id}/results`);
         }
-    }, [canView, group, currentUser, slip, router]);
+    }, [canView, group, currentUser, slip, slipResolved, router]);
 
     const availableSports = (slip?.sports?.length ? slip.sports : [DEFAULT_SPORT]).filter(Boolean);
     const limitValue = slip?.pick_limit === "unlimited" ? Infinity : (slip?.pick_limit ?? 0);
@@ -127,7 +167,18 @@ const SlipAddPickPage = () => {
         );
     }
 
-    if (!group || !currentUser || !slip || !canAddPick || !canView) {
+    // Loading, not empty. Returning null here used to paint a blank screen for
+    // the whole round trip; the guard above is what decides where an actually
+    // unavailable slip goes.
+    if (!slipResolved || !group) {
+        return (
+            <div className="flex min-h-[45vh] items-center justify-center">
+                <p className="text-sm text-gray-400">Loading pick builder...</p>
+            </div>
+        );
+    }
+
+    if (!currentUser || !slip || !canAddPick || !canView) {
         return null;
     }
 

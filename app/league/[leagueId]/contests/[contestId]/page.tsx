@@ -511,23 +511,24 @@ const ContestDetailPage = () => {
         [activeLeaderboards]
     );
 
+    /*
+     * The board is keyed on the CONTEST alone now.
+     *
+     * `/group/contest-leaderboard/:contest_id` serves one Main Leaderboard per
+     * contest, so the old `activeLeaderboardId` gate is gone — waiting on the
+     * leaderboard-list read before firing this one only delayed the board.
+     */
     useEffect(() => {
-        if (
-            league?.id &&
-            contest?.id &&
-            activeLeaderboardId &&
-            activeContestTab === "standings"
-        ) {
+        if (league?.id && contest?.id && activeContestTab === "standings") {
             setLeaderboardPage(1);
             dispatch(fetchLeaderboardRequest({
                 groupId: league?.id,
                 contest_id: contest?.id,
-                leaderboard_id: activeLeaderboardId,
                 page: 1,
                 limit: 5
             }));
         }
-    }, [league?.id, contest?.id, activeLeaderboardId, activeContestTab, dispatch]);
+    }, [league?.id, contest?.id, activeContestTab, dispatch]);
 
     useEffect(() => {
         if (activeContestTab === "standings") {
@@ -941,13 +942,12 @@ const ContestDetailPage = () => {
     };
 
     const handleLoadMoreLeaderboard = () => {
-        if (!league?.id || !contest?.id || !activeLeaderboardId) return;
+        if (!league?.id || !contest?.id) return;
         const nextPage = leaderboardPage + 1;
         setLeaderboardPage(nextPage);
         dispatch(fetchLeaderboardRequest({
             groupId: league.id,
             contest_id: contest.id,
-            leaderboard_id: activeLeaderboardId,
             page: nextPage,
             limit: 5
         }));
@@ -1003,6 +1003,20 @@ const ContestDetailPage = () => {
                             isArchived={false}
                             archivedLeaderboardSlips={[]}
                             contestName={contest.name}
+                            /*
+                             * Only for someone who can actually open a slip, and
+                             * only while the contest is live — the board renders
+                             * its placeholder column either way, but the action
+                             * inside it appears only on this viewer's own row.
+                             */
+                            onCreateSlip={
+                                canManage && !isArchived
+                                    ? () =>
+                                        router.push(
+                                            `/league/${league.id}/contests/${contest.id}/slips/create`
+                                        )
+                                    : undefined
+                            }
                         />
                     )}
                 </section>
@@ -1038,12 +1052,12 @@ const ContestDetailPage = () => {
                         hasMore={hasMoreOpens}
                     />
                     <SlipCategorySection
-                        title="in review"
+                        title="resolving results"
                         slips={reviewSlips || []}
                         onSelect={handleSlipSelect}
                         onLoadMore={handleLoadMoreReview}
                         layout="grid"
-                        emptyCopy="No contest slips are in review."
+                        emptyCopy="No League Slips are resolving."
                         hasMore={hasMoreReviews}
                     />
                     <SlipCategorySection
@@ -1052,7 +1066,7 @@ const ContestDetailPage = () => {
                         onSelect={handleSlipSelect}
                         onLoadMore={handleLoadMoreFinal}
                         layout="grid"
-                        emptyCopy="No finalized contest slips yet."
+                        emptyCopy="No finalized League Slips yet."
                         hasMore={hasMoreFinalizes}
                     />
                 </section>

@@ -72,9 +72,21 @@ export type PickemEntrySelectionTileProps = {
     leg: PickLeg;
     /** The contest's flat per-correct-pick bonus, for the scoring breakdown. */
     correctBonus?: number | null;
+    /**
+     * Which contextual currency the three figures are denominated in. Rendered
+     * abbreviated — "LP" / "AP" — because these tiles carry three of them side
+     * by side and the spelled-out label does not fit; the unabbreviated name
+     * rides on the scoring group's aria-label instead.
+     */
+    pointsLabel?: "League Points" | "Arena Points";
 };
 
-const PickemEntrySelectionTile = ({ leg, correctBonus }: PickemEntrySelectionTileProps) => {
+const PickemEntrySelectionTile = ({
+    leg,
+    correctBonus,
+    pointsLabel = "League Points",
+}: PickemEntrySelectionTileProps) => {
+    const pointsAbbreviation = pointsLabel === "Arena Points" ? "AP" : "LP";
     // The server stores the picked team as the leg's description AND as
     // `selection.side`; either is the club name.
     const teamName = leg.selection?.side || leg.description || PLACEHOLDER;
@@ -183,13 +195,14 @@ const PickemEntrySelectionTile = ({ leg, correctBonus }: PickemEntrySelectionTil
 
             <dl
                 data-pickem-selection-scoring
+                aria-label={`Scoring in ${pointsLabel}`}
                 className="mt-auto grid grid-cols-3 gap-1 border-t border-white/20 pt-2"
             >
                 {(
                     [
-                        ["Odds pts", scoreValue(oddsPoints)],
-                        ["Bonus pts", scoreValue(scored ? bonus : null)],
-                        ["Total pts", scoreValue(total)],
+                        [`Odds ${pointsAbbreviation}`, scoreValue(oddsPoints)],
+                        [`Bonus ${pointsAbbreviation}`, scoreValue(scored ? bonus : null)],
+                        [`Total ${pointsAbbreviation}`, scoreValue(total)],
                     ] as const
                 ).map(([label, value]) => (
                     <div key={label} className="min-w-0">
@@ -224,12 +237,14 @@ const PickemEntrySelectionTile = ({ leg, correctBonus }: PickemEntrySelectionTil
 export type PickemEntrySelectionCarouselProps = {
     pick: Pick;
     correctBonus?: number | null;
+    pointsLabel?: "League Points" | "Arena Points";
 };
 
 /** Two selections per page, exactly as the MVP pages them. */
 export const PickemEntrySelectionCarousel = ({
     pick,
     correctBonus,
+    pointsLabel,
 }: PickemEntrySelectionCarouselProps) => {
     const legs = pick.legs ?? [];
     const pages = Array.from({ length: Math.ceil(legs.length / 2) }, (_, pageIndex) =>
@@ -258,6 +273,7 @@ export const PickemEntrySelectionCarousel = ({
                             key={`${leg.external_pick_key ?? leg.description}-${index}`}
                             leg={leg}
                             correctBonus={correctBonus}
+                            pointsLabel={pointsLabel}
                         />
                     ))}
                 </ul>

@@ -5,8 +5,6 @@ import { useDispatch, useSelector } from "react-redux";
 import type {
     ArenaCommunityPick,
     ArenaStaffPick,
-    BuiltPickPayload,
-    CreateCommunityPickPayload,
     FeedContestPickRow,
     FeedGroupType,
     Pick,
@@ -28,7 +26,6 @@ import {
     clearEditStaffAnnouncementState,
     clearPinStaffAnnouncementState,
     clearUpdateCommunityPickState,
-    createCommunityPickRequest,
     createStaffAnnouncementRequest,
     createStaffPickRequest,
     deleteCommunityPickRequest,
@@ -42,6 +39,8 @@ import {
     resetGroupFeed,
     updateCommunityPickRequest,
 } from "@/lib/redux/slices/arenaSlice";
+import { fetchFantasyPodiumsRequest } from "@/lib/redux/slices/groupsSlice";
+import { FANTASY_PODIUM_PAGE_SIZE } from "@/lib/redux/sagas/groupsSaga";
 import {
     clearFeedContestPicks,
     fetchFeedContestPicksRequest,
@@ -60,6 +59,7 @@ import {
     FeedContestWinnersBlock,
     FEED_CONTEST_WINNERS_PAGE_SIZE,
 } from "./FeedContestWinnersBlock";
+import FantasyContestWinnersBlock from "./FantasyContestWinnersBlock";
 import { StructuredFeed } from "./StructuredFeed";
 import { resolveContestEntryLifecycle } from "./formatters";
 import {
@@ -250,9 +250,6 @@ export const ConnectedStructuredFeed = ({
         createdStaffPick,
         createStaffPickError,
         createStaffPickMessage,
-        createdCommunityPick,
-        createCommunityPickError,
-        createCommunityPickMessage,
         communityPicks,
         updatedCommunityPick,
         updateCommunityPickError,
@@ -320,7 +317,12 @@ export const ConnectedStructuredFeed = ({
     // could only ever offer a single pick off the live NFL slate, on Arena-only
     // routes, which is neither.
     const capabilities: StructuredFeedCapabilities = {
-        canCreateCommunityPick: canPostCommunityPick, // member NFL moneyline
+        // WITHDRAWN 2026-08-19. The Feed no longer CREATES community picks from
+        // anywhere: the drawer's Pick Post panel is gone and this flag keeps the
+        // composer's community-pick mode unreachable too. It still READS them —
+        // they render in the Feed — and `canPostCommunityPick` below still gates
+        // the odds fetch, because REPLACING an existing pick needs that slate.
+        canCreateCommunityPick: false,
         canCreateCompetitivePick: false, // see above — contest page only
         canCreateStaffPick: isArena && canPost, // NFL moneyline, next 2 days
         canCreateStaffPost: canPost, // announcements
@@ -491,8 +493,8 @@ export const ConnectedStructuredFeed = ({
                                 item.contest.template === "td_psychic"
                                     ? "td_psychic"
                                     : item.contest.template === "sunday_pickem"
-                                      ? "sunday_pickem"
-                                      : "general_combo",
+                                        ? "sunday_pickem"
+                                        : "general_combo",
                             contestHref,
                             contestName: item.contest.name,
                             contextualPointsLabel:
@@ -1009,9 +1011,9 @@ export const ConnectedStructuredFeed = ({
     // success lands late could resolve the wrong in-flight promise.
     const pendingResolve = useRef<
         | {
-              kind: "staff_post" | "staff_pick" | "community_pick";
-              resolve: (response: StructuredFeedSubmitResponse) => void;
-          }
+            kind: "staff_post" | "staff_pick";
+            resolve: (response: StructuredFeedSubmitResponse) => void;
+        }
         | null
     >(null);
 
@@ -1021,9 +1023,9 @@ export const ConnectedStructuredFeed = ({
     // contest page.
     const pendingReplaceResolve = useRef<
         | {
-              kind: "community_pick";
-              resolve: (response: StructuredFeedSubmitResponse) => void;
-          }
+            kind: "community_pick";
+            resolve: (response: StructuredFeedSubmitResponse) => void;
+        }
         | null
     >(null);
 
@@ -1077,27 +1079,11 @@ export const ConnectedStructuredFeed = ({
         }
     }, [createdStaffPick, createStaffPickMessage, createStaffPickError, dispatch]);
 
-    useEffect(() => {
-        const pending = pendingResolve.current;
-        if (!pending || pending.kind !== "community_pick") return;
-        if (createdCommunityPick || createCommunityPickMessage) {
-            pending.resolve({
-                status: "accepted",
-                message: createCommunityPickMessage ?? "Community pick posted.",
-            });
-            pendingResolve.current = null;
-            dispatch(clearCreateCommunityPickState());
-        } else if (createCommunityPickError) {
-            pending.resolve({ status: "rejected", message: createCommunityPickError });
-            pendingResolve.current = null;
-            dispatch(clearCreateCommunityPickState());
-        }
-    }, [
-        createdCommunityPick,
-        createCommunityPickMessage,
-        createCommunityPickError,
-        dispatch,
-    ]);
+    // NOTE: the create-community-pick resolver effect that sat here was removed
+    // with the Pick Post panel on 2026-08-19. `createCommunityPickRequest` is no
+    // longer dispatched from anywhere, so nothing can be awaiting its reply. The
+    // slice and saga still exist and the mount-time `clearCreateCommunityPickState()`
+    // above is kept, so a stale success left by an older build cannot leak in.
 
     // The Winners strip's read lives HERE rather than in FeedContestWinnersBlock
     // because the block is rendered inside CommunitySwipePager's slide, which is
@@ -1116,6 +1102,25 @@ export const ConnectedStructuredFeed = ({
             })
         );
     }, [dispatch, groupId, groupType]);
+
+    /*
+     * The FANTASY winners strip's read, owned here for the same reason as the
+     * Feed one above — the block lives inside the swipe pager and would refetch
+     * on every view switch if it owned this.
+     *
+     * League only: Fantasy contests are a League construct, and the endpoint
+     * would answer an Arena with an empty list at the cost of a round trip.
+     */
+    useEffect(() => {
+        if (!groupId || !isLeague) return;
+        dispatch(
+            fetchFantasyPodiumsRequest({
+                group_id: groupId,
+                page: 1,
+                limit: FANTASY_PODIUM_PAGE_SIZE,
+            })
+        );
+    }, [dispatch, groupId, isLeague]);
 
     useEffect(() => {
         const pending = pendingReplaceResolve.current;
@@ -1175,100 +1180,28 @@ export const ConnectedStructuredFeed = ({
                     dispatch(createStaffPickRequest({ ...payload, group_type: groupType }));
                 });
             }
-            if (submission.mode === "community_pick") {
-                // Members post from the same NFL moneyline dropdown as staff.
-                const detail = detailById[submission.selectionId];
-                if (!detail) {
-                    return {
-                        status: "rejected",
-                        message: "That selection is no longer available. Refresh and try again.",
-                    };
-                }
-                if (Date.parse(detail.match_date) <= Date.now()) {
-                    return {
-                        status: "rejected",
-                        message: "That game has already started. Refresh for the latest slate.",
-                    };
-                }
-                const payload = buildCommunityPickPayload(detail, groupId, submission.note);
-                return new Promise<StructuredFeedSubmitResponse>((resolve) => {
-                    pendingResolve.current = { kind: "community_pick", resolve };
-                    dispatch(createCommunityPickRequest({ ...payload, group_type: groupType }));
-                });
-            }
+            // A `community_pick` submission has no branch any more — the drawer
+            // cannot produce one, and `canCreateCommunityPick` is false, so the
+            // composer never renders that mode either. It falls through to the
+            // rejection below rather than reaching the create endpoint.
             return { status: "rejected", message: "This post type isn't available yet." };
         },
         [groupId, groupType, detailById, dispatch],
     );
 
-    /**
-     * Community Picks now come from the full Pick Builder in the New-post drawer,
-     * so the payload is already built — no odds-dropdown lookup. The community
-     * pick body is the same shape as createPostPick (the endpoint reads exactly
-     * these fields), plus the group scope and american_odds, which the endpoint
-     * needs because it recomputes `points` from it rather than trusting the body.
+    /*
+     * REMOVED 2026-08-19 — `onSubmitBuiltPicks`, the create-community-pick write.
      *
-     * Only the first pick is posted: the endpoint takes one pick per call and is
-     * rate limited, so a multi-pick build would need N calls and N receipts.
+     * It dispatched `createCommunityPickRequest` with the payload the drawer's
+     * Pick Builder produced. The Pick Post panel is gone, so nothing can call it
+     * and the endpoint is no longer reached from the Feed.
+     *
+     * The slice, the saga and `CreateCommunityPickPayload` are all untouched on
+     * purpose: `onReplaceSubmit` below still PUTs an existing community pick, and
+     * the Feed still READS and renders community picks. Only the CREATE path is
+     * withdrawn.
      */
-    const onSubmitBuiltPicks = useCallback(
-        (picks: BuiltPickPayload[]): Promise<StructuredFeedSubmitResponse> | StructuredFeedSubmitResponse => {
-            const payload = picks[0];
-            if (!payload) {
-                return { status: "rejected", message: "Build a pick before posting." };
-            }
-            if (payload.match_date && Date.parse(payload.match_date) <= Date.now()) {
-                return {
-                    status: "rejected",
-                    message: "That game has already started. Refresh for the latest slate.",
-                };
-            }
-            const americanOdds = parseAmericanOdds(payload.odds_bracket);
-            if (americanOdds === null) {
-                return {
-                    status: "rejected",
-                    message: "That pick has no priced odds yet. Rebuild it and try again.",
-                };
-            }
 
-            return new Promise<StructuredFeedSubmitResponse>((resolve) => {
-                pendingResolve.current = { kind: "community_pick", resolve };
-                dispatch(
-                    createCommunityPickRequest({
-                        arena_id: groupId,
-                        group_type: groupType,
-                        description: payload.description,
-                        odds_bracket: payload.odds_bracket,
-                        american_odds: americanOdds,
-                        buildMode: payload.buildMode,
-                        difficulty_label: payload.difficulty_label,
-                        difficultyTier: payload.difficultyTier,
-                        points: payload.points,
-                        sport: payload.sport,
-                        gameId: payload.gameId ?? payload.selection?.gameId,
-                        market: payload.market ?? payload.selection?.market,
-                        scope: payload.scope ?? payload.selection?.scope,
-                        side: payload.side ?? payload.selection?.side,
-                        threshold: payload.threshold ?? payload.selection?.threshold,
-                        teamId: payload.teamId ?? payload.selection?.teamId,
-                        playerId: payload.selection?.playerId ?? undefined,
-                        external_pick_key: payload.external_pick_key,
-                        confidence: payload.confidence,
-                        isCombo: payload.isCombo ?? false,
-                        legs: payload.legs,
-                        selection: payload.selection,
-                        matchup: payload.matchup ?? undefined,
-                        match_date: payload.match_date
-                            ? new Date(payload.match_date)
-                            : undefined,
-                        sourceTab: payload.sourceTab,
-                        validationStatus: payload.validationStatus,
-                    } as CreateCommunityPickPayload),
-                );
-            });
-        },
-        [groupId, groupType, dispatch],
-    );
 
     // Replace = update a community pick by re-picking. The member chooses a new NFL
     // moneyline in the replacement composer; we rebuild the full pick body and PUT
@@ -1345,19 +1278,33 @@ export const ConnectedStructuredFeed = ({
                 // same one — the Feed already knows the group, the surface and
                 // the accent, which is everything the block needs.
                 winners={
-                    <FeedContestWinnersBlock
-                        context={context}
-                        groupType={groupType}
-                        accent={isArena ? "violet" : "sky"}
-                        currentUserId={currentUserId}
-                    />
+                    <>
+                        {/* Fantasy results first: they are the League's own
+                            contests, and a League that runs both should not have
+                            to scroll past its Feed contests to find them. Each
+                            block renders nothing at all when it has no cards, so
+                            an Arena — which has no Fantasy contests — is
+                            unaffected by the extra node. */}
+                        {isLeague ? (
+                            <FantasyContestWinnersBlock
+                                context={context}
+                                accent="sky"
+                                currentUserId={currentUserId}
+                            />
+                        ) : null}
+                        <FeedContestWinnersBlock
+                            context={context}
+                            groupType={groupType}
+                            accent={isArena ? "violet" : "sky"}
+                            currentUserId={currentUserId}
+                        />
+                    </>
                 }
                 initialFilter={initialFilter}
                 currentUserId={currentUserId}
                 onReaction={onReaction}
                 getPickReactionSummary={getReactionSummary}
                 onSubmit={onSubmit}
-                onSubmitBuiltPicks={onSubmitBuiltPicks}
                 onReplaceSubmit={onReplaceSubmit}
                 onDelete={onDelete}
                 onEdit={onEdit}

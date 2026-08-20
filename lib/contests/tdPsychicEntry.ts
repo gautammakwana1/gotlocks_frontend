@@ -372,10 +372,19 @@ export type TdPsychicEntrySelectionView = {
  * the moving public quote next to a pick the member already made. After the lock
  * it is ignored outright — substituting a later quote into an immutable post-lock
  * surface is exactly what the domain doc forbids.
+ *
+ * `includePublicDataOdds` mirrors the MVP's `showPublicDataOdds`, which defaults
+ * FALSE and is switched on only for the reader's OWN receipt. Someone else's
+ * open card shows no odds row at all — the number would be a live quote on a
+ * pick that is not yours, which is neither yours to act on nor the price the
+ * card will score at. Omitting the key is what suppresses the row: a present
+ * `publicDataAmericanOdds: null` renders as "Public data · Unavailable", which
+ * is a different and much louder statement.
  */
 export const tdPsychicEntrySelections = (
     legs: readonly TdPsychicStoredLeg[] | null | undefined,
-    currentOddsByPlayerId?: ReadonlyMap<string, PublicCurrentOdds | null>
+    currentOddsByPlayerId?: ReadonlyMap<string, PublicCurrentOdds | null>,
+    includePublicDataOdds = true
 ): TdPsychicEntrySelectionView[] => {
     const rows = legs ?? [];
     const locked = isTdPsychicCardLocked(rows);
@@ -400,7 +409,7 @@ export const tdPsychicEntrySelections = (
             view.lockTimeAmericanOdds = isDisplayableAmericanOdds(leg?.american_odds)
                 ? leg.american_odds
                 : null;
-        } else {
+        } else if (includePublicDataOdds) {
             const quote = currentOddsByPlayerId?.get(playerId) ?? null;
             view.publicDataAmericanOdds = quote ? quote.americanOdds : null;
         }

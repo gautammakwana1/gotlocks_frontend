@@ -572,7 +572,7 @@ const LeaguesTab = ({ variant = "standalone", scope = "leagues" }: GroupsTabProp
             <ScoringModal
                 open={showScoringModal}
                 onClose={() => setShowScoringModal(false)}
-                variant="league"
+                variant={scope === "arenas" ? "arena" : "league"}
             />
 
             {scope === "leagues" ? (

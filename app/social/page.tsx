@@ -14,6 +14,12 @@ import { UserIcon } from "@/components/layout/MainTabBar";
 import { EM_DASH, extractMatchup, extractPickLine } from "@/lib/utils/pickDescription";
 import { getProfilePath } from "@/lib/utils/profileNavigation";
 import UserSearchDialog from "@/components/social/UserSearchDialog";
+import {
+    StandingIdentity,
+    StandingRank,
+    StandingsCard,
+    STANDINGS_CARD_STYLES,
+} from "@/components/community/StandingsCard";
 import { fetchFollowingListRequest } from "@/lib/redux/slices/authSlice";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import { SearchIcon } from "@/components/ui/SvgIcons";
@@ -29,8 +35,16 @@ import GlobalLeaderboardSkeleton from "@/components/skeletons/social/GlobalLeade
 import { WeeklyWinnersRange } from "@/lib/social/weeklyWinnersLeaderboard";
 import PostReactionButtons from "@/components/social/PostReactionButtons";
 
-type SocialTab = "top-hits" | "for-you" | "following";
-type WinnersView = "leaderboard" | "recent-wins";
+/*
+ * Four top-level tabs, in the MVP's order (app/social/page.tsx:34, :520-523).
+ *
+ * `wins` and `rankings` used to be one "winners" tab with a rankings/wins
+ * SubToggle under it. The MVP promotes both to tabs of their own, so the two
+ * surfaces are reachable in one tap instead of two and the strip names what it
+ * shows. That also retires the `WinnersView` state — `activeTab` now IS the
+ * choice, and each tab drives its own fetch.
+ */
+type SocialTab = "for-you" | "following" | "wins" | "rankings";
 
 const resultTone = (result: PickResult | null | undefined) => {
     switch (result) {
@@ -95,33 +109,15 @@ const getTierCardStyle = (color?: string) => {
     };
 };
 
-type PodiumAccent = {
-    rowTint: string;
-    rankClass: string;
-};
+// The local podium accents and the board-wide `imgError` flag that used to live
+// here went with the StandingsCard port: `StandingRank` owns the
+// gold/silver/bronze number and `StandingIdentity` owns per-row avatar fallback.
 
-const NEUTRAL_PODIUM_ACCENT: PodiumAccent = {
-    rowTint: "",
-    rankClass: "text-xs font-semibold text-[var(--text-secondary)]",
-};
-
-// Ranks 1-3 get a bolder gold/silver/bronze number; everyone else stays muted.
-const getPodiumAccent = (rank: number): PodiumAccent => {
-    switch (rank) {
-        case 1:
-            return { rowTint: "bg-amber-400/[0.06]", rankClass: "text-sm font-bold text-amber-300" };
-        case 2:
-            return { rowTint: "bg-slate-200/[0.05]", rankClass: "text-sm font-bold text-slate-200" };
-        case 3:
-            return { rowTint: "bg-orange-500/[0.05]", rankClass: "text-sm font-bold text-orange-400" };
-        default:
-            return NEUTRAL_PODIUM_ACCENT;
-    }
-};
-
-// Shared column template so the header row and every data row line up on both viewports.
+// Global keeps its own four metrics while sharing the community standings shape.
+// No leading `grid` and no gap utilities: StandingsCard prepends `grid` itself
+// and owns the row spacing, so both would fight the shared frame.
 const LEADERBOARD_GRID =
-    "grid grid-cols-[26px_minmax(0,1fr)_56px_72px] gap-2 sm:grid-cols-[40px_minmax(0,1fr)_96px_104px] sm:gap-4";
+    "grid-cols-[3rem_minmax(0,1fr)_4rem_4.5rem] sm:grid-cols-[4rem_minmax(0,1fr)_6rem_6.5rem]";
 
 const renderBiggestHitCell = (
     biggestWin: GlobalLeaderboadPostRows | null,
@@ -288,7 +284,6 @@ const SocialPage = () => {
     const router = useRouter();
     const dispatch = useDispatch();
     const [activeTab, setActiveTab] = useState<SocialTab>("for-you");
-    const [winnersView, setWinnersView] = useState<WinnersView>("leaderboard");
     const [winnersRange, setWinnersRange] = useState<WeeklyWinnersRange>("this-week");
     const [forYouScope, setForYouScope] = useState<"posts" | "reacted">("posts");
     const [followingScope, setFollowingScope] = useState<"posts" | "winning">("posts");
@@ -296,7 +291,6 @@ const SocialPage = () => {
     const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
-    const [imgError, setImgError] = useState(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
@@ -322,11 +316,11 @@ const SocialPage = () => {
                 dispatch(fetchFollowingUsersWinTopHitPostsRequest(payload));
             }
         }
-        else if (activeTab === "top-hits") {
-            if (winnersView === "recent-wins") {
-                dispatch(fetchGlobalWinnerTopHitPostsRequest(payload));
-            }
+        else if (activeTab === "wins") {
+            dispatch(fetchGlobalWinnerTopHitPostsRequest(payload));
         }
+        // `rankings` is not paged and does not read the post feed — it has its
+        // own leaderboard fetch below, keyed on the week range.
     };
 
     useEffect(() => {
@@ -334,14 +328,14 @@ const SocialPage = () => {
         setPage(1);
         setHasMore(true);
         fetchDataByTab(1);
-    }, [activeTab, forYouScope, dispatch, currentUser, winnersView, followingScope]);
+    }, [activeTab, forYouScope, dispatch, currentUser, followingScope]);
 
     useEffect(() => {
         if (!currentUser) return;
-        if (winnersView === "leaderboard") {
+        if (activeTab === "rankings") {
             dispatch(fetchGlobalLeaderboardRequest({ range: winnersRange }));
         }
-    }, [dispatch, currentUser, winnersView, winnersRange, activeTab]);
+    }, [dispatch, currentUser, winnersRange, activeTab]);
 
     useEffect(() => {
         if (pickLoader || !pickMessage) return;
@@ -848,148 +842,127 @@ const SocialPage = () => {
         </div>
     );
 
+    /**
+     * The Rankings tab, on the shared gold standings surface.
+     *
+     * Ported from the MVP's `renderWinnersUserLeaderboard`
+     * (app/social/page.tsx:409-500): the same `StandingsCard` the Arena and
+     * League boards already use, so Global stops hand-rolling its own header,
+     * column strip and row tint. Global keeps its own four metrics — that is
+     * what `LEADERBOARD_GRID` is for — but the frame, the rank badge, the
+     * identity block and the podium treatment now come from one place.
+     *
+     * The avatar swap matters beyond looks: this used to key a SINGLE
+     * `imgError` flag for the whole board, so one member's broken image blanked
+     * every avatar on the page. `StandingIdentity` owns per-row fallback.
+     */
     const renderWinnersUserLeaderboard = () => {
         if (!winnersLeaderboard) {
-            return globalLeaderboardLoading
-                ? <GlobalLeaderboardSkeleton />
-                : (
-                    <p className="py-4 text-sm text-[var(--text-secondary)]">
-                        No public weekly winners yet.
-                    </p>
-                );
+            return globalLeaderboardLoading ? (
+                <GlobalLeaderboardSkeleton />
+            ) : (
+                <p className="py-4 text-sm text-[var(--text-secondary)]">
+                    No public weekly winners yet.
+                </p>
+            );
         }
+
         const weekLabel = formatWeekRange(
             new Date(winnersLeaderboard.week.start),
             new Date(winnersLeaderboard.week.end)
         );
 
-        return (
-            <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 sm:px-3">
-                    <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-100">
-                            weekly xp
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                            {weekLabel} · {winnersLeaderboard.userRows.length} ranked
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-4 text-[11px] font-semibold uppercase tracking-wide">
-                        {(["this-week", "last-week"] as const).map((range) => {
-                            const active = winnersRange === range;
-                            return (
-                                <button
-                                    key={range}
-                                    type="button"
-                                    onClick={() => setWinnersRange(range)}
-                                    className={`relative pb-1 transition ${active
-                                        ? "text-white"
-                                        : "text-[var(--text-secondary)] hover:text-white"
-                                        }`}
-                                >
-                                    {range === "this-week" ? "this week" : "last week"}
-                                    {active && (
-                                        <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-amber-300/80" />
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {winnersLeaderboard.userRows.length > 0 ? (
-                    // Break out of the page gutter so row backgrounds reach the screen edge on mobile.
-                    <div className="-mx-5 sm:mx-0">
-                        {/* Column headers — shared grid template keeps both viewports aligned */}
-                        <div
-                            className={`${LEADERBOARD_GRID} items-center border-b border-white/10 px-5 pb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)] sm:px-3 sm:text-[10px]`}
+        const rangeControls = (
+            <div
+                role="group"
+                aria-label="Weekly rankings period"
+                className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wide sm:gap-4 sm:text-[11px]"
+            >
+                {(["this-week", "last-week"] as const).map((range) => {
+                    const active = winnersRange === range;
+                    return (
+                        <button
+                            key={range}
+                            type="button"
+                            onClick={() => setWinnersRange(range)}
+                            aria-pressed={active}
+                            className={`relative whitespace-nowrap pb-1 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300/70 ${active ? "text-white" : "text-amber-100/45 hover:text-white"
+                                }`}
                         >
-                            <span className="-ml-1 text-center">#</span>
-                            <span>Player</span>
-                            <span>
-                                <span className="sm:hidden">Hit</span>
-                                <span className="hidden sm:inline">Biggest Hit</span>
-                            </span>
-                            <span className="text-right">
-                                <span className="sm:hidden">Total</span>
-                                <span className="hidden sm:inline">XP</span>
-                            </span>
-                        </div>
+                            {range === "this-week" ? "this week" : "last week"}
+                            {active ? (
+                                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-amber-300/80" />
+                            ) : null}
+                        </button>
+                    );
+                })}
+            </div>
+        );
 
-                        <div className="divide-y divide-white/10">
-                            {winnersLeaderboard.userRows.map((row) => {
-                                const userName = row.username ?? "Member";
-                                const initials = userName.slice(0, 2).toUpperCase();
-                                const winLabel = row.win_count === 1 ? "1 win" : `${row.win_count} wins`;
-                                const accent = getPodiumAccent(row.rank);
-                                const profileImg = generateProfileImageUrl(row.profile_image ?? "");
-                                const hasValidImage =
-                                    row.profile_image && !imgError;
-
-                                return (
-                                    <div
-                                        key={row.user_id}
-                                        className={`${LEADERBOARD_GRID} items-center px-5 py-2.5 sm:px-3 ${accent.rowTint}`}
-                                    >
-                                        <div className="-ml-1 flex items-center justify-center">
-                                            <span className={`tabular-nums ${accent.rankClass}`}>
-                                                {row.rank}
-                                            </span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleViewProfile(row.user_id)}
-                                            className="group flex min-w-0 items-center gap-2 text-left sm:gap-2.5"
-                                        >
-                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-semibold uppercase text-slate-100 transition group-hover:text-sky-100 sm:h-8 sm:w-8 sm:text-[11px]">
-                                                {profileImg && hasValidImage ? (
-                                                    <Image
-                                                        src={profileImg}
-                                                        alt="Profile image"
-                                                        width={52}
-                                                        height={52}
-                                                        className={`tracking-wide rounded-full object-cover h-6 w-6 sm:h-7 sm:w-7`}
-                                                        draggable={false}
-                                                        onDragStart={(e) => e.preventDefault()}
-                                                        unoptimized
-                                                        onError={() => setImgError(true)}
-                                                    />
-                                                ) : (
-                                                    <div className="flex items-center justify-center text-white/80 text-[10px] sm:text-[12px]" >
-                                                        <span>{initials}</span>
-                                                    </div>
-                                                )}
-                                            </span>
-                                            <span className="min-w-0">
-                                                <span
-                                                    className="block truncate text-[13px] font-semibold text-[var(--app-text)] group-hover:underline sm:text-sm"
-                                                    title={userName}
-                                                >
-                                                    {userName}
-                                                </span>
-                                                <span className="block text-[10px] uppercase tracking-wide text-[var(--text-secondary)]">
-                                                    {winLabel}
-                                                </span>
-                                            </span>
-                                        </button>
-                                        {renderBiggestHitCell(row.biggest_win_post, () =>
-                                            handleViewPick(row.user_id, row.biggest_win_pick_id)
-                                        )}
-                                        <GlobalXpCell
-                                            appliedGlobalXp={row.biggest_win_post?.applied_global_xp ?? 0}
-                                            calculatedGlobalXp={row.biggest_win_post?.calculated_global_xp ?? 0}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ) : (
-                    <p className="py-4 text-sm text-[var(--text-secondary)] sm:px-3">
+        return (
+            <StandingsCard
+                rows={winnersLeaderboard.userRows}
+                getRowKey={(row) => row.user_id}
+                columns={[
+                    { key: "rank", label: "Rank" },
+                    { key: "player", label: "Player" },
+                    {
+                        key: "win",
+                        label: (
+                            <span className="whitespace-normal leading-tight">Biggest Win</span>
+                        ),
+                    },
+                    { key: "xp", label: "XP", className: "text-right" },
+                ]}
+                gridClassName={LEADERBOARD_GRID}
+                title="Weekly XP Rankings"
+                titleId="weekly-xp-rankings"
+                subtitle={`${weekLabel} · ${winnersLeaderboard.userRows.length} ranked`}
+                actions={rangeControls}
+                presentation="page"
+                rootClassName="-mx-5 sm:mx-0"
+                emptyState={
+                    <p className="px-5 py-5 text-sm text-amber-100/45 sm:px-4">
                         No public weekly winners yet.
                     </p>
-                )}
-            </div>
+                }
+                renderRow={(row) => {
+                    const userName = row.username ?? "Member";
+                    const winLabel = row.win_count === 1 ? "1 win" : `${row.win_count} wins`;
+
+                    return (
+                        <div
+                            data-lifetime-standing-row
+                            data-lifetime-standing-theme="gold"
+                            className={`grid min-h-[3.3125rem] ${LEADERBOARD_GRID} ${STANDINGS_CARD_STYLES.fullPageRow}`}
+                        >
+                            <StandingRank rank={row.rank} />
+                            <button
+                                type="button"
+                                onClick={() => handleViewProfile(row.user_id)}
+                                aria-label={`View @${userName}'s profile`}
+                                className="group flex min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300/70"
+                            >
+                                <StandingIdentity
+                                    avatarUrl={generateProfileImageUrl(row.profile_image ?? "")}
+                                    displayName={userName}
+                                    handle={userName}
+                                    rank={row.rank}
+                                    className="gap-2 sm:gap-2.5"
+                                    meta={winLabel}
+                                />
+                            </button>
+                            {renderBiggestHitCell(row.biggest_win_post, () =>
+                                handleViewPick(row.user_id, row.biggest_win_pick_id)
+                            )}
+                            <GlobalXpCell
+                                appliedGlobalXp={row.biggest_win_post?.applied_global_xp ?? 0}
+                                calculatedGlobalXp={row.biggest_win_post?.calculated_global_xp ?? 0}
+                            />
+                        </div>
+                    );
+                }}
+            />
         );
     };
 
@@ -1016,7 +989,8 @@ const SocialPage = () => {
                         <div className="inline-flex w-fit items-center sm:gap-1">
                             {renderTabButton("for-you", "for you")}
                             {renderTabButton("following", "following")}
-                            {renderTabButton("top-hits", "winners")}
+                            {renderTabButton("wins", "wins")}
+                            {renderTabButton("rankings", "rankings")}
                             <button
                                 type="button"
                                 onClick={handleUserSearch}
@@ -1029,16 +1003,8 @@ const SocialPage = () => {
                                 <SearchIcon className="h-4 w-4" />
                             </button>
                         </div>
-                        {activeTab === "top-hits" && (
-                            <SubToggle
-                                value={winnersView}
-                                onChange={setWinnersView}
-                                options={[
-                                    { value: "leaderboard", label: "rankings" },
-                                    { value: "recent-wins", label: "wins" },
-                                ]}
-                            />
-                        )}
+                        {/* No SubToggle for wins/rankings any more — each is its
+                            own tab, so the strip above already IS the choice. */}
                         {activeTab === "for-you" && (
                             <SubToggle
                                 value={forYouScope}
@@ -1062,28 +1028,22 @@ const SocialPage = () => {
                     </div>
                 </div>
 
-                {activeTab === "top-hits" && (
+                {activeTab === "wins" && (
                     <section className="space-y-4">
-                        {winnersView === "leaderboard" ? (
-                            renderWinnersUserLeaderboard()
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                        recent wins
-                                    </p>
-                                    <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                                        {feedItems.length} posts
-                                    </p>
-                                </div>
-                                {renderFeedItems(
-                                    feedItems,
-                                    "No public winning posts yet.",
-                                    false
-                                )}
-                            </div>
-                        )}
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                recent wins
+                            </p>
+                            <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                                {feedItems.length} posts
+                            </p>
+                        </div>
+                        {renderFeedItems(feedItems, "No public winning posts yet.", false)}
                     </section>
+                )}
+
+                {activeTab === "rankings" && (
+                    <section className="space-y-4">{renderWinnersUserLeaderboard()}</section>
                 )}
 
                 {activeTab === "for-you" && (

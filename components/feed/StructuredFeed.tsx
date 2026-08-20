@@ -106,7 +106,6 @@ export const StructuredFeed = ({
     onReaction,
     getPickReactionSummary,
     onSubmit,
-    onSubmitBuiltPicks,
     onReplaceSubmit,
     onReplace,
     onDelete,
@@ -135,6 +134,12 @@ export const StructuredFeed = ({
         capabilities.canCreateCompetitivePick ||
         capabilities.canCreateStaffPick ||
         capabilities.canCreateStaffPost;
+    /** Same test GroupFeedPostDrawer titles itself with — keep the two in step. */
+    const announcementOnlyComposer =
+        capabilities.canCreateStaffPost &&
+        !capabilities.canCreateCommunityPick &&
+        !capabilities.canCreateStaffPick &&
+        !capabilities.canCreateCompetitivePick;
 
     const viewOptions = standings
         ? [...FEED_VIEWS, { id: "standings" as const, label: "Standings" }]
@@ -213,9 +218,13 @@ export const StructuredFeed = ({
             ? {
                 ref: composerTriggerRef,
                 onClick: () => setComposerOpen(true),
-                label: "New post",
+                // Announcements are the only thing most viewers can create now
+                // that the Pick Post panel is gone, and the drawer titles itself
+                // "New Announcement" in that case — so the trigger has to agree,
+                // or the button and the panel it opens name different things.
+                label: announcementOnlyComposer ? "New Announcement" : "New post",
                 expanded: composerOpen,
-                action: "create-post",
+                action: announcementOnlyComposer ? "create-announcement" : "create-post",
             }
             : null;
 
@@ -395,7 +404,6 @@ export const StructuredFeed = ({
                         contestOptions={contestOptions}
                         communityPickWindow={communityPickWindow}
                         onSubmit={onSubmit}
-                        onSubmitBuiltPicks={onSubmitBuiltPicks}
                         onPostComplete={() => setComposerOpen(false)}
                     />
                 ) : null}

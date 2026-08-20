@@ -4,9 +4,16 @@ import { formatContestDateTime } from "@/lib/contests/feedContestCatalog";
 import type {
     FeedContestEntriesData,
     FeedContestEntryRow,
+    FeedContestEntryPick,
 } from "@/lib/interfaces/interfaces";
 import type { FeedContestEntryFormat } from "@/components/social/PickCardContent";
+import {
+    isTdPsychicCardLocked,
+    tdPsychicEntrySelections,
+    type TdPsychicStoredLeg,
+} from "@/lib/contests/tdPsychicEntry";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
+import TdPsychicEntryCard from "./TdPsychicEntryCard";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
 /* ----------------------------------------------------------------------------
@@ -425,6 +432,31 @@ export const FeedContestEntriesPanel = ({
     const ownEntry = ownRow?.pick ?? null;
 
     /*
+     * A TD card gets the receipt card, not the feed pick card — on every entry
+     * in this list, the reader's own and everyone else's.
+     *
+     * The MVP guards its generic `ContestSubmittedEntryCard` with
+     * `template !== "td_psychic"` and routes every TD surface through
+     * `TdPsychicEntryCard`, so one ordered row of three square scorer cards is
+     * what a member recognises in the builder tray, review, this list and their
+     * own receipt. A parlay leg list is the wrong shape for it: a TD card is not
+     * a priced combination of three picks, it is three independent scorers that
+     * rank on how many hit.
+     *
+     * `includePublicDataOdds` is TRUE only for the reader's own row, mirroring
+     * the MVP's `showPublicDataOdds` default. Someone else's still-open card
+     * shows no odds row at all.
+     */
+    const isTdPsychicEntries = entryFormat === "td_psychic";
+    const tdPsychicCardFor = (pick: FeedContestEntryPick, isOwn: boolean) => {
+        const legs = (pick.legs ?? []) as unknown as TdPsychicStoredLeg[];
+        return {
+            selections: tdPsychicEntrySelections(legs, undefined, isOwn),
+            locked: isTdPsychicCardLocked(legs),
+        };
+    };
+
+    /*
      * The receipt and the field are shown TOGETHER, not as alternatives.
      *
      * This replaced a My-entry / All-entries sub-tab switch that the MVP does
@@ -489,21 +521,38 @@ export const FeedContestEntriesPanel = ({
                                     Entries open {opensAtLabel}.
                                 </p>
                             ) : null}
-                            {/* Bled to the full panel width — the feed card owns
-                                its own px-5/sm:px-6 gutter. */}
-                            <div className="-mx-5 mt-1 sm:-mx-6">
-                                <ContestEntryFeedCard
-                                    row={ownRow!}
-                                    pick={ownEntry}
-                                    contextualPointsLabel={pointsLabel}
-                                    currentUserId={currentUserId}
-                                    accent={cardAccent}
-                                    entryFormat={entryFormat}
-                                    pickemCorrectBonus={pickemCorrectBonus}
-                                    contestName={contestName}
-                                    contestHref={contestHref}
-                                />
-                            </div>
+                            {isTdPsychicEntries ? (
+                                // Not bled: the receipt card carries its own frame,
+                                // so it sits inside the section's gutter rather
+                                // than spanning it like the feed card does.
+                                <div className="mt-4" data-td-psychic-submitted-entry>
+                                    <TdPsychicEntryCard
+                                        selections={tdPsychicCardFor(ownEntry, true).selections}
+                                        submittedAt={ownRow!.submitted_at}
+                                        comboAmericanOdds={
+                                            tdPsychicCardFor(ownEntry, true).locked
+                                                ? (ownEntry.american_odds ?? null)
+                                                : undefined
+                                        }
+                                    />
+                                </div>
+                            ) : (
+                                /* Bled to the full panel width — the feed card owns
+                                   its own px-5/sm:px-6 gutter. */
+                                <div className="-mx-5 mt-1 sm:-mx-6">
+                                    <ContestEntryFeedCard
+                                        row={ownRow!}
+                                        pick={ownEntry}
+                                        contextualPointsLabel={pointsLabel}
+                                        currentUserId={currentUserId}
+                                        accent={cardAccent}
+                                        entryFormat={entryFormat}
+                                        pickemCorrectBonus={pickemCorrectBonus}
+                                        contestName={contestName}
+                                        contestHref={contestHref}
+                                    />
+                                </div>
+                            )}
                         </section>
                     ) : (
                         <>
@@ -607,15 +656,34 @@ export const FeedContestEntriesPanel = ({
                         {otherRows.map((row, index) => (
                             <li key={row.id} className={zebraRowClassName(index)}>
                                 {row.pick ? (
-                                    <ContestEntryFeedCard
-                                        row={row}
-                                        pick={row.pick}
-                                        contextualPointsLabel={pointsLabel}
-                                        currentUserId={currentUserId}
-                                        accent={cardAccent}
-                                        entryFormat={entryFormat}
-                                        pickemCorrectBonus={pickemCorrectBonus}
-                                    />
+                                    isTdPsychicEntries ? (
+                                        <div
+                                            className="px-5 py-4 sm:px-6"
+                                            data-td-psychic-submitted-entry
+                                        >
+                                            <TdPsychicEntryCard
+                                                selections={
+                                                    tdPsychicCardFor(row.pick, false).selections
+                                                }
+                                                submittedAt={row.submitted_at}
+                                                comboAmericanOdds={
+                                                    tdPsychicCardFor(row.pick, false).locked
+                                                        ? (row.pick.american_odds ?? null)
+                                                        : undefined
+                                                }
+                                            />
+                                        </div>
+                                    ) : (
+                                        <ContestEntryFeedCard
+                                            row={row}
+                                            pick={row.pick}
+                                            contextualPointsLabel={pointsLabel}
+                                            currentUserId={currentUserId}
+                                            accent={cardAccent}
+                                            entryFormat={entryFormat}
+                                            pickemCorrectBonus={pickemCorrectBonus}
+                                        />
+                                    )
                                 ) : (
                                     <EntryStubContent row={row} />
                                 )}

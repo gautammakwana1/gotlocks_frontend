@@ -47,6 +47,14 @@
         {
             "path": "/api/cron/venue-expire-sessions",
             "schedule": "8-59/10 * * * *"
+        },
+        {
+            "path": "/api/cron/leaderboard-rebuild",
+            "schedule": "9-59/2 * * * *"
+        },
+        {
+            "path": "/api/cron/leaderboard-backfill",
+            "schedule": "0 6 * * *"
         }
     ]
 }

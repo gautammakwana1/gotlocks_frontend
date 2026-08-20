@@ -14,6 +14,13 @@
  * -------------------------------------------------------------------------- */
 
 /**
+ * Stamped onto a contest as `rules_version` when it is created, and compared
+ * against the accepted version to decide whether an entrant must re-accept.
+ */
+export const FEED_CONTEST_PARTICIPATION_RULES_VERSION =
+    "contest-participation-v6";
+
+/**
  * The base disclaimer, and the last paragraph of every template's rules. Also
  * the whole of General Combo's — a combo is all-or-nothing on prices the entrant
  * can already see, so there is nothing further to disclose.
@@ -44,7 +51,7 @@ export const CURRENT_ODDS_PUBLIC_DATA_LABEL = "Public data";
  * the only price that exists until the contest locks.
  */
 export const CURRENT_ODDS_LOCK_DISCLOSURE =
-    "Odds shown while you pick are the latest available FanDuel prices and are provided as a guide to the sportsbook’s current expectation. Final contest odds are captured at the shared entry lock—automatically five minutes before the earliest included kickoff—and may differ from the odds shown now.";
+    "Odds shown while you pick reflect the latest available public market data and are provided as a guide only. Final contest odds are captured at the shared entry lock—automatically five minutes before the earliest included kickoff—and may differ from the odds shown now.";
 
 /**
  * Sunday Pick'em. Five paragraphs, because this template scores per LEG and
@@ -55,9 +62,9 @@ export const CURRENT_ODDS_LOCK_DISCLOSURE =
  */
 export const SUNDAY_PICKEM_PARTICIPATION_RULES_TEXT = [
     "Pick one moneyline winner in every included game.",
-    "Cards rank first by correct picks. Each correct pick earns odds-based points from its final lock-time moneyline plus a fixed 2-point bonus; those points break ties.",
+    "Cards rank first by correct picks. Each correct pick earns odds-based League Points or Arena Points from its final lock-time moneyline plus a fixed +2 bonus; those point totals break ties.",
     CURRENT_ODDS_LOCK_DISCLOSURE,
-    "After entries lock, each entry card shows its selected lock-time prices and full-card Combo odds. Combo odds multiply every selected lock-time price and are informational; Sunday scoring still awards points per correct pick.",
+    "After entries lock, each entry card shows its selected lock-time prices and full-card Combo odds. Combo odds multiply every selected lock-time price and are informational; Sunday scoring still awards League Points or Arena Points per correct pick.",
     FEED_CONTEST_PARTICIPATION_RULES_TEXT,
 ].join("\n\n");
 
@@ -81,13 +88,36 @@ export const TD_PSYCHIC_PARTICIPATION_RULES_TEXT = [
     "A selection is correct when that player records at least one rushing or receiving touchdown.",
     "Passing touchdowns do not count.",
     "Cards rank first by correct picks. For cards with the same number correct, final lock-time odds for the correct scorers break the tie.",
-    "Only a perfect 3-of-3 card earns League or Arena points. Its single card-level point total is calculated from the combined final lock-time odds of all three correct scorers. A 2-of-3, 1-of-3, 0-of-3, or void card earns 0 points.",
+    "Only a perfect 3-of-3 card earns League Points or Arena Points. Its single card-level League Point or Arena Point total is calculated from the combined final lock-time odds of all three correct scorers. A 2-of-3, 1-of-3, 0-of-3, or void card earns no League Points or Arena Points.",
     CURRENT_ODDS_LOCK_DISCLOSURE,
     "After entries lock, each entry card shows the shared scorer prices and full-card Combo odds from all three selections. The Combo odds are not the correct-scorer-only tiebreak for a 2-of-3 card.",
     "Perfect 3-of-3 cards rank first. If fewer than three cards finish 3-of-3, the strongest non-void 2-of-3 cards by correct-scorer lock odds fill the remaining places.",
     "The top three placement-eligible cards receive placements.",
     FEED_CONTEST_PARTICIPATION_RULES_TEXT,
 ].join("\n\n");
+
+/**
+ * Narrows the stored rules copy to the surface it is being read on.
+ *
+ * The seeded text says "League Points or Arena Points" because ONE string is
+ * stored on the contest and the same template ships to both surfaces. A member
+ * reading it is only ever on one of them, so the disjunction is noise at best
+ * and, on an Arena contest, actively wrong about where the points land.
+ *
+ * Applied at RENDER time, never at write time: the accepted text on record stays
+ * the neutral one, so a contest that later moves surface does not silently
+ * change the terms an entrant already ticked.
+ */
+export const formatParticipationRulesForContext = (
+    rulesText: string,
+    pointsLabel: "League Points" | "Arena Points"
+) => {
+    const singularLabel =
+        pointsLabel === "League Points" ? "League Point" : "Arena Point";
+    return rulesText
+        .replaceAll("League Points or Arena Points", pointsLabel)
+        .replaceAll("League Point or Arena Point", singularLabel);
+};
 
 /**
  * The default rules for a template, as the wizard seeds them when a style is

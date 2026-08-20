@@ -38,6 +38,7 @@ import {
 } from "./ContestDetailHeader";
 import FeedContestEntriesPanel from "./FeedContestEntriesPanel";
 import FeedContestStandingsPanel from "./FeedContestStandingsPanel";
+import { formatParticipationRulesForContext } from "@/lib/contests/participationRules";
 import type {
     ContestPreviewArtworkKey,
     ContestPreviewVisualState,
@@ -610,6 +611,18 @@ export const FeedContestDetail = ({
                     ? "Finalized"
                     : phase[0].toUpperCase() + phase.slice(1);
     const isArenaContest = scoped?.context_type === "arena";
+    /**
+     * What contest points are CALLED on this surface. One label, threaded
+     * through every panel that names them, so an Arena contest never says
+     * "League Points" and the stored rules copy can be narrowed to match.
+     */
+    const standingPointsLabel: "League Points" | "Arena Points" = isArenaContest
+        ? "Arena Points"
+        : "League Points";
+    const contextualRulesText = formatParticipationRulesForContext(
+        contest?.rules_text ?? "",
+        standingPointsLabel
+    );
 
     /* ---------- Header: the MVP's ContestDetailHeader inputs ---------- */
 
@@ -768,7 +781,50 @@ export const FeedContestDetail = ({
             label: "Settlement",
             value: "Automatic after the last included matchup is final",
         },
-        { label: "Scoring", value: contestScoringLabel(contest), wide: true },
+        /*
+         * TD Psychic replaces the one-line Scoring fact with a full brief.
+         *
+         * It earns the space because this is the only template where placing
+         * and scoring come apart: ranking is on correct count, so a 2-of-3 can
+         * take a podium place, while points come from the combined lock-time
+         * odds of all THREE scorers and only a perfect card has those. Stating
+         * that in a single clause is what made members read a second-place
+         * finish worth zero as a bug, so each rule gets its own row.
+         */
+        ...(contest.template === "td_psychic"
+            ? [
+                {
+                    label: "How it works",
+                    value:
+                        "Pick exactly three players from the included NFL games to score a rushing or receiving touchdown.",
+                    wide: true,
+                },
+                { label: "Entry", value: "3 players" },
+                { label: "Ranking", value: "More correct picks rank higher." },
+                {
+                    label: "Tiebreaker",
+                    value:
+                        "Shared scorer odds captured at lock break ties and appear on entry cards after lock; displayed current odds may change before then.",
+                    wide: true,
+                },
+                {
+                    label: "Placement requirement",
+                    value:
+                        "At least 2 of 3. Perfect cards rank first, then the strongest 2-of-3 cards fill any remaining places.",
+                },
+                {
+                    label: "Awards",
+                    value: "Up to the top 3 placement-eligible cards.",
+                },
+                {
+                    label: standingPointsLabel,
+                    value: `Only a perfect 3 of 3 card earns one combined lock-time-odds ${standingPointsLabel} total.`,
+                    wide: true,
+                },
+            ]
+            : [
+                { label: "Scoring", value: contestScoringLabel(contest), wide: true },
+            ]),
         ...(isArenaContest
             ? [
                 {
@@ -811,6 +867,22 @@ export const FeedContestDetail = ({
         CONTEST_EDITABLE_STATUSES.includes(contest.lifecycle_status) &&
         !canceled &&
         !archived;
+
+    /*
+     * RENAME OUTLIVES THE COPY EDIT.
+     *
+     * The MVP splits one permission into two: the description and rules freeze
+     * at the first accepted entry, but the NAME stays editable right up to
+     * finalization. An organizer who typoed a contest title should not be stuck
+     * with it for the whole run, and the name is the one field no entrant
+     * accepted anything about.
+     *
+     * `contestInformationEditable` is the full-copy gate; `contestNameEditable`
+     * is the wider one. Which is true decides both the link label and which of
+     * the three summary sentences prints below it.
+     */
+    const contestInformationEditable = canEditContest && phase === "open";
+    const contestNameEditable = canEditContest && phase !== "finalized";
 
     /* ---------- Entries tab: the member's "build entry" CTA ----------
      *
@@ -870,8 +942,12 @@ export const FeedContestDetail = ({
      * sentence beside a still-live Edit link would contradict itself.
      * TODO(api): with `viewer.can_edit` on the detail response, restore it.
      */
-    const contestInformationSummary = canEditContest
-        ? "Name, description, and rules can still be updated until the first entry is accepted."
+    const contestInformationSummary = contestNameEditable
+        ? contestInformationEditable
+            ? "Name, description, and rules can still be updated until the first entry is accepted."
+            : !writable
+                ? "The contest name can still be updated. Description, rules, mechanics, slate, and timing are read-only in the current Arena state."
+                : "The contest name can still be updated. Description, rules, mechanics, slate, and timing are read-only after entry or lock."
         : phase === "finalized"
             ? "Read only · finalized contest setup stays fixed."
             : !writable
@@ -1021,7 +1097,13 @@ export const FeedContestDetail = ({
                     onTabChange={setDetailTab}
                     tabs={availableTabs.map((tab) => ({
                         id: tab,
-                        label: tab[0].toUpperCase() + tab.slice(1),
+                        // "Rank", not "Standings" — the tab id stays `standings`
+                        // because that is what the `?tab=` deep link and the
+                        // panel ids use, but the strip reads the MVP's label.
+                        label:
+                            tab === "standings"
+                                ? "Rank"
+                                : tab[0].toUpperCase() + tab.slice(1),
                     }))}
                 />
             </ContestDetailHeader>
@@ -1132,7 +1214,7 @@ export const FeedContestDetail = ({
                                 </span>
                             </div>
                             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-400">
-                                {contest.rules_text}
+                                {contextualRulesText}
                             </p>
                         </section>
                     </section>
@@ -1229,7 +1311,7 @@ export const FeedContestDetail = ({
                         isFrozenFinal={isFrozenFinal}
                         entriesArePublic={entriesArePublic}
                         winningPlaces={contest.winning_places ?? 3}
-                        pointsLabel={isArenaContest ? "Arena points" : "League points"}
+                        pointsLabel={standingPointsLabel}
                         template={contest.template}
                         currentUserId={currentUser?.userId}
                         accent={accent}
@@ -1331,12 +1413,16 @@ export const FeedContestDetail = ({
                                     {contestInformationSummary}
                                 </p>
                             </div>
-                            {canEditContest && editHref ? (
+                            {contestNameEditable && editHref ? (
                                 <Link
                                     href={editHref}
                                     className={`ml-auto inline-flex min-h-10 shrink-0 items-center rounded-lg border px-3.5 py-2 text-xs font-semibold transition ${accentClasses.borderedLink}`}
                                 >
-                                    {phase === "draft" ? "Edit draft" : "Edit details"}
+                                    {phase === "draft"
+                                        ? "Edit draft"
+                                        : contestInformationEditable
+                                            ? "Edit details"
+                                            : "Rename contest"}
                                 </Link>
                             ) : (
                                 <span className="ml-auto shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
@@ -1583,6 +1669,7 @@ export const FeedContestDetail = ({
                 entrantCount={entrantCount}
                 reversesAwards={phase === "finalized"}
                 organizerHandle={currentUser?.username ?? ""}
+                pointsLabel={standingPointsLabel}
                 onDelete={handleDeleteContest}
                 accent={accent}
             />

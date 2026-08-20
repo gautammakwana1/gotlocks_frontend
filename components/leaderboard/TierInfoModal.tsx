@@ -28,7 +28,9 @@ const rangeFor = (tier: (typeof ODDS_BRACKETS)[number]) => {
     return tier.label;
 };
 
-// Matches ScoringModal's getCardStyle: a diagonal fade from the tier colour to black.
+// A diagonal fade from the tier colour to black. This was kept in step with
+// ScoringModal's getCardStyle until that modal was re-ported to the MVP's tier
+// layout and dropped the helper, so this is now the only copy.
 const gradientFor = (hex: string) =>
     `linear-gradient(135deg, ${hex}55, ${hex}22, rgba(0,0,0,0))`;
 
