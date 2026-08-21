@@ -1316,6 +1316,12 @@ export const FeedContestDetail = ({
                         currentUserId={currentUser?.userId}
                         accent={accent}
                         onShowMore={() => setStandingsPage((page) => page + 1)}
+                        // For an expanded standing's entry card — the same three
+                        // the Entries tab needs, and absent from the leaderboard
+                        // read's narrow contest projection for the same reason.
+                        pickemCorrectBonus={contest.pickem_correct_bonus}
+                        contestName={contest.name}
+                        contestHref={contestPathname}
                     />
                 </section>
             ) : null}

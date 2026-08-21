@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
     AWARDED_POINTS_CARD_TONE,
     STANDING_RANK_MARKER_LAYOUT,
@@ -8,9 +9,19 @@ import {
     type StandingRankMarkerTone,
 } from "@/lib/styles/postCards";
 import type {
+    FeedContestEntryRow,
     FeedContestLeaderboardData,
     FeedContestStandingRow,
 } from "@/lib/interfaces/interfaces";
+import type { FeedContestEntryFormat } from "@/components/social/PickCardContent";
+import {
+    isTdPsychicCardLocked,
+    tdPsychicEntrySelections,
+    tdPsychicSelectionResult,
+    type TdPsychicStoredLeg,
+} from "@/lib/contests/tdPsychicEntry";
+import ContestEntryFeedCard from "./ContestEntryFeedCard";
+import TdPsychicEntryCard from "./TdPsychicEntryCard";
 
 /* ----------------------------------------------------------------------------
  * The Feed contest STANDINGS board, over
@@ -32,9 +43,17 @@ import type {
  *                      visible yet", never "no value", so those cells render a
  *                      locked dash instead of a zero.
  *
- * The MVP's fourth column — a disclosure that expands the entry itself — is NOT
- * ported: this endpoint carries `pick_id` and nothing else about the entry, and
- * the Entries tab already renders every entry in full.
+ * THE ENTRY DISCLOSURE (the MVP's `expandedStandingEntryId`) is ported as of
+ * 2026-08-20, when `runFeedContestLeaderboard` began carrying each standing's
+ * `pick` in the same shape /entries returns. It was previously skipped for want
+ * of that payload — the row named a `pick_id` and nothing else — which is also
+ * why the note about a missing entry payload has gone from `pointsState` below.
+ *
+ * One disclosure is open at a time, keyed by the standing's `pick_id` rather
+ * than by its leaderboard row id: the pinned "Your standing" frame renders the
+ * viewer's own row a second time when it falls off the loaded pages, and keying
+ * on the row id would let those two toggle independently while showing the same
+ * entry.
  *
  * This board deliberately does NOT use components/community/StandingsCard: that
  * is the gold LIFETIME surface (League / Arena / Global rankings), and the MVP
@@ -108,6 +127,116 @@ const zebraRowClassName = (index: number) =>
     index % 2 === 1 ? "bg-white/[0.025]" : undefined;
 
 /**
+ * A standing's entry, counted by leg result.
+ *
+ * The MVP reads `pendingCount` / `voidCount` / `correctCount` straight off its
+ * in-memory entry; this response carries the stored `legs[]` instead, so the
+ * same three come from folding them. `tdPsychicSelectionResult` is reused rather
+ * than re-matching the strings here because it is the one place that knows
+ * `not_found` is a VOID and not a pending state — a card whose legs read
+ * "1 correct · 2 pending" forever is exactly what re-deriving it gets wrong.
+ */
+const legCounts = (row: FeedContestStandingRow) => {
+    const legs = row.pick?.legs ?? [];
+    let correct = 0;
+    let incorrect = 0;
+    let voided = 0;
+    let pending = 0;
+
+    for (const leg of legs) {
+        switch (tdPsychicSelectionResult(leg?.result)) {
+            case "correct":
+                correct += 1;
+                break;
+            case "incorrect":
+                incorrect += 1;
+                break;
+            case "void":
+            case "canceled":
+                voided += 1;
+                break;
+            default:
+                pending += 1;
+        }
+    }
+
+    return { correct, incorrect, voided, pending, total: legs.length };
+};
+
+/**
+ * A SETTLED ENTRY, whether or not the whole contest has frozen.
+ *
+ * The MVP's `entryIsSettled`. Without the entry this could only ask "has the
+ * contest finished", which keeps a card that has already lost or voided in the
+ * amber "potential points" styling until the very end — worst on TD Psychic,
+ * where a voided card is terminal the moment the capture runs.
+ *
+ * `pick.result` is checked first because a combo folds to a single verdict; the
+ * leg counts answer for the card templates, where the pick row can still read
+ * pending while every leg underneath it is done.
+ */
+const entryIsSettled = (row: FeedContestStandingRow, isFrozenFinal: boolean) => {
+    if (isFrozenFinal) return true;
+    if (!row.pick) return false;
+
+    const result = (row.pick.result ?? "").trim().toLowerCase();
+    if (result === "loss" || result === "void" || result === "not_found") return true;
+
+    const counts = legCounts(row);
+    if (!counts.total) return false;
+    return counts.voided > 0 || counts.pending === 0;
+};
+
+/**
+ * The MVP's `tdPsychicProgressCopy` — what the x/y metric cannot say. A card
+ * sitting at "1 correct · 2 pending" and one that finished "1 correct · 2
+ * incorrect" both read `1/3`, and only the first is still live.
+ *
+ * DIVERGENCE: once the contest freezes the MVP prints its standing's
+ * `resultSummary`, a sentence the server composes. Nothing on this row carries
+ * it, so the correct/incorrect split stands in — the same counts, without the
+ * prose. Add the copy here if the endpoint ever grows the field.
+ */
+const tdPsychicProgressCopy = (
+    row: FeedContestStandingRow,
+    isFrozenFinal: boolean
+): string | null => {
+    if (!row.pick) return null;
+    const counts = legCounts(row);
+    if (!counts.total) return null;
+    if (counts.voided > 0) return "VOID";
+    if (counts.pending > 0 && !isFrozenFinal)
+        return `${counts.correct} correct · ${counts.pending} pending`;
+    return `${counts.correct} correct · ${counts.incorrect} incorrect`;
+};
+
+/**
+ * The standing, restated as the row the entry cards already take.
+ *
+ * `ContestEntryFeedCard` is built against /entries' row and reads five fields
+ * off it. Adapting here rather than widening that card keeps ONE entry-card
+ * contract across both tabs — the alternative is a card that accepts a union and
+ * has to ask which surface it is on.
+ *
+ * `id` is the PICK id, not the leaderboard row id: the card uses it as the
+ * pick's own identity for the feed item it builds. `submitted_at` stands in from
+ * `entered_at`, which is the only timestamp a standing carries and is the same
+ * instant for an entry that has never been replaced.
+ */
+const asEntryRow = (row: FeedContestStandingRow): FeedContestEntryRow => ({
+    id: row.pick_id ?? row.id,
+    is_own: row.is_own,
+    is_revealed: row.is_entry_revealed,
+    member: row.member,
+    participant_status: null,
+    joined_at: null,
+    entered_at: row.entered_at,
+    submitted_at: row.entered_at,
+    updated_at: row.updated_at,
+    pick: row.pick,
+});
+
+/**
  * Only a SETTLED board earns a podium colour. Before that every row is neutral,
  * because the ordering is provisional and a gold marker would read as a result.
  */
@@ -143,6 +272,16 @@ export type FeedContestStandingsPanelProps = {
     currentUserId?: string;
     accent?: FeedContestStandingsAccent;
     onShowMore?: () => void;
+    /**
+     * Sunday Pick'em only — splits each tile's total into odds + bonus on an
+     * expanded entry card. The leaderboard's contest projection omits it, so it
+     * comes from the detail read this panel already sits inside, exactly as the
+     * Entries tab receives it.
+     */
+    pickemCorrectBonus?: number | null;
+    /** Names an expanded entry card's header and links it back to this contest. */
+    contestName?: string;
+    contestHref?: string;
 };
 
 const StandingRow = ({
@@ -153,9 +292,17 @@ const StandingRow = ({
     winningPlaces,
     showOdds,
     pointsLabel,
+    template,
+    entryFormat,
     accent,
     isOwn,
     zebra,
+    expanded,
+    onToggleEntry,
+    currentUserId,
+    pickemCorrectBonus,
+    contestName,
+    contestHref,
 }: {
     row: FeedContestStandingRow;
     position: number;
@@ -164,9 +311,17 @@ const StandingRow = ({
     winningPlaces: number;
     showOdds: boolean;
     pointsLabel: string;
+    template: string;
+    entryFormat: FeedContestEntryFormat;
     accent: FeedContestStandingsAccent;
     isOwn: boolean;
     zebra?: string;
+    expanded: boolean;
+    onToggleEntry: () => void;
+    currentUserId?: string;
+    pickemCorrectBonus?: number | null;
+    contestName?: string;
+    contestHref?: string;
 }) => {
     const name = memberName(row);
     const tone = placementTone(row.rank, isFrozenFinal, isRanked, winningPlaces);
@@ -190,12 +345,12 @@ const StandingRow = ({
      * common case rather than the edge — a 2-of-3 card places on the podium and
      * still earns nothing, so an amber +0 beside a bronze marker reads as a bug.
      *
-     * TODO(api): the MVP also settles a row mid-grading, off the entry's own
-     * `result` / `pendingCount` / `voidCount`. This endpoint returns none of the
-     * three (see the header note on the missing entry payload), so a dead card
-     * here keeps the potential styling until the whole contest freezes.
+     * `entryIsSettled` — not `isFrozenFinal` — is what closes the row, matching
+     * the MVP now that the entry rides along on the standing. A dead card stops
+     * reading as live at the moment it dies rather than when the contest does.
      */
-    const noPointsEarned = !reversed && isFrozenFinal && points <= 0;
+    const settled = entryIsSettled(row, isFrozenFinal);
+    const noPointsEarned = !reversed && settled && points <= 0;
     const pointsState = reversed
         ? "reversed"
         : noPointsEarned
@@ -206,10 +361,24 @@ const StandingRow = ({
                     ? "awarded"
                     : "confirmed";
 
+    /*
+     * The entry is disclosable only when the server actually sent it. Gated on
+     * `pick` and never on the lifecycle status: before the lock every row but the
+     * viewer's own arrives with `pick: null`, so an "Entry" affordance derived
+     * from the status would open an empty panel on someone else's hidden card.
+     */
+    const entry = row.pick;
+    const entryPanelId = `standing-entry-${row.pick_id ?? row.id}`;
+    const progressCopy =
+        template === "td_psychic" ? tdPsychicProgressCopy(row, isFrozenFinal) : null;
+
+    const tdPsychicLegs = (entry?.legs ?? []) as unknown as TdPsychicStoredLeg[];
+
     return (
         <li
             data-standing-row
             data-standing-rank={row.rank ?? undefined}
+            data-standing-template={template}
             data-standing-placement={tone}
             data-standing-current-user={isOwn ? "true" : undefined}
             className={zebra}
@@ -256,6 +425,51 @@ const StandingRow = ({
                             </span>
                         ) : null}
                     </div>
+                    {/* The MVP's `data-standing-meta-row`: the progress line and
+                        the entry disclosure share one wrapping row, so a long
+                        TD summary pushes the toggle to the next line rather
+                        than squeezing it. */}
+                    {progressCopy || entry ? (
+                        <div
+                            data-standing-meta-row
+                            className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5"
+                        >
+                            {progressCopy ? (
+                                <span
+                                    data-standing-result-summary
+                                    className="min-w-0 truncate text-[10px] leading-4 text-gray-500"
+                                >
+                                    {progressCopy}
+                                </span>
+                            ) : null}
+                            {entry ? (
+                                <button
+                                    data-standing-action="entry"
+                                    type="button"
+                                    aria-label={`${expanded ? "Hide" : "View"} ${name} entry`}
+                                    aria-expanded={expanded}
+                                    aria-controls={entryPanelId}
+                                    onClick={onToggleEntry}
+                                    className="relative inline-flex min-h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 transition after:absolute after:-inset-x-1 after:-inset-y-2 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                                >
+                                    Entry
+                                    <svg
+                                        aria-hidden
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="1.8"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""
+                                            }`}
+                                    >
+                                        <path d="m6 9 6 6 6-6" />
+                                    </svg>
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : null}
                     {isFrozenFinal && row.achievement_id ? (
                         <p
                             className={`mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${accentClasses[accent].textSoft}`}
@@ -352,6 +566,51 @@ const StandingRow = ({
                     </div>
                 </dl>
             </div>
+
+            {/* The entry itself, in the SAME cards the Entries tab renders — a TD
+                card gets the receipt card and everything else the feed card, so a
+                member recognises their slate whichever tab they opened it from. */}
+            {entry && expanded ? (
+                <div
+                    id={entryPanelId}
+                    role="region"
+                    aria-label={`${name} entry details`}
+                    className="border-t border-white/10 bg-black/25"
+                >
+                    {entryFormat === "td_psychic" ? (
+                        <div
+                            data-td-psychic-submitted-entry
+                            className="px-5 py-3 sm:px-6 sm:py-4"
+                        >
+                            <TdPsychicEntryCard
+                                selections={tdPsychicEntrySelections(
+                                    tdPsychicLegs,
+                                    undefined,
+                                    isOwn
+                                )}
+                                submittedAt={row.entered_at}
+                                comboAmericanOdds={
+                                    isTdPsychicCardLocked(tdPsychicLegs)
+                                        ? (entry.american_odds ?? null)
+                                        : undefined
+                                }
+                            />
+                        </div>
+                    ) : (
+                        <ContestEntryFeedCard
+                            row={asEntryRow(row)}
+                            pick={entry}
+                            contextualPointsLabel={pointsLabel}
+                            currentUserId={currentUserId}
+                            accent={accent === "arena" ? "violet" : "sky"}
+                            entryFormat={entryFormat}
+                            pickemCorrectBonus={pickemCorrectBonus}
+                            contestName={contestName}
+                            contestHref={contestHref}
+                        />
+                    )}
+                </div>
+            ) : null}
         </li>
     );
 };
@@ -369,7 +628,19 @@ export const FeedContestStandingsPanel = ({
     currentUserId,
     accent = "league",
     onShowMore,
+    pickemCorrectBonus,
+    contestName,
+    contestHref,
 }: FeedContestStandingsPanelProps) => {
+    /*
+     * One open disclosure at a time, as the MVP's `expandedStandingEntryId` is.
+     * Declared before the early returns so the hook order is stable across the
+     * draft / error / loading branches below.
+     */
+    const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+    const toggleEntry = (key: string) =>
+        setExpandedEntryId((current) => (current === key ? null : key));
+
     if (isDraft) {
         return (
             <p className="text-sm leading-6 text-gray-500">
@@ -417,6 +688,26 @@ export const FeedContestStandingsPanel = ({
     const rows = leaderboard.standings;
     const isRanked = leaderboard.is_ranked;
 
+    /*
+     * Which builder produced these entries — the same derivation the Entries tab
+     * makes, and for the same reason: all three models are stored as combos, so
+     * no row can say which it is and only the CONTEST knows. Reading it off the
+     * row would render a Pick'em card as a parlay leg list. `entry_model` is the
+     * authoritative column; `template` is checked too because both travel on
+     * this envelope and cannot disagree.
+     */
+    const entryFormat: FeedContestEntryFormat =
+        leaderboard.contest.entry_model === "td_psychic_card" ||
+            leaderboard.contest.template === "td_psychic"
+            ? "td_psychic"
+            : leaderboard.contest.entry_model === "pickem_card" ||
+                leaderboard.contest.template === "sunday_pickem"
+                ? "sunday_pickem"
+                : "general_combo";
+
+    /** Keyed on the PICK, so the pinned own-row and its board twin stay in step. */
+    const entryKey = (row: FeedContestStandingRow) => row.pick_id ?? row.id;
+
     if (!rows.length) {
         return (
             <p className="rounded-xl border border-dashed border-white/15 bg-black/25 px-4 py-5 text-sm leading-6 text-gray-500">
@@ -460,8 +751,16 @@ export const FeedContestStandingsPanel = ({
                             winningPlaces={winningPlaces}
                             showOdds={showOdds}
                             pointsLabel={pointsLabel}
+                            template={template}
+                            entryFormat={entryFormat}
                             accent={accent}
                             isOwn
+                            expanded={expandedEntryId === entryKey(own)}
+                            onToggleEntry={() => toggleEntry(entryKey(own))}
+                            currentUserId={currentUserId}
+                            pickemCorrectBonus={pickemCorrectBonus}
+                            contestName={contestName}
+                            contestHref={contestHref}
                         />
                     </ul>
                 </div>
@@ -499,9 +798,17 @@ export const FeedContestStandingsPanel = ({
                             winningPlaces={winningPlaces}
                             showOdds={showOdds}
                             pointsLabel={pointsLabel}
+                            template={template}
+                            entryFormat={entryFormat}
                             accent={accent}
                             isOwn={Boolean(currentUserId) && row.member.id === currentUserId}
                             zebra={zebraRowClassName(index)}
+                            expanded={expandedEntryId === entryKey(row)}
+                            onToggleEntry={() => toggleEntry(entryKey(row))}
+                            currentUserId={currentUserId}
+                            pickemCorrectBonus={pickemCorrectBonus}
+                            contestName={contestName}
+                            contestHref={contestHref}
                         />
                     ))}
                 </ol>

@@ -3469,14 +3469,35 @@ export type FeedContestStandingRow = {
     contest_points: number | null;
     correct_picks: number | null;
     /**
-     * Both WITHHELD as null until the contest locks, for everyone but the
-     * viewer's own row — the price and the leg count are exactly what a rival
-     * would read the field early to learn. Null here means "not visible yet",
-     * never "no value"; `is_entry_revealed` on the row says which.
+     * WITHHELD as null until the contest locks, for everyone but the viewer's own
+     * row — it is `legs.length`, the one signal that cannot be recovered from the
+     * price, so publishing it early would tell the field how long a parlay each
+     * rival built. Null here means "not visible yet", never "no value";
+     * `is_entry_revealed` on the row says which.
      */
     total_picks: number | null;
+    /**
+     * NOT withheld, unlike `total_picks` beside it. `contest_points` is live from
+     * the moment an entry is accepted and inverts back to the price, so gating
+     * this would narrow the disclosure rather than close it — the server sends it
+     * to everyone deliberately, and the board is meant to show what each entrant
+     * is playing for.
+     */
     combo_odds: number | null;
     is_entry_revealed: boolean;
+    /**
+     * The ENTRY this standing scored from, in the same shape /entries returns —
+     * so one client model renders a card on either surface and the board can show
+     * what someone played without a second call.
+     *
+     * NULL means one of two different things, and `is_entry_revealed` above is
+     * what tells them apart: FALSE there means "hidden from you until the lock"
+     * (the server narrows the read to the caller's own rows by user_id, so no
+     * other member's slate is even SELECTed), TRUE means this standing genuinely
+     * has no pick behind it. A TD Psychic card arrives past the same member
+     * boundary /entries applies.
+     */
+    pick: FeedContestEntryPick | null;
     pick_id: string | null;
     participant_id: string | null;
     achievement_id: string | null;
