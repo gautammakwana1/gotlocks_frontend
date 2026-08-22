@@ -656,8 +656,41 @@ html:has([data-app-scale="desktop"]) {
   }
 }
 
+/*
+ * `backwards`, NOT `both`.
+ *
+ * `both` freezes the final keyframe on the element for ever, and that keyframe
+ * sets a transform. A non-`none` transform makes the element a CONTAINING BLOCK
+ * for every `position: fixed` descendant — so a centred modal opened from inside
+ * a tab panel stopped being centred in the viewport and was centred in the
+ * (arbitrarily tall, scrollable) panel instead. On the Arena settings tab that
+ * meant scrolling down the page to find the delete confirmation dialog.
+ *
+ * `backwards` is visually identical here: there is no animation-delay, so the
+ * `from` state still applies at the start, and the `to` state is exactly the
+ * element's own resting style — opacity 1, no transform — so dropping the frozen
+ * fill on completion changes nothing on screen and releases the containing block.
+ */
 .workspace-tab-panel {
-  animation: workspaceTabIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /*
+   * A transform does three things at once, and only one of them was wanted.
+   * These two keep the other two, so dropping the frozen transform is a
+   * no-op for everything except fixed positioning:
+   *
+   *   position: relative    keeps the panel a containing block for any
+   *                         `position: absolute` descendant that has no closer
+   *                         positioned ancestor — the transform was providing
+   *                         that, and those elements would otherwise jump out
+   *                         to the app shell.
+   *   isolation: isolate    keeps the stacking context, so descendant z-index
+   *                         layering against the panel's siblings is unchanged.
+   *
+   * Neither creates a containing block for `position: fixed`, which is the
+   * whole point.
+   */
+  position: relative;
+  isolation: isolate;
+  animation: workspaceTabIn 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

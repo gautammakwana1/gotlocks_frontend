@@ -4,16 +4,9 @@ import { formatContestDateTime } from "@/lib/contests/feedContestCatalog";
 import type {
     FeedContestEntriesData,
     FeedContestEntryRow,
-    FeedContestEntryPick,
 } from "@/lib/interfaces/interfaces";
-import type { FeedContestEntryFormat } from "@/components/social/PickCardContent";
-import {
-    isTdPsychicCardLocked,
-    tdPsychicEntrySelections,
-    type TdPsychicStoredLeg,
-} from "@/lib/contests/tdPsychicEntry";
+import type { FeedContestEntryFormat } from "@/components/social/pick-card/types";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
-import TdPsychicEntryCard from "./TdPsychicEntryCard";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
 /* ----------------------------------------------------------------------------
@@ -83,9 +76,14 @@ const memberInitials = (name: string) => (name || "??").slice(0, 2).toUpperCase(
 type ParticipantTone = "sky" | "amber" | "emerald" | "muted" | "red";
 
 /**
- * The MVP's "Your entry" copy matrix (StructuredContestDetail.tsx:457-545). The
- * heading and body both come from here, so the section states its case rather
- * than reporting a bare "Entry accepted" / "No entry yet".
+ * The MVP's "Your entry" copy matrix (StructuredContestDetail.tsx:536-589). The
+ * heading always prints; the BODY is a sentence only where there is something to
+ * say that the heading does not already say.
+ *
+ * "Entry submitted" returns NO body on purpose — the receipt card sits directly
+ * underneath it, so a paragraph explaining that the entry exists and can be
+ * replaced was narrating the thing the member is already looking at. The pill
+ * beneath the card is what offers the replace.
  *
  * Precedence is deliberate: the deadline and a stale rules acceptance both
  * OVERRIDE the stored status, because a member sitting at `opted_in` past lock
@@ -95,18 +93,19 @@ const participantCopy = (
     status: string | null | undefined,
     hasParticipation: boolean,
     rulesCurrent: boolean,
-    deadlinePassed: boolean
-): { title: string; body: string; tone: ParticipantTone } => {
+    deadlinePassed: boolean,
+    pointsLabel: string
+): { title: string; body: string | null; tone: ParticipantTone } => {
     if (!hasParticipation) {
         return deadlinePassed
             ? {
                 title: "Entry window closed",
-                body: "The deadline passed before you submitted an entry. No rank, points, or Contest Achievement can be recorded.",
+                body: `The deadline passed before you submitted an entry. No rank, ${pointsLabel}, or award can be recorded.`,
                 tone: "muted",
             }
             : {
                 title: "Available to enter",
-                body: "Build your picks, then submit everything together to join the contest.",
+                body: "Choose your picks and submit before the contest locks.",
                 tone: "sky",
             };
     }
@@ -114,7 +113,7 @@ const participantCopy = (
     if (deadlinePassed && preEntry) {
         return {
             title: "Missed deadline",
-            body: "No complete valid entry was received. You are not ranked and earn no points or Contest Achievement.",
+            body: `No complete valid entry was received. You are not ranked and earn no ${pointsLabel} or award.`,
             tone: "muted",
         };
     }
@@ -129,7 +128,7 @@ const participantCopy = (
         case "eligible":
             return {
                 title: "Available to enter",
-                body: "Review the rules and submit a complete entry to claim your spot.",
+                body: "Choose your picks and submit before the contest locks.",
                 tone: "sky",
             };
         case "opted_in":
@@ -141,25 +140,25 @@ const participantCopy = (
         case "entered":
             return {
                 title: "Entry submitted",
-                body: "Your complete entry has a receipt and remains editable only while the entry window is open.",
+                body: null,
                 tone: "emerald",
             };
         case "locked":
             return {
                 title: "Entry locked",
-                body: "Your accepted entry is read-only while results and live standings update automatically.",
+                body: "Your accepted entry is read-only while results and your live rank update automatically.",
                 tone: "sky",
             };
         case "completed":
             return {
                 title: "Contest complete",
-                body: "Your result is available in the frozen final standings.",
+                body: "Your result is available in the frozen final rank.",
                 tone: "emerald",
             };
         case "missed_deadline":
             return {
                 title: "Missed deadline",
-                body: "No complete valid entry was received. You are not ranked and earn no points or Contest Achievement.",
+                body: `No complete valid entry was received. You are not ranked and earn no ${pointsLabel} or award.`,
                 tone: "muted",
             };
         case "withdrawn":
@@ -173,13 +172,13 @@ const participantCopy = (
             // carries no `disqualification_reason`, so the generic line stands in.
             return {
                 title: "Disqualified",
-                body: "This entry is ineligible for ranking, points, and achievements.",
+                body: `This entry is ineligible for ranking, ${pointsLabel}, and achievements.`,
                 tone: "red",
             };
         default:
             return {
                 title: "Available to enter",
-                body: "Review the rules and submit a complete entry to claim your spot.",
+                body: "Choose your picks and submit before the contest locks.",
                 tone: "sky",
             };
     }
@@ -267,15 +266,25 @@ export type FeedContestEntriesPanelProps = {
      * The contest this panel belongs to, for each entry card's header line.
      *
      * REQUIRED in practice even though the panel sits inside that very contest:
-     * naming the format ("Feed Contest TD Psychic Entry") is what tells a card
-     * apart from a General Combo, and the same declaration is what makes
-     * `PickCardContent` render a TD or Pick'em card as its own selection grid
-     * rather than as a parlay leg list. Without these two the header still
-     * renders — with a dangling separator and a link to nowhere.
+     * naming the format ("Feed TD Psychic Contest Entry") is what tells a card
+     * apart from a General Combo, and the same declaration is what routes the
+     * entry to `TdPsychicPickCard` or `PickemPickCard` rather than to the parlay
+     * leg list. Without these two the header still renders — with a dangling
+     * separator and a link to nowhere.
      *
      * Passed in rather than read off `entries.contest`: `runFeedContestEntries`
      * returns a narrow projection, and the detail read this panel sits inside
      * already holds both.
+     */
+    /**
+     * The MOVING public quote per scorer, for the viewer.s OWN accepted TD card
+     * while the contest is still open. A TD leg carries no price of its own
+     * until the shared capture, so without this every square on an open card
+     * sits bare — which is the state this tab was in.
+     *
+     * Passed to the own-entry receipt ALONE. A live quote on another member.s
+     * pick is neither theirs to act on nor the price it will be graded at, and
+     * the MVP gates it the same way (StructuredContestDetail.tsx:5261).
      */
     contestName?: string;
     contestHref?: string;
@@ -359,7 +368,7 @@ export const FeedContestEntriesPanel = ({
         return (
             <div
                 aria-label="Contest entries"
-                className="-mx-5 divide-y divide-white/10 overflow-visible border-y border-white/10 sm:mx-0"
+                className="-mx-5 divide-y divide-white/10 overflow-visible border-y border-white/10 sm:-mx-6"
             >
                 <section className="px-5 py-5 sm:px-6">
                     <h2 className="font-semibold text-white">
@@ -425,36 +434,27 @@ export const FeedContestEntriesPanel = ({
         myParticipationStatus,
         hasParticipation,
         rulesCurrent,
-        deadlinePassed
+        deadlinePassed,
+        pointsLabel
     );
 
     const ownRow = entries.entries.find((row) => row.is_own) ?? null;
     const ownEntry = ownRow?.pick ?? null;
 
     /*
-     * A TD card gets the receipt card, not the feed pick card — on every entry
-     * in this list, the reader's own and everyone else's.
+     * EVERY format renders through `ContestEntryFeedCard` — General Combo,
+     * Pick'em and TD Psychic alike — which is what the MVP does and what stops
+     * this tab drawing a TD card one way and the Feed drawing it another.
      *
-     * The MVP guards its generic `ContestSubmittedEntryCard` with
-     * `template !== "td_psychic"` and routes every TD surface through
-     * `TdPsychicEntryCard`, so one ordered row of three square scorer cards is
-     * what a member recognises in the builder tray, review, this list and their
-     * own receipt. A parlay leg list is the wrong shape for it: a TD card is not
-     * a priced combination of three picks, it is three independent scorers that
-     * rank on how many hit.
+     * The card decides its own shape from the declared `entryFormat`: a TD entry
+     * gets its ordered row of three square scorer cards, a Pick'em entry gets its
+     * paged team tiles, and only a real General Combo gets the parlay leg list.
      *
-     * `includePublicDataOdds` is TRUE only for the reader's own row, mirroring
-     * the MVP's `showPublicDataOdds` default. Someone else's still-open card
-     * shows no odds row at all.
+     * `TdPsychicEntryCard` is now referenced by nothing — the same state the MVP
+     * leaves its own copy in. It is kept on disk rather than deleted because it
+     * is the only component that knows how to draw the two-state
+     * `Public data` / `Odds at lock` square on its own.
      */
-    const isTdPsychicEntries = entryFormat === "td_psychic";
-    const tdPsychicCardFor = (pick: FeedContestEntryPick, isOwn: boolean) => {
-        const legs = (pick.legs ?? []) as unknown as TdPsychicStoredLeg[];
-        return {
-            selections: tdPsychicEntrySelections(legs, undefined, isOwn),
-            locked: isTdPsychicCardLocked(legs),
-        };
-    };
 
     /*
      * The receipt and the field are shown TOGETHER, not as alternatives.
@@ -485,7 +485,7 @@ export const FeedContestEntriesPanel = ({
     return (
         <div
             aria-label="Contest entries"
-            className="-mx-5 divide-y divide-white/10 overflow-visible border-b border-white/10 sm:mx-0"
+            className="-mx-5 divide-y divide-white/10 overflow-visible border-b border-white/10 sm:-mx-6"
         >
             {/* THE RECEIPT ARTICLE — two shapes, never both.
                 With an entry it is a record: an eyebrow and the status on the
@@ -521,38 +521,21 @@ export const FeedContestEntriesPanel = ({
                                     Entries open {opensAtLabel}.
                                 </p>
                             ) : null}
-                            {isTdPsychicEntries ? (
-                                // Not bled: the receipt card carries its own frame,
-                                // so it sits inside the section's gutter rather
-                                // than spanning it like the feed card does.
-                                <div className="mt-4" data-td-psychic-submitted-entry>
-                                    <TdPsychicEntryCard
-                                        selections={tdPsychicCardFor(ownEntry, true).selections}
-                                        submittedAt={ownRow!.submitted_at}
-                                        comboAmericanOdds={
-                                            tdPsychicCardFor(ownEntry, true).locked
-                                                ? (ownEntry.american_odds ?? null)
-                                                : undefined
-                                        }
-                                    />
-                                </div>
-                            ) : (
-                                /* Bled to the full panel width — the feed card owns
-                                   its own px-5/sm:px-6 gutter. */
-                                <div className="-mx-5 mt-1 sm:-mx-6">
-                                    <ContestEntryFeedCard
-                                        row={ownRow!}
-                                        pick={ownEntry}
-                                        contextualPointsLabel={pointsLabel}
-                                        currentUserId={currentUserId}
-                                        accent={cardAccent}
-                                        entryFormat={entryFormat}
-                                        pickemCorrectBonus={pickemCorrectBonus}
-                                        contestName={contestName}
-                                        contestHref={contestHref}
-                                    />
-                                </div>
-                            )}
+                            {/* Bled to the full panel width — the feed card owns
+                                its own px-5/sm:px-6 gutter. */}
+                            <div className="-mx-5 mt-1 sm:-mx-6">
+                                <ContestEntryFeedCard
+                                    row={ownRow!}
+                                    pick={ownEntry}
+                                    contextualPointsLabel={pointsLabel}
+                                    currentUserId={currentUserId}
+                                    accent={cardAccent}
+                                    entryFormat={entryFormat}
+                                    pickemCorrectBonus={pickemCorrectBonus}
+                                    contestName={contestName}
+                                    contestHref={contestHref}
+                                />
+                            </div>
                         </section>
                     ) : (
                         <>
@@ -656,34 +639,22 @@ export const FeedContestEntriesPanel = ({
                         {otherRows.map((row, index) => (
                             <li key={row.id} className={zebraRowClassName(index)}>
                                 {row.pick ? (
-                                    isTdPsychicEntries ? (
-                                        <div
-                                            className="px-5 py-4 sm:px-6"
-                                            data-td-psychic-submitted-entry
-                                        >
-                                            <TdPsychicEntryCard
-                                                selections={
-                                                    tdPsychicCardFor(row.pick, false).selections
-                                                }
-                                                submittedAt={row.submitted_at}
-                                                comboAmericanOdds={
-                                                    tdPsychicCardFor(row.pick, false).locked
-                                                        ? (row.pick.american_odds ?? null)
-                                                        : undefined
-                                                }
-                                            />
-                                        </div>
-                                    ) : (
-                                        <ContestEntryFeedCard
-                                            row={row}
-                                            pick={row.pick}
-                                            contextualPointsLabel={pointsLabel}
-                                            currentUserId={currentUserId}
-                                            accent={cardAccent}
-                                            entryFormat={entryFormat}
-                                            pickemCorrectBonus={pickemCorrectBonus}
-                                        />
-                                    )
+                                    <ContestEntryFeedCard
+                                        row={row}
+                                        pick={row.pick}
+                                        contextualPointsLabel={pointsLabel}
+                                        currentUserId={currentUserId}
+                                        accent={cardAccent}
+                                        entryFormat={entryFormat}
+                                        pickemCorrectBonus={pickemCorrectBonus}
+                                        // The field's rows carry the contest header
+                                        // too. Omitting these left every card in the
+                                        // list with a dangling "· Feed Combo Contest
+                                        // Entry" and a link to nowhere, while the
+                                        // viewer's own entry above it read correctly.
+                                        contestName={contestName}
+                                        contestHref={contestHref}
+                                    />
                                 ) : (
                                     <EntryStubContent row={row} />
                                 )}

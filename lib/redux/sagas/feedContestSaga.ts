@@ -28,6 +28,8 @@ import type {
     FeedContestPicksData,
     FeedContestPodiumListData,
     FeedContestStatsData,
+    FeedContestRewardPrizesData,
+    FeedContestRewardPrizesPayload,
     FeedContestSection,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
@@ -98,6 +100,9 @@ import {
     updateFeedContestFailure,
     updateFeedContestRequest,
     updateFeedContestSuccess,
+    updateFeedContestRewardPrizesFailure,
+    updateFeedContestRewardPrizesRequest,
+    updateFeedContestRewardPrizesSuccess,
 } from "../slices/feedContestSlice";
 
 type ApiErrorResponse = { message?: string };
@@ -525,6 +530,50 @@ function* handleUpdateFeedContest(
         yield put(
             updateFeedContestFailure(
                 getErrorMessage(error, "Failed to update the contest")
+            )
+        );
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * PATCH /reward/:contest_id/prizes — the podium prize WORDING, and the only
+ * reward write allowed after a contest has gone live.
+ *
+ * The settlement method, the venue, the pickup instructions and the contact
+ * email are rebuilt server-side from the stored row, so they are not sent: they
+ * are the deal a member accepted when they entered. The SET of paid places is
+ * frozen too — a `prizes` array with a place added or removed answers 409, not
+ * 200, so the caller must send exactly the placements the reward already has.
+ *
+ * `organizer_confirmed` is re-taken on every edit rather than inherited: an
+ * amended offer with no fresh signature behind it is the one state this feature
+ * must never reach.
+ * -------------------------------------------------------------------------- */
+function* handleUpdateFeedContestRewardPrizes(
+    action: PayloadAction<FeedContestRewardPrizesPayload>
+): SagaIterator {
+    const { contest_id, ...body } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.patch,
+            `${API_BASE_URL}/group/feed-contest/reward/${encodeURIComponent(contest_id)}/prizes`,
+            body
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: FeedContestRewardPrizesData;
+        };
+        yield put(
+            updateFeedContestRewardPrizesSuccess({
+                contest_id,
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            updateFeedContestRewardPrizesFailure(
+                getErrorMessage(error, "Failed to update the contest prizes")
             )
         );
     }
@@ -978,6 +1027,12 @@ export default function* feedContestSaga(): SagaIterator {
     // repeat delete is a 409, not a harmless no-op like cancel/archive.
     yield takeLatest(deleteFeedContestRequest.type, handleDeleteFeedContest);
     yield takeLatest(updateFeedContestRequest.type, handleUpdateFeedContest);
+    // takeLatest: one Settings tab at a time, and the save button is disabled
+    // while it runs. A repeat with unchanged wording is a harmless 200.
+    yield takeLatest(
+        updateFeedContestRewardPrizesRequest.type,
+        handleUpdateFeedContestRewardPrizes
+    );
     // takeLatest: one contest's field is on screen at a time, and the "Show
     // more" page and the post-write refetch are the same read — newest wins.
     yield takeLatest(fetchFeedContestEntriesRequest.type, handleFetchFeedContestEntries);

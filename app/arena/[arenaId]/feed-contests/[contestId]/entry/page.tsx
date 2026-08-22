@@ -57,12 +57,17 @@ const ArenaFeedContestEntryPage = () => {
         !scopedHosting ||
         (WRITABLE_ARENA_HOSTING_STATUSES.includes(scopedHosting.status) &&
             scopedUnlock?.status === "unlocked");
+    // The tier's participating-member ceiling, read exactly as the detail route
+    // reads it — the shell prints the "contest full" notice against it.
+    const participantLimit =
+        hostingForId === arenaId ? hosting?.participating_member_limit ?? null : null;
 
     return (
         <FeedContestEntryShell
             contestId={contestId}
             detailHref={`/arena/${arenaId}/feed-contests/${contestId}`}
             writable={writable}
+            participantLimit={participantLimit}
             accent="arena"
         />
     );

@@ -41,6 +41,37 @@ export const TD_PSYCHIC_FULL_CARD_WARNING =
     "You already have 3 TD scorers. Remove one before selecting another.";
 
 /**
+ * The offensive positions a touchdown scorer can hold.
+ *
+ * FAILS CLOSED, which is the point. A provider that mislabels a defensive or
+ * special-teams player under the player-touchdown market would otherwise put
+ * "CB" or "K" on a scorer card, and the position is the one piece of the
+ * identity a member uses to sanity-check a name they half-recognise. Anything
+ * outside this list renders NOTHING rather than the raw string.
+ */
+export const TD_PSYCHIC_ELIGIBLE_PLAYER_POSITIONS = [
+    "QB",
+    "RB",
+    "WR",
+    "TE",
+    "FB",
+] as const;
+
+export type TdPsychicEligiblePlayerPosition =
+    (typeof TD_PSYCHIC_ELIGIBLE_PLAYER_POSITIONS)[number];
+
+const eligiblePlayerPositions = new Set<string>(TD_PSYCHIC_ELIGIBLE_PLAYER_POSITIONS);
+
+export const getTdPsychicEligiblePlayerPosition = (
+    position: string | null | undefined
+): TdPsychicEligiblePlayerPosition | null => {
+    const normalized = position?.trim().toUpperCase();
+    return normalized && eligiblePlayerPositions.has(normalized)
+        ? (normalized as TdPsychicEligiblePlayerPosition)
+        : null;
+};
+
+/**
  * One pickable scorer, as the builder sees it.
  *
  * The MVP's `TdPsychicCatalogSelection`, rebuilt from the wire rather than from
@@ -331,6 +362,11 @@ export const tdPsychicSelectionResult = (result: unknown): TdPsychicSelectionRes
             return "incorrect";
         case "void":
         case "not_found":
+        // A push is a SETTLED non-result, not an unfinished one. Leaving it in
+        // the pending bucket makes a card the book has already closed out read
+        // as though it were still playing — and on a terminal card that never
+        // resolves, because nothing re-grades a leg after settlement.
+        case "push":
             return "void";
         case "canceled":
         case "cancelled":

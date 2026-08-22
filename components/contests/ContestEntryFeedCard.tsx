@@ -1,10 +1,13 @@
 "use client";
 
 import FeedList from "@/components/social/FeedList";
+import PickCard from "@/components/social/pick-card/PickCard";
 import type {
     FeedContestEntryFormat,
     PickCardAccent,
-} from "@/components/social/PickCardContent";
+    PickCardContestStanding,
+    PickCardPresentation,
+} from "@/components/social/pick-card/types";
 import type {
     FeedContestEntryPick,
     FeedContestEntryRow,
@@ -17,10 +20,14 @@ import type {
  * ONE accepted contest entry, rendered as a FEED POST.
  *
  * This is the MVP's `ContestComboEntryCard` (StructuredContestDetail.tsx:748):
- * it does not draw a card of its own at all — it hands the entry to `FeedList`
- * as a single embedded item, so an accepted entry reads exactly like the pick
- * posts everywhere else in the app, with the same tier colouring, the same
- * combo-legs disclosure and the same result chip.
+ * it draws no card of its own — it hands the entry to `FeedList` as a single
+ * embedded item, so an accepted entry reads exactly like the pick posts
+ * everywhere else in the app, with the same tier colouring, the same combo-legs
+ * disclosure and the same result chip.
+ *
+ * `entryOnly` is the one exception: there is no author row or footer to draw, so
+ * it skips `FeedList` and renders the card variant directly. That is the MVP's
+ * `displayMode="standings"` (StructuredContestDetail.tsx:689).
  *
  * The only substitution is the points vocabulary: inside a contest a pick is
  * worth League / Arena Points, not global XP, which is what
@@ -99,6 +106,22 @@ export type ContestEntryFeedCardProps = {
     /** Required by the feed_contest presentation; the entry's own contest page. */
     contestHref?: string;
     contestName?: string;
+    /**
+     * The entry's place on the board, when the surface holds one. Absent on the
+     * Feed and in the Entries list, where the read carries no rank — and absent
+     * is exactly what "never ranked" means there, so the tile reads "Pending".
+     */
+    standing?: PickCardContestStanding;
+    /** False keeps a settled non-qualifier visible without podium styling. */
+    placementEligible?: boolean;
+    /**
+     * Selections ONLY — no author row, no metric rail, no footer.
+     *
+     * What the Standings tab expands to: the row above the expansion already
+     * states the rank, the member and the points, so repeating them inside it
+     * makes the expansion twice as tall and says nothing new.
+     */
+    entryOnly?: boolean;
 };
 
 export const ContestEntryFeedCard = ({
@@ -111,36 +134,57 @@ export const ContestEntryFeedCard = ({
     pickemCorrectBonus,
     contestHref,
     contestName,
-}: ContestEntryFeedCardProps) => (
-    <FeedList
-        items={[toContestEntryFeedItem(row, pick)]}
-        embedded
-        currentUserId={currentUserId}
-        contextualPointsLabel={contextualPointsLabel}
-        accent={accent}
-        // Only declared when the caller named a format. Without it the card
-        // keeps its plain combo rendering, which is the correct default for
-        // every General Combo entry and for any surface that cannot say.
-        getItemPresentation={
-            entryFormat
-                ? () => ({
-                      kind: "feed_contest" as const,
-                      contestHref: contestHref ?? "",
-                      contestName: contestName ?? "",
-                      contextualPointsLabel:
-                          contextualPointsLabel === "Arena Points"
-                              ? ("Arena Points" as const)
-                              : ("League Points" as const),
-                      entryFormat,
-                      pickemCorrectBonus,
-                  })
-                : undefined
-        }
-        // Reactions belong to the Feed, not to a contest's field: an entry is a
-        // competitive submission, and the MVP turns them off here for that reason.
-        showReactions={false}
-        showTopBorder={false}
-    />
-);
+    standing,
+    placementEligible,
+    entryOnly = false,
+}: ContestEntryFeedCardProps) => {
+    const resolvedEntryFormat = entryFormat ?? "general_combo";
+    /*
+     * ALWAYS declared, unlike before — the format defaults to General Combo
+     * rather than to no presentation at all.
+     *
+     * Dropping the presentation is what used to make an entry render as a plain
+     * combo post with no contest header, and it is only ever a General Combo
+     * that renders correctly that way by accident. Naming the format is also
+     * what routes a Pick'em or TD entry to its own card instead of to a parlay
+     * leg list.
+     */
+    const presentation: PickCardPresentation = {
+        kind: "feed_contest",
+        contestHref: contestHref ?? "",
+        contestName: contestName ?? "",
+        contextualPointsLabel:
+            contextualPointsLabel === "Arena Points" ? "Arena Points" : "League Points",
+        entryFormat: resolvedEntryFormat,
+        pickemCorrectBonus,
+        standing,
+        placementEligible,
+    };
+    const item = toContestEntryFeedItem(row, pick);
+
+    return entryOnly ? (
+        <PickCard
+            pick={item}
+            entryOnly
+            accent={accent}
+            contextualPointsLabel={contextualPointsLabel}
+            presentation={presentation}
+        />
+    ) : (
+        <FeedList
+            items={[item]}
+            embedded
+            currentUserId={currentUserId}
+            contextualPointsLabel={contextualPointsLabel}
+            accent={accent}
+            getItemPresentation={() => presentation}
+            // Reactions belong to the Feed, not to a contest's field: an entry is
+            // a competitive submission, and the MVP turns them off here for that
+            // reason.
+            showReactions={false}
+            showTopBorder={false}
+        />
+    );
+};
 
 export default ContestEntryFeedCard;

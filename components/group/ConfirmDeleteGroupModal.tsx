@@ -1,4 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+/* ----------------------------------------------------------------------------
+ * The shared "type the emailed code" delete dialog, used by both the League
+ * settings tab and the Arena settings tab.
+ *
+ * It renders through a PORTAL onto document.body, and that is load-bearing
+ * rather than tidiness. `position: fixed` is resolved against the nearest
+ * ancestor that has a transform, filter or containment — and the Arena mounts
+ * this dialog inside `<main class="workspace-tab-panel">`, which used to keep a
+ * frozen `translate3d` from its entrance animation. The overlay then covered the
+ * whole scrollable settings panel instead of the viewport, so the dialog sat
+ * wherever the middle of that panel happened to be and the owner had to scroll
+ * to find it. The League never hit it only because it happens to mount the
+ * dialog at its page root.
+ *
+ * The animation no longer leaves that transform behind (see `.workspace-tab-panel`
+ * in globals.css), but a modal should not depend on every future ancestor
+ * staying transform-free — so it escapes the tree outright.
+ * -------------------------------------------------------------------------- */
 
 type DeleteGroupModalProps = {
     open: boolean;
@@ -26,6 +46,13 @@ export const DeleteGroupConfirmationModal = ({
 }: DeleteGroupModalProps) => {
     const modalRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    // `document` does not exist during the server render, so the portal target
+    // is only claimed once this has mounted on the client.
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (!open) return;
@@ -48,7 +75,7 @@ export const DeleteGroupConfirmationModal = ({
         };
     }, [open, onClose]);
 
-    if (!open) return null;
+    if (!open || !mounted) return null;
 
     const titleId = "delete-group-title";
     const descriptionId = "delete-group-description";
@@ -92,9 +119,13 @@ export const DeleteGroupConfirmationModal = ({
         ? "Only the commissioner can delete this group."
         : errorMessage;
 
-    return (
+    return createPortal(
+        // `overflow-y-auto` + `items-start sm:items-center`: on a short viewport
+        // the dialog is taller than the screen, and without this the overlay
+        // clipped its top with nothing to scroll. Now the OVERLAY scrolls — the
+        // page behind it never has to.
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 py-8"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/80 px-4 py-8 sm:items-center"
             role="presentation"
             onMouseDown={handleOverlayClick}
         >
@@ -168,6 +199,7 @@ export const DeleteGroupConfirmationModal = ({
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

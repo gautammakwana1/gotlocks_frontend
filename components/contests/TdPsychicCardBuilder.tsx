@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import {
-    CURRENT_ODDS_LOCK_DISCLOSURE,
-    CURRENT_ODDS_PUBLIC_DATA_LABEL,
-} from "@/lib/contests/participationRules";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { CURRENT_ODDS_LOCK_DISCLOSURE } from "@/lib/contests/participationRules";
 import { formatPublicAmericanOdds } from "@/lib/contests/publicCurrentOdds";
 import {
     TD_PSYCHIC_FULL_CARD_WARNING,
@@ -20,6 +17,7 @@ import {
     getPickemTeamCardTint,
     getPickemTeamVisual,
 } from "@/lib/contests/pickemTeamVisual";
+import ContestRulesAcceptance from "./ContestRulesAcceptance";
 import { PickemCarousel } from "./PickemCarousel";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
@@ -27,9 +25,13 @@ import type { FeedContestAccent } from "./FeedContestDetail";
  * "Choose 3 touchdown scorers" — the TD Psychic card builder, ported from the
  * MVP's components/contests/TdPsychicCardBuilder.tsx.
  *
- * Layout, copy, the search-or-browse split, the three-column square grids, the
- * sticky tray and the review screen are the MVP's, verbatim. What changed is
- * where the players come from and one rule:
+ * Layout, copy, the search-or-browse split, the three-column square grids and
+ * the sticky tray are the MVP's, verbatim — including the fact that the tray
+ * button IS the submit. There is no review screen: the tray already shows the
+ * card that is about to be sent, so a second read-only copy of it was chrome
+ * between the member and the entry.
+ *
+ * What differs from the MVP, and why:
  *
  *   - The MVP reads a synchronous local catalog (`tdPsychicCatalog.ts`) plus a
  *     separate quote table. Here both arrive together from
@@ -40,23 +42,30 @@ import type { FeedContestAccent } from "./FeedContestDetail";
  *     the endpoint applies the market / main / `Over` / `0.5` filter itself, so
  *     a second copy here could only drift from the one that is enforced.
  *
+ *   - The MVP's submit is synchronous and calls nothing, so it can have neither
+ *     an in-flight state nor a card to replace. Ours posts an entry and can be
+ *     re-opened over an accepted card, so `Submitting…` and the caller's
+ *     `Replace TD Psychic card` label are DELIBERATE KEEPS, not leftovers.
+ *
  * A NOTE ON THE PICKER CHROME, because it is a deliberate departure from every
  * other contest surface: this component is neutral dark with WHITE controls, not
  * League sky-blue or Arena violet. The domain doc pins it ("the same neutral dark
  * treatment as Sunday Pick'em, with white selection controls instead of
  * League/Arena blue or purple accents") so the only colour on screen is the
  * player's own team tint — which is the thing the member is actually choosing
- * between. `accent` therefore only reaches the small type, never a control.
+ * between. `accent` therefore reaches NOTHING here, not even the small type: it
+ * stays on the props so the shells can hand every builder the same set, and is
+ * ignored on purpose.
  * -------------------------------------------------------------------------- */
-
-const accentClassesFor = (accent: FeedContestAccent) =>
-    accent === "arena"
-        ? { textSoft: "text-violet-200" }
-        : { textSoft: "text-sky-200" };
 
 export type TdPsychicCardBuilderProps = {
     contestId: string;
     matchups: readonly TdPsychicMatchupOptions[];
+    /**
+     * Accepted for parity with the other entry builders and deliberately unused
+     * — see the chrome note above. Removing it would only force every caller to
+     * special-case this one template.
+     */
     accent?: FeedContestAccent;
     loading?: boolean;
     error?: string | null;
@@ -69,6 +78,10 @@ export type TdPsychicCardBuilderProps = {
     onRetry?: () => void;
     submitting?: boolean;
     submitLabel?: string;
+    /** The entry endpoint refused the card; shown under the tray's submit. */
+    submitError?: string | null;
+    /** The entry endpoint accepted the card; shown under the tray's submit. */
+    submitMessage?: string | null;
     /**
      * The accepted card's three players, re-resolved against the CURRENT board
      * (see `tdPsychicPrefillFromLegs`) — seeds a replacement so it opens
@@ -97,7 +110,12 @@ export type TdPsychicCardBuilderProps = {
     ) => void;
 };
 
-type BuilderFeedback = { tone: "warning" | "error" | "success"; message: string };
+/**
+ * The only message the builder raises on its own: a tap onto a card that is
+ * already full. Submit outcomes are NOT here — they belong to the shell that
+ * owns the request, and arrive back as `submitError` / `submitMessage`.
+ */
+type BuilderFeedback = { tone: "warning"; message: string };
 
 const teamPositionLabel = (selection: TdPsychicCatalogSelection) =>
     [selection.teamAbbreviation, selection.position].filter(Boolean).join(" · ");
@@ -106,6 +124,20 @@ const oddsLabelFor = (selection: TdPsychicCatalogSelection) =>
     selection.currentOdds
         ? formatPublicAmericanOdds(selection.currentOdds.americanOdds)
         : "Unavailable";
+
+/**
+ * The team crest colours for a scorer.
+ *
+ * The name is passed ALONGSIDE the abbreviation, which the MVP has no reason to
+ * do: its bundled catalog always supplies a code, whereas the live feed can send
+ * `team_abbreviation: null` and the square would then render the grey `—`
+ * placeholder for a club we can name perfectly well.
+ */
+const teamVisualFor = (selection: TdPsychicCatalogSelection) =>
+    getPickemTeamVisual({
+        abbreviation: selection.teamAbbreviation ?? undefined,
+        name: selection.teamName ?? undefined,
+    });
 
 /* ---------- One pickable square ---------- */
 
@@ -121,9 +153,8 @@ const PlayerChoice = ({
 }) => {
     const selected = pickNumber !== null;
     const currentOddsDescriptionId = `td-current-odds-${selection.id}`;
-    const teamVisual = getPickemTeamVisual({
-        abbreviation: selection.teamAbbreviation ?? undefined,
-    });
+    const oddsCopy = oddsLabelFor(selection);
+    const teamVisual = teamVisualFor(selection);
     return (
         <button
             type="button"
@@ -152,25 +183,33 @@ const PlayerChoice = ({
                     : "border-white/10 hover:-translate-y-0.5 hover:border-white/35"
             }`}
         >
-            <span className="flex w-full min-w-0 items-start justify-between gap-1.5">
+            {/* Selection is signalled by the card's own border, ring and
+                aria-pressed — no tick badge. A hollow circle drawn on every
+                UNSELECTED square is the loudest thing on a grid of nine and says
+                nothing the border does not. */}
+            <span
+                data-td-psychic-card-top
+                className="flex w-full min-w-0 items-start justify-between gap-1.5"
+            >
                 <span
                     aria-hidden="true"
                     className="text-xs font-black tracking-[-0.04em] text-white/90 drop-shadow-md sm:text-lg"
                 >
                     {teamVisual.abbreviation}
                 </span>
-                {/* A tick, never the pick number: a numeral inside a player card
-                    reads as a jersey number. The order is carried by the list and
-                    by this control's own aria-label. */}
                 <span
-                    aria-hidden="true"
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[9px] font-bold sm:h-6 sm:w-6 sm:text-xs ${
-                        selected
-                            ? "border-white bg-white text-black"
-                            : "border-white/25 bg-black/20 text-transparent"
-                    }`}
+                    id={currentOddsDescriptionId}
+                    data-current-odds
+                    data-td-psychic-card-position="top-right"
+                    aria-label={`${selection.playerName} current odds ${oddsCopy}`}
+                    title={oddsCopy}
+                    className="max-w-[60%] min-w-0 shrink text-right"
                 >
-                    ✓
+                    <span className="sr-only">Current odds </span>
+                    {" "}
+                    <span className="block truncate whitespace-nowrap text-[9px] font-bold leading-none tabular-nums text-white sm:text-xs sm:leading-normal">
+                        {oddsCopy}
+                    </span>
                 </span>
             </span>
             <span
@@ -192,18 +231,6 @@ const PlayerChoice = ({
                         {selection.position}
                     </span>
                 ) : null}
-            </span>
-            <span
-                id={currentOddsDescriptionId}
-                data-current-odds
-                className="mt-auto block min-w-0 border-t border-white/20 pt-1 text-left sm:pt-2"
-            >
-                <span className="block min-w-0 truncate text-[7px] font-semibold uppercase leading-none tracking-[0.02em] text-white/60 sm:text-[8px] sm:tracking-[0.07em]">
-                    {CURRENT_ODDS_PUBLIC_DATA_LABEL}
-                </span>
-                <span className="mt-0.5 block truncate text-[9px] font-bold leading-none tabular-nums text-white sm:text-xs sm:leading-normal">
-                    {oddsLabelFor(selection)}
-                </span>
             </span>
             <span
                 data-td-psychic-team-strip
@@ -215,95 +242,24 @@ const PlayerChoice = ({
     );
 };
 
-/* ---------- One read-only square, as the review screen shows it ---------- */
-
-const ReviewCard = ({ selection }: { selection: TdPsychicCatalogSelection }) => {
-    const teamVisual = getPickemTeamVisual({
-        abbreviation: selection.teamAbbreviation ?? undefined,
-    });
-    const odds = oddsLabelFor(selection);
-    return (
-        <li
-            data-td-psychic-pick-card
-            data-team-abbreviation={teamVisual.abbreviation}
-            data-team-color={teamVisual.primary}
-            data-td-psychic-team-surface="team-color"
-            style={
-                {
-                    "--pickem-team-primary": teamVisual.primary,
-                    "--pickem-team-secondary": teamVisual.secondary,
-                    backgroundColor: getPickemTeamCardTint(teamVisual),
-                } as CSSProperties
-            }
-            className="relative isolate flex aspect-square min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0d0f13] p-2 pb-2.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] sm:p-3 sm:pb-3.5"
-        >
-            <span className="flex min-w-0 items-start gap-1.5">
-                <span
-                    aria-hidden="true"
-                    className="text-xs font-black tracking-[-0.04em] text-white/90 drop-shadow-md sm:text-lg"
-                >
-                    {teamVisual.abbreviation}
-                </span>
-            </span>
-            <span
-                data-td-psychic-player-identity
-                className="flex min-h-0 flex-1 flex-col justify-center py-1"
-            >
-                <span className="sr-only">{teamPositionLabel(selection)}</span>
-                <span
-                    title={selection.playerName}
-                    className="block min-w-0 truncate text-[9px] font-semibold leading-[1.1] text-white drop-shadow-md sm:line-clamp-2 sm:whitespace-normal sm:text-xs sm:leading-[1.15]"
-                >
-                    {selection.playerName}
-                </span>
-                {selection.position ? (
-                    <span
-                        aria-hidden="true"
-                        className="mt-1 hidden truncate text-[8px] font-medium uppercase tracking-[0.06em] text-white/60 sm:block sm:text-[9px]"
-                    >
-                        {selection.position}
-                    </span>
-                ) : null}
-            </span>
-            <span
-                data-current-odds
-                aria-label={`${selection.playerName} public data odds ${odds.toLowerCase()}`}
-                className="mt-auto block min-w-0 border-t border-white/20 pt-1 text-left sm:pt-2"
-            >
-                <span className="block min-w-0 truncate text-[7px] font-semibold uppercase leading-none tracking-[0.02em] text-white/60 sm:text-[8px] sm:tracking-[0.07em]">
-                    {CURRENT_ODDS_PUBLIC_DATA_LABEL}
-                </span>
-                <span className="mt-0.5 block truncate text-[9px] font-bold leading-none tabular-nums text-white sm:text-xs sm:leading-normal">
-                    {odds}
-                </span>
-            </span>
-            <span
-                data-td-psychic-team-strip
-                aria-hidden="true"
-                className="absolute inset-x-0 bottom-0 h-1"
-                style={{ backgroundColor: teamVisual.secondary }}
-            />
-        </li>
-    );
-};
-
 export const TdPsychicCardBuilder = ({
     contestId,
     matchups,
-    accent = "league",
     loading = false,
     error,
     partialNotice,
     onRetry,
     submitting = false,
     submitLabel,
+    submitError,
+    submitMessage,
     initialSelections,
     prefillNotice,
     versionKey,
     rulesAcceptance,
     onSubmit,
 }: TdPsychicCardBuilderProps) => {
-    const accentClasses = accentClassesFor(accent);
+    const builderId = useId();
 
     /**
      * Every distinct scorer on the slate, and the lookup the card is held in.
@@ -322,7 +278,6 @@ export const TdPsychicCardBuilder = ({
 
     const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
     const [query, setQuery] = useState("");
-    const [reviewing, setReviewing] = useState(false);
     const [feedback, setFeedback] = useState<BuilderFeedback>();
     /**
      * Has the member touched this card yet?
@@ -344,7 +299,6 @@ export const TdPsychicCardBuilder = ({
     useEffect(() => {
         touchedRef.current = false;
         setSelectedPlayerIds([]);
-        setReviewing(false);
         setQuery("");
         setFeedback(undefined);
     }, [versionKey]);
@@ -449,37 +403,51 @@ export const TdPsychicCardBuilder = ({
             id: matchup.gameId,
             label: matchup.matchup,
             content: (
-                <fieldset className="rounded-2xl border border-white/10 bg-black/25 p-3 sm:p-4">
-                    <legend className="px-1 text-sm font-semibold text-white">
+                <div data-entry-builder-matchup="td_psychic">
+                    <h4
+                        id={`${builderId}-matchup-${index}`}
+                        data-entry-builder-matchup-label="td_psychic"
+                        className="text-sm font-semibold text-white"
+                    >
                         Matchup {index + 1} · {matchup.matchup}
-                    </legend>
-                    {selections.length ? (
-                        <div
-                            data-td-psychic-choice-grid="matchup"
-                            className="mt-3 grid grid-cols-3 gap-2 sm:gap-3"
-                        >
-                            {selections.map((selection) => {
-                                const selectedIndex = selectedIndexByPlayerId.get(
-                                    selection.playerId
-                                );
-                                return (
-                                    <PlayerChoice
-                                        key={selection.id}
-                                        selection={selection}
-                                        pickNumber={
-                                            selectedIndex === undefined ? null : selectedIndex + 1
-                                        }
-                                        onToggle={toggleSelection}
-                                    />
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <p className="mt-3 rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-4 text-xs leading-5 text-amber-100">
-                            TD scorer markets are not posted for this matchup yet.
-                        </p>
-                    )}
-                </fieldset>
+                    </h4>
+                    {/* The heading carries the group's accessible name now that
+                        the <legend> is gone — without this the fieldset would be
+                        announced unnamed. */}
+                    <fieldset
+                        aria-labelledby={`${builderId}-matchup-${index}`}
+                        className="m-0 mt-3 min-w-0 border-0 p-0"
+                    >
+                        {selections.length ? (
+                            <div
+                                data-td-psychic-choice-grid="matchup"
+                                className="grid grid-cols-3 gap-2 sm:gap-3"
+                            >
+                                {selections.map((selection) => {
+                                    const selectedIndex = selectedIndexByPlayerId.get(
+                                        selection.playerId
+                                    );
+                                    return (
+                                        <PlayerChoice
+                                            key={selection.id}
+                                            selection={selection}
+                                            pickNumber={
+                                                selectedIndex === undefined
+                                                    ? null
+                                                    : selectedIndex + 1
+                                            }
+                                            onToggle={toggleSelection}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-4 text-xs leading-5 text-amber-100">
+                                TD scorer markets are not posted for this matchup yet.
+                            </p>
+                        )}
+                    </fieldset>
+                </div>
             ),
         };
     });
@@ -489,131 +457,26 @@ export const TdPsychicCardBuilder = ({
         onSubmit(selectedSelections.map(toTdPsychicScorerIdentity), selectedSelections);
     };
 
-    /* ---------- REVIEW ---------- */
-    if (reviewing) {
-        return (
-            <section
-                aria-label="Review TD Psychic card"
-                className="rounded-2xl border border-white/10 bg-[#090b0f] p-4 text-gray-200 sm:p-5"
-            >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-gray-400">
-                    TD Psychic
-                </p>
-                <h3 className="mt-1 text-lg font-semibold text-white">Your 3 TD scorers</h3>
-                <ol
-                    data-td-psychic-pick-grid="review"
-                    className="mt-5 grid grid-cols-3 gap-2 sm:gap-3"
-                    aria-label="Selected TD scorers"
-                >
-                    {selectedSelections.map((selection) => (
-                        <ReviewCard key={selection.id} selection={selection} />
-                    ))}
-                </ol>
-                <p className="mt-4 text-sm leading-6 text-gray-300">
-                    All three picks are predictions for a rushing or receiving touchdown.
-                </p>
-
-                {rulesAcceptance ? (
-                    <section
-                        data-contest-rules-confirmation
-                        aria-label="Contest rules confirmation"
-                        className="mt-4 border-y border-white/10 py-4"
-                    >
-                        {rulesAcceptance.rulesVersion ? (
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-gray-400">
-                                Rules version {rulesAcceptance.rulesVersion}
-                            </p>
-                        ) : null}
-                        {rulesAcceptance.rulesText ? (
-                            <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-gray-300">
-                                {rulesAcceptance.rulesText}
-                            </p>
-                        ) : null}
-                        <label className="mt-3 flex cursor-pointer items-start gap-3 text-xs leading-5 text-gray-200">
-                            <input
-                                type="checkbox"
-                                checked={rulesAcceptance.accepted}
-                                onChange={(event) =>
-                                    rulesAcceptance.onAcceptedChange(event.target.checked)
-                                }
-                                className="mt-0.5 h-4 w-4 shrink-0 accent-white"
-                            />
-                            <span>{rulesAcceptance.label}</span>
-                        </label>
-                    </section>
-                ) : null}
-
-                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setReviewing(false);
-                            setFeedback(undefined);
-                        }}
-                        className="rounded-xl border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.09em] text-gray-200 transition hover:border-white/30"
-                    >
-                        Edit Picks
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        disabled={!canSubmit}
-                        className="flex-1 rounded-xl bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.09em] text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        {submitting ? "Submitting…" : (submitLabel ?? "Submit TD Psychic Card")}
-                    </button>
-                </div>
-                {!rulesAccepted ? (
-                    <p className="mt-2 text-center text-[11px] text-amber-100/80">
-                        Accept the contest rules to submit.
-                    </p>
-                ) : null}
-                {feedback ? (
-                    <p
-                        role={feedback.tone === "success" ? "status" : "alert"}
-                        className={`mt-3 text-center text-xs ${
-                            feedback.tone === "success" ? "text-emerald-300" : "text-rose-300"
-                        }`}
-                    >
-                        {feedback.message}
-                    </p>
-                ) : null}
-                <p
-                    data-current-odds-notice
-                    className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs leading-5 text-gray-300"
-                >
-                    {CURRENT_ODDS_LOCK_DISCLOSURE}
-                </p>
-            </section>
-        );
-    }
-
     /* ---------- PICK ---------- */
     const boardEmpty = !catalog.length;
 
     return (
         <section
             aria-label="TD Psychic card builder"
-            className="rounded-2xl border border-white/10 bg-[#090b0f] p-4 text-gray-200 sm:p-5"
+            data-entry-builder-surface="flat"
+            className="text-gray-200"
         >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <p
-                        className={`text-[10px] font-semibold uppercase tracking-[0.13em] ${accentClasses.textSoft}`}
-                    >
-                        TD Psychic
-                    </p>
-                    <h3 className="mt-1 text-lg font-semibold text-white">
-                        Choose 3 touchdown scorers
-                    </h3>
-                    <p className="mt-1 max-w-xl text-xs leading-5 text-gray-400">
-                        Pick three different players to score a rushing or receiving touchdown.
-                        Players from the same game are allowed.
-                    </p>
-                </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-300">
-                    NFL · Exactly 3
-                </span>
+            <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-gray-400">
+                    TD Psychic
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-white">
+                    Choose 3 touchdown scorers
+                </h3>
+                <p className="mt-1 max-w-xl text-xs leading-5 text-gray-400">
+                    Pick three different players to score a rushing or receiving touchdown.
+                    Players from the same game are allowed.
+                </p>
             </div>
 
             <label className="mt-4 block">
@@ -627,13 +490,16 @@ export const TdPsychicCardBuilder = ({
                     }}
                     placeholder="Search players or teams"
                     aria-label="Search players or teams"
-                    disabled={boardEmpty}
-                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-white/30 focus:ring-2 focus:ring-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-white/30 focus:ring-2 focus:ring-white/10"
                 />
             </label>
 
             {/* The scorers arrive over the network, so this screen owns states the
-                MVP's synchronous catalog never needs. */}
+                MVP's synchronous catalog never needs. Order matters below: search
+                is resolved BEFORE the board is judged thin, and a thin board is a
+                notice beside the carousel rather than a replacement for it —
+                otherwise a slate whose games happened to return no scorers would
+                hide the matchups the contest actually contains. */}
             {loading && boardEmpty ? (
                 <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">
                     Loading this slate&rsquo;s touchdown scorers…
@@ -651,14 +517,6 @@ export const TdPsychicCardBuilder = ({
                         </button>
                     ) : null}
                 </div>
-            ) : catalog.length < TD_PSYCHIC_SELECTION_COUNT ? (
-                <p className="mt-4 rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-4 text-sm leading-5 text-amber-100">
-                    {boardEmpty
-                        ? "No eligible NFL matchups are available for this card."
-                        : `Only ${catalog.length} eligible touchdown ${
-                              catalog.length === 1 ? "scorer is" : "scorers are"
-                          } posted for this slate so far — a card needs ${TD_PSYCHIC_SELECTION_COUNT} different players. Check back once the books post more.`}
-                </p>
             ) : query.trim() ? (
                 <section aria-label="TD scorer search results" className="mt-4">
                     <div className="flex items-center justify-between gap-3">
@@ -700,14 +558,32 @@ export const TdPsychicCardBuilder = ({
                         </p>
                     )}
                 </section>
+            ) : matchups.length ? (
+                <>
+                    {/* A network board can be posted one or two scorers deep, which
+                        the MVP's bundled catalog can never be. Say so — but only
+                        once there is a number worth reporting; a board with none
+                        at all is already told per matchup inside the carousel. */}
+                    {catalog.length > 0 && catalog.length < TD_PSYCHIC_SELECTION_COUNT ? (
+                        <p className="mt-4 rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-4 text-sm leading-5 text-amber-100">
+                            Only {catalog.length} eligible touchdown{" "}
+                            {catalog.length === 1 ? "scorer is" : "scorers are"} posted for this
+                            slate so far — a card needs {TD_PSYCHIC_SELECTION_COUNT} different
+                            players. Check back once the books post more.
+                        </p>
+                    ) : null}
+                    <PickemCarousel
+                        items={selectionCarouselItems}
+                        versionKey={`td-psychic-${contestId}-${versionKey}`}
+                        ariaLabel="TD Psychic matchup carousel"
+                        itemName="matchup"
+                        className="mt-4"
+                    />
+                </>
             ) : (
-                <PickemCarousel
-                    items={selectionCarouselItems}
-                    versionKey={`td-psychic-${contestId}-${versionKey}`}
-                    ariaLabel="TD Psychic matchup carousel"
-                    itemName="matchup"
-                    className="mt-4"
-                />
+                <p className="mt-4 rounded-xl border border-amber-200/20 bg-amber-200/5 px-3 py-4 text-sm text-amber-100">
+                    No eligible NFL matchups are available for this card.
+                </p>
             )}
 
             {partialNotice ? (
@@ -736,7 +612,7 @@ export const TdPsychicCardBuilder = ({
                 </p>
             ) : null}
 
-            {feedback?.tone === "warning" ? (
+            {feedback ? (
                 <p
                     role="alert"
                     className="mt-4 rounded-xl border border-amber-200/25 bg-amber-200/10 px-3 py-3 text-xs leading-5 text-amber-100"
@@ -745,11 +621,35 @@ export const TdPsychicCardBuilder = ({
                 </p>
             ) : null}
 
-            {/* THE TRAY. Sticky, and the only place the card itself is shown while
-                picking — three squares, always three, empty ones dashed. */}
+            {/* THE RULES BOX, which the MVP has no equivalent of. It cannot simply
+                be dropped with the review screen that used to carry it: joining a
+                feed contest and recording the rules acceptance are ONE backend
+                call, so the acceptance has to be collected before the entry is
+                posted. It sits directly above the tray — the last thing read
+                before the button that sends the card. It appears only for a FIRST
+                entry: the shell passes `rulesAcceptance` only while the member has
+                no accepted entry, and a replacement re-uses the acceptance already
+                on file. */}
+            {rulesAcceptance ? (
+                <ContestRulesAcceptance
+                    accepted={rulesAcceptance.accepted}
+                    onAcceptedChange={rulesAcceptance.onAcceptedChange}
+                    label={rulesAcceptance.label}
+                    rulesText={rulesAcceptance.rulesText}
+                    rulesVersion={rulesAcceptance.rulesVersion}
+                    // Neutral, like every other control on this builder — see the
+                    // chrome note at the top of the file.
+                    accent="neutral"
+                    className="mt-4 border-y border-white/10 py-4"
+                />
+            ) : null}
+
+            {/* THE TRAY. Sticky, the only place the card itself is shown, and the
+                place it is submitted from — three squares, always three, empty
+                ones dashed. */}
             <aside
                 aria-label="TD Psychic selection tray"
-                className="sticky bottom-3 z-20 mt-5 rounded-2xl border border-white/10 bg-[#0b0d12]/95 p-3 text-gray-200 shadow-2xl backdrop-blur sm:p-4"
+                className="sticky bottom-3 z-20 mt-5 rounded-xl border border-white/10 bg-[#0b0d12]/95 p-3 text-gray-200 backdrop-blur"
             >
                 <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.11em] text-gray-300">
@@ -766,127 +666,154 @@ export const TdPsychicCardBuilder = ({
                 >
                     {Array.from({ length: TD_PSYCHIC_SELECTION_COUNT }, (_, index) => {
                         const selection = selectedSelections[index];
-                        const teamVisual = selection
-                            ? getPickemTeamVisual({
-                                  abbreviation: selection.teamAbbreviation ?? undefined,
-                              })
-                            : null;
+                        const teamVisual = selection ? teamVisualFor(selection) : null;
                         const identityDescriptionId = selection
                             ? `td-tray-identity-${selection.id}`
                             : undefined;
                         const oddsDescriptionId = selection
                             ? `td-tray-odds-${selection.id}`
                             : undefined;
-                        const odds = selection ? oddsLabelFor(selection) : "Unavailable";
+                        const oddsCopy = selection ? oddsLabelFor(selection) : "Unavailable";
                         return (
                             <li
                                 key={selection?.playerId ?? `empty-${index}`}
                                 data-td-psychic-pick-card
-                                data-team-abbreviation={teamVisual?.abbreviation}
-                                data-team-color={teamVisual?.primary}
-                                data-td-psychic-team-surface={teamVisual ? "team-color" : "empty"}
-                                style={
-                                    teamVisual
-                                        ? ({
-                                              "--pickem-team-primary": teamVisual.primary,
-                                              "--pickem-team-secondary": teamVisual.secondary,
-                                              backgroundColor: getPickemTeamCardTint(teamVisual),
-                                          } as CSSProperties)
-                                        : undefined
-                                }
-                                className={`relative isolate aspect-square min-h-0 min-w-0 overflow-hidden rounded-xl border bg-[#0d0f13] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] ${
-                                    selection
-                                        ? "border-white/10"
-                                        : "border-dashed border-white/10 bg-black/20"
-                                }`}
+                                className="relative aspect-square min-h-0 min-w-0 overflow-visible"
                             >
-                                {selection ? (
-                                    <button
-                                        type="button"
-                                        aria-label={`Remove ${selection.playerName} from Pick ${index + 1}`}
-                                        aria-describedby={`${identityDescriptionId} ${oddsDescriptionId}`}
-                                        onClick={() => toggleSelection(selection)}
-                                        className="relative z-10 flex h-full w-full min-w-0 flex-col p-2 pb-2.5 text-left text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80 sm:p-3 sm:pb-3.5"
-                                    >
-                                        <span className="flex w-full items-start justify-between gap-1.5">
-                                            <span className="text-xs font-black tracking-[-0.04em] text-white/90 drop-shadow-md sm:text-lg">
-                                                {teamVisual?.abbreviation}
-                                            </span>
-                                            <span aria-hidden="true" className="text-xs text-white/55">
-                                                ×
-                                            </span>
-                                        </span>
-                                        <span
-                                            data-td-psychic-player-identity
-                                            className="flex min-h-0 flex-1 flex-col justify-center py-1"
+                                {selection && teamVisual ? (
+                                    <>
+                                        {/* Removal is this 16px button and nothing
+                                            else. The card surface below is inert on
+                                            purpose: when the whole square was the
+                                            remove control, any stray tap on a filled
+                                            slot silently deleted a pick. */}
+                                        <button
+                                            type="button"
+                                            data-td-psychic-selection-control="remove"
+                                            data-td-psychic-card-position="outside-top-left"
+                                            aria-label={`Remove ${selection.playerName} from Pick ${index + 1}`}
+                                            aria-describedby={`${identityDescriptionId} ${oddsDescriptionId}`}
+                                            title="Remove pick"
+                                            onClick={() => toggleSelection(selection)}
+                                            className="absolute -left-2 -top-2 z-20 flex h-4 w-4 items-center justify-center rounded-full border border-rose-400/60 bg-rose-500/15 text-[12px] font-semibold text-rose-200 transition hover:bg-rose-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60"
                                         >
-                                            <span id={identityDescriptionId} className="sr-only">
-                                                {teamPositionLabel(selection)}
+                                            −
+                                        </button>
+                                        <div
+                                            data-td-psychic-pick-card-surface
+                                            data-team-abbreviation={teamVisual.abbreviation}
+                                            data-team-color={teamVisual.primary}
+                                            data-td-psychic-team-surface="team-color"
+                                            style={
+                                                {
+                                                    "--pickem-team-primary": teamVisual.primary,
+                                                    "--pickem-team-secondary":
+                                                        teamVisual.secondary,
+                                                    backgroundColor:
+                                                        getPickemTeamCardTint(teamVisual),
+                                                } as CSSProperties
+                                            }
+                                            className="relative isolate flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0d0f13] p-2 pb-2.5 text-left text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] sm:p-3 sm:pb-3.5"
+                                        >
+                                            <span
+                                                data-td-psychic-card-top
+                                                className="flex w-full min-w-0 items-start justify-between gap-1.5"
+                                            >
+                                                <span className="text-xs font-black tracking-[-0.04em] text-white/90 drop-shadow-md sm:text-lg">
+                                                    {teamVisual.abbreviation}
+                                                </span>
+                                                <span
+                                                    id={oddsDescriptionId}
+                                                    data-current-odds
+                                                    data-td-psychic-card-position="top-right"
+                                                    aria-label={`${selection.playerName} current odds ${oddsCopy}`}
+                                                    title={oddsCopy}
+                                                    className="max-w-[60%] min-w-0 shrink text-right"
+                                                >
+                                                    <span className="sr-only">Current odds </span>
+                                                    {" "}
+                                                    <span className="block truncate whitespace-nowrap text-[9px] font-semibold leading-none tabular-nums text-white sm:text-xs sm:leading-normal">
+                                                        {oddsCopy}
+                                                    </span>
+                                                </span>
                                             </span>
                                             <span
-                                                title={selection.playerName}
-                                                className="block min-w-0 truncate text-[9px] font-semibold leading-[1.1] drop-shadow-md sm:line-clamp-2 sm:whitespace-normal sm:text-xs sm:leading-[1.15]"
+                                                data-td-psychic-player-identity
+                                                className="flex min-h-0 flex-1 flex-col justify-center py-1"
                                             >
-                                                {selection.playerName}
-                                            </span>
-                                            {selection.position ? (
-                                                <span className="mt-1 hidden truncate text-[8px] font-medium uppercase tracking-[0.06em] text-white/60 sm:block sm:text-[9px]">
-                                                    {selection.position}
+                                                <span
+                                                    id={identityDescriptionId}
+                                                    className="sr-only"
+                                                >
+                                                    {teamPositionLabel(selection)}
                                                 </span>
-                                            ) : null}
-                                        </span>
+                                                <span
+                                                    title={selection.playerName}
+                                                    className="block min-w-0 truncate text-[9px] font-semibold leading-[1.1] drop-shadow-md sm:line-clamp-2 sm:whitespace-normal sm:text-xs sm:leading-[1.15]"
+                                                >
+                                                    {selection.playerName}
+                                                </span>
+                                                {selection.position ? (
+                                                    <span className="mt-1 hidden truncate text-[8px] font-medium uppercase tracking-[0.06em] text-white/60 sm:block sm:text-[9px]">
+                                                        {selection.position}
+                                                    </span>
+                                                ) : null}
+                                            </span>
+                                            <span
+                                                data-td-psychic-team-strip
+                                                aria-hidden="true"
+                                                className="absolute inset-x-0 bottom-0 h-1"
+                                                style={{
+                                                    backgroundColor: teamVisual.secondary,
+                                                }}
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div
+                                        data-td-psychic-pick-card-surface
+                                        data-td-psychic-team-surface="empty"
+                                        className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-xl border border-dashed border-white/10 bg-black/20 p-2 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] sm:p-3"
+                                    >
                                         <span
-                                            id={oddsDescriptionId}
-                                            data-current-odds
-                                            aria-label={`${selection.playerName} public data odds ${odds.toLowerCase()}`}
-                                            className="mt-auto block min-w-0 border-t border-white/20 pt-1 sm:pt-2"
+                                            aria-label={`Pick ${index + 1} empty`}
+                                            className="flex h-full w-full items-center justify-center"
                                         >
-                                            <span className="block min-w-0 truncate text-[7px] font-semibold uppercase leading-none tracking-[0.02em] text-white/60 sm:text-[8px] sm:tracking-[0.07em]">
-                                                {CURRENT_ODDS_PUBLIC_DATA_LABEL}
-                                            </span>{" "}
-                                            <span className="mt-0.5 block truncate text-[9px] font-semibold leading-none tabular-nums text-white sm:text-xs sm:leading-normal">
-                                                {odds}
+                                            <span aria-hidden="true" className="text-lg">
+                                                —
                                             </span>
                                         </span>
-                                    </button>
-                                ) : (
-                                    <span
-                                        aria-label={`Pick ${index + 1} empty`}
-                                        className="flex h-full w-full items-center justify-center p-2 text-gray-600 sm:p-3"
-                                    >
-                                        <span aria-hidden="true" className="text-lg">
-                                            —
-                                        </span>
-                                    </span>
+                                    </div>
                                 )}
-                                {teamVisual ? (
-                                    <span
-                                        data-td-psychic-team-strip
-                                        aria-hidden="true"
-                                        className="absolute inset-x-0 bottom-0 h-1"
-                                        style={{ backgroundColor: teamVisual.secondary }}
-                                    />
-                                ) : null}
                             </li>
                         );
                     })}
                 </ol>
                 <button
                     type="button"
-                    onClick={() => {
-                        setReviewing(true);
-                        setFeedback(undefined);
-                    }}
-                    disabled={!isComplete}
+                    onClick={handleSubmit}
+                    disabled={!canSubmit}
                     className="mt-3 w-full rounded-xl bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.09em] text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    Review Picks
+                    {submitting ? "Submitting…" : (submitLabel ?? "Submit TD Psychic Card")}
                 </button>
+                {!rulesAccepted ? (
+                    <p className="mt-2 text-center text-[11px] text-amber-100/80">
+                        Accept the contest rules to submit.
+                    </p>
+                ) : null}
+                {submitError ? (
+                    <p role="alert" className="mt-3 text-center text-xs text-rose-300">
+                        {submitError}
+                    </p>
+                ) : null}
+                {submitMessage ? (
+                    <p role="status" className="mt-3 text-center text-xs text-emerald-300">
+                        {submitMessage}
+                    </p>
+                ) : null}
             </aside>
-            <p
-                data-current-odds-notice
-                className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-xs leading-5 text-gray-300"
-            >
+            <p data-current-odds-notice className="mt-3 text-xs leading-5 text-gray-400">
                 {CURRENT_ODDS_LOCK_DISCLOSURE}
             </p>
         </section>

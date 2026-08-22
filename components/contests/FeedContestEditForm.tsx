@@ -11,6 +11,7 @@ import {
     clearFeedContestUpdateState,
     updateFeedContestRequest,
 } from "@/lib/redux/slices/feedContestSlice";
+import ContestRulesDisclosure from "./ContestRulesDisclosure";
 import {
     contestAccentClasses,
     contestFormCardClasses,
@@ -193,7 +194,6 @@ export const FeedContestEditForm = ({
     }
 
     const isDraft = contest.lifecycle_status === "draft";
-    const isCombo = contest.template === "multi_pick";
     const isArenaContest = scoped?.context_type === "arena";
     // The endpoint's own window. It also freezes the copy once a member has
     // joined, which this screen cannot see — that case surfaces as a 409 on save.
@@ -238,10 +238,6 @@ export const FeedContestEditForm = ({
         );
     }
 
-    // Read straight off the stored row rather than held in state: mechanics are
-    // frozen at publish and nothing on this screen can change them.
-    const winningPlaces = contest.winning_places ?? 1;
-
     return (
         <div
             className={`flex flex-col gap-6 pb-10 ${accent === "arena" ? "arena-theme" : ""}`}
@@ -256,13 +252,15 @@ export const FeedContestEditForm = ({
                     {isDraft
                         ? "Edit contest draft"
                         : copyEditable
-                            ? "Edit contest copy"
+                            ? "Edit contest details"
                             : "Rename contest"}
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-gray-500">
                     {copyEditable
-                        ? "Update the member-facing name and rules before the first member joins. Mechanics, slate, and timing stay read-only."
-                        : "Update the contest name. Description, rules, mechanics, slate, and timing are read-only after entry or lock."}
+                        ? "Update the member-facing name and details before the first entry is submitted. Mechanics, slate, and timing stay read-only."
+                        : isArenaContest
+                            ? "Update the contest name here. Details, mechanics, slate, timing, and reward settlement stay read-only. Existing podium prizes can be updated from Contest Settings."
+                            : "Update the contest name. Details, mechanics, slate, and timing are read-only after entry or lock."}
                 </p>
             </header>
 
@@ -283,8 +281,9 @@ export const FeedContestEditForm = ({
                             Make the contest easy to understand
                         </h2>
                         <p className="mt-2 text-sm leading-6 text-gray-400">
-                            The description explains how entries work. Entrants must accept
-                            the rules below before submitting an entry.
+                            Add the contest details members will see. The contest rules stay
+                            available in Contest Details, and entrants accept them before
+                            submitting an entry.
                         </p>
                     </div>
 
@@ -302,18 +301,18 @@ export const FeedContestEditForm = ({
                     <section aria-labelledby="contest-description-title">
                         <div className="flex items-center justify-between gap-3">
                             <h3 id="contest-description-title" className={fieldLabelClasses}>
-                                Description
+                                Details
                             </h3>
                             <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                {copyEditable ? "Editable copy" : "Read-only copy"}
+                                {copyEditable ? "Edit details" : "Details locked"}
                             </span>
                         </div>
                         {/* The MVP now edits published copy as plain prose. A
                             General Combo's MECHANICS stay frozen at publish, but the
-                            description is member-facing copy, so it is editable here
-                            and sent with the save. */}
+                            details blurb is member-facing copy, so it is editable
+                            here and sent with the save. */}
                         <textarea
-                            aria-label="Description"
+                            aria-label="Details"
                             aria-describedby="contest-description-help"
                             rows={4}
                             value={description}
@@ -330,37 +329,40 @@ export const FeedContestEditForm = ({
                         </p>
                     </section>
 
-                    <div>
-                        <label className={fieldLabelClasses}>
-                            Rules participants must accept
-                            <textarea
-                                rows={4}
-                                value={rulesText}
-                                onChange={(event) => setRulesText(event.target.value)}
-                                disabled={updateLoading || !copyEditable}
-                                aria-describedby="contest-rules-help"
-                                className={copyFieldClasses(accent)}
+                    {copyEditable ? (
+                        <div>
+                            <label className={fieldLabelClasses}>
+                                Rules participants must accept
+                                <textarea
+                                    rows={4}
+                                    value={rulesText}
+                                    onChange={(event) => setRulesText(event.target.value)}
+                                    disabled={updateLoading}
+                                    aria-describedby="contest-rules-help"
+                                    className={copyFieldClasses(accent)}
+                                />
+                            </label>
+                            <p
+                                id="contest-rules-help"
+                                className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
+                            >
+                                Entrants must review and check that they accept this copy before submitting an entry.
+                            </p>
+                        </div>
+                    ) : (
+                        /* RENAME MODE — the rules are a RECORD now, not a field.
+                           Entrants accepted this exact text, so it is shown the way
+                           the Details tab shows it: collapsed, formatted, and with
+                           no control that implies it could still be changed. */
+                        <section aria-label="Contest Rules" data-contest-rules-preview>
+                            <ContestRulesDisclosure
+                                rulesText={rulesText}
+                                accent={accent}
+                                helperText="Read only · accepted by entrants at this version."
+                                className={`rounded-xl border px-4 ${accentClasses.previewSurface}`}
                             />
-                        </label>
-                        <p
-                            id="contest-rules-help"
-                            className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
-                        >
-                            Entrants must review and check that they accept this copy before submitting an entry.
-                        </p>
-                    </div>
-
-                    {!isCombo ? (
-                        <label className={`${fieldLabelClasses} max-w-48`}>
-                            Winning places
-                            <input
-                                type="number"
-                                disabled
-                                value={winningPlaces}
-                                className={fieldClasses(accent)}
-                            />
-                        </label>
-                    ) : null}
+                        </section>
+                    )}
 
                     {isArenaContest ? (
                         <section

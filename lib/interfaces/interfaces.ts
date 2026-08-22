@@ -218,10 +218,22 @@ export type Group = {
         role: string;
     },
     external_community_url?: string;
+    /**
+     * ARENA ONLY, and OWNER ONLY on the way out — `GET /group/:id` deletes this
+     * key for anyone but `created_by`, matching who may write it.
+     *
+     * The address a winner uses to claim a VIRTUAL prize. Not a secret so much
+     * as not theirs: it does reach entrants, but only through the published
+     * rules of a contest that actually offers one, where it arrives with the
+     * context that explains what it is for. So `undefined` here means "not
+     * yours to see" at least as often as it means "not configured", and a
+     * manager must never be told the Arena has no inbox on the strength of it.
+     */
+    reward_contact_email?: string | null;
     lifecycle_status?: string;
 }
 
-export type ContestBadgeCategory = "generic" | "football" | "nba" | "mlb" | "nhl" | "soccer";
+export type ContestBadgeCategory ="generic" | "football" | "nba" | "mlb" | "nhl" | "soccer";
 
 export type ContestBadgeSettings = {
     enabled: boolean;
@@ -2108,6 +2120,17 @@ export type UpdateArenaDetailsPayload = {
     name?: string;
     description?: string | null;
     external_community_url?: string | null;
+    /**
+     * The Arena's reward fulfilment inbox — PERMANENT OWNER ONLY. A manager who
+     * sends it gets a 403 rather than having it silently dropped, because
+     * dropping it would report the Arena updated while virtual rewards kept
+     * pointing at the old address.
+     *
+     * `null` clears it. Clearing never breaks a live reward: a published contest
+     * holds its own snapshot of the address it was signed with. It only stops
+     * the NEXT one being configured.
+     */
+    reward_contact_email?: string | null;
 };
 
 export type ArenaDetails = {
@@ -2989,6 +3012,147 @@ export type CreateFeedContestPayload = {
      * The draft-replace body carries the same field for the same reason.
      */
     time_zone?: string;
+    /**
+     * ARENA ONLY — the wizard's Reward step, and the ONLY way a reward is ever
+     * created.
+     *
+     * There is no "attach a prize afterwards" endpoint, and the omission is
+     * deliberate: the reward's legal disclosure has to be inside `rules_text` on
+     * the very first version of the row, or the contest goes live advertising a
+     * prize its own published rules do not mention. `PATCH /reward/:id/prizes`
+     * can correct the WORDING later; it cannot add a reward
+     * ({@link FeedContestRewardPrizesPayload}).
+     *
+     * `{ enabled: false }` is a complete answer, not a missing field — the
+     * server treats it exactly as an absent key, which is what lets the wizard
+     * post its step state verbatim. Sending it from a League context is a 400.
+     *
+     * Note what is NOT here: the venue, the contact email and the provider name.
+     * Each is a claim about who is legally responsible for a real-world prize,
+     * so the server resolves all three from its own state and ignores anything
+     * a body says about them.
+     */
+    arena_reward?: FeedContestRewardInput;
+};
+
+/**
+ * ARENA CONTEST REWARDS — a real-world prize on a contest's podium, offered,
+ * supplied and handed over by the Arena. Gotlocks never provides, funds, ships
+ * or guarantees one, and nothing in this feature moves money.
+ */
+export type FeedContestRewardSettlementMethod = "in_person" | "virtual";
+
+export type FeedContestRewardPrize = {
+    place: number;
+    title: string;
+    description: string;
+    /** A free-text LABEL ("$50", "Two tickets") — never a currency amount. */
+    approximate_value: string | null;
+};
+
+/** The organizer-authored half, as `arena_reward` on a create / draft body. */
+export type FeedContestRewardInput =
+    | { enabled: false }
+    | {
+        enabled: true;
+        settlement_method: FeedContestRewardSettlementMethod;
+        prizes: FeedContestRewardPrize[];
+        /** REQUIRED for in-person; forced to null for virtual. */
+        pickup_instructions: string | null;
+        /** The attestation. An unsigned offer is refused with a 400. */
+        organizer_confirmed: boolean;
+    };
+
+/**
+ * The stored reward as `GET /detail/:contest_id` returns it, on `data.reward`.
+ *
+ * NULL on every League contest and on any Arena contest whose organizer chose
+ * "No prizes". A SIBLING of `contest` rather than a field on it, because the
+ * list endpoints deliberately do not carry it.
+ *
+ * The snapshot columns are frozen copies taken when the reward was signed, never
+ * re-read from the Arena: an owner who has since moved venue must not have a
+ * live contest silently repointed at the new address.
+ */
+export type FeedContestReward = {
+    contest_id: string;
+    settlement_method: FeedContestRewardSettlementMethod;
+    prizes: FeedContestRewardPrize[];
+    pickup_instructions: string | null;
+    venue_name_snapshot: string | null;
+    venue_address_snapshot: string | null;
+    reward_contact_email_snapshot: string | null;
+    provider_name_snapshot: string;
+    /** Organizer projection only — absent from the member-facing read. */
+    venue_id?: string | null;
+    confirmed_by_user_id?: string;
+    confirmed_at?: string;
+};
+
+/**
+ * One winner's prize, on `data.reward_awards`. EMPTY until the contest
+ * finalizes, and empty forever on a contest that never carried a reward.
+ *
+ * `not_awarded` is a normal outcome rather than an error — a contest nobody
+ * scored in awards nothing, and "offered but unwon" has to be distinguishable
+ * from "never offered".
+ */
+export type FeedContestRewardAwardStatus =
+    | "pending"
+    | "claimed"
+    | "fulfilled"
+    | "unclaimed"
+    | "not_awarded"
+    | "void";
+
+export type FeedContestRewardAward = {
+    id: string;
+    contest_id: string;
+    place: number;
+    user_id: string | null;
+    username_snapshot: string | null;
+    prize_title: string;
+    prize_description: string;
+    prize_approximate_value: string | null;
+    settlement_method: FeedContestRewardSettlementMethod;
+    status: FeedContestRewardAwardStatus;
+    awarded_at: string | null;
+    claimed_at: string | null;
+    fulfilled_at: string | null;
+    unclaimed_at: string | null;
+    voided_at: string | null;
+    /** Organizer projection only — the Arena's own working notes. */
+    fulfillment_note?: string | null;
+    fulfilled_by_user_id?: string | null;
+};
+
+/**
+ * PATCH /group/feed-contest/reward/:contest_id/prizes — organizer only, Arena
+ * only, and the ONE reward write allowed after a contest has gone live.
+ *
+ * It edits prize WORDING and nothing else. The settlement method, the venue, the
+ * pickup instructions and the contact email are the deal a member accepted when
+ * they entered, so they are rebuilt from the stored row and anything the body
+ * says about them is ignored. The SET of paid places is frozen too: adding a
+ * 3rd-place prize after entries land changes who stands to win something, and
+ * removing one takes an advertised prize away — either answers 409.
+ *
+ * A contest published WITHOUT prizes answers 409 as well; there is no path that
+ * attaches one afterwards.
+ *
+ * Every edit re-signs an attestation and rewrites the ARENA REWARD block inside
+ * `rules_text`, but deliberately does NOT bump `rules_version` — bumping would
+ * strand every existing entrant between an entry they cannot replace and a
+ * re-join they cannot make.
+ */
+export type FeedContestRewardPrizesPayload = {
+    contest_id: string;
+    prizes: FeedContestRewardPrize[];
+    organizer_confirmed: boolean;
+};
+
+export type FeedContestRewardPrizesData = {
+    reward: FeedContestReward;
 };
 
 /**
@@ -3071,6 +3235,15 @@ export type FeedContestDetailData = {
     };
     /** Carries `creator`, `participant_count` and `my_participation`, exactly as a list row does. */
     contest: FeedContest;
+    /**
+     * NULL on a League, and on any Arena contest whose organizer chose "No
+     * prizes" — which is most of them. Shown to EVERY viewer, entered or not:
+     * "what do I win" is exactly the question somebody asks BEFORE deciding to
+     * enter.
+     */
+    reward?: FeedContestReward | null;
+    /** Empty until the contest finalizes, and always empty without a reward. */
+    reward_awards?: FeedContestRewardAward[];
 };
 
 /**
@@ -3452,6 +3625,20 @@ export type FetchFeedContestLeaderboardPayload = {
     limit?: number;
 };
 
+/**
+ * One standing's award, as `runFeedContestLeaderboard` embeds it.
+ *
+ * Deliberately derived from the trophy-case row rather than declared again: the
+ * server builds both from the same `contest_achievements` columns and says so,
+ * so a field added there must not silently diverge here. `is_own` and `contest`
+ * are the two the leaderboard drops — the board already knows whose row it is
+ * and which contest it belongs to.
+ */
+export type FeedContestStandingAchievement = Omit<
+    FeedContestAchievementRow,
+    "is_own" | "contest"
+>;
+
 export type FeedContestStandingRow = {
     /** The contest_leaderboard row id — NOT the pick or the user. */
     id: string;
@@ -3500,6 +3687,27 @@ export type FeedContestStandingRow = {
     pick: FeedContestEntryPick | null;
     pick_id: string | null;
     participant_id: string | null;
+    /**
+     * WHAT this member won, ready to render — the same row `/feed-contest/
+     * achievements` returns, minus the `contest` block that read nests (this
+     * envelope already names the contest once at the top level, and repeating it
+     * on every row of a fifty-member board is the same object fifty times).
+     *
+     * NULL for everyone who finished outside the paid window, and for every row
+     * on a contest that has not finalized — an achievement row is only written by
+     * finalization, so there is no state where an award exists and the field it
+     * was computed from is still secret. That is why it carries NO
+     * hidden-until-lock gate, unlike `total_picks` above.
+     *
+     * `label` is the enum already spelled for a screen ("Champion",
+     * "Runner-Up"), so nothing here maps `RUNNER_UP` by hand.
+     */
+    achievement: FeedContestStandingAchievement | null;
+    /**
+     * Kept alongside `achievement`. It is the only field that distinguishes "no
+     * award" from "an award whose row could not be loaded", so the board still
+     * reads it rather than inferring absence from the object above.
+     */
     achievement_id: string | null;
     /** TRUE once an organizer reversed this row's confirmed award. */
     is_points_reverse: boolean | null;

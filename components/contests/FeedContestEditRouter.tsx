@@ -6,6 +6,8 @@ import BackButton from "@/components/ui/BackButton";
 import FeedContestCreateForm from "./FeedContestCreateForm";
 import FeedContestEditForm from "./FeedContestEditForm";
 import type { FeedGroupType, RootState } from "@/lib/interfaces/interfaces";
+import { fetchGroupByIdRequest } from "@/lib/redux/slices/groupsSlice";
+import useScopedGroup from "@/lib/groups/useScopedGroup";
 import {
     clearFeedContestDetail,
     fetchFeedContestDetailRequest,
@@ -57,6 +59,21 @@ export const FeedContestEditRouter = ({
         dispatch(fetchFeedContestDetailRequest({ contest_id: contestId }));
     }, [contestId, dispatch]);
 
+    /*
+     * The GROUP read, for one field the contest detail does not carry: the
+     * Arena's reward contact email, which the Reward step's virtual-delivery
+     * block needs. Fired only once the detail has named its group — this screen
+     * is reached by contest id and has no group id of its own — and read back
+     * through `useScopedGroup`, because `state.group.group` is a single-tenant
+     * slot shared by every group screen.
+     */
+    const groupId = detail?.contest?.id === contestId ? detail.group.id : undefined;
+    useEffect(() => {
+        if (!groupId) return;
+        dispatch(fetchGroupByIdRequest({ groupId }));
+    }, [dispatch, groupId]);
+    const scopedGroup = useScopedGroup(groupId);
+
     useEffect(
         () => () => {
             dispatch(clearFeedContestDetail());
@@ -106,6 +123,12 @@ export const FeedContestEditRouter = ({
                 backHref={detailHref}
                 detailHref={() => detailHref}
                 initialContest={contest}
+                // The draft's saved reward. The draft endpoints REPLACE the row,
+                // so a reopened draft that does not carry this back has deleted
+                // the prizes it was holding.
+                initialReward={scoped.reward ?? null}
+                rewardContactEmail={scopedGroup.group?.reward_contact_email}
+                isArenaOwner={scoped.viewer?.role === "commissioner"}
             />
         );
     }

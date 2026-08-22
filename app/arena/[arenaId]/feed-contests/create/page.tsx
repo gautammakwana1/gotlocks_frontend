@@ -80,6 +80,12 @@ const ArenaFeedContestCreateContent = () => {
                     ? hosting?.participating_member_limit ?? null
                     : null
             }
+            // The Reward step's virtual-delivery block. The group read returns
+            // this key to the OWNER alone, so a manager sees undefined whether or
+            // not one is configured — hence the role flag beside it, which is
+            // what decides between "set it up" and "ask the owner".
+            rewardContactEmail={arena.reward_contact_email}
+            isArenaOwner={role === "commissioner"}
         />
     );
 };

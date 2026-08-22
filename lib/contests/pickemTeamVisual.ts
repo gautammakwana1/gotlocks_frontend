@@ -19,6 +19,28 @@ export type PickemTeamVisual = {
     secondary: string;
 };
 
+export type PickemTeamNameParts = {
+    city: string;
+    nickname: string;
+};
+
+/**
+ * "Kansas City Chiefs" -> { city: "Kansas City", nickname: "Chiefs" }.
+ *
+ * Splits on the LAST word rather than the first space, which is what keeps
+ * multiword locations ("New York", "Tampa Bay", "Los Angeles") intact. A
+ * one-word name is all nickname, so the city line renders empty rather than
+ * stealing the club's only identifying word.
+ */
+export const splitPickemTeamName = (fullName: string): PickemTeamNameParts => {
+    const parts = fullName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) {
+        return { city: "", nickname: parts[0] ?? "" };
+    }
+    const nickname = parts.pop() ?? "";
+    return { city: parts.join(" "), nickname };
+};
+
 const withHexAlpha = (color: string, alpha: string) =>
     /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : color;
 

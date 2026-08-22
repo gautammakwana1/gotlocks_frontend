@@ -1,7 +1,7 @@
 import { PickReaction } from "@/lib/interfaces/interfaces";
 import { ReactionThumbIcon } from "../ui/SvgIcons";
 import { getFeedDesktopSizing } from "./feedDesktopSizing";
-import type { PickCardScale } from "./PickCardContent";
+import type { PickCardScale } from "./pick-card/types";
 
 type PostReactionButtonsProps = {
     up: number;

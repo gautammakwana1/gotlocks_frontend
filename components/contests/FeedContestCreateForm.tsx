@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
 import Loader from "@/components/ui/Loader";
+import ArenaRewardContactSettings from "@/components/arenas/ArenaRewardContactSettings";
 import ArenaVenueSetupDialog from "@/components/arenas/checkin/ArenaVenueSetupDialog";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
@@ -13,6 +14,7 @@ import type {
     FeedContest,
     FeedContestEntryAccessMode,
     FeedContestGameSnapshot,
+    FeedContestReward,
     FeedContestTemplate,
     FeedGroupType,
     ReplaceDraftFeedContestPayload,
@@ -29,6 +31,7 @@ import {
     clearLeagueMatchupCounts,
     fetchLeagueMatchupCountsRequest,
 } from "@/lib/redux/slices/leagueSlice";
+import { updateArenaDetailsRequest } from "@/lib/redux/slices/arenaSlice";
 import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
 import { clearTdScorers, fetchTdScorersRequest } from "@/lib/redux/slices/tdScorersSlice";
 import { feedContestOddsRequestKey } from "@/lib/contests/feedContestOdds";
@@ -59,12 +62,23 @@ import {
     type FeedContestSport,
     type SundayPickemSlateMode,
 } from "@/lib/contests/feedContestCatalog";
-import { participationRulesForTemplate } from "@/lib/contests/participationRules";
+import { buildFeedContestParticipationRulesText } from "@/lib/contests/participationRules";
+import {
+    arenaRewardPayload,
+    createEmptyArenaRewardDraft,
+    formatContestPlacement,
+    isValidArenaRewardContactEmail,
+    validateArenaRewardDraft,
+    type ArenaRewardDraft,
+    type ArenaRewardPlace,
+} from "@/lib/contests/arenaReward";
+import ArenaContestRewardCard from "./ArenaContestRewardCard";
+import ArenaContestRewardEditor from "./ArenaContestRewardEditor";
+import ContestRulesDisclosure from "./ContestRulesDisclosure";
 import ContestSlateBrowser from "./ContestSlateBrowser";
 import ContestSlateRangeCalendar from "./ContestSlateRangeCalendar";
 import {
     contestAccentClasses,
-    copyFieldClasses,
     fieldClasses,
     fieldLabelClasses,
     inlineDescriptionInputClasses,
@@ -83,7 +97,14 @@ const ENTRY_MODEL_BY_TEMPLATE: Record<FeedContestTemplate, string> = {
 /** The contest is expected to have settled this long after the last kickoff. */
 const CONTEST_END_LAG_MS = 8 * 60 * 60 * 1000;
 
-type ContestWizardStep = "style" | "slate" | "matchups" | "rules" | "access" | "review";
+type ContestWizardStep =
+    | "style"
+    | "slate"
+    | "matchups"
+    | "rules"
+    | "access"
+    | "reward"
+    | "review";
 type ContestSubmissionMode = "draft" | "immediate";
 
 // General Combo picks its dates and sports first, then reviews the resulting
@@ -119,23 +140,32 @@ const TD_PSYCHIC_WIZARD_STEPS: readonly { id: ContestWizardStep; label: string }
 ];
 
 /* ----------------------------------------------------------------------------
- * ACCESS is an ARENA-ONLY step, and the MVP inserts it in the same place for
- * every template: immediately before Review, whatever the template's own steps
- * are. A League never sees it — a League has no room to stand in, so
- * `entry_access_mode` is pinned to 'open' server-side and asking for the venue
- * mode from a League context is a 400 rather than a silent downgrade.
+ * ACCESS and REWARD are ARENA-ONLY steps, and the MVP inserts both in the same
+ * place for every template: immediately before Review, in that order, whatever
+ * the template's own steps are.
+ *
+ * A League never sees either. It has no room to stand in, so `entry_access_mode`
+ * is pinned to 'open' server-side and asking for the venue mode from a League
+ * context is a 400 rather than a silent downgrade; and it has no venue, no
+ * reward inbox and no legal standing to offer a real-world prize, so
+ * `arena_reward` on a League is a 400 too.
+ *
+ * REWARD SITS LAST, after Access, because it is the only step that can depend on
+ * an answer given on another one: an in-person prize is collected AT the venue,
+ * which is the thing Access is about.
  * -------------------------------------------------------------------------- */
-const withAccessStep = (
+const withArenaSteps = (
     steps: readonly { id: ContestWizardStep; label: string }[]
 ): readonly { id: ContestWizardStep; label: string }[] => [
     ...steps.slice(0, -1),
     { id: "access", label: "Access" },
+    { id: "reward", label: "Reward" },
     steps[steps.length - 1],
 ];
 
-const ARENA_GENERAL_COMBO_WIZARD_STEPS = withAccessStep(GENERAL_COMBO_WIZARD_STEPS);
-const ARENA_SUNDAY_PICKEM_WIZARD_STEPS = withAccessStep(SUNDAY_PICKEM_WIZARD_STEPS);
-const ARENA_TD_PSYCHIC_WIZARD_STEPS = withAccessStep(TD_PSYCHIC_WIZARD_STEPS);
+const ARENA_GENERAL_COMBO_WIZARD_STEPS = withArenaSteps(GENERAL_COMBO_WIZARD_STEPS);
+const ARENA_SUNDAY_PICKEM_WIZARD_STEPS = withArenaSteps(SUNDAY_PICKEM_WIZARD_STEPS);
+const ARENA_TD_PSYCHIC_WIZARD_STEPS = withArenaSteps(TD_PSYCHIC_WIZARD_STEPS);
 
 /** The two Access choices, in the MVP's order. */
 const ENTRY_ACCESS_OPTIONS: readonly {
@@ -290,9 +320,9 @@ type DraftSeed = {
     allowSameGameLegs: boolean;
     winningPlaces: number;
     name: string;
-    rulesText: string;
     allowStaffParticipation: boolean;
     entryAccessMode: FeedContestEntryAccessMode;
+    arenaReward: ArenaRewardDraft;
 };
 
 const CREATE_SEED: DraftSeed = {
@@ -308,12 +338,15 @@ const CREATE_SEED: DraftSeed = {
     allowSameGameLegs: true,
     winningPlaces: 3,
     name: "",
-    rulesText: "",
     // Both default to the RESTRICTIVE / unrestricted pair the MVP starts from:
     // staff stay out unless deliberately opted in, and a contest nobody
     // deliberately confined to a venue must never come out confined.
     allowStaffParticipation: false,
     entryAccessMode: "open",
+    // "No prizes" is a complete answer to the Reward step, and the right default:
+    // most Arena contests carry none, and a prize is a real-world promise nobody
+    // should make by leaving a control alone.
+    arenaReward: createEmptyArenaRewardDraft(),
 };
 
 const isSlateMode = (value: unknown): value is SundayPickemSlateMode =>
@@ -324,11 +357,13 @@ const isSlateMode = (value: unknown): value is SundayPickemSlateMode =>
 
 const buildDraftSeed = ({
     contest,
+    reward,
     organizerTimeZone,
     organizerToday,
     organizerHorizonEnd,
 }: {
     contest: FeedContest | undefined;
+    reward: FeedContestReward | null | undefined;
     organizerTimeZone: string;
     organizerToday: string;
     organizerHorizonEnd: string;
@@ -417,7 +452,6 @@ const buildDraftSeed = ({
         allowSameGameLegs: contest.allow_same_game_legs ?? true,
         winningPlaces: contest.winning_places ?? 3,
         name: contest.name ?? "",
-        rulesText: contest.rules_text ?? "",
         // Both endpoints REPLACE the row, so a draft's saved answers have to be
         // seeded here or re-saving would reset them to the create defaults.
         allowStaffParticipation: contest.allow_staff_participation === true,
@@ -425,6 +459,33 @@ const buildDraftSeed = ({
             contest.entry_access_mode === "venue_check_in_required"
                 ? "venue_check_in_required"
                 : "open",
+        /*
+         * The saved draft's reward, re-opened for editing. Seeded here for the
+         * same reason every other Arena answer is: the draft endpoints REPLACE
+         * the row, so a reward that was not sent back is a reward the organizer
+         * silently deleted by re-saving.
+         *
+         * `organizerConfirmed` starts TRUE because the stored reward already
+         * carries a signature — and the editor clears it the moment anything
+         * changes, which is what makes the re-signature real rather than
+         * inherited.
+         */
+        arenaReward: reward
+            ? {
+                enabled: true,
+                settlementMethod: reward.settlement_method,
+                prizes: [...reward.prizes]
+                    .sort((left, right) => left.place - right.place)
+                    .map((prize) => ({
+                        place: prize.place as ArenaRewardPlace,
+                        title: prize.title,
+                        description: prize.description,
+                        approximateValue: prize.approximate_value ?? "",
+                    })),
+                pickupInstructions: reward.pickup_instructions ?? "",
+                organizerConfirmed: true,
+            }
+            : createEmptyArenaRewardDraft(),
     };
 };
 
@@ -458,6 +519,27 @@ export type FeedContestCreateFormProps = {
      */
     initialContest?: FeedContest;
     /**
+     * DRAFT EDIT ONLY — the draft's saved reward, from the detail response's
+     * `data.reward` SIBLING of `contest`. It is not a column of the contest row,
+     * so it cannot ride in on `initialContest`.
+     *
+     * Load-bearing rather than decorative: the draft endpoints REPLACE the row,
+     * so a reopened draft that does not send its reward back has deleted it.
+     */
+    initialReward?: FeedContestReward | null;
+    /**
+     * ARENA ONLY — the Arena's configured reward inbox, for the Reward step's
+     * virtual-delivery block.
+     *
+     * `GET /group/:id` returns it to the OWNER alone, so a manager sees
+     * `undefined` whether or not one exists. That is why the copy below is
+     * role-aware: a manager is told to ask the owner rather than told the Arena
+     * has no inbox, and the server's own 409 is the backstop either way.
+     */
+    rewardContactEmail?: string | null;
+    /** TRUE only for the permanent Arena owner — decides which copy is shown. */
+    isArenaOwner?: boolean;
+    /**
      * WHERE this wizard is mounted, and the only thing that changes with it is
      * its relationship to the URL.
      *
@@ -484,6 +566,9 @@ export const FeedContestCreateForm = ({
     publishDisabledReason,
     participantLimit = null,
     initialContest,
+    initialReward = null,
+    rewardContactEmail = null,
+    isArenaOwner = false,
     surface = "page",
 }: FeedContestCreateFormProps) => {
     /** TRUE when the wizard is reopening a saved draft rather than starting one. */
@@ -513,6 +598,7 @@ export const FeedContestCreateForm = ({
     const matchupCountsError = useSelector(
         (state: RootState) => state.league.matchupCountsError
     );
+    const arenaDetailsSaving = useSelector((state: RootState) => state.arena.updateLoading);
     const venueDetail = useSelector((state: RootState) => state.venue.detail);
     const venueDetailForId = useSelector((state: RootState) => state.venue.detailForId);
 
@@ -606,6 +692,7 @@ export const FeedContestCreateForm = ({
     const [seed] = useState(() =>
         buildDraftSeed({
             contest: initialContest,
+            reward: initialReward,
             organizerTimeZone,
             organizerToday,
             organizerHorizonEnd,
@@ -616,7 +703,6 @@ export const FeedContestCreateForm = ({
     const [highestVisitedStepIndex, setHighestVisitedStepIndex] = useState(0);
     const [template, setTemplate] = useState<FeedContestTemplate | null>(seed.template);
     const [name, setName] = useState(seed.name);
-    const [rulesText, setRulesText] = useState(seed.rulesText);
     const [selectedComboSports, setSelectedComboSports] = useState<FeedContestSport[]>(
         seed.comboSports
     );
@@ -642,6 +728,48 @@ export const FeedContestCreateForm = ({
     );
     const [allowSameGameLegs, setAllowSameGameLegs] = useState(seed.allowSameGameLegs);
     const [winningPlaces, setWinningPlaces] = useState(seed.winningPlaces);
+
+    /**
+     * THE RULES, DERIVED — never state, and never typed over.
+     *
+     * The MVP has no rules field at all: the terms are written out of the format
+     * and the settings, so an organizer changes them by changing the leg range,
+     * the minimum price or the same-game toggle above. Holding them in state and
+     * letting the organizer edit them is how the two drift apart, and the drift
+     * lands on the one string an entrant ticks a box to accept.
+     *
+     * A reopened DRAFT regenerates rather than replaying its stored
+     * `rules_text` — the MVP does the same, and this wizard only ever edits
+     * drafts (a published contest's copy belongs to `FeedContestEditForm`), so
+     * nothing an entrant has accepted can move underneath them.
+     *
+     * The ARENA REWARD block is absent on purpose: the server appends its own
+     * from the resolved reward snapshot on every save.
+     */
+    const rulesText = useMemo(
+        () =>
+            template
+                ? buildFeedContestParticipationRulesText({
+                    template,
+                    contextType: isArenaContest ? "arena" : "league",
+                    minLegs,
+                    maxLegs,
+                    minimumCombinedOdds:
+                        minimumCombinedOdds.trim() && Number.isFinite(Number(minimumCombinedOdds))
+                            ? Number(minimumCombinedOdds)
+                            : null,
+                    allowSameGameLegs,
+                })
+                : "",
+        [
+            allowSameGameLegs,
+            isArenaContest,
+            maxLegs,
+            minLegs,
+            minimumCombinedOdds,
+            template,
+        ]
+    );
     // Both are Arena-only answers. They are still held for a League so the state
     // shape does not fork; `buildPayload` simply never sends them from there.
     const [allowStaffParticipation, setAllowStaffParticipation] = useState(
@@ -650,6 +778,21 @@ export const FeedContestCreateForm = ({
     const [entryAccessMode, setEntryAccessMode] = useState<FeedContestEntryAccessMode>(
         seed.entryAccessMode
     );
+    const [arenaRewardDraft, setArenaRewardDraft] = useState<ArenaRewardDraft>(
+        seed.arenaReward
+    );
+    /** The field a failed reward save pointed at, so the editor can focus it. */
+    const [invalidRewardPrizeField, setInvalidRewardPrizeField] = useState<{
+        place: ArenaRewardPlace;
+        field: "title" | "description";
+    } | null>(null);
+    /**
+     * The organizer saved the Arena's reward inbox from inside this step. Held
+     * locally rather than read off `state.arena.updateMessage`, which is a shared
+     * slot the Arena settings screen clears — a stale value there would have this
+     * wizard congratulate an organizer who has not touched the field.
+     */
+    const [contactEmailJustSaved, setContactEmailJustSaved] = useState(false);
     const [venueSetupOpen, setVenueSetupOpen] = useState(false);
 
     // Only ever true once the venue read has landed, so a contest is never
@@ -660,6 +803,77 @@ export const FeedContestCreateForm = ({
         entryAccessMode === "venue_check_in_required" &&
         Boolean(scopedVenue) &&
         !hasActiveVenue;
+
+    /* ------------------------------------------------------------------------
+     * THE REWARD STEP'S PREREQUISITES — both read from the ARENA, not the draft.
+     *
+     * An in-person prize is snapshotted against an ACTIVE venue and a virtual one
+     * against the Arena's configured inbox, and the server answers 409 when
+     * either is missing. Both messages are role-aware because only the permanent
+     * owner can fix either: telling a manager to "set up a venue" sends them to a
+     * screen they cannot use.
+     * ---------------------------------------------------------------------- */
+    const normalizedRewardContactEmail = (rewardContactEmail ?? "").trim().toLowerCase();
+    const hasValidRewardContactEmail = Boolean(
+        normalizedRewardContactEmail &&
+        isValidArenaRewardContactEmail(normalizedRewardContactEmail)
+    );
+    const rewardVenue =
+        scopedVenue?.venue_check_in.venue && hasActiveVenue
+            ? {
+                name: scopedVenue.venue_check_in.venue.name,
+                address: scopedVenue.venue_check_in.venue.display_address,
+            }
+            : null;
+    const rewardContactEmailRequiredMessage = isArenaOwner
+        ? "Set up the Arena Contact Email in Arena Settings before adding contest prizes."
+        : "Ask the permanent Arena owner to set up the Arena Contact Email before adding contest prizes.";
+    const rewardVenueRequiredMessage = isArenaOwner
+        ? "Set up an active Arena venue for in-person prize pickup."
+        : "Ask the permanent Arena owner to set up an active venue for in-person prize pickup.";
+    const rewardPrizeSetupDisabledReason = hasValidRewardContactEmail
+        ? undefined
+        : rewardContactEmailRequiredMessage;
+
+    /**
+     * The Review step's preview, in the exact shape the server will snapshot.
+     *
+     * The venue, the inbox and the provider name are filled in from the ARENA
+     * rather than from the draft, because that is where the server reads them —
+     * showing anything else here would preview a promise the contest will not
+     * actually carry.
+     */
+    const previewArenaReward =
+        isArenaContest && arenaRewardDraft.enabled && arenaRewardDraft.prizes.length > 0
+            ? {
+                settlement_method: arenaRewardDraft.settlementMethod,
+                prizes: [...arenaRewardDraft.prizes]
+                    .sort((left, right) => left.place - right.place)
+                    .map((prize) => ({
+                        place: prize.place,
+                        title: prize.title.trim(),
+                        description: prize.description.trim(),
+                        approximate_value: prize.approximateValue.trim() || null,
+                    })),
+                pickup_instructions:
+                    arenaRewardDraft.settlementMethod === "in_person"
+                        ? arenaRewardDraft.pickupInstructions.trim() || null
+                        : null,
+                venue_name_snapshot:
+                    arenaRewardDraft.settlementMethod === "in_person"
+                        ? rewardVenue?.name ?? null
+                        : null,
+                venue_address_snapshot:
+                    arenaRewardDraft.settlementMethod === "in_person"
+                        ? rewardVenue?.address ?? null
+                        : null,
+                reward_contact_email_snapshot:
+                    arenaRewardDraft.settlementMethod === "virtual"
+                        ? normalizedRewardContactEmail || null
+                        : null,
+                provider_name_snapshot: contextName,
+            }
+            : null;
 
     /**
      * The caller's own reason wins — it describes the group's whole ability to
@@ -1334,12 +1548,37 @@ export const FeedContestCreateForm = ({
                 ? null
                 : "Choose where members can enter.";
         }
+        if (candidate === "reward") {
+            /*
+             * A League never reaches this step and can never carry a reward, so
+             * the only legal answer there is the empty one — which is also what
+             * the seed starts from, so this only fires if something set it.
+             */
+            if (!isArenaContest) {
+                return arenaRewardDraft.enabled
+                    ? "League Feed contests cannot offer Arena prizes."
+                    : null;
+            }
+            return validateArenaRewardDraft({
+                draft: arenaRewardDraft,
+                arenaName: contextName,
+                // Cross-checked here rather than only server-side: a prize for a
+                // place the contest does not pay can never be awarded, and the
+                // organizer would only find out when nobody received it.
+                winningPlaces: template === "td_psychic" ? 3 : winningPlaces,
+                venueConfigured: Boolean(rewardVenue),
+                contactEmailConfigured: hasValidRewardContactEmail,
+                venueRequiredMessage: rewardVenueRequiredMessage,
+                contactEmailRequiredMessage: rewardContactEmailRequiredMessage,
+            });
+        }
         const setupError =
             validateStep("style") ??
             validateStep("slate") ??
             validateStep("matchups") ??
             validateStep("rules") ??
-            validateStep("access");
+            validateStep("access") ??
+            validateStep("reward");
         if (setupError) return setupError;
         return automaticLocksAt && automaticExpectedEnd
             ? null
@@ -1426,7 +1665,6 @@ export const FeedContestCreateForm = ({
         // spell out how a card can place and still earn nothing. Re-seeded on
         // every style change, so switching templates never leaves the other
         // one's terms in the field.
-        setRulesText(participationRulesForTemplate(nextTemplate));
         setError(undefined);
     };
 
@@ -1504,6 +1742,15 @@ export const FeedContestCreateForm = ({
         if (isArenaContest) {
             payload.allow_staff_participation = allowStaffParticipation;
             payload.entry_access_mode = entryAccessMode;
+            /*
+             * ALWAYS sent, including as `{ enabled: false }`. The create and
+             * draft-replace endpoints REPLACE the row, so a reopened draft that
+             * omitted this would silently delete the reward it was carrying —
+             * and the server treats an absent key and an explicit `false` the
+             * same, which is exactly what makes posting the step state verbatim
+             * safe.
+             */
+            payload.arena_reward = arenaRewardPayload(arenaRewardDraft);
         }
 
         if (template === "sunday_pickem") {
@@ -1558,6 +1805,21 @@ export const FeedContestCreateForm = ({
         const validationError = validateStep("review");
         if (validationError) {
             setError(validationError);
+            // Points the editor at the offending field, so a failure on the
+            // Review step is actionable without hunting through the carousel.
+            const incompletePrize = isArenaContest && arenaRewardDraft.enabled
+                ? [...arenaRewardDraft.prizes]
+                    .sort((left, right) => left.place - right.place)
+                    .find((prize) => !prize.title.trim() || !prize.description.trim())
+                : undefined;
+            setInvalidRewardPrizeField(
+                incompletePrize
+                    ? {
+                        place: incompletePrize.place,
+                        field: incompletePrize.title.trim() ? "description" : "title",
+                    }
+                    : null
+            );
             return;
         }
         const payload = buildPayload();
@@ -1684,6 +1946,24 @@ export const FeedContestCreateForm = ({
                             : "Open to Arena members",
                         entryAccessMode === "venue_check_in_required"
                             ? "Members need an active verified venue session whenever they submit or replace an entry."
+                            : undefined,
+                    ],
+                    [
+                        "Prizes",
+                        previewArenaReward
+                            ? `${previewArenaReward.prizes.length} podium ${previewArenaReward.prizes.length === 1 ? "prize" : "prizes"
+                            }`
+                            : "No prizes",
+                        previewArenaReward
+                            ? `${previewArenaReward.prizes
+                                .map((prize) => formatContestPlacement(prize.place))
+                                .join(", ")} · ${previewArenaReward.settlement_method === "in_person"
+                                    ? `In-person pickup at ${previewArenaReward.venue_name_snapshot ?? "the Arena venue"
+                                    }`
+                                    : `Virtual delivery via ${previewArenaReward.reward_contact_email_snapshot ??
+                                    "the Arena Contact Email"
+                                    }`
+                            }`
                             : undefined,
                     ],
                 ] as [string, string, string?][])
@@ -2300,8 +2580,9 @@ export const FeedContestCreateForm = ({
                                     Make the contest easy to understand
                                 </h2>
                                 <p className="mt-2 text-sm leading-6 text-gray-400">
-                                    The description explains how entries work. Entrants must accept
-                                    the rules below before submitting an entry.
+                                    Add the contest details members will see. The contest rules are
+                                    generated from these settings and remain available in Contest
+                                    Details.
                                 </p>
                             </div>
                             <label className={fieldLabelClasses}>
@@ -2317,11 +2598,16 @@ export const FeedContestCreateForm = ({
                             <section aria-labelledby="contest-description-title">
                                 <div className="flex items-center justify-between gap-3">
                                     <h3 id="contest-description-title" className={fieldLabelClasses}>
-                                        Description
+                                        Details
                                     </h3>
-                                    <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                        {template === "multi_pick" ? "Edit values inline" : "Auto-generated"}
-                                    </span>
+                                    {/* The chip only appears where there is something to say
+                                        about editability — a template whose details are simply
+                                        generated does not need a badge announcing it. */}
+                                    {editingDraft || template === "multi_pick" ? (
+                                        <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
+                                            Edit details
+                                        </span>
+                                    ) : null}
                                 </div>
                                 {template === "multi_pick" ? (
                                     <fieldset
@@ -2445,61 +2731,24 @@ export const FeedContestCreateForm = ({
                                         </p>
                                     </div>
                                 )}
-                                <p
-                                    id="contest-description-help"
-                                    className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
-                                >
-                                    {template === "multi_pick"
-                                        ? "Edit the highlighted values directly. The surrounding copy updates automatically. Participants do not accept this copy."
-                                        : "Shown with the contest details. Participants do not accept this copy."}
-                                </p>
                             </section>
 
-                            {template === "td_psychic" ? (
-                                <section
-                                    aria-label="Fixed TD Psychic rules"
-                                    className={`rounded-xl border p-4 ${accentClasses.previewSurface}`}
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <h3 className={fieldLabelClasses}>
-                                            Rules participants must accept
-                                        </h3>
-                                        <span
-                                            className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] ${accentClasses.previewSurface} ${accentClasses.textStrong}`}
-                                        >
-                                            Fixed mechanics
-                                        </span>
-                                    </div>
-                                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-300">
-                                        {rulesText}
-                                    </p>
-                                    <p className="mt-3 text-xs leading-5 text-gray-500">
-                                        Every TD Psychic contest uses exactly three picks, allows
-                                        multiple players from the same game, and awards up to three
-                                        placement-eligible cards. Only a perfect card earns points.
-                                    </p>
-                                </section>
-                            ) : (
-                                <div>
-                                    <label className={fieldLabelClasses}>
-                                        Rules participants must accept
-                                        <textarea
-                                            rows={4}
-                                            value={rulesText}
-                                            onChange={(event) => setRulesText(event.target.value)}
-                                            aria-describedby="contest-rules-help"
-                                            className={copyFieldClasses(accent)}
-                                        />
-                                    </label>
-                                    <p
-                                        id="contest-rules-help"
-                                        className="mt-2 text-[11px] font-normal normal-case leading-5 text-gray-500"
-                                    >
-                                        Entrants must review and check that they accept this copy
-                                        before submitting an entry.
-                                    </p>
-                                </div>
-                            )}
+                            {/* THE RULES, read-only and behind a disclosure.
+                                They are generated from the settings above — the leg
+                                range, the minimum price, the same-game toggle — so
+                                an organizer changes them by changing those, never by
+                                typing over them. That is the MVP's model, and it is
+                                what keeps the terms an entrant accepts describing
+                                the contest they are actually entering. The Arena
+                                reward block is appended server-side on save. */}
+                            <section aria-label="Contest Rules" data-contest-rules-preview>
+                                <ContestRulesDisclosure
+                                    rulesText={rulesText}
+                                    accent={accent}
+                                    helperText="Read only · generated from the contest format and settings."
+                                    className={`rounded-xl border px-4 ${accentClasses.previewSurface}`}
+                                />
+                            </section>
 
                             {template === "sunday_pickem" ? (
                                 <label className={`${fieldLabelClasses} max-w-48`}>
@@ -2662,6 +2911,113 @@ export const FeedContestCreateForm = ({
                         </div>
                     ) : null}
 
+                    {/* ------------------------------------------------------------------
+                        REWARD — Arena only, and always the step between Access and
+                        Review. It is the ONLY place a reward can ever be authored:
+                        the disclosure has to be inside rules_text on the first
+                        version of the row, so there is no endpoint that attaches one
+                        afterwards. `PATCH /reward/:id/prizes` can correct the wording
+                        later, and that is all.
+                       ------------------------------------------------------------------ */}
+                    {step === "reward" && template && isArenaContest ? (
+                        <div className="space-y-6">
+                            <div>
+                                <p
+                                    className={`text-xs font-semibold uppercase tracking-[0.12em] ${accentClasses.textSoft}`}
+                                >
+                                    Step {currentStepIndex + 1} · Reward
+                                </p>
+                            </div>
+
+                            {/* The email landed while the organizer was standing
+                                here, so the prerequisite panel below has already
+                                gone. Without this line the step would simply
+                                un-disable itself with no acknowledgement. */}
+                            {contactEmailJustSaved && hasValidRewardContactEmail ? (
+                                <p
+                                    role="status"
+                                    className="rounded-xl border border-emerald-300/25 bg-emerald-500/10 p-4 text-sm normal-case leading-6 text-emerald-100"
+                                >
+                                    Arena Contact Email saved. You can now add contest prizes.
+                                </p>
+                            ) : null}
+
+                            <ArenaContestRewardEditor
+                                value={arenaRewardDraft}
+                                arenaName={contextName}
+                                activeVenue={rewardVenue}
+                                rewardContactEmail={normalizedRewardContactEmail || null}
+                                invalidPrizeField={invalidRewardPrizeField}
+                                prizeSetupDisabledReason={rewardPrizeSetupDisabledReason}
+                                onChange={(next) => {
+                                    setArenaRewardDraft(next);
+                                    setInvalidRewardPrizeField(null);
+                                    setError(undefined);
+                                }}
+                            />
+
+                            {/* THE CONTACT-EMAIL PREREQUISITE, fixable in place.
+                                Every reward needs the Arena's inbox — not only a
+                                virtual one — because it is the address a winner
+                                claims a prize at, so the server refuses to snapshot
+                                a reward without it.
+
+                                Offered inline rather than as a link away because
+                                sending an organizer to Arena Settings mid-draft
+                                loses the draft: this wizard holds its answers in
+                                state and nothing has been saved yet. Owner only —
+                                `PUT /group/arena/details` answers 403 for a manager
+                                who sends this field, so a manager gets the sentence
+                                the editor already shows and no form. */}
+                            {!hasValidRewardContactEmail && isArenaOwner ? (
+                                <div className="rounded-xl border border-violet-300/25 bg-violet-500/[0.06]">
+                                    <p className="px-5 pt-5 text-sm normal-case leading-6 text-violet-100 sm:px-6">
+                                        Set up the Arena Contact Email here without leaving this
+                                        contest draft.
+                                    </p>
+                                    <ArenaRewardContactSettings
+                                        rewardContactEmail={normalizedRewardContactEmail || null}
+                                        saving={arenaDetailsSaving}
+                                        onSave={(email) => {
+                                            setContactEmailJustSaved(true);
+                                            dispatch(
+                                                updateArenaDetailsRequest({
+                                                    arena_id: groupId,
+                                                    reward_contact_email: email,
+                                                })
+                                            );
+                                        }}
+                                    />
+                                </div>
+                            ) : null}
+
+                            {/* The venue prerequisite, with the fix attached — but
+                                only for the owner, who is the only role the endpoint
+                                would accept it from. A manager gets the sentence
+                                without a button they cannot use. */}
+                            {arenaRewardDraft.enabled &&
+                                arenaRewardDraft.settlementMethod === "in_person" &&
+                                !rewardVenue ? (
+                                isArenaOwner && canConfigureVenue ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setVenueSetupOpen(true)}
+                                        className="rounded-xl border border-amber-200/35 bg-amber-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-amber-950 transition hover:bg-white"
+                                    >
+                                        Set Up Reward Venue
+                                    </button>
+                                ) : (
+                                    <p
+                                        role="status"
+                                        className="rounded-xl border border-amber-300/25 bg-amber-500/10 p-4 text-sm normal-case leading-6 text-amber-100"
+                                    >
+                                        {rewardVenueRequiredMessage}
+                                    </p>
+                                )
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     {step === "review" && template ? (
                         <div className="space-y-6">
                             <div>
@@ -2706,15 +3062,31 @@ export const FeedContestCreateForm = ({
                                     Venue setup must be completed before publishing.
                                 </p>
                             ) : null}
+                            {previewArenaReward ? (
+                                <>
+                                    <ArenaContestRewardCard
+                                        reward={previewArenaReward}
+                                        variant="review"
+                                    />
+                                    {/* The prize terms are GENERATED, not authored:
+                                        the server appends its own ARENA REWARD block
+                                        to rules_text on save, so the rules preview
+                                        below deliberately does not show it yet. */}
+                                    <p className="text-xs normal-case leading-5 text-gray-500">
+                                        The prize terms, the no-purchase-necessary notice and the
+                                        Arena&apos;s responsibility for fulfillment are added to the
+                                        published contest rules automatically.
+                                    </p>
+                                </>
+                            ) : null}
                             {rulesText.trim() ? (
-                                <div>
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                        Rules participants must accept
-                                    </p>
-                                    <p className="mt-2 whitespace-pre-line text-sm normal-case leading-6 text-gray-300">
-                                        {rulesText}
-                                    </p>
-                                </div>
+                                <section aria-label="Contest Rules" data-contest-review-rules>
+                                    <ContestRulesDisclosure
+                                        rulesText={rulesText}
+                                        accent={accent}
+                                        className="rounded-xl border bg-black/25 px-4"
+                                    />
+                                </section>
                             ) : null}
                         </div>
                     ) : null}

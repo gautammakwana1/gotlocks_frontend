@@ -13,24 +13,42 @@ import type {
     FeedContestLeaderboardData,
     FeedContestStandingRow,
 } from "@/lib/interfaces/interfaces";
-import type { FeedContestEntryFormat } from "@/components/social/PickCardContent";
-import {
-    isTdPsychicCardLocked,
-    tdPsychicEntrySelections,
-    tdPsychicSelectionResult,
-    type TdPsychicStoredLeg,
-} from "@/lib/contests/tdPsychicEntry";
+import type { FeedContestEntryFormat } from "@/components/social/pick-card/types";
+import { tdPsychicSelectionResult } from "@/lib/contests/tdPsychicEntry";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
-import TdPsychicEntryCard from "./TdPsychicEntryCard";
 
 /* ----------------------------------------------------------------------------
  * The Feed contest STANDINGS board, over
  * `GET /group/feed-contest/leaderboard/:contest_id`.
  *
- * Ported from the MVP's standings frame (StructuredContestDetail.tsx ~4494
- * onwards) and mapped onto this backend's `contest_leaderboard` row. Two of the
- * envelope's flags are load-bearing and must never be re-derived from the
- * contest status:
+ * Re-ported 2026-08-21 against the MVP's current standings frame
+ * (StructuredContestDetail.tsx:5414 onwards + the STANDINGS_* constants at
+ * :828). What changed in that pass, and why each piece matters:
+ *
+ *   THE GRADIENT FRAME. The board is one continuous surface that starts on the
+ *   community's own tint, settles to near-black through the rows, and fades back
+ *   into `--app-bg` at the bottom, so the list ENDS rather than being cut off.
+ *   Its top colour is the same one the title band above lands on, which is what
+ *   makes the two read as a single object. The header owns the bleed — this
+ *   panel re-insets every row with `px-5 sm:px-6` instead of bleeding again.
+ *
+ *   THE ROW IS TWO COLUMNS, not three. Identity (avatar + rank marker + name +
+ *   meta) takes the flexible column and the metric PAIR takes a fixed 164px on
+ *   mobile / 220-260px above it. The rank marker rides on the avatar, so it
+ *   needs no column of its own.
+ *
+ *   POINTS COME FIRST. The metric pair is [points, primary metric], which is the
+ *   opposite of the order this panel used to draw. Points are what the board is
+ *   sorted by, so they belong nearest the name.
+ *
+ *   PRE-LOCK IS ITS OWN LIST. Before the field opens there is no ranking to
+ *   show — the server seeds `contest_leaderboard` the moment a member enters, so
+ *   a pre-lock board is a roster, not a scoreboard. It is sorted by NAME, drops
+ *   the rank marker entirely, says "Rank pending", and its metrics are Potential
+ *   pts / Combo odds.
+ *
+ * Two of the envelope's flags stay load-bearing and must never be re-derived
+ * from the contest status:
  *
  *   is_ranked          FALSE until a settlement job fills in `rank`, and every
  *                      row sits at NULL until then. While false the marker shows
@@ -43,68 +61,79 @@ import TdPsychicEntryCard from "./TdPsychicEntryCard";
  *                      visible yet", never "no value", so those cells render a
  *                      locked dash instead of a zero.
  *
- * THE ENTRY DISCLOSURE (the MVP's `expandedStandingEntryId`) is ported as of
- * 2026-08-20, when `runFeedContestLeaderboard` began carrying each standing's
- * `pick` in the same shape /entries returns. It was previously skipped for want
- * of that payload — the row named a `pick_id` and nothing else — which is also
- * why the note about a missing entry payload has gone from `pointsState` below.
- *
- * One disclosure is open at a time, keyed by the standing's `pick_id` rather
- * than by its leaderboard row id: the pinned "Your standing" frame renders the
- * viewer's own row a second time when it falls off the loaded pages, and keying
- * on the row id would let those two toggle independently while showing the same
- * entry.
+ * THE ENTRY DISCLOSURE (the MVP's `expandedStandingEntryId`): one open at a
+ * time, keyed by the standing's `pick_id` rather than by its leaderboard row id,
+ * because the pinned "Your standing" frame renders the viewer's own row a second
+ * time when it falls off the loaded pages and keying on the row id would let
+ * those two toggle independently while showing the same entry.
  *
  * This board deliberately does NOT use components/community/StandingsCard: that
  * is the gold LIFETIME surface (League / Arena / Global rankings), and the MVP
- * keeps this per-contest board on its own neutral responsive-list frame too.
- * Its row is a two-line stack whose metric pair col-spans on mobile, it pages
- * from the server behind "Show more" rather than scrolling a 15-row viewport,
- * and it pins the viewer's own line in a separate frame above the board — none
- * of which survives a single `gridClassName` row template.
+ * keeps this per-contest board on its own frame too.
  * -------------------------------------------------------------------------- */
 
 export type FeedContestStandingsAccent = "league" | "arena";
 
 const accentClasses: Record<
     FeedContestStandingsAccent,
-    { avatar: string; textSoft: string; showMore: string }
+    { textSoft: string; showMore: string }
 > = {
     league: {
-        avatar:
-            "border-sky-300/40 bg-sky-500/[0.14] text-sky-100 shadow-[0_0_16px_rgba(125,211,252,0.14)]",
         textSoft: "text-sky-200",
         showMore: "border-sky-300/30 text-sky-100 hover:bg-sky-500/10",
     },
     arena: {
-        avatar:
-            "border-violet-300/40 bg-violet-500/[0.14] text-violet-100 shadow-[0_0_16px_rgba(196,181,253,0.14)]",
         textSoft: "text-violet-200",
         showMore: "border-violet-300/30 text-violet-100 hover:bg-violet-500/10",
     },
 };
 
 /*
- * FULL-LENGTH board, as the MVP now draws it
- * (StructuredContestDetail.tsx:821-822 + :5102). The rounded, bordered card
- * this used to be was a port of an older MVP frame; the current one drops the
- * border, the radius and the drop shadow and lets the row wash run to the
- * screen edge, which is also what the sibling Entries tab already does here
- * (FeedContestEntriesPanel.tsx:337).
- *
- * The bleed matches AppShell's `px-5 sm:px-6` gutter, so re-adding the same
- * inset to every child puts the rows back in line with the section heading
- * FeedContestDetail renders above this panel.
+ * The frame's own wash. `5rem` in from each end so the community tint reads at
+ * the top of the list and the fade to `--app-bg` only starts once the rows are
+ * done — on a short board the two stops meet and the whole thing is a soft
+ * gradient, which is the intended result rather than an accident.
  */
-const STANDINGS_BLEED_CLASS_NAME = "-mx-5 sm:-mx-6";
+const STANDINGS_LEAGUE_FRAME_SURFACE_CLASS_NAME =
+    "min-w-0 bg-[linear-gradient(to_bottom,#111820_0%,#0b0d10_5rem,#0b0d10_calc(100%_-_5rem),var(--app-bg)_100%)]";
 
+const STANDINGS_ARENA_FRAME_SURFACE_CLASS_NAME =
+    "min-w-0 bg-[linear-gradient(to_bottom,#1b1529_0%,#0b0d10_5rem,#0b0d10_calc(100%_-_5rem),var(--app-bg)_100%)]";
+
+/** Re-inset to the app gutter — the tab panel above owns the bleed. */
 const STANDINGS_INSET_CLASS_NAME = "px-5 sm:px-6";
 
-const STANDINGS_FRAME_CLASS_NAME =
-    "min-w-0 bg-gradient-to-br from-white/[0.08] via-white/[0.035] to-white/[0.02]";
+const STANDINGS_CONTENT_ROW_CLASS_NAME =
+    "grid min-w-0 grid-cols-[minmax(0,1fr)_164px] items-center gap-2 px-5 py-2.5 sm:grid-cols-[minmax(0,1fr)_minmax(220px,260px)] sm:gap-3 sm:px-6 sm:py-3";
 
-const STANDING_METRIC_CARD_CLASS_NAME =
-    "min-w-0 rounded-lg border border-white/10 bg-black/25 px-2.5 py-2";
+const STANDINGS_IDENTITY_CLASS_NAME = "flex min-w-0 items-center gap-2.5 sm:gap-3";
+
+const STANDINGS_METRIC_ROW_CLASS_NAME =
+    "grid min-w-0 grid-cols-2 gap-1.5 self-center";
+
+const STANDING_METRIC_CARD_LAYOUT_CLASS_NAME =
+    "flex min-h-0 min-w-0 flex-col justify-between gap-1 overflow-hidden rounded-xl border border-b-2 border-b-white/15 px-2.5 py-2 leading-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_-22px_rgba(0,0,0,0.88)] sm:px-3 sm:py-2.5";
+
+const STANDING_METRIC_CARD_CLASS_NAME = `${STANDING_METRIC_CARD_LAYOUT_CLASS_NAME} border-white/10 bg-white/[0.04]`;
+
+const STANDING_METRIC_LABEL_CLASS_NAME =
+    "text-[8px] font-semibold uppercase leading-none tracking-[0.08em] text-slate-100/70 sm:text-[9px]";
+
+const STANDING_ZERO_POINTS_LABEL_CLASS_NAME =
+    "whitespace-nowrap text-[7px] font-semibold normal-case leading-none tracking-normal text-slate-100/70 sm:text-[9px]";
+
+const STANDING_METRIC_VALUE_CLASS_NAME =
+    "mt-0 truncate text-sm font-semibold leading-none tabular-nums sm:text-base";
+
+const standingAvatarToneClasses = (
+    accent: FeedContestStandingsAccent,
+    isCurrentUser: boolean
+) =>
+    isCurrentUser
+        ? accent === "arena"
+            ? "border-violet-300/40 bg-violet-500/[0.14] text-violet-100 shadow-[0_0_16px_rgba(167,139,250,0.14)]"
+            : "border-sky-300/40 bg-sky-500/[0.14] text-sky-100 shadow-[0_0_16px_rgba(96,165,250,0.14)]"
+        : "border-white/15 bg-white/[0.05] text-slate-200";
 
 const standingInitials = (value: string) => {
     const initials = value
@@ -119,12 +148,42 @@ const standingInitials = (value: string) => {
 const memberName = (row: FeedContestStandingRow) =>
     row.member?.username?.trim() || "Member";
 
-/** American odds always carry their sign — "+450" reads as a price, "450" does not. */
-const formatAmericanOdds = (value: number) =>
-    `${value > 0 ? "+" : ""}${value}`;
+/**
+ * The MVP's `CONTEST_ACHIEVEMENT_LABELS` (StructuredContestDetail:817), keyed on
+ * the enum THIS backend stores — `CHAMPION`, not `champion`. It is a FALLBACK
+ * only: `runFeedContestLeaderboard` already spells the label on the embedded
+ * award, and reading that is what keeps the board, the trophy case and the
+ * finalized feed post naming the same trophy the same way.
+ */
+const CONTEST_ACHIEVEMENT_LABELS: Record<string, string> = {
+    CHAMPION: "Champion",
+    RUNNER_UP: "Runner-Up",
+    PODIUM_FINISH: "Podium Finish",
+    TOP_FIVE: "Top Five",
+};
 
-const zebraRowClassName = (index: number) =>
-    index % 2 === 1 ? "bg-white/[0.025]" : undefined;
+/**
+ * WHAT this standing won, as one line — or null if it won nothing.
+ *
+ * Three sources, in falling order of trust: the server's own `label`, the enum
+ * mapped locally, and finally the bare pointer. That last rung is why the
+ * generic wording survives: `achievement_id` set with `achievement` null means
+ * an award exists but its row could not be loaded, and dropping the line there
+ * would tell a champion they placed nowhere.
+ */
+const standingAchievementLabel = (row: FeedContestStandingRow): string | null => {
+    const award = row.achievement;
+    if (award) {
+        const label = award.label?.trim();
+        if (label) return label;
+        const mapped = CONTEST_ACHIEVEMENT_LABELS[String(award.type ?? "").toUpperCase()];
+        if (mapped) return mapped;
+    }
+    return row.achievement_id ? "Contest Achievement" : null;
+};
+
+/** American odds always carry their sign — "+450" reads as a price, "450" does not. */
+const formatAmericanOdds = (value: number) => `${value > 0 ? "+" : ""}${value}`;
 
 /**
  * A standing's entry, counted by leg result.
@@ -261,7 +320,7 @@ export type FeedContestStandingsPanelProps = {
     entriesArePublic: boolean;
     /** How many places pay out — decides where the podium colours stop. */
     winningPlaces: number;
-    /** "League points" | "Arena points" — replaces the global XP wording. */
+    /** "League Points" | "Arena Points" — replaces the global XP wording. */
     pointsLabel: string;
     /**
      * `multi_pick` scores on combo odds; Pick'em and TD Psychic both score on
@@ -284,6 +343,139 @@ export type FeedContestStandingsPanelProps = {
     contestHref?: string;
 };
 
+/** The entry disclosure toggle, identical on a ranked and an unranked row. */
+const EntryToggleButton = ({
+    name,
+    expanded,
+    panelId,
+    onToggle,
+}: {
+    name: string;
+    expanded: boolean;
+    panelId: string;
+    onToggle: () => void;
+}) => (
+    <button
+        data-standing-action="entry"
+        type="button"
+        aria-label={`${expanded ? "Hide" : "View"} ${name} entry`}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={onToggle}
+        className="relative inline-flex min-h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 transition after:absolute after:-inset-x-1 after:-inset-y-2 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+    >
+        Entry
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`}
+        >
+            <path d="m6 9 6 6 6-6" />
+        </svg>
+    </button>
+);
+
+/**
+ * ONE PRE-LOCK ROW — the MVP's `standingsPreviewRows` item.
+ *
+ * No rank marker and no ranking copy at all: before the field opens the order
+ * on screen is alphabetical, and a numbered marker beside it would read as a
+ * placement that nothing has computed.
+ */
+const StandingsPreviewRow = ({
+    row,
+    accent,
+    isOwn,
+    pointsLabel,
+}: {
+    row: FeedContestStandingRow;
+    accent: FeedContestStandingsAccent;
+    isOwn: boolean;
+    pointsLabel: string;
+}) => {
+    const name = memberName(row);
+    const points = row.contest_points ?? 0;
+
+    return (
+        <li
+            data-standings-preview-entry
+            data-standings-content-row
+            data-standing-current-user={isOwn ? "true" : undefined}
+            className={STANDINGS_CONTENT_ROW_CLASS_NAME}
+        >
+            <div data-standing-identity className={STANDINGS_IDENTITY_CLASS_NAME}>
+                <span
+                    aria-hidden
+                    data-standing-avatar
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold tracking-wide sm:h-10 sm:w-10 sm:text-xs lg:h-11 lg:w-11 ${standingAvatarToneClasses(
+                        accent,
+                        isOwn
+                    )}`}
+                >
+                    {standingInitials(name)}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <span
+                            data-standings-member-name
+                            className="truncate text-sm font-semibold text-white"
+                        >
+                            {name}
+                        </span>
+                        {isOwn ? (
+                            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400">
+                                You
+                            </span>
+                        ) : null}
+                    </div>
+                    <p
+                        data-standing-placement-copy
+                        className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-500 sm:text-[10px]"
+                    >
+                        Rank pending
+                    </p>
+                </div>
+            </div>
+
+            <dl data-standing-metrics className={STANDINGS_METRIC_ROW_CLASS_NAME}>
+                <div
+                    data-standing-metric="potential-points"
+                    data-points-state="potential"
+                    aria-label={`Potential ${pointsLabel}`}
+                    className={STANDING_METRIC_CARD_CLASS_NAME}
+                >
+                    <dt className={`${STANDING_METRIC_LABEL_CLASS_NAME} whitespace-nowrap`}>
+                        Potential pts
+                    </dt>
+                    <dd className={`${STANDING_METRIC_VALUE_CLASS_NAME} text-amber-200`}>
+                        {`+${points}`}
+                    </dd>
+                </div>
+                <div
+                    data-standing-metric="combo-odds"
+                    className={STANDING_METRIC_CARD_CLASS_NAME}
+                >
+                    <dt className={STANDING_METRIC_LABEL_CLASS_NAME}>Combo odds</dt>
+                    <dd className={`${STANDING_METRIC_VALUE_CLASS_NAME} text-white`}>
+                        {/* A hidden row is a DASH, never a price: before the lock
+                            the server nulls `combo_odds` for everyone but the
+                            viewer, and null there means "not yet visible". */}
+                        {typeof row.combo_odds === "number"
+                            ? formatAmericanOdds(row.combo_odds)
+                            : "—"}
+                    </dd>
+                </div>
+            </dl>
+        </li>
+    );
+};
+
 const StandingRow = ({
     row,
     position,
@@ -296,7 +488,6 @@ const StandingRow = ({
     entryFormat,
     accent,
     isOwn,
-    zebra,
     expanded,
     onToggleEntry,
     currentUserId,
@@ -315,7 +506,6 @@ const StandingRow = ({
     entryFormat: FeedContestEntryFormat;
     accent: FeedContestStandingsAccent;
     isOwn: boolean;
-    zebra?: string;
     expanded: boolean;
     onToggleEntry: () => void;
     currentUserId?: string;
@@ -371,8 +561,7 @@ const StandingRow = ({
     const entryPanelId = `standing-entry-${row.pick_id ?? row.id}`;
     const progressCopy =
         template === "td_psychic" ? tdPsychicProgressCopy(row, isFrozenFinal) : null;
-
-    const tdPsychicLegs = (entry?.legs ?? []) as unknown as TdPsychicStoredLeg[];
+    const achievementLabel = standingAchievementLabel(row);
 
     return (
         <li
@@ -381,118 +570,146 @@ const StandingRow = ({
             data-standing-template={template}
             data-standing-placement={tone}
             data-standing-current-user={isOwn ? "true" : undefined}
-            className={zebra}
         >
-            <div
-                data-standings-content-row
-                className={`grid min-w-0 grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-3 sm:grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] ${STANDINGS_INSET_CLASS_NAME}`}
-            >
-                <div className="relative h-9 w-9 sm:h-10 sm:w-10">
-                    <span
-                        aria-hidden
-                        className={`flex h-full w-full items-center justify-center rounded-full border text-[10px] font-semibold sm:text-xs ${isOwn ? accentClasses[accent].avatar : "border-white/15 bg-white/[0.05] text-slate-200"
-                            }`}
+            <div data-standings-content-row className={STANDINGS_CONTENT_ROW_CLASS_NAME}>
+                <div data-standing-identity className={STANDINGS_IDENTITY_CLASS_NAME}>
+                    <div
+                        data-standing-avatar
+                        className="relative h-9 w-9 shrink-0 sm:h-10 sm:w-10 lg:h-11 lg:w-11"
                     >
-                        {standingInitials(name)}
-                    </span>
-                    <span
-                        data-standing-rank-marker
-                        data-standing-marker-surface="opaque"
-                        aria-label={
-                            isRanked && row.rank !== null
-                                ? `Rank ${row.rank}`
-                                : `Position ${position}`
-                        }
-                        className={`absolute flex items-center justify-center rounded-full border font-semibold tabular-nums ${STANDING_RANK_MARKER_LAYOUT} ${STANDING_RANK_MARKER_TONES[tone]}`}
-                    >
-                        {marker}
-                    </span>
-                </div>
-
-                <div className="min-w-0">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                        <p
-                            data-standings-member-name
-                            className="truncate text-sm font-semibold text-white"
+                        <span
+                            aria-hidden
+                            className={`flex h-full w-full items-center justify-center rounded-full border text-[10px] font-semibold sm:text-xs lg:text-sm ${standingAvatarToneClasses(
+                                accent,
+                                isOwn
+                            )}`}
                         >
-                            {name}
-                        </p>
-                        {isOwn ? (
-                            <span
-                                className={`text-[9px] font-semibold uppercase tracking-[0.1em] ${accentClasses[accent].textSoft}`}
-                            >
-                                You
-                            </span>
-                        ) : null}
+                            {standingInitials(name)}
+                        </span>
+                        <span
+                            data-standing-rank-marker
+                            data-standing-marker-surface="opaque"
+                            aria-label={
+                                isRanked && row.rank !== null
+                                    ? `Rank ${row.rank}`
+                                    : `Position ${position}`
+                            }
+                            className={`absolute flex items-center justify-center rounded-full border font-semibold tabular-nums ${STANDING_RANK_MARKER_LAYOUT} ${STANDING_RANK_MARKER_TONES[tone]}`}
+                        >
+                            {marker}
+                        </span>
                     </div>
-                    {/* The MVP's `data-standing-meta-row`: the progress line and
-                        the entry disclosure share one wrapping row, so a long
-                        TD summary pushes the toggle to the next line rather
-                        than squeezing it. */}
-                    {progressCopy || entry ? (
-                        <div
-                            data-standing-meta-row
-                            className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5"
-                        >
-                            {progressCopy ? (
+
+                    <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <p
+                                data-standings-member-name
+                                className="truncate text-sm font-semibold text-white"
+                            >
+                                {name}
+                            </p>
+                            {isOwn ? (
                                 <span
-                                    data-standing-result-summary
-                                    className="min-w-0 truncate text-[10px] leading-4 text-gray-500"
+                                    className={`text-[9px] font-semibold uppercase tracking-[0.1em] ${accentClasses[accent].textSoft}`}
                                 >
-                                    {progressCopy}
+                                    You
                                 </span>
                             ) : null}
-                            {entry ? (
-                                <button
-                                    data-standing-action="entry"
-                                    type="button"
-                                    aria-label={`${expanded ? "Hide" : "View"} ${name} entry`}
-                                    aria-expanded={expanded}
-                                    aria-controls={entryPanelId}
-                                    onClick={onToggleEntry}
-                                    className="relative inline-flex min-h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 transition after:absolute after:-inset-x-1 after:-inset-y-2 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                                >
-                                    Entry
-                                    <svg
-                                        aria-hidden
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""
-                                            }`}
-                                    >
-                                        <path d="m6 9 6 6 6-6" />
-                                    </svg>
-                                </button>
-                            ) : null}
                         </div>
-                    ) : null}
-                    {isFrozenFinal && row.achievement_id ? (
-                        <p
-                            className={`mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] ${accentClasses[accent].textSoft}`}
-                        >
-                            Contest Achievement
-                        </p>
-                    ) : null}
-                    {reversed ? (
-                        <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-red-200">
-                            Point award reversed
-                        </p>
-                    ) : null}
+                        {/* The MVP's `data-standing-meta-row`: the progress line and
+                            the entry disclosure share one wrapping row, so a long
+                            TD summary pushes the toggle to the next line rather
+                            than squeezing it. */}
+                        {progressCopy || entry ? (
+                            <div
+                                data-standing-meta-row
+                                className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5"
+                            >
+                                {progressCopy ? (
+                                    <span
+                                        data-standing-result-summary
+                                        className="min-w-0 truncate text-[10px] leading-4 text-gray-500"
+                                    >
+                                        {progressCopy}
+                                    </span>
+                                ) : null}
+                                {entry ? (
+                                    <EntryToggleButton
+                                        name={name}
+                                        expanded={expanded}
+                                        panelId={entryPanelId}
+                                        onToggle={onToggleEntry}
+                                    />
+                                ) : null}
+                            </div>
+                        ) : null}
+                        {/* The trophy, named. The MVP prints the placement label
+                            itself here rather than a generic "Contest Achievement"
+                            — on a finalized board the rank marker beside it
+                            already says the member placed, so the only thing this
+                            line adds is WHICH award it was. */}
+                        {isFrozenFinal && achievementLabel ? (
+                            <p
+                                data-standing-achievement={row.achievement?.type ?? "unknown"}
+                                className={`mt-1 text-[10px] font-semibold normal-case tracking-[0.04em] ${accentClasses[accent].textSoft}`}
+                            >
+                                {achievementLabel}
+                            </p>
+                        ) : null}
+                        {reversed ? (
+                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-red-200">
+                                {pointsLabel} award reversed
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
 
-                <dl className="col-span-2 grid grid-cols-2 gap-2 sm:col-span-1 sm:col-start-3 sm:row-start-1">
+                <dl data-standing-metrics className={STANDINGS_METRIC_ROW_CLASS_NAME}>
                     <div
-                        data-standing-metric={showOdds ? "combo-odds" : "correct-picks"}
+                        data-standing-metric="points"
+                        data-points-state={pointsState}
+                        aria-label={
+                            noPointsEarned ? `No ${pointsLabel} earned` : pointsLabel
+                        }
+                        className={`${STANDING_METRIC_CARD_LAYOUT_CLASS_NAME} ${reversed
+                            ? "border-red-300/20 bg-red-500/[0.08]"
+                            : awarded
+                                ? AWARDED_POINTS_CARD_TONE
+                                : "border-white/10 bg-white/[0.04]"
+                            }`}
+                    >
+                        <dt
+                            className={
+                                noPointsEarned
+                                    ? STANDING_ZERO_POINTS_LABEL_CLASS_NAME
+                                    : STANDING_METRIC_LABEL_CLASS_NAME
+                            }
+                        >
+                            {noPointsEarned ? "No pts earned" : pointsLabel}
+                        </dt>
+                        <dd
+                            className={`${STANDING_METRIC_VALUE_CLASS_NAME} ${noPointsEarned
+                                ? "text-slate-300"
+                                : reversed
+                                    ? "text-red-200 line-through"
+                                    : awarded
+                                        ? "text-emerald-200"
+                                        : isFrozenFinal
+                                            ? "text-slate-300"
+                                            : "text-amber-200"
+                                }`}
+                        >
+                            {noPointsEarned ? "0" : `+${points}`}
+                        </dd>
+                    </div>
+                    <div
+                        data-standing-metric={showOdds ? "combo-odds" : "score"}
                         className={STANDING_METRIC_CARD_CLASS_NAME}
                     >
-                        <dt className="text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-[9px]">
+                        <dt className={STANDING_METRIC_LABEL_CLASS_NAME}>
                             {showOdds ? "Combo odds" : "Correct picks"}
                         </dt>
-                        <dd className="mt-1 truncate text-sm font-semibold tabular-nums text-white">
+                        <dd className={`${STANDING_METRIC_VALUE_CLASS_NAME} text-white`}>
                             {showOdds
                                 ? typeof row.combo_odds === "number"
                                     ? formatAmericanOdds(row.combo_odds)
@@ -509,67 +726,23 @@ const StandingRow = ({
                                    * allowed to see; null there means "not yet
                                    * visible", never "no value".
                                    */
-                                  !row.is_entry_revealed
-                                  ? "—"
-                                  : typeof row.total_picks === "number"
-                                    ? `${row.correct_picks ?? 0}/${row.total_picks}`
-                                    : `${row.correct_picks ?? 0}`}
-                        </dd>
-                    </div>
-                    <div
-                        data-standing-metric="points"
-                        data-points-state={pointsState}
-                        aria-label={
-                            noPointsEarned
-                                ? `No ${pointsLabel} earned`
-                                : !isFrozenFinal
-                                    ? `Potential ${pointsLabel}`
-                                    : pointsLabel
-                        }
-                        className={`min-w-0 rounded-lg border px-2.5 py-2 ${reversed
-                            ? "border-red-300/20 bg-red-500/[0.08]"
-                            : awarded
-                                ? AWARDED_POINTS_CARD_TONE
-                                : "border-white/10 bg-black/25"
-                            }`}
-                    >
-                        <dt
-                            className={
-                                noPointsEarned
-                                    ? "whitespace-nowrap text-[7px] font-semibold normal-case leading-none tracking-normal text-slate-400 sm:text-[9px]"
-                                    : "text-[8px] font-semibold uppercase tracking-[0.08em] text-slate-400 sm:text-[9px]"
-                            }
-                        >
-                            {/* Abbreviated on purpose: the full "League Points"
-                                overflows this chip at 360px, and the unabbreviated
-                                label rides on the group's aria-label instead. */}
-                            {noPointsEarned
-                                ? "No pts earned"
-                                : !isFrozenFinal
-                                    ? "Potential pts"
-                                    : pointsLabel}
-                        </dt>
-                        <dd
-                            className={`mt-1 truncate text-sm font-semibold tabular-nums ${noPointsEarned
-                                ? "text-slate-300"
-                                : reversed
-                                    ? "text-red-200 line-through"
-                                    : awarded
-                                        ? "text-emerald-200"
-                                        : isFrozenFinal
-                                            ? "text-slate-300"
-                                            : "text-amber-200"
-                                }`}
-                        >
-                            {noPointsEarned ? "0" : `+${points}`}
+                                !row.is_entry_revealed
+                                    ? "—"
+                                    : typeof row.total_picks === "number"
+                                        ? `${row.correct_picks ?? 0}/${row.total_picks}`
+                                        : `${row.correct_picks ?? 0}`}
                         </dd>
                     </div>
                 </dl>
             </div>
 
-            {/* The entry itself, in the SAME cards the Entries tab renders — a TD
-                card gets the receipt card and everything else the feed card, so a
-                member recognises their slate whichever tab they opened it from. */}
+            {/* The entry itself, in the SAME card the Feed and the Entries tab
+                render — one component for all three formats, so a member
+                recognises their slate whichever tab they opened it from.
+
+                `entryOnly`: SELECTIONS alone. The row above already states the
+                rank, the member and the points, so the expansion repeating them
+                would double its height to say nothing new. */}
             {entry && expanded ? (
                 <div
                     id={entryPanelId}
@@ -577,38 +750,18 @@ const StandingRow = ({
                     aria-label={`${name} entry details`}
                     className="border-t border-white/10 bg-black/25"
                 >
-                    {entryFormat === "td_psychic" ? (
-                        <div
-                            data-td-psychic-submitted-entry
-                            className="px-5 py-3 sm:px-6 sm:py-4"
-                        >
-                            <TdPsychicEntryCard
-                                selections={tdPsychicEntrySelections(
-                                    tdPsychicLegs,
-                                    undefined,
-                                    isOwn
-                                )}
-                                submittedAt={row.entered_at}
-                                comboAmericanOdds={
-                                    isTdPsychicCardLocked(tdPsychicLegs)
-                                        ? (entry.american_odds ?? null)
-                                        : undefined
-                                }
-                            />
-                        </div>
-                    ) : (
-                        <ContestEntryFeedCard
-                            row={asEntryRow(row)}
-                            pick={entry}
-                            contextualPointsLabel={pointsLabel}
-                            currentUserId={currentUserId}
-                            accent={accent === "arena" ? "violet" : "sky"}
-                            entryFormat={entryFormat}
-                            pickemCorrectBonus={pickemCorrectBonus}
-                            contestName={contestName}
-                            contestHref={contestHref}
-                        />
-                    )}
+                    <ContestEntryFeedCard
+                        row={asEntryRow(row)}
+                        pick={entry}
+                        contextualPointsLabel={pointsLabel}
+                        currentUserId={currentUserId}
+                        accent={accent === "arena" ? "violet" : "sky"}
+                        entryFormat={entryFormat}
+                        pickemCorrectBonus={pickemCorrectBonus}
+                        contestName={contestName}
+                        contestHref={contestHref}
+                        entryOnly
+                    />
                 </div>
             ) : null}
         </li>
@@ -641,19 +794,28 @@ export const FeedContestStandingsPanel = ({
     const toggleEntry = (key: string) =>
         setExpandedEntryId((current) => (current === key ? null : key));
 
+    const frameSurfaceClassName =
+        accent === "arena"
+            ? STANDINGS_ARENA_FRAME_SURFACE_CLASS_NAME
+            : STANDINGS_LEAGUE_FRAME_SURFACE_CLASS_NAME;
+
     if (isDraft) {
         return (
-            <p className="text-sm leading-6 text-gray-500">
-                Publish this contest to start counting participants and entries.
-            </p>
+            <div className={`${frameSurfaceClassName} ${STANDINGS_INSET_CLASS_NAME} py-5`}>
+                <p className="text-sm leading-6 text-gray-500">
+                    Publish this contest to start counting participants and entries.
+                </p>
+            </div>
         );
     }
 
     if (error) {
         return (
-            <p role="alert" className="text-sm leading-6 text-rose-200">
-                {error}
-            </p>
+            <div className={`${frameSurfaceClassName} ${STANDINGS_INSET_CLASS_NAME} py-5`}>
+                <p role="alert" className="text-sm leading-6 text-rose-200">
+                    {error}
+                </p>
+            </div>
         );
     }
 
@@ -661,22 +823,19 @@ export const FeedContestStandingsPanel = ({
     // flashing an empty board that would read as "nobody entered".
     if (!leaderboard) {
         return (
-            <div
-                aria-hidden="true"
-                className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
-            >
+            <div aria-hidden="true" className={frameSurfaceClassName}>
                 <ul className="divide-y divide-white/10">
                     {[0, 1, 2].map((key) => (
                         <li
                             key={key}
                             className={`flex items-center gap-3 py-3.5 ${STANDINGS_INSET_CLASS_NAME}`}
                         >
-                            <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-white/[0.06] sm:h-10 sm:w-10" />
+                            <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-white/[0.06] sm:h-10 sm:w-10 lg:h-11 lg:w-11" />
                             <div className="min-w-0 flex-1">
                                 <div className="h-3 w-32 animate-pulse rounded bg-white/[0.06]" />
                                 <div className="mt-2 h-2.5 w-20 animate-pulse rounded bg-white/[0.04]" />
                             </div>
-                            <div className="hidden h-11 w-[210px] shrink-0 animate-pulse rounded-lg bg-white/[0.04] sm:block" />
+                            <div className="h-11 w-[164px] shrink-0 animate-pulse rounded-xl bg-white/[0.04] sm:w-[220px]" />
                         </li>
                     ))}
                 </ul>
@@ -707,16 +866,111 @@ export const FeedContestStandingsPanel = ({
 
     /** Keyed on the PICK, so the pinned own-row and its board twin stay in step. */
     const entryKey = (row: FeedContestStandingRow) => row.pick_id ?? row.id;
+    const rowIsOwn = (row: FeedContestStandingRow) =>
+        row.is_own || (Boolean(currentUserId) && row.member.id === currentUserId);
+
+    const own = leaderboard.my_standing;
+    const ownIsOnBoard = own ? rows.some((row) => row.id === own.id) : false;
+
+    /* ------------------------------------------------------------ PRE-LOCK */
+    /*
+     * The field has not opened, so this is a ROSTER and not a scoreboard. Sorted
+     * by NAME rather than by the server's points ordering, which is the MVP's
+     * rule and the point of the whole branch: printing the points order before
+     * the lock publishes a provisional ranking that nothing has settled.
+     */
+    if (!entriesArePublic) {
+        const previewRows = [...rows, ...(own && !ownIsOnBoard ? [own] : [])].sort(
+            (left, right) => memberName(left).localeCompare(memberName(right))
+        );
+
+        return (
+            <>
+                <section
+                    aria-label="Pre-lock standings entries"
+                    aria-describedby="standings-pre-lock-description"
+                    data-standings-frame
+                    data-standings-frame-theme={accent}
+                    className={frameSurfaceClassName}
+                >
+                    {previewRows.length ? (
+                        <ul aria-label="Rank preview" className="relative divide-y divide-white/10">
+                            {previewRows.map((row) => (
+                                <StandingsPreviewRow
+                                    key={row.id}
+                                    row={row}
+                                    accent={accent}
+                                    isOwn={rowIsOwn(row)}
+                                    pointsLabel={pointsLabel}
+                                />
+                            ))}
+                        </ul>
+                    ) : (
+                        <div
+                            data-standings-empty-state="preview"
+                            className="bg-black/15 px-5 py-7 text-center sm:px-6"
+                        >
+                            <span
+                                aria-hidden
+                                className="mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/20 text-sm text-slate-500"
+                            >
+                                —
+                            </span>
+                            <p className="mt-2 text-sm leading-6 text-gray-400">
+                                No complete entries have been accepted yet.
+                            </p>
+                        </div>
+                    )}
+                </section>
+                {leaderboard.pagination.hasMore && onShowMore ? (
+                    <div className={`flex justify-center py-4 ${STANDINGS_INSET_CLASS_NAME}`}>
+                        <button
+                            type="button"
+                            onClick={onShowMore}
+                            disabled={loading}
+                            className={`inline-flex min-h-10 items-center rounded-lg border px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${accentClasses[accent].showMore}`}
+                        >
+                            {loading
+                                ? "Loading…"
+                                : `Show more (${rows.length} of ${leaderboard.pagination.total})`}
+                        </button>
+                    </div>
+                ) : null}
+            </>
+        );
+    }
+
+    /* ---------------------------------------------------------- POST-LOCK */
 
     if (!rows.length) {
         return (
-            <p className="rounded-xl border border-dashed border-white/15 bg-black/25 px-4 py-5 text-sm leading-6 text-gray-500">
-                {isFrozenFinal
-                    ? "This contest finished with no entries on the board."
-                    : entriesArePublic
-                        ? "No entries were accepted before the deadline."
-                        : "No entries yet. Standings appear as members enter."}
-            </p>
+            <div
+                data-standings-empty-state="public"
+                data-standings-frame
+                data-standings-frame-theme={accent}
+                className={`${frameSurfaceClassName} px-5 py-5 sm:px-6`}
+            >
+                {/* The MVP's "No placement-eligible finishers this time." notice.
+                    TD Psychic is the one template where a settled contest can
+                    genuinely end with an empty board — a card needs 2 of 3 to
+                    place — so it says why rather than reading as a missing read. */}
+                {isFrozenFinal && template === "td_psychic" ? (
+                    <>
+                        <p className="text-sm font-semibold text-slate-200">
+                            No placement-eligible finishers this time.
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-gray-400">
+                            A card needs at least 2 of 3 correct to place.
+                        </p>
+                    </>
+                ) : (
+                    <p className="text-sm leading-6 text-gray-500">
+                        {isFrozenFinal
+                            ? "This contest finished with no entries on the board."
+                            : "No ranked results are available yet. Live rank updates automatically as selections settle."}
+                    </p>
+                )}
+            </div>
         );
     }
 
@@ -725,17 +979,16 @@ export const FeedContestStandingsPanel = ({
      * whatever page it really falls on. Pin it above the board only when the
      * loaded pages do NOT already contain it — otherwise it would show twice.
      */
-    const own = leaderboard.my_standing;
-    const ownIsOnBoard = own ? rows.some((row) => row.id === own.id) : false;
     const ownPosition =
         own && isRanked && own.rank !== null ? own.rank : rows.length + 1;
 
     return (
-        <div className="space-y-3">
+        <>
+            {/* The pinned own-row frame is its own block above the board, so it
+                closes with a rule — two gradient surfaces butted together read as
+                one long list with a stray heading in the middle otherwise. */}
             {own && !ownIsOnBoard ? (
-                <div
-                    className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
-                >
+                <div className={`${frameSurfaceClassName} border-b border-white/10`}>
                     <p
                         data-standings-column-header
                         className={`border-b border-white/10 bg-black/20 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 ${STANDINGS_INSET_CLASS_NAME}`}
@@ -768,22 +1021,15 @@ export const FeedContestStandingsPanel = ({
 
             <div
                 data-standings-frame
-                className={`${STANDINGS_BLEED_CLASS_NAME} ${STANDINGS_FRAME_CLASS_NAME}`}
+                data-standings-frame-theme={accent}
+                className={frameSurfaceClassName}
             >
-                <div
-                    aria-hidden
-                    data-standings-column-header
-                    className={`hidden grid-cols-[44px_minmax(0,1fr)_minmax(210px,260px)] items-center gap-3 border-b border-white/10 bg-black/20 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 sm:grid ${STANDINGS_INSET_CLASS_NAME}`}
-                >
-                    <span className="col-span-2">Player</span>
-                    <span>Performance</span>
-                </div>
                 <ol
                     aria-label={
                         isFrozenFinal
-                            ? "Final standings"
+                            ? "Final rank"
                             : isRanked
-                                ? "Live standings"
+                                ? "Live rank"
                                 : "Standings order"
                     }
                     className="divide-y divide-white/10"
@@ -801,8 +1047,7 @@ export const FeedContestStandingsPanel = ({
                             template={template}
                             entryFormat={entryFormat}
                             accent={accent}
-                            isOwn={Boolean(currentUserId) && row.member.id === currentUserId}
-                            zebra={zebraRowClassName(index)}
+                            isOwn={rowIsOwn(row)}
                             expanded={expandedEntryId === entryKey(row)}
                             onToggleEntry={() => toggleEntry(entryKey(row))}
                             currentUserId={currentUserId}
@@ -815,14 +1060,16 @@ export const FeedContestStandingsPanel = ({
             </div>
 
             {!isRanked && !isFrozenFinal ? (
-                <p className="text-[10px] leading-4 text-gray-500">
-                    Ordered by points, then by who entered first. Final placements are
-                    set when the contest settles.
+                <p
+                    className={`pt-3 text-[10px] leading-4 text-gray-500 ${STANDINGS_INSET_CLASS_NAME}`}
+                >
+                    Ordered by points, then by who entered first. Final placements are set
+                    when the contest settles.
                 </p>
             ) : null}
 
             {leaderboard.pagination.hasMore && onShowMore ? (
-                <div className="flex justify-center">
+                <div className={`flex justify-center py-4 ${STANDINGS_INSET_CLASS_NAME}`}>
                     <button
                         type="button"
                         onClick={onShowMore}
@@ -835,7 +1082,7 @@ export const FeedContestStandingsPanel = ({
                     </button>
                 </div>
             ) : null}
-        </div>
+        </>
     );
 };
 

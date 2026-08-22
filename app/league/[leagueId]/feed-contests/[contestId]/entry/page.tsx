@@ -22,6 +22,10 @@ import { useCurrentUser } from "@/lib/auth/useCurrentUser";
  * entries, rather than redirecting: the MVP bounces to `?tab=entries`, but that
  * decision cannot be made until the detail read lands, and a redirect fired on
  * an empty store would kick every visitor out on first paint.
+ *
+ * `participantLimit` is deliberately not passed: the ceiling is a property of an
+ * Arena's hosting tier, a League Feed contest has no cap at all, and reading one
+ * would mean adding the group fetch this route exists without.
  */
 const LeagueFeedContestEntryPage = () => {
     const params = useParams<{ leagueId: string; contestId: string }>();

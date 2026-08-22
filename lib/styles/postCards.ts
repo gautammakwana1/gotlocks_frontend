@@ -31,6 +31,44 @@ export const CONTEST_POST_HEADER_TONES = {
     violet: "bg-violet-400/[0.18]",
 } as const;
 
+/**
+ * The header band an ORDINARY (non-contest) pick post wears.
+ *
+ * A contest post takes its band from the community accent above, because inside
+ * a contest the result belongs to the standings rather than to the card. An
+ * ordinary post has no such owner, so its band is the only place the result can
+ * read from — which is why these three are keyed by result and the contest pair
+ * is keyed by accent.
+ */
+export const ORDINARY_POST_HEADER_TONES = {
+    neutral: "bg-slate-400/[0.10]",
+    win: "bg-[#faab00]/[0.18]",
+    loss: "bg-rose-600/[0.16]",
+} as const;
+
+/**
+ * The podium tint a contest entry's RANK tile wears at 1st, 2nd and 3rd.
+ *
+ * Applied to the tile itself rather than to the whole card: an entry can be
+ * winning and still have losing selections, so tinting the card would contradict
+ * the picks inside it.
+ */
+export const CONTEST_STANDING_PODIUM_TONES = {
+    gold: "border-[#faab00]/40 bg-[#faab00]/[0.14]",
+    silver:
+        "border-slate-200/50 bg-gradient-to-br from-slate-200/[0.20] via-slate-400/[0.09] to-slate-950/[0.04] shadow-[inset_0_1px_0_rgba(241,245,249,0.20),0_0_10px_rgba(203,213,225,0.08)]",
+    bronze:
+        "border-orange-300/50 bg-gradient-to-br from-orange-400/[0.21] via-orange-700/[0.10] to-orange-950/[0.05] shadow-[inset_0_1px_0_rgba(253,186,116,0.20),0_0_10px_rgba(249,115,22,0.08)]",
+} as const;
+
+/** The settled-result chip in a feed post's control cluster. */
+export const PICK_RESULT_BADGE_TONES = {
+    win: "bg-emerald-400/15 text-emerald-100",
+    loss: "bg-rose-400/15 text-rose-100",
+    void: "bg-slate-400/15 text-slate-100",
+    not_found: "bg-slate-400/15 text-slate-100",
+} as const;
+
 export const PENDING_POST_CARD_TONE =
     "border border-white/10 border-b-[3px] border-b-white/20 bg-[#0b0b0b] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-2px_0_rgba(255,255,255,0.08),inset_0_0_0_1px_rgba(255,255,255,0.04),0_2px_10px_rgba(0,0,0,0.18)]";
 

@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import type { PickCardPresentation } from "@/components/social/PickCardContent";
+import type { PickCardPresentation } from "@/components/social/pick-card/types";
 import type {
     Pick,
     PickReaction,

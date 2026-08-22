@@ -89,6 +89,7 @@ import ConnectedStructuredFeed from "../feed/ConnectedStructuredFeed";
 import type { StructuredFeedFilter } from "../feed/types";
 import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
 import ArenaVenueCheckInPanel from "./checkin/ArenaVenueCheckInPanel";
+import ArenaRewardContactSettings from "./ArenaRewardContactSettings";
 import {
     getMemberDirectoryAvatarClassName,
     getMemberDirectoryCardClassName,
@@ -373,6 +374,7 @@ const ArenaFeedPanel = ({
 const ArenaContestsPanel = ({
     arenaId,
     arenaName,
+    rewardContactEmail,
     role,
     hosting,
     unlock,
@@ -381,6 +383,12 @@ const ArenaContestsPanel = ({
     arenaId: string;
     /** Interpolated into the builder's header — "<name> · Feed contest". */
     arenaName: string;
+    /**
+     * The Arena's reward inbox, for the builder's Reward step. `GET /group/:id`
+     * returns it to the OWNER alone, so a manager sees undefined whether or not
+     * one is configured — which is why the step's copy is role-aware.
+     */
+    rewardContactEmail: string | null | undefined;
     role: string;
     hosting: ArenaHostingDetails | null;
     unlock: ArenaUnlockDetails | null;
@@ -609,6 +617,8 @@ const ArenaContestsPanel = ({
                                     hosting?.participating_member_limit ?? null
                                 }
                                 createDisabledReason={createDisabledReason}
+                                rewardContactEmail={rewardContactEmail}
+                                isArenaOwner={role === "commissioner"}
                             />
                         ),
                     }}
@@ -1371,11 +1381,29 @@ const ArenaSettingsPanel = ({
         dispatch(clearArenaHostingActionMessage());
     }, [hostingActionError, hostingActionMessage, dispatch, setToast]);
 
-    // Delete outcome. The "code sent" message is shown inside the dialog, so only
-    // the terminal states surface here; on success the Arena no longer exists, so
-    // the page has to leave before it tries to re-read it.
+    /*
+     * Delete outcome — BOTH terminal states, and each reported exactly once.
+     *
+     * The once-only guards are not defensive padding: `setToast` is a fresh
+     * closure out of useToast on every render and `onDeleteSuccess` is an inline
+     * arrow from the parent, so this effect re-runs on every single render of the
+     * panel. Without the refs a confirm-step error would re-toast on every
+     * keystroke in the dialog, and the success branch could fire its navigation
+     * twice.
+     *
+     * The FAILURE branch used to be gated on `!arenaDeleteOtpSent`, which meant a
+     * rejected code — by far the likelier failure — reported nowhere except
+     * inline in a dialog the owner may have scrolled away from. Both steps toast
+     * now; the confirm-step error is deliberately left in the slice as well, so
+     * the dialog keeps showing it beside the field that has to be corrected.
+     */
+    const deleteSuccessReportedRef = useRef(false);
+    const reportedDeleteErrorRef = useRef<string | null>(null);
+
     useEffect(() => {
         if (arenaDeleted) {
+            if (deleteSuccessReportedRef.current) return;
+            deleteSuccessReportedRef.current = true;
             setToast({
                 id: Date.now(),
                 type: "success",
@@ -1383,19 +1411,27 @@ const ArenaSettingsPanel = ({
                 duration: 5000,
             });
             dispatch(clearArenaDeleteState());
+            // The Arena no longer exists, so the page has to leave before
+            // anything tries to re-read it.
             onDeleteSuccess();
             return;
         }
-        // Only the initiate step reports out here; a bad code is shown in-dialog.
-        if (arenaDeleteError && !arenaDeleteOtpSent) {
-            setToast({
-                id: Date.now(),
-                type: "error",
-                message: arenaDeleteError,
-                duration: 4000,
-            });
-            dispatch(clearArenaDeleteState());
+        if (!arenaDeleteError) {
+            reportedDeleteErrorRef.current = null;
+            return;
         }
+        if (reportedDeleteErrorRef.current === arenaDeleteError) return;
+        reportedDeleteErrorRef.current = arenaDeleteError;
+        setToast({
+            id: Date.now(),
+            type: "error",
+            message: arenaDeleteError,
+            duration: 4000,
+        });
+        // Clear ONLY the initiate-step failure. While the dialog is open its
+        // inline error is the message next to the code field, and clearing the
+        // slice here would blank it the instant the toast appeared.
+        if (!arenaDeleteOtpSent) dispatch(clearArenaDeleteState());
     }, [
         arenaDeleted,
         arenaDeleteError,
@@ -1600,6 +1636,32 @@ const ArenaSettingsPanel = ({
                     </p>
                 )}
             </section>
+
+            {/* THE REWARD INBOX — PERMANENT OWNER ONLY, and rendered for nobody
+                else. `PUT /group/arena/details` answers 403 for a manager who
+                sends the field, and `GET /group/:id` deletes the key on the way
+                out for anyone but `created_by` — so a manager could neither read
+                the current value nor write a new one, and showing them an empty
+                box would read as "no inbox configured" when there may well be
+                one.
+
+                Unlike Arena identity, this is NOT gated on hosting state: a
+                paused Arena still owes prizes on contests it already published,
+                and the address winners claim them at has to stay correctable. */}
+            {isOwner ? (
+                <ArenaRewardContactSettings
+                    rewardContactEmail={arena.reward_contact_email}
+                    saving={updateLoading}
+                    onSave={(email) =>
+                        dispatch(
+                            updateArenaDetailsRequest({
+                                arena_id: arenaId,
+                                reward_contact_email: email,
+                            })
+                        )
+                    }
+                />
+            ) : null}
 
             {/* Permanent-unlock section: the only part of the hosting panel enabled so
                 far. Tier selection, change previews and the purchase-confirm flow stay
@@ -2034,6 +2096,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                     <ArenaContestsPanel
                         arenaId={arenaId}
                         arenaName={arena?.name ?? "Arena"}
+                        rewardContactEmail={arena?.reward_contact_email}
                         role={currentMembership}
                         hosting={hosting}
                         unlock={unlock}
@@ -2061,7 +2124,11 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                         role={currentMembership}
                         hosting={hosting}
                         members={arenaMembers ?? []}
-                        onDeleteSuccess={() => router.replace("/home")}
+                        // The Arena hub, mirroring the League page's
+                        // `router.replace("/fantasy")` after its own delete: a
+                        // deleted group drops you on the list it belonged to, not
+                        // on Home. Same destination the header's back button uses.
+                        onDeleteSuccess={() => router.replace("/arena")}
                     />
                 ) : null}
             </main>

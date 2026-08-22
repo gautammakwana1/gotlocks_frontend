@@ -14,6 +14,7 @@ import {
     feedContestOddsRequestKey,
     withEnrichedContestOdds,
 } from "@/lib/contests/feedContestOdds";
+import { formatParticipationRulesForContext } from "@/lib/contests/participationRules";
 import {
     PICKEM_ENTRY_API_READY,
     PICKEM_ENTRY_PLACEHOLDER_NOTICE,
@@ -22,15 +23,12 @@ import {
 import {
     TD_PSYCHIC_SELECTION_COUNT,
     buildTdPsychicSelections,
-    isTdPsychicCardLocked,
     tdPsychicCardDescription,
-    tdPsychicEntrySelections,
     tdPsychicMatchupsFromScorers,
     tdPsychicPrefillFromLegs,
     tdPsychicScorerCatalog,
     type TdPsychicCatalogSelection,
     type TdPsychicScorerIdentity,
-    type TdPsychicStoredLeg,
 } from "@/lib/contests/tdPsychicEntry";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
@@ -70,7 +68,6 @@ import { fetchVenueCheckInDetailRequest } from "@/lib/redux/slices/venueSlice";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
 import PickemCardEntryEditor from "./PickemCardEntryEditor";
 import TdPsychicCardBuilder from "./TdPsychicCardBuilder";
-import TdPsychicEntryCard from "./TdPsychicEntryCard";
 import VenueContestAccessPanel from "./VenueContestAccessPanel";
 import type { FeedContestAccent } from "./FeedContestDetail";
 
@@ -144,6 +141,12 @@ export type FeedContestEntryShellProps = {
      * gate. A League has no hosting state and never passes it.
      */
     writable?: boolean;
+    /**
+     * The Arena tier's participating-member ceiling, for the "Contest full"
+     * notice. An Arena route reads it from hosting; a League Feed contest has no
+     * cap at all and leaves it unset, which is why the notice never fires there.
+     */
+    participantLimit?: number | null;
     accent?: FeedContestAccent;
 };
 
@@ -151,6 +154,7 @@ export const FeedContestEntryShell = ({
     contestId,
     detailHref,
     writable = true,
+    participantLimit,
     accent = "league",
 }: FeedContestEntryShellProps) => {
     const accentClasses = accentClassesFor(accent);
@@ -446,6 +450,12 @@ export const FeedContestEntryShell = ({
     // Optimistic until the read lands: a not-yet-answered slot must not look
     // like a missing check-in and hide a builder the server would accept.
     const venueAllowsBuilder = !venueRequired || !scopedVenue || checkedInAtVenue;
+    // Whether the check-in panel is ALREADY on screen above the fold. A submit
+    // that was refused re-renders the same panel under the error, and one screen
+    // must never carry two of them.
+    const venuePanelShown = Boolean(
+        venueRequired && entryWindowOpen && scopedVenue && !checkedInAtVenue
+    );
 
     // Three entry models have a builder. `multi_pick` is the General Combo
     // board; `pickem_card` is the Sunday Pick'em card — one moneyline in every
@@ -551,35 +561,6 @@ export const FeedContestEntryShell = ({
             ? ownEntry.legs.length - tdPsychicPrefill.length
             : 0;
 
-    /* ---------- The accepted TD card, as its own receipt ----------
-     *
-     * NOT the feed post the other two models get, and the MVP is explicit about
-     * it: its `ContestSubmittedEntryCard` is guarded by
-     * `contest.template !== "td_psychic"`, and every TD surface renders
-     * `TdPsychicEntryCard` instead. The reason is the shape of the thing — three
-     * square scorer cards with a shared Combo price under them is not a parlay
-     * leg list, and reading it as one loses the row the whole template is built
-     * around.
-     */
-    const tdPsychicCurrentOddsByPlayerId = useMemo(
-        () =>
-            new Map(
-                tdPsychicCatalog.map((selection) => [selection.playerId, selection.currentOdds])
-            ),
-        [tdPsychicCatalog]
-    );
-    const tdPsychicLegs = (ownEntry?.legs ?? []) as unknown as TdPsychicStoredLeg[];
-    const tdPsychicReceiptSelections = useMemo(
-        () =>
-            isTdPsychicContest
-                ? tdPsychicEntrySelections(tdPsychicLegs, tdPsychicCurrentOddsByPlayerId)
-                : [],
-        // `tdPsychicLegs` is derived from `ownEntry` each render; keying on the
-        // entry itself is what keeps this memo stable.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [isTdPsychicContest, ownEntry, tdPsychicCurrentOddsByPlayerId]
-    );
-    const tdPsychicCardLocked = isTdPsychicCardLocked(tdPsychicLegs);
     /**
      * The MVP's `replacingExistingEntry` — an accepted entry that the builder
      * below is about to edit in place. It suppresses the receipt, so the screen
@@ -587,7 +568,62 @@ export const FeedContestEntryShell = ({
      */
     const replacingExistingEntry = Boolean(ownEntry && hasAcceptedEntry && canBuildEntry);
 
+    /**
+     * What contest points are CALLED on this surface, and the stored rules copy
+     * narrowed to match.
+     *
+     * ONE rules string is stored on the contest and the same template ships to
+     * both surfaces, so it reads "League Points or Arena Points" — a disjunction
+     * that is noise on a League contest and actively wrong about where the points
+     * land on an Arena one. Narrowed at RENDER time only, exactly as the detail
+     * screen does it: the text on record stays neutral, so a member who ticked
+     * the box is never held to terms different from the ones stored.
+     */
+    const contextualPointsLabel: "League Points" | "Arena Points" =
+        scoped?.context_type === "arena" ? "Arena Points" : "League Points";
+    const contextualRulesText = contest?.rules_text
+        ? formatParticipationRulesForContext(contest.rules_text, contextualPointsLabel)
+        : contest?.rules_text;
+
+    /**
+     * Why this screen has no builder on it, when it has none — or null when the
+     * builder is up, or when the reason is already stated by a panel of its own.
+     */
+    const readOnlyNote = canBuildEntry
+        ? null
+        : barred
+          ? "You are not eligible to enter this contest."
+          : settled
+            ? "Your entry is locked and can no longer be replaced. Results and your live rank update automatically."
+            : !buildableModel
+              ? "This contest does not take a General Combo, Sunday Pick'em or TD Psychic entry, so it cannot be built here yet."
+              : !entryWindowOpen
+                ? "This entry is read-only because the contest is not currently accepting submissions. Results and your live rank update automatically."
+                : null;
+
+    /**
+     * The contest is at its tier's participating-member ceiling AND the viewer
+     * holds NO PARTICIPATION ROW AT ALL — so there is nothing here for them to
+     * submit. Capacity bars a new participant, never an existing one.
+     *
+     * Gated on `participation`, not on `hasAcceptedEntry`: a member who is
+     * `opted_in`, `locked` or `completed` already counts toward
+     * `participant_count`, so testing "has an accepted entry" would tell someone
+     * holding a spot that the spots are all taken — including above their own
+     * locked receipt. This is the MVP's condition (StructuredContestDetail:4039).
+     */
+    const contestFullForViewer = Boolean(
+        contest &&
+            participantLimit !== null &&
+            participantLimit !== undefined &&
+            (contest.participant_count ?? 0) >= participantLimit &&
+            !participation
+    );
+
     /* ---------- Report the write once ---------- */
+    // Set the moment the screen navigates away on a successful write, so a
+    // re-render before the route change lands cannot fire a second replace.
+    const navigatedAfterSubmitRef = useRef(false);
     useEffect(() => {
         if (!entrySubmitMessage && !entrySubmitError) return;
         // `/replace-entry` returns what it displaced, precisely so the swap can
@@ -624,16 +660,57 @@ export const FeedContestEntryShell = ({
             message,
             duration: entrySubmitError ? 4000 : 3000,
         });
-        // A successful write changed the participant row; re-read so the screen
-        // flips from "join" to "replace" from the server's own copy.
-        if (!entrySubmitError) {
-            dispatch(fetchFeedContestDetailRequest({ contest_id: contestId }));
-        }
         dispatch(clearFeedContestEntryMessage());
+        /*
+         * An ACCEPTED write is done with this screen — the MVP leaves for
+         * `?tab=entries`, and all three entry models do the same here.
+         *
+         * Staying put was the worse behaviour and not merely a different one:
+         * the "am I replacing?" flag flips as soon as the re-read of the
+         * participant row lands, so the steady state after a submit was a
+         * re-seeded "Replace" builder rather than the receipt the member just
+         * earned. The detail route re-reads the contest on mount, which is why
+         * the refetch this used to fire is gone with it.
+         *
+         * A FAILED write stays, so the error and the builder holding the
+         * member's picks are still on screen.
+         */
+        if (!entrySubmitError && !navigatedAfterSubmitRef.current) {
+            navigatedAfterSubmitRef.current = true;
+            router.replace(`${detailHref}?tab=entries`);
+        }
         // `submittedEntry` outlives the message it came with, but the guard above
         // means only the commit that carries a message can get past it — so this
         // still reports exactly once per write.
-    }, [contestId, dispatch, entrySubmitError, entrySubmitMessage, setToast, submittedEntry]);
+    }, [
+        detailHref,
+        dispatch,
+        entrySubmitError,
+        entrySubmitMessage,
+        router,
+        setToast,
+        submittedEntry,
+    ]);
+
+    /*
+     * A submit that the SERVER refused re-reads the venue session, because a
+     * refusal is the one moment the cached read is known to be capable of being
+     * stale: `resolveVenueEntryAccess` runs again at the submit, so a session
+     * that expired between this screen's read and the write answers 403 while
+     * the store still shows a live check-in. The re-read is what puts the
+     * check-in panel back under the error.
+     *
+     * TODO(api): the entry error arrives as a plain string with no code, so this
+     * cannot tell a venue refusal from any other failure and re-reads on all of
+     * them. The MVP keys the same behaviour off a structured entry-access code
+     * (`isStructuredContestEntryAccessErrorCode`); string-matching the message
+     * here would break on the first copy edit, so the endpoints need to return
+     * that code before this can be narrowed.
+     */
+    useEffect(() => {
+        if (!entrySubmitError || !venueRequired || !venueGroupId) return;
+        dispatch(fetchVenueCheckInDetailRequest({ group_id: venueGroupId }));
+    }, [dispatch, entrySubmitError, venueGroupId, venueRequired]);
 
     const handleSubmit = (legs: FeedContestEntryLegPayload[]) => {
         if (!contest) return;
@@ -790,9 +867,19 @@ export const FeedContestEntryShell = ({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
                         {scoped?.group?.name ?? "Contest"} · Contest entry
                     </p>
-                    {/* The MVP's arena-only entry-access chip. */}
+                    {/* The MVP's arena-only entry-access chip. It drops the violet
+                        on a TD Psychic contest: the template is deliberately
+                        neutral dark with white controls — the only colour on the
+                        screen below is the players' own team tints — so an accent
+                        chip in the header is the one thing that would fight them. */}
                     {scoped?.context_type === "arena" ? (
-                        <span className="rounded-full border border-violet-300/25 bg-violet-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100">
+                        <span
+                            className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] ${
+                                isTdPsychicContest
+                                    ? "border-white/10 bg-white/[0.03] text-gray-300"
+                                    : "border-violet-300/25 bg-violet-500/10 text-violet-100"
+                            }`}
+                        >
                             {venueRequired ? "VENUE CHECK-IN" : "OPEN ENTRY"}
                         </span>
                     ) : null}
@@ -811,10 +898,23 @@ export const FeedContestEntryShell = ({
                 ) : null}
             </header>
 
+            {/* Bled to the edges on mobile, like the MVP's: this is a fact about
+                the whole screen rather than a card inside it. */}
+            {contestFullForViewer ? (
+                <section className="-mx-5 border-y border-amber-300/20 bg-amber-500/[0.07] px-5 py-4 text-amber-100 sm:mx-0 sm:px-4">
+                    <h2 className="text-sm font-semibold">Contest full</h2>
+                    <p className="mt-1 text-xs leading-5 text-amber-100/75">
+                        All {participantLimit} participant spots are in use. Existing
+                        participants can keep their entries, but this contest is no longer
+                        accepting new entries.
+                    </p>
+                </section>
+            ) : null}
+
             {/* Shown only once the venue read has answered and says there is no
                 live session — the builder is hidden in the same breath, because
                 the server re-checks this at submit AND at replace. */}
-            {venueRequired && entryWindowOpen && scopedVenue && !checkedInAtVenue ? (
+            {venuePanelShown && scopedVenue ? (
                 <VenueContestAccessPanel
                     venue={scopedVenue.venue_check_in.venue}
                     lastStatus={venueSession?.last_status}
@@ -823,7 +923,13 @@ export const FeedContestEntryShell = ({
                 />
             ) : null}
 
-            {feedback ? (
+            {/* A TD Psychic card reports its own outcome, immediately under the
+                submit button the member is looking at, so repeating it here would
+                put the same sentence on the screen twice. Only while the builder
+                is actually mounted, though — a refused submit can hide it (a
+                revoked venue session does exactly that), and the explanation must
+                not leave with it. */}
+            {feedback && !(isTdPsychicContest && canBuildEntry) ? (
                 <p
                     role={feedback.tone === "error" ? "alert" : "status"}
                     className={
@@ -834,6 +940,29 @@ export const FeedContestEntryShell = ({
                 >
                     {feedback.message}
                 </p>
+            ) : null}
+
+            {/* The MVP re-renders the check-in panel whenever the submit failed
+                with an entry-access code. This error carries no code (see the
+                TODO on the re-read effect), so the panel is offered on a refusal
+                of a venue-gated contest ONLY WHEN THE RE-READ FOUND A DEAD
+                SESSION.
+                That last clause is what keeps it honest: without it, a member who
+                is checked in and gets any other refusal — "you already have an
+                accepted entry", a 409 on replace, a moved slate — gets a check-in
+                panel bolted underneath telling them to fix a session that is
+                fine. */}
+            {feedback?.tone === "error" &&
+                venueRequired &&
+                scopedVenue &&
+                !checkedInAtVenue &&
+                !venuePanelShown ? (
+                <VenueContestAccessPanel
+                    venue={scopedVenue.venue_check_in.venue}
+                    lastStatus={venueSession?.last_status}
+                    lastExpiresAt={venueSession?.last_expires_at}
+                    revocationReason={venueSession?.revocation_reason}
+                />
             ) : null}
 
             {/* Hidden while the member is REPLACING it: the builder below opens
@@ -848,44 +977,22 @@ export const FeedContestEntryShell = ({
                     <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-500">
                         Accepted entry receipt
                     </p>
-                    {/* A TD card gets its own receipt — see the note on
-                        `tdPsychicReceiptSelections`. Everything else reads like the
-                        pick post it is, in the same feed card the Entries tab
-                        shows. Not bled to the edges here: the MVP only does that
-                        inside the detail screen's flush entries list, not inside
-                        this padded card. */}
-                    {isTdPsychicContest ? (
-                        <TdPsychicEntryCard
-                            className="mt-4"
-                            selections={tdPsychicReceiptSelections}
-                            submittedAt={ownRow!.submitted_at}
-                            showResults={
-                                contest.lifecycle_status !== "open" ||
-                                tdPsychicReceiptSelections.some(
-                                    (selection) => selection.result !== "pending"
-                                )
-                            }
-                            /*
-                             * UNDEFINED hides the Combo row outright, which is the
-                             * correct pre-lock state: the card genuinely has no
-                             * combined price until the shared capture writes one.
-                             * NULL is the different thing — locked, but the capture
-                             * could not produce one, which is what a voided card
-                             * reads as.
-                             */
-                            comboAmericanOdds={
-                                tdPsychicCardLocked
-                                    ? (ownEntry.american_odds ?? null)
-                                    : undefined
-                            }
-                        />
-                    ) : (
+                    {venueRequired ? (
+                        <p className="mt-2 text-xs font-semibold text-emerald-200">
+                            Entry accepted during a verified venue check-in.
+                        </p>
+                    ) : null}
+                    {/* EVERY model reads like the pick post it is, in the same feed
+                        card the Entries tab and the Standings expansion already
+                        render — a TD card included, which is what makes this the
+                        third consistent surface rather than a fourth shape of the
+                        same entry. Not bled to the edges here: the MVP only does
+                        that inside the detail screen's flush entries list, not
+                        inside this padded card. */}
                     <ContestEntryFeedCard
                         row={ownRow!}
                         pick={ownEntry}
-                        contextualPointsLabel={
-                            scoped?.context_type === "arena" ? "Arena Points" : "League Points"
-                        }
+                        contextualPointsLabel={contextualPointsLabel}
                         currentUserId={currentUser?.userId}
                         entryFormat={
                             isTdPsychicContest
@@ -898,7 +1005,6 @@ export const FeedContestEntryShell = ({
                         contestName={contest.name}
                         contestHref={detailHref}
                     />
-                    )}
                 </section>
             ) : null}
 
@@ -912,11 +1018,19 @@ export const FeedContestEntryShell = ({
                             <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500">
                                 entry builder
                             </p>
+                            {/* Neutral grey on a TD Psychic card, for the same
+                                reason its header chip is: the accent belongs to
+                                the League/Arena chrome, and this template puts no
+                                colour on screen but the players' team tints. */}
                             <span
-                                className={`text-[10px] uppercase tracking-[0.16em] ${accentClasses.textSoft}`}
+                                className={`text-[10px] uppercase tracking-[0.16em] ${
+                                    isTdPsychicContest
+                                        ? "text-gray-400"
+                                        : accentClasses.textSoft
+                                }`}
                             >
                                 {isTdPsychicContest
-                                    ? "td scorers"
+                                    ? "touchdown scorers"
                                     : isPickemContest
                                       ? "moneyline card"
                                       : "contest lines"}
@@ -988,10 +1102,23 @@ export const FeedContestEntryShell = ({
                                           accepted: rulesAccepted,
                                           onAcceptedChange: setRulesAccepted,
                                           label: "I accept the current rules for this complete card.",
-                                          rulesText: contest.rules_text,
+                                          rulesText: contextualRulesText,
                                           rulesVersion: contest.rules_version,
                                       }
                                     : undefined
+                            }
+                            /*
+                             * The outcome, rendered under the submit button rather
+                             * than only at the top of the screen: a three-square
+                             * card plus its rules block is taller than the viewport
+                             * on a phone, so a banner above the header is off screen
+                             * exactly when the member is waiting to hear back. The
+                             * shell's own copy of it is suppressed while this is
+                             * mounted, so the sentence appears once.
+                             */
+                            submitError={feedback?.tone === "error" ? feedback.message : null}
+                            submitMessage={
+                                feedback?.tone === "success" ? feedback.message : null
                             }
                             onSubmit={handleTdPsychicSubmit}
                         />
@@ -1016,7 +1143,7 @@ export const FeedContestEntryShell = ({
                                           accepted: rulesAccepted,
                                           onAcceptedChange: setRulesAccepted,
                                           label: "I accept the current rules for this complete card.",
-                                          rulesText: contest.rules_text,
+                                          rulesText: contextualRulesText,
                                           rulesVersion: contest.rules_version,
                                       }
                                     : undefined
@@ -1076,7 +1203,7 @@ export const FeedContestEntryShell = ({
                                           accepted: rulesAccepted,
                                           onAcceptedChange: setRulesAccepted,
                                           label: "I accept the current rules for this complete entry.",
-                                          rulesText: contest.rules_text,
+                                          rulesText: contextualRulesText,
                                           rulesVersion: contest.rules_version,
                                       }
                                     : undefined,
@@ -1090,15 +1217,18 @@ export const FeedContestEntryShell = ({
                 </section>
             ) : null}
 
-            {!canBuildEntry ? (
+            {/* The generic sentence is gated on the ENTRY WINDOW, not on
+                `canBuildEntry`, and the difference is a contradiction the member
+                would otherwise read on one screen: `canBuildEntry` folds in the
+                venue check-in, so a member who is not checked in on an OPEN
+                venue-gated contest was being shown the "scan the QR to enter"
+                panel and "this contest is not currently accepting submissions"
+                at the same time. The three branches above it stay on their own
+                conditions — each says something the MVP's single sentence does
+                not. */}
+            {readOnlyNote ? (
                 <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-gray-400">
-                    {barred
-                        ? "You are not eligible to enter this contest."
-                        : settled
-                          ? "Your entry is locked and can no longer be replaced. Results and live standings update automatically."
-                          : !buildableModel
-                          ? "This contest does not take a General Combo, Sunday Pick'em or TD Psychic entry, so it cannot be built here yet."
-                          : "This entry is read-only because the contest is not currently accepting submissions. Results and live standings update automatically."}
+                    {readOnlyNote}
                 </section>
             ) : null}
         </div>

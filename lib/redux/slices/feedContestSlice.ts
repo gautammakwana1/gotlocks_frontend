@@ -24,6 +24,8 @@ import type {
     FeedContestPodiumListData,
     FeedContestSection,
     FeedContestStatsData,
+    FeedContestRewardPrizesData,
+    FeedContestRewardPrizesPayload,
     FeedContestUpdateData,
     FetchFeedContestDetailPayload,
     FetchFeedContestPodiumsPayload,
@@ -141,6 +143,16 @@ export type FeedContestState = {
     updateError: string | null;
     /** TRUE when the last save minted a new rules_version — entrants must re-accept. */
     updateBumpedRulesVersion: boolean;
+
+    /**
+     * PATCH /reward/:contest_id/prizes — the podium prize WORDING, and nothing
+     * else. Its own slot rather than sharing `update*`: the two are driven from
+     * different tabs (Settings vs the edit route) and can be in flight together,
+     * and a shared error slot would report one screen's failure on the other.
+     */
+    rewardPrizesLoading: boolean;
+    rewardPrizesMessage: string | null;
+    rewardPrizesError: string | null;
 
     /**
      * GET /entries/:contest_id — the field. Held in its own slot for the same
@@ -293,6 +305,9 @@ const initialState: FeedContestState = {
     updateMessage: null,
     updateError: null,
     updateBumpedRulesVersion: false,
+    rewardPrizesLoading: false,
+    rewardPrizesMessage: null,
+    rewardPrizesError: null,
     entries: null,
     entriesLoading: false,
     entriesError: null,
@@ -729,6 +744,58 @@ const feedContestSlice = createSlice({
         },
 
         /* --------------------------------------------------------------------
+         * PATCH /reward/:contest_id/prizes — the podium prize wording.
+         * ------------------------------------------------------------------ */
+        updateFeedContestRewardPrizesRequest: (
+            state,
+            action: PayloadAction<FeedContestRewardPrizesPayload>
+        ) => {
+            void action;
+            state.rewardPrizesLoading = true;
+            state.rewardPrizesMessage = null;
+            state.rewardPrizesError = null;
+        },
+        updateFeedContestRewardPrizesSuccess: (
+            state,
+            action: PayloadAction<{
+                contest_id: string;
+                data: FeedContestRewardPrizesData | null;
+                message?: string;
+            }>
+        ) => {
+            state.rewardPrizesLoading = false;
+            state.rewardPrizesMessage = action.payload.message ?? "Contest prizes updated.";
+            /*
+             * Patched into the detail slot rather than left for a refetch, so the
+             * Settings tab shows the corrected wording the moment it saves.
+             *
+             * Guarded on the id for the same reason every other write is: this
+             * slot is single-tenant and survives navigation between contests.
+             * `reward_awards` is deliberately NOT touched — an award froze its
+             * own copy of the wording when the contest finalized, and a
+             * correction made afterwards must not change what an
+             * already-announced winner appears to have won.
+             */
+            const reward = action.payload.data?.reward;
+            if (
+                reward &&
+                state.detail &&
+                state.detail.contest.id === action.payload.contest_id
+            ) {
+                state.detail.reward = reward;
+            }
+        },
+        updateFeedContestRewardPrizesFailure: (state, action: PayloadAction<string>) => {
+            state.rewardPrizesLoading = false;
+            state.rewardPrizesError = action.payload;
+        },
+        clearFeedContestRewardPrizesState: (state) => {
+            state.rewardPrizesLoading = false;
+            state.rewardPrizesMessage = null;
+            state.rewardPrizesError = null;
+        },
+
+        /* --------------------------------------------------------------------
          * The field — GET /group/feed-contest/entries/:contest_id.
          * ------------------------------------------------------------------ */
         fetchFeedContestEntriesRequest: (
@@ -1125,6 +1192,10 @@ export const {
     updateFeedContestSuccess,
     updateFeedContestFailure,
     clearFeedContestUpdateState,
+    updateFeedContestRewardPrizesRequest,
+    updateFeedContestRewardPrizesSuccess,
+    updateFeedContestRewardPrizesFailure,
+    clearFeedContestRewardPrizesState,
     fetchFeedContestEntriesRequest,
     fetchFeedContestEntriesSuccess,
     fetchFeedContestEntriesFailure,

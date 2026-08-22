@@ -590,7 +590,6 @@ export const StructuredFeedCard = ({
                             : undefined
                     }
                     accent={accent}
-                    scale="structured"
                     getItemPresentation={() => record.presentation}
                     renderItemSupplement={
                         record.body

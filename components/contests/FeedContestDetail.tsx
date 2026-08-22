@@ -28,6 +28,8 @@ import {
     fetchFeedContestLeaderboardRequest,
     fetchFeedContestStatsRequest,
 } from "@/lib/redux/slices/feedContestSlice";
+import ArenaContestPrizeSettings from "./ArenaContestPrizeSettings";
+import ArenaContestRewardCard from "./ArenaContestRewardCard";
 import ContestDeletionDrawer, {
     type ContestDeletionResult,
 } from "./ContestDeletionDrawer";
@@ -36,6 +38,7 @@ import {
     ContestDetailTabBar,
     type ContestDetailFormat,
 } from "./ContestDetailHeader";
+import ContestRulesDisclosure from "./ContestRulesDisclosure";
 import FeedContestEntriesPanel from "./FeedContestEntriesPanel";
 import FeedContestStandingsPanel from "./FeedContestStandingsPanel";
 import { formatParticipationRulesForContext } from "@/lib/contests/participationRules";
@@ -195,9 +198,12 @@ const headerSportChips = (contest: FeedContest) => {
 const eligibleSlateSportsLabel = (contest: FeedContest) =>
     contest.sports?.filter(Boolean).join(", ") || contest.sport;
 
-const contestScoringLabel = (contest: FeedContest) => {
+const contestScoringLabel = (
+    contest: FeedContest,
+    pointsLabel: "League Points" | "Arena Points"
+) => {
     if (contest.template === "sunday_pickem") {
-        return `Correct picks first · odds points + ${contest.pickem_correct_bonus ?? 2} per correct winner`;
+        return `Correct picks first · odds-based ${pointsLabel} plus +${contest.pickem_correct_bonus ?? 2} per correct winner`;
     }
     /*
      * Both halves are load-bearing, and the second is the one a member gets
@@ -612,6 +618,13 @@ export const FeedContestDetail = ({
                     : phase[0].toUpperCase() + phase.slice(1);
     const isArenaContest = scoped?.context_type === "arena";
     /**
+     * The contest's real-world prize, or null. A SIBLING of `contest` on the
+     * detail response rather than a column of it, because the list endpoints
+     * deliberately do not carry it — so it is read from the scoped envelope, not
+     * from the contest row.
+     */
+    const contestReward = scoped?.reward ?? null;
+    /**
      * What contest points are CALLED on this surface. One label, threaded
      * through every panel that names them, so an Arena contest never says
      * "League Points" and the stored rules copy can be narrowed to match.
@@ -679,20 +692,17 @@ export const FeedContestDetail = ({
     // Rows ON THE BOARD, not rows on this page — the board is paginated and the
     // header is reporting the size of the field.
     const standingsRowCount = scopedLeaderboard?.pagination.total ?? 0;
-    // The MVP's ladder. Its "Live standings" rung is gated on the field being
-    // public as well as on having rows: `contest_leaderboard` is seeded the
-    // moment a member enters, so a pre-lock board is a preview, not a scoreboard.
-    // The draft rung is ours — the MVP has no draft phase on this screen.
-    const standingsTitle =
-        phase === "draft"
-            ? "Standings unlock after publish"
-            : isFrozenFinal
-                ? "Final standings"
-                : entriesArePublic && standingsRowCount
-                    ? "Live standings"
-                    : entriesArePublic
-                        ? "Live standings are settling"
-                        : "Standings preview";
+    /*
+     * THE TITLE BAR, which is where the MVP's whole standings header now lives
+     * (StructuredContestDetail ~5425). Its own <h2> is screen-reader only: the
+     * tab strip directly above already says "Rank", so a second heading saying
+     * "Live standings" was repeating it in bigger type and pushing the board
+     * itself below the fold. What is left is one line of numbers on a dark
+     * gradient band that reads as the board's column header.
+     */
+    const standingsTitleSurfaceClassName = isArenaContest
+        ? "bg-[linear-gradient(to_bottom,#000000_0%,#1b1529_100%)]"
+        : "bg-[linear-gradient(to_bottom,#000000_0%,#111820_100%)]";
     /*
      * The MVP prints ONE number under both labels, because over there a member
      * is not a participant until they hold an entry. This backend splits the
@@ -706,6 +716,16 @@ export const FeedContestDetail = ({
     // skeletons only while a real read is genuinely in flight.
     const standingsCountsPending =
         phase !== "draft" && !statsError && !scopedStats;
+    /**
+     * The one sentence under the pre-lock counts. It exists because the numbers
+     * beside it are provisional in two different ways depending on the template:
+     * a General Combo's potential points are exact and merely hypothetical, while
+     * a card template's are quoted off prices that have not been captured yet.
+     */
+    const standingsPreLockDescription =
+        contest.template === "multi_pick"
+            ? `Selections stay hidden until lock; potential ${standingPointsLabel} assume a win.`
+            : `Picks stay hidden until lock; current Combo odds and potential ${standingPointsLabel} may change before shared lock-time prices are captured.`;
 
     /*
      * The MVP's entry-view policy. Arena staff who opted their own contest in to
@@ -749,11 +769,10 @@ export const FeedContestDetail = ({
         entriesArePublic || (isArenaStaffViewer && !isLiveParticipant);
     const contextName =
         scoped?.group?.name?.trim() || (isArenaContest ? "Arena" : "League");
-    const participantCapacityLabel = `${contest.participant_count ?? 0} / ${
-        participantLimit === null || participantLimit === undefined
+    const participantCapacityLabel = `${contest.participant_count ?? 0} / ${participantLimit === null || participantLimit === undefined
             ? "Unlimited"
             : participantLimit
-    }`;
+        }`;
 
     /*
      * The Details tab's dt/dd grid. `wide` spans both columns — only Scoring
@@ -769,88 +788,96 @@ export const FeedContestDetail = ({
         value: React.ReactNode;
         wide?: boolean;
     }[] = [
-        { label: "Format", value: contestFormatLabel(contest.template) },
-        {
-            label: "Opens",
-            value: contest.opens_at
-                ? formatContestDateTime(contest.opens_at)
-                : "When published",
-        },
-        { label: "Entries lock", value: formatContestDateTime(contest.locks_at) },
-        {
-            label: "Settlement",
-            value: "Automatic after the last included matchup is final",
-        },
-        /*
-         * TD Psychic replaces the one-line Scoring fact with a full brief.
-         *
-         * It earns the space because this is the only template where placing
-         * and scoring come apart: ranking is on correct count, so a 2-of-3 can
-         * take a podium place, while points come from the combined lock-time
-         * odds of all THREE scorers and only a perfect card has those. Stating
-         * that in a single clause is what made members read a second-place
-         * finish worth zero as a bug, so each rule gets its own row.
-         */
-        ...(contest.template === "td_psychic"
-            ? [
-                {
-                    label: "How it works",
-                    value:
-                        "Pick exactly three players from the included NFL games to score a rushing or receiving touchdown.",
-                    wide: true,
-                },
-                { label: "Entry", value: "3 players" },
-                { label: "Ranking", value: "More correct picks rank higher." },
-                {
-                    label: "Tiebreaker",
-                    value:
-                        "Shared scorer odds captured at lock break ties and appear on entry cards after lock; displayed current odds may change before then.",
-                    wide: true,
-                },
-                {
-                    label: "Placement requirement",
-                    value:
-                        "At least 2 of 3. Perfect cards rank first, then the strongest 2-of-3 cards fill any remaining places.",
-                },
-                {
-                    label: "Awards",
-                    value: "Up to the top 3 placement-eligible cards.",
-                },
-                {
-                    label: standingPointsLabel,
-                    value: `Only a perfect 3 of 3 card earns one combined lock-time-odds ${standingPointsLabel} total.`,
-                    wide: true,
-                },
-            ]
-            : [
-                { label: "Scoring", value: contestScoringLabel(contest), wide: true },
-            ]),
-        ...(isArenaContest
-            ? [
-                {
-                    label: "Participant capacity",
-                    value: `${participantCapacityLabel} spots used`,
-                },
-                {
-                    label: "Owner and manager participation",
-                    value: contest.allow_staff_participation
-                        ? "Allowed · each staff entrant uses a contest participant spot"
-                        : "Not allowed for this contest",
-                },
-                // `entry_access_mode` rides on the list AND detail columns, so
-                // this fact costs no extra read. A League has no room to stand
-                // in and is pinned to 'open', which is why it sits in here.
-                {
-                    label: "Entry access",
-                    value:
-                        contest.entry_access_mode === "venue_check_in_required"
-                            ? "Venue Check-In Required · an active verified venue session is needed to submit or replace an entry"
-                            : "Open to Arena members · entries can be submitted from anywhere",
-                    wide: true,
-                },
-            ]
-            : []),
-    ];
+            { label: "Format", value: contestFormatLabel(contest.template) },
+            {
+                label: "Opens",
+                value: contest.opens_at
+                    ? formatContestDateTime(contest.opens_at)
+                    : "When published",
+            },
+            { label: "Entries lock", value: formatContestDateTime(contest.locks_at) },
+            {
+                label: "Results finalize",
+                value: "Automatic after the last included matchup is final",
+            },
+            /*
+             * TD Psychic replaces the one-line Scoring fact with a full brief.
+             *
+             * It earns the space because this is the only template where placing
+             * and scoring come apart: ranking is on correct count, so a 2-of-3 can
+             * take a podium place, while points come from the combined lock-time
+             * odds of all THREE scorers and only a perfect card has those. Stating
+             * that in a single clause is what made members read a second-place
+             * finish worth zero as a bug, so each rule gets its own row.
+             */
+            ...(contest.template === "td_psychic"
+                ? [
+                    {
+                        label: "How it works",
+                        value:
+                            "Pick exactly three players from the included NFL games to score a rushing or receiving touchdown.",
+                        wide: true,
+                    },
+                    { label: "Entry", value: "3 players" },
+                    { label: "Ranking", value: "More correct picks rank higher." },
+                    {
+                        label: "Tiebreaker",
+                        value:
+                            "Shared scorer odds captured at lock break ties and appear on entry cards after lock; displayed current odds may change before then.",
+                        wide: true,
+                    },
+                    {
+                        label: "Placement requirement",
+                        value:
+                            "At least 2 of 3. Perfect cards rank first, then the strongest 2-of-3 cards fill any remaining places.",
+                    },
+                    {
+                        label: "Awards",
+                        value: "Up to the top 3 placement-eligible cards.",
+                    },
+                    {
+                        label: standingPointsLabel,
+                        value: `Only a perfect 3 of 3 card earns one combined lock-time-odds ${standingPointsLabel} total.`,
+                        wide: true,
+                    },
+                ]
+                : [
+                    {
+                        label: "Scoring",
+                        value: contestScoringLabel(contest, standingPointsLabel),
+                        wide: true,
+                    },
+                    {
+                        label: "Awards",
+                        value: `Top ${contest.winning_places ?? 3} ${contest.template === "sunday_pickem" ? "cards" : "entries"
+                            } receive placements.`,
+                    },
+                ]),
+            ...(isArenaContest
+                ? [
+                    // `entry_access_mode` rides on the list AND detail columns, so
+                    // this fact costs no extra read. A League has no room to stand
+                    // in and is pinned to 'open', which is why it sits in here.
+                    {
+                        label: "Entry access",
+                        value:
+                            contest.entry_access_mode === "venue_check_in_required"
+                                ? "Venue Check-In Required"
+                                : "Open to Arena members",
+                    },
+                    {
+                        label: "Participant capacity",
+                        value: `${participantCapacityLabel} spots used`,
+                    },
+                    {
+                        label: "Owner and manager participation",
+                        value: contest.allow_staff_participation
+                            ? "Allowed · each staff entrant uses a contest participant spot"
+                            : "Not allowed for this contest",
+                    },
+                ]
+                : []),
+        ];
 
     /*
      * The MVP's canEditContest, minus one clause it can evaluate and we cannot:
@@ -935,19 +962,34 @@ export const FeedContestDetail = ({
     /* ---------- Settings tab: derived state + the organizer writes ---------- */
 
     /*
-     * The one-line status under "Contest information". The MVP has a fourth
-     * branch — "Read only · locked after the first accepted entry" — that is
-     * omitted here for the same reason `canEditContest` omits its clause: no
-     * response tells us whether anyone has opted in yet, and printing that
-     * sentence beside a still-live Edit link would contradict itself.
-     * TODO(api): with `viewer.can_edit` on the detail response, restore it.
+     * The one-line status under "Contest information", following the MVP's
+     * matrix (StructuredContestDetail ~4673). It says "details", never "rules":
+     * the rules are GENERATED from the format and its settings, so they change
+     * with the copy rather than being edited beside it.
+     *
+     * Two of the MVP's branches cannot be reproduced here:
+     *
+     *   "Read only · locked after the first accepted entry" — no response tells
+     *   us whether anyone has opted in yet, and printing that sentence beside a
+     *   still-live Edit link would contradict itself.
+     *   TODO(api): with `viewer.can_edit` on the detail response, restore it.
+     *
+     *   the finalized-Arena rename — over there an Arena contest can still be
+     *   renamed after it settles. `PUT /update/:contest_id` refuses a finalized
+     *   contest outright, so offering it would be a button that cannot succeed.
      */
     const contestInformationSummary = contestNameEditable
         ? contestInformationEditable
-            ? "Name, description, and rules can still be updated until the first entry is accepted."
+            ? isArenaContest
+                ? "Name, details, and the optional reward can still be updated until the first entry is accepted. Contest Rules regenerate automatically."
+                : "Name and details can still be updated until the first entry is accepted. Contest Rules regenerate automatically."
             : !writable
-                ? "The contest name can still be updated. Description, rules, mechanics, slate, and timing are read-only in the current Arena state."
-                : "The contest name can still be updated. Description, rules, mechanics, slate, and timing are read-only after entry or lock."
+                ? isArenaContest
+                    ? "The contest name and existing podium prizes can still be updated. Details, mechanics, slate, and timing are read-only in the current Arena state."
+                    : "The contest name can still be updated. Details, mechanics, slate, and timing are read-only in the current community state."
+                : isArenaContest
+                    ? "The contest name and existing podium prizes can still be updated. Details, mechanics, slate, and timing are read-only after entry or lock."
+                    : "The contest name can still be updated. Details, mechanics, slate, and timing are read-only after entry or lock."
         : phase === "finalized"
             ? "Read only · finalized contest setup stays fixed."
             : !writable
@@ -1127,12 +1169,13 @@ export const FeedContestDetail = ({
                             ) : null}
                         </header>
 
-                        {/* Two-column dt/dd grid. `border-y` is load-bearing: the
-                            rule below it doubles as the top rule of the games
+                        {/* Two-column dt/dd grid, bled to the full panel width so
+                            its rules run edge to edge. `border-y` is load-bearing:
+                            the rule below it doubles as the top rule of the games
                             disclosure, which carries only `border-b`. */}
                         <dl
                             aria-label="Contest facts"
-                            className="mt-6 grid w-full gap-x-10 gap-y-5 border-y border-white/10 py-5 sm:grid-cols-2"
+                            className="-mx-5 mt-6 grid w-auto gap-x-10 gap-y-5 border-y border-white/10 px-5 py-5 sm:-mx-6 sm:grid-cols-2 sm:px-6"
                         >
                             {contestDetailFacts.map((fact) => (
                                 <div
@@ -1150,7 +1193,7 @@ export const FeedContestDetail = ({
                         </dl>
 
                         {includedGames.length ? (
-                            <details className="group w-full border-b border-white/10">
+                            <details className="group -mx-5 w-auto border-b border-white/10 px-5 sm:-mx-6 sm:px-6">
                                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
                                     <span className="min-w-0">
                                         <span className="block text-sm font-semibold text-gray-100">
@@ -1198,25 +1241,33 @@ export const FeedContestDetail = ({
                             </details>
                         ) : null}
 
-                        <section
-                            aria-labelledby="contest-detail-rules-title"
-                            className="mt-6 w-full"
-                        >
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                <h3
-                                    id="contest-detail-rules-title"
-                                    className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-300"
-                                >
-                                    Rules
-                                </h3>
-                                <span className="text-[10px] uppercase tracking-[0.1em] text-gray-600">
-                                    Version {contest.rules_version}
-                                </span>
-                            </div>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-400">
-                                {contextualRulesText}
-                            </p>
-                        </section>
+                        {/* The PODIUM PRIZES, above the rules and in the same
+                            stack of full-bleed disclosures. Shown to every
+                            viewer, entered or not: "what do I win" is exactly the
+                            question somebody asks BEFORE deciding to enter, and
+                            the detail read carries the reward for that reason.
+                            NULL on a League and on any Arena contest whose
+                            organizer chose "No prizes". */}
+                        {isArenaContest && contestReward ? (
+                            <ArenaContestRewardCard
+                                reward={contestReward}
+                                className="-mt-px"
+                                variant="details"
+                            />
+                        ) : null}
+
+                        {/* The rules are a COLLAPSED disclosure now, in the same
+                            full-bleed stack as the games list and the reward card:
+                            most members open Details for the slate and the clock,
+                            and a wall of accepted terms above the fold buried both.
+                            The version stamp went with it — a member has no use for
+                            it, and re-acceptance is prompted from the Entries tab. */}
+                        <ContestRulesDisclosure
+                            rulesText={contextualRulesText}
+                            accent={accent}
+                            className="-mt-px"
+                            layout="details"
+                        />
                     </section>
                 </div>
             ) : null}
@@ -1235,55 +1286,85 @@ export const FeedContestDetail = ({
                     id="contest-panel-standings"
                     role="tabpanel"
                     aria-labelledby="contest-tab-standings"
-                    aria-label="Contest standings"
+                    aria-label="Contest rank"
                     data-standings-layout="responsive-list"
                     data-standings-phase={standingsPhase}
-                    className="space-y-4"
+                    data-standings-presentation="full-length"
+                    // FULL-BLEED, and it is the section that carries the bleed —
+                    // the title band, the frame and every row inside re-inset
+                    // themselves with `px-5 sm:px-6`, so the gradients run to the
+                    // screen edge while the text stays on the app gutter.
+                    className="-mx-5 sm:-mx-6"
                 >
-                    <header className="flex items-start justify-between gap-3">
-                        <h2 className="min-w-0 text-lg font-semibold text-white">
-                            {standingsTitle}
-                        </h2>
-                        <div className="shrink-0">
+                    <header
+                        data-standings-title-row
+                        data-standings-title-surface={isFrozenFinal ? "final" : "active"}
+                        data-standings-title-theme={accent}
+                        className={`flex min-h-12 items-center justify-start gap-3 px-5 py-2.5 sm:px-6 ${standingsTitleSurfaceClassName}`}
+                    >
+                        {/* Screen-reader only: the tab strip above already reads
+                            "Rank", so a visible second heading said it twice. */}
+                        <h2 className="sr-only">Contest standings</h2>
+                        <div className="min-w-0 flex-1">
                             {standingsCountsPending ? (
-                                // One read with no partial state, so the figure
-                                // skeletons rather than flashing a zero that would
+                                // One read with no partial state, so the figures
+                                // skeleton rather than flashing a zero that would
                                 // read as "nobody entered".
-                                <div aria-hidden="true" className="text-right">
-                                    <div className="ml-auto h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" />
-                                    <div className="ml-auto mt-1.5 h-4 w-12 animate-pulse rounded bg-white/[0.06]" />
+                                <div aria-hidden="true">
+                                    <div className="h-2.5 w-40 animate-pulse rounded bg-white/[0.08]" />
+                                    <div className="mt-1.5 h-2 w-64 max-w-full animate-pulse rounded bg-white/[0.05]" />
                                 </div>
                             ) : !entriesArePublic ? (
-                                <dl
-                                    aria-label="Contest participation progress"
-                                    data-standings-summary
-                                    className="text-right"
-                                >
-                                    <div>
-                                        <dt className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500">
-                                            Participants
-                                        </dt>
-                                        <dd className="mt-0.5 flex items-baseline justify-end gap-1 text-sm font-semibold tabular-nums text-white sm:text-base">
-                                            <span>{standingsParticipantCount}</span>
-                                            {participantLimit !== null &&
-                                                participantLimit !== undefined ? (
-                                                <span className="text-[10px] font-medium text-gray-500">
-                                                    / {participantLimit}
-                                                </span>
-                                            ) : null}
-                                        </dd>
+                                <div data-standings-summary className="min-w-0 text-left">
+                                    <div className="flex min-w-0 items-baseline gap-1 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-xs">
+                                        <span
+                                            data-standings-phase-label="pre-lock"
+                                            className="shrink-0 text-amber-200"
+                                        >
+                                            Pre-lock
+                                        </span>
+                                        <span aria-hidden="true">·</span>
+                                        <dl
+                                            aria-label="Contest participation progress"
+                                            className="flex min-w-0 items-baseline gap-1"
+                                        >
+                                            <div className="flex min-w-0 items-baseline gap-1">
+                                                <dt className="shrink-0">Participants</dt>
+                                                <dd className="flex min-w-0 items-baseline justify-start gap-1 tabular-nums text-white">
+                                                    <span aria-hidden="true">·</span>
+                                                    <span>{standingsParticipantCount}</span>
+                                                    {participantLimit !== null &&
+                                                        participantLimit !== undefined ? (
+                                                        <span className="font-medium text-gray-500">
+                                                            / {participantLimit}
+                                                        </span>
+                                                    ) : null}
+                                                </dd>
+                                            </div>
+                                        </dl>
                                     </div>
-                                </dl>
+                                    <p
+                                        id="standings-pre-lock-description"
+                                        data-standings-pre-lock-description
+                                        className="mt-1 max-w-3xl text-[10px] font-normal normal-case leading-4 tracking-normal text-gray-500 sm:text-[11px]"
+                                    >
+                                        {phase === "draft"
+                                            ? "Standings unlock once this draft is published."
+                                            : standingsPreLockDescription}
+                                    </p>
+                                </div>
                             ) : (
-                                <div className="text-right">
+                                <div
+                                    data-standings-summary
+                                    className="flex min-w-0 items-baseline gap-1 truncate text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-xs"
+                                >
                                     {!isFrozenFinal ? (
-                                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-200">
-                                            Live points
+                                        <p className="shrink-0 text-amber-200">
+                                            Live {standingPointsLabel}
                                         </p>
                                     ) : null}
-                                    <p
-                                        className={`${isFrozenFinal ? "" : "mt-1"} text-xs tabular-nums text-gray-500`}
-                                    >
+                                    <p className="min-w-0 truncate tabular-nums">
+                                        {!isFrozenFinal ? <span aria-hidden="true">· </span> : null}
                                         {standingsRowCount} ranked · {standingsEntryCount}{" "}
                                         {standingsEntryCount === 1 ? "entry" : "entries"}
                                     </p>
@@ -1291,17 +1372,6 @@ export const FeedContestDetail = ({
                             )}
                         </div>
                     </header>
-
-                    {/* The MVP's pre-lock frame carries this chip; here it sits above
-                        the board, because the header slot it used to occupy is now
-                        taken by the participant count. */}
-                    {scopedLeaderboard && !scopedLeaderboard.is_entry_revealed ? (
-                        <div className="flex justify-end">
-                            <span className="rounded-full border border-white/10 bg-black/25 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                                Pre-lock · entry details hidden
-                            </span>
-                        </div>
-                    ) : null}
 
                     <FeedContestStandingsPanel
                         leaderboard={scopedLeaderboard}
@@ -1334,64 +1404,64 @@ export const FeedContestDetail = ({
                     aria-label="Entries"
                     className="overflow-visible"
                 >
-                    {/* One spacing for everyone now: the organizer band that used
-                        to sit above this (and needed the extra top padding) moved
-                        to Settings and Standings, as in the MVP. */}
-                    <div className="px-1 pb-6 pt-2">
-                        <FeedContestEntriesPanel
-                            entries={scopedEntries}
-                            loading={entriesLoading}
-                            error={entriesError}
-                            accent={accent}
-                            currentUserId={currentUser?.userId}
-                            // The entries read's contest projection omits this,
-                            // and only a Pick'em card's scoring split needs it.
-                            pickemCorrectBonus={contest.pickem_correct_bonus}
-                            // Names each entry card's header. The link is
-                            // self-referential from this tab, which is fine — the
-                            // same card is also rendered on the entry route and in
-                            // the group Feed, where it is not.
-                            contestName={contest.name}
-                            contestHref={contestPathname}
-                            isDraft={phase === "draft"}
-                            staffParticipationPrivacy={staffParticipationPrivacy}
-                            canViewAllEntries={canViewAllEntries}
-                            canParticipate={canParticipate}
-                            myParticipationStatus={contest.my_participation?.status ?? null}
-                            hasParticipation={Boolean(contest.my_participation)}
-                            rulesCurrent={rulesCurrent}
-                            deadlinePassed={entriesArePublic}
-                            opensAtLabel={
-                                opensInFuture ? formatContestDateTime(contest.opens_at) : null
-                            }
-                            action={
-                                entryHref && canEnterContest && !canJoinContest ? (
-                                    <Link
-                                        href={entryHref}
-                                        className="inline-flex rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-black transition hover:bg-gray-200"
+                    {/* NO padding wrapper: the MVP hangs its entries list straight
+                        off the tab panel, so the receipt's own rule sits flush
+                        under the tab strip and the list runs to the screen edge.
+                        The `px-1 pb-6 pt-2` box that used to be here was left over
+                        from the organizer band that has since moved to Settings. */}
+                    <FeedContestEntriesPanel
+                        entries={scopedEntries}
+                        loading={entriesLoading}
+                        error={entriesError}
+                        accent={accent}
+                        currentUserId={currentUser?.userId}
+                        // The entries read's contest projection omits this,
+                        // and only a Pick'em card's scoring split needs it.
+                        pickemCorrectBonus={contest.pickem_correct_bonus}
+                        // Names each entry card's header. The link is
+                        // self-referential from this tab, which is fine — the
+                        // same card is also rendered on the entry route and in
+                        // the group Feed, where it is not.
+                        contestName={contest.name}
+                        contestHref={contestPathname}
+                        isDraft={phase === "draft"}
+                        staffParticipationPrivacy={staffParticipationPrivacy}
+                        canViewAllEntries={canViewAllEntries}
+                        canParticipate={canParticipate}
+                        myParticipationStatus={contest.my_participation?.status ?? null}
+                        hasParticipation={Boolean(contest.my_participation)}
+                        rulesCurrent={rulesCurrent}
+                        deadlinePassed={entriesArePublic}
+                        opensAtLabel={
+                            opensInFuture ? formatContestDateTime(contest.opens_at) : null
+                        }
+                        action={
+                            entryHref && canEnterContest && !canJoinContest ? (
+                                <Link
+                                    href={entryHref}
+                                    className="inline-flex rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.09em] text-black transition hover:bg-gray-200"
+                                >
+                                    {entryCtaLabel}
+                                </Link>
+                            ) : null
+                        }
+                        joinAction={
+                            entryHref && canJoinContest ? (
+                                <Link
+                                    href={entryHref}
+                                    className={`group inline-flex shrink-0 items-center gap-2 py-0.5 text-sm font-semibold transition hover:text-white ${accentClasses.textStrong}`}
+                                >
+                                    <span>{entryCtaLabel}</span>
+                                    <span
+                                        aria-hidden
+                                        className="text-base leading-none transition-transform group-hover:translate-x-1"
                                     >
-                                        {entryCtaLabel}
-                                    </Link>
-                                ) : null
-                            }
-                            joinAction={
-                                entryHref && canJoinContest ? (
-                                    <Link
-                                        href={entryHref}
-                                        className={`group inline-flex shrink-0 items-center gap-2 py-0.5 text-sm font-semibold transition hover:text-white ${accentClasses.textStrong}`}
-                                    >
-                                        <span>{entryCtaLabel}</span>
-                                        <span
-                                            aria-hidden
-                                            className="text-base leading-none transition-transform group-hover:translate-x-1"
-                                        >
-                                            →
-                                        </span>
-                                    </Link>
-                                ) : null
-                            }
-                        />
-                    </div>
+                                        →
+                                    </span>
+                                </Link>
+                            ) : null
+                        }
+                    />
                 </section>
             ) : null}
 
@@ -1438,6 +1508,31 @@ export const FeedContestDetail = ({
                         </div>
                     </section>
 
+                    {/* PODIUM PRIZES — Arena only. Editing the WORDING is the one
+                        reward write left after publication; the settlement method,
+                        the venue and the contact email are the deal a member
+                        accepted when they entered, so they are read-only.
+
+                        `addRewardHref` is offered on a DRAFT alone. A reward's
+                        legal disclosure has to be inside rules_text on the first
+                        version of the row, so a published contest that shipped
+                        without prizes cannot gain them — the endpoint answers 409
+                        — and offering the link there would lead to a save that
+                        cannot succeed. */}
+                    {isArenaContest ? (
+                        <ArenaContestPrizeSettings
+                            contestId={contest.id}
+                            reward={contestReward}
+                            editable={writable && !canceled && !archived}
+                            addRewardHref={
+                                phase === "draft" && contestInformationEditable
+                                    ? editHref
+                                    : undefined
+                            }
+                            finalized={phase === "finalized"}
+                        />
+                    ) : null}
+
                     <details
                         aria-label="Automatic settlement policy"
                         className="group px-5 sm:px-6"
@@ -1473,9 +1568,9 @@ export const FeedContestDetail = ({
                         </summary>
                         <div className="-mx-5 border-t border-white/10 sm:-mx-6">
                             <p className="px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
-                                Provider results update live standings after lock. The contest
-                                settles after its last included matchup is final, with
-                                unresolved selections handled by the provider grace policy.
+                                Provider results update live rank after lock. The contest
+                                settles after its last included matchup is final, with unresolved
+                                selections handled by the provider grace policy.
                             </p>
                             <dl className="divide-y divide-white/10 border-t border-white/10">
                                 <div className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6 sm:px-6">
