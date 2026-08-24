@@ -20,6 +20,7 @@ import {
     MemberDirectoryViewToggle,
     memberDirectoryGridClassName,
     memberDirectoryListClassName,
+    memberDirectoryPanelClassName,
     type MemberDirectoryAccent,
     type MemberDirectoryView,
 } from "../community/MemberDirectoryControls";
@@ -263,7 +264,7 @@ const MemberRow = ({
             <Link
                 href={memberHref}
                 aria-label={memberLinkLabel}
-                className={`flex min-w-0 flex-1 items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${accent === "arena" ? "focus-visible:outline-violet-300" : "focus-visible:outline-sky-300"
+                className={`flex min-w-0 flex-1 items-center gap-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${accent === "arena" ? "focus-visible:outline-violet-300" : "focus-visible:outline-blue-400"
                     }`}
             >
                 <span aria-hidden className={getMemberDirectoryAvatarClassName(accent, "list")}>
@@ -590,7 +591,7 @@ export const ModifyMembers = ({
     };
 
     return (
-        <section className="space-y-4">
+        <section className={memberDirectoryPanelClassName}>
             <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
                 <MemberDirectorySearch
                     search={search}

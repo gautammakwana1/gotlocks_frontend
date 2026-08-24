@@ -97,6 +97,7 @@ import {
     MemberDirectoryViewToggle,
     memberDirectoryGridClassName,
     memberDirectoryListClassName,
+    memberDirectoryPanelClassName,
     type MemberDirectoryView,
 } from "../community/MemberDirectoryControls";
 import {
@@ -822,7 +823,13 @@ const MemberAvatar = ({
     );
 };
 
-type MemberActionKind = "promote" | "demote" | "remove" | "leave";
+/**
+ * Only the two DESTRUCTIVE member actions confirm. Promote/demote used to be
+ * here too; they now live in Settings > Arena managers, which applies them
+ * directly — the roster there states the tier's manager limit beside every
+ * button, so the change is already legible before it is made.
+ */
+type MemberActionKind = "remove" | "leave";
 
 type PendingMemberAction = {
     kind: MemberActionKind;
@@ -836,20 +843,6 @@ const MEMBER_ACTION_COPY: Record<
     MemberActionKind,
     { title: (handle: string) => string; detail: string; confirmLabel: string; destructive: boolean }
 > = {
-    promote: {
-        title: (handle) => `Make @${handle} a manager?`,
-        detail:
-            "Managers can create and operate Arena contests. They use a staff allowance instead of member capacity, and stop being eligible to rank on the Community Leaderboard.",
-        confirmLabel: "Make manager",
-        destructive: false,
-    },
-    demote: {
-        title: (handle) => `Move @${handle} back to member?`,
-        detail:
-            "They immediately lose contest controls and return to participating member capacity.",
-        confirmLabel: "Make member",
-        destructive: false,
-    },
     remove: {
         title: (handle) => `Remove @${handle} from this Arena?`,
         detail:
@@ -995,13 +988,14 @@ const ArenaMembersPanel = ({
             return;
         }
 
-        const request =
-            kind === "promote"
-                ? makeArenaManagerRequest
-                : kind === "demote"
-                    ? makeArenaMemberRequest
-                    : removeArenaMemberRequest;
-        dispatch(request({ arena_id: arenaId, user_id: userId, page: 1, limit: 10 }));
+        dispatch(
+            removeArenaMemberRequest({
+                arena_id: arenaId,
+                user_id: userId,
+                page: 1,
+                limit: 10,
+            })
+        );
     };
 
     // The Arena member CARD, not the global profile: everything on it is scoped
@@ -1014,14 +1008,17 @@ const ArenaMembersPanel = ({
      * views cannot drift apart on permissions. These rules are this app's, NOT
      * the MVP mock's — only the owner moderates here, where the MVP also lets a
      * manager remove members.
+     *
+     * Removal is the ONLY per-row action, matching the MVP: promoting and
+     * demoting managers moved to Settings > Arena managers, where the roster is
+     * shown against the tier's manager limit. A tile has no room to state that
+     * limit, so a "Make manager" button here could only fail after the fact.
      */
     const memberPermissions = (membership: Members[number]) => {
         const handle = membership?.profiles?.username ?? "member";
         const isSelf = membership.user_id === currentUserId;
         return {
             handle,
-            canPromote: isOwner && writable && membership.role === "member" && !isSelf,
-            canDemote: isOwner && writable && membership.role === "manager" && !isSelf,
             canRemove:
                 isOwner && writable && membership.role !== "commissioner" && !isSelf,
             isBusy: memberActionUserId === membership.user_id,
@@ -1033,11 +1030,7 @@ const ArenaMembersPanel = ({
     };
 
     return (
-        <div className="space-y-4">
-            <p className="text-xs text-gray-500">
-                Owners and managers use staff allowances and do not consume member capacity.
-            </p>
-
+        <div className={memberDirectoryPanelClassName}>
             <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
                 <MemberDirectorySearch
                     search={search}
@@ -1058,7 +1051,7 @@ const ArenaMembersPanel = ({
                     className={memberDirectoryGridClassName}
                 >
                     {visibleMemberships.map((membership) => {
-                        const { handle, canPromote, canDemote, canRemove, isBusy, request } =
+                        const { handle, canRemove, isBusy, request } =
                             memberPermissions(membership);
 
                         return (
@@ -1103,21 +1096,6 @@ const ArenaMembersPanel = ({
                                         </p>
                                     </div>
                                 </div>
-
-                                {canPromote || canDemote ? (
-                                    <button
-                                        type="button"
-                                        disabled={isBusy}
-                                        onClick={() => request(canPromote ? "promote" : "demote")}
-                                        className="w-full rounded-lg border border-violet-300/30 bg-violet-500/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100 transition hover:border-violet-300/50 hover:bg-violet-500/15 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
-                                    >
-                                        {isBusy
-                                            ? "Working..."
-                                            : canPromote
-                                                ? "Make manager"
-                                                : "Make member"}
-                                    </button>
-                                ) : null}
                             </article>
                         );
                     })}
@@ -1125,7 +1103,7 @@ const ArenaMembersPanel = ({
             ) : (
                 <ul aria-label="Arena members list" className={memberDirectoryListClassName}>
                     {visibleMemberships.map((membership) => {
-                        const { handle, canPromote, canDemote, canRemove, isBusy, request } =
+                        const { handle, canRemove, isBusy, request } =
                             memberPermissions(membership);
 
                         return (
@@ -1164,20 +1142,6 @@ const ArenaMembersPanel = ({
                                 </Link>
 
                                 <div className="flex shrink-0 items-center gap-1">
-                                    {canPromote || canDemote ? (
-                                        <button
-                                            type="button"
-                                            disabled={isBusy}
-                                            onClick={() => request(canPromote ? "promote" : "demote")}
-                                            className="min-h-11 px-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-violet-100 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-[10px]"
-                                        >
-                                            {isBusy
-                                                ? "Working..."
-                                                : canPromote
-                                                    ? "Make manager"
-                                                    : "Make member"}
-                                        </button>
-                                    ) : null}
                                     {canRemove ? (
                                         <button
                                             type="button"
@@ -1280,6 +1244,12 @@ const ArenaMembersPanel = ({
                     </div>
                 </div>
             ) : null}
+
+            {/* Last, as in the MVP: it explains the roster above rather than
+                introducing it, and it must not push the search box down. */}
+            <p className="text-xs text-gray-500">
+                Owners and managers use staff allowances and do not consume member capacity.
+            </p>
         </div>
     );
 };
@@ -1313,6 +1283,7 @@ const ArenaSettingsPanel = ({
     const [timeZone, setTimeZone] = useState("America/New_York");
     const [deleteConfirmation, setDeleteConfirmation] = useState("");
     const [deleteOtp, setDeleteOtp] = useState("");
+    const [managerCandidateId, setManagerCandidateId] = useState("");
     const [unlockOpen, setUnlockOpen] = useState(false);
     const unlockButtonRef = useRef<HTMLButtonElement>(null);
     const dispatch = useDispatch();
@@ -1333,6 +1304,10 @@ const ArenaSettingsPanel = ({
         arenaDeleted,
         arenaDeleteError,
         arenaDeleteMessage,
+        memberActionLoading,
+        memberActionUserId,
+        memberActionError,
+        memberActionMessage,
     } = useSelector((state: RootState) => state.arena);
     const unlockOffer = getArenaUnlockOffer();
 
@@ -1442,12 +1417,56 @@ const ArenaSettingsPanel = ({
         onDeleteSuccess,
     ]);
 
+    /*
+     * Manager promote/demote outcome. ArenaMembersPanel reports the same slice,
+     * but only ONE tab panel is mounted at a time — on Settings that component
+     * does not exist, so its effect cannot report for this one and the toast
+     * would simply never appear.
+     */
+    useEffect(() => {
+        if (!memberActionError && !memberActionMessage) return;
+        setToast({
+            id: Date.now(),
+            type: memberActionError ? "error" : "success",
+            message: memberActionError ?? memberActionMessage ?? "",
+            duration: 3000,
+        });
+        // Only on success. A failed promotion leaves the member selected so the
+        // owner can read the reason and retry without hunting for them again.
+        if (!memberActionError) setManagerCandidateId("");
+        dispatch(clearArenaMemberActionMessage());
+    }, [memberActionError, memberActionMessage, dispatch, setToast]);
+
     if (!arena || !unlock || !arenaId || !actorId) return null;
 
     const isOwner = role === "commissioner";
     // PUT /group/arena/details admits the owner and managers, and does not gate on
     // hosting status the way the contest/billing endpoints do.
     const identityWritable = isOwner || role === "manager";
+
+    /*
+     * ARENA MANAGERS — moved here from the Members tab.
+     *
+     * `members` is the same page-1 roster the Members tab renders (limit 10), so
+     * the candidate list is the first ten members, not the whole Arena. That is
+     * the existing fetch's shape, not a decision made here; widen it by adding a
+     * search param to GET /group/members/:group_id.
+     *
+     * Unlike the MVP there is no invitation step: PUT /group/arena/make-manager
+     * writes the role immediately, so the select's button IS the assignment and
+     * there is no pending state to render.
+     */
+    const roster = members ?? [];
+    const activeManagers = roster.filter((member) => member.role === "manager");
+    const managerCandidates = roster.filter(
+        (member) => member.role === "member" && member.user_id !== actorId
+    );
+    const managerLimit = hosting?.manager_limit ?? null;
+    const managerSlotsAvailable =
+        managerLimit === null || activeManagers.length < managerLimit;
+    // The server's rule verbatim: makeArenaManager checks `created_by`, and
+    // unlike Arena identity it does not consult hosting status at all.
+    const canAssignManagers = isOwner;
 
     // Only the fields that actually changed are sent: the endpoint treats an
     // absent key as "leave alone" and null as "clear".
@@ -1535,13 +1554,19 @@ const ArenaSettingsPanel = ({
         dispatch(initiateArenaDeleteRequest({ arena_id: arenaId }));
     };
 
-    // Step 2 — spend the emailed code.
+    // Step 2 — spend the emailed code. The in-flight guard is not only the
+    // button's job: the code is SINGLE USE, so a second submit is guaranteed to
+    // come back rejected and would replace the real outcome with a failure.
     const handleConfirmDelete = () => {
-        if (!deleteOtp.trim()) return;
+        if (arenaDeleteLoading || !deleteOtp.trim()) return;
         dispatch(confirmArenaDeleteRequest({ arena_id: arenaId, otp: deleteOtp.trim() }));
     };
 
+    // Refused mid-flight for the same reason the dialog refuses Escape: the
+    // delete is already on its way, and clearing the slice here would throw away
+    // the receipt it is about to land.
     const handleCloseDeleteDialog = () => {
+        if (arenaDeleteLoading) return;
         setDeleteOtp("");
         dispatch(clearArenaDeleteState());
     };
@@ -1636,6 +1661,131 @@ const ArenaSettingsPanel = ({
                     </p>
                 )}
             </section>
+
+            {/* ARENA MANAGERS — owner only, mirroring the MVP's
+                `data-arena-manager-settings` section. The MVP sends an
+                invitation the member accepts from Notifications; here the role
+                is written straight away, so the copy and the button say so. */}
+            {isOwner ? (
+                <section
+                    className="space-y-4 px-5 py-7 sm:px-6"
+                    data-arena-manager-settings
+                >
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
+                                Arena managers
+                            </h2>
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                                {activeManagers.length} of {managerLimit ?? "unlimited"}
+                            </span>
+                        </div>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
+                            Choose members to help operate this Arena. The role applies
+                            immediately. Managers use a staff allowance instead of member
+                            capacity, and stop being eligible for the Community Leaderboard.
+                        </p>
+                    </div>
+
+                    {activeManagers.map((membership) => {
+                        const handle = membership.profiles?.username ?? membership.user_id;
+                        const isBusy = memberActionUserId === membership.user_id;
+
+                        return (
+                            <div
+                                key={membership.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3"
+                            >
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-white">
+                                        @{handle}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-500">
+                                        Current manager
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    disabled={!canAssignManagers || memberActionLoading}
+                                    onClick={() => {
+                                        if (!membership.user_id) return;
+                                        dispatch(
+                                            makeArenaMemberRequest({
+                                                arena_id: arenaId,
+                                                user_id: membership.user_id,
+                                                page: 1,
+                                                limit: 10,
+                                            })
+                                        );
+                                    }}
+                                    className="min-h-9 rounded-lg border border-red-300/25 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isBusy ? "Working…" : "Remove manager"}
+                                </button>
+                            </div>
+                        );
+                    })}
+
+                    {managerSlotsAvailable ? (
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <select
+                                aria-label="Arena manager candidate"
+                                value={managerCandidateId}
+                                onChange={(event) =>
+                                    setManagerCandidateId(event.target.value)
+                                }
+                                disabled={!canAssignManagers || memberActionLoading}
+                                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-300/60 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <option value="">Choose an active member</option>
+                                {managerCandidates.map((membership) => (
+                                    <option key={membership.id} value={membership.user_id}>
+                                        @{membership.profiles?.username ?? membership.user_id}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!managerCandidateId) return;
+                                    dispatch(
+                                        makeArenaManagerRequest({
+                                            arena_id: arenaId,
+                                            user_id: managerCandidateId,
+                                            page: 1,
+                                            limit: 10,
+                                        })
+                                    );
+                                }}
+                                disabled={
+                                    !managerCandidateId ||
+                                    !canAssignManagers ||
+                                    memberActionLoading
+                                }
+                                className="rounded-xl bg-violet-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {memberActionLoading ? "Working…" : "Make manager"}
+                            </button>
+                        </div>
+                    ) : (
+                        <p className="text-xs leading-5 text-gray-500">
+                            Every manager slot on this tier is filled. Remove a manager
+                            before promoting another member.
+                        </p>
+                    )}
+
+                    {/* Gated on a NON-EMPTY roster: an empty one means the members
+                        fetch has not landed yet, and "nobody to promote" is a
+                        different statement from "not loaded". */}
+                    {managerSlotsAvailable &&
+                        roster.length > 0 &&
+                        managerCandidates.length === 0 ? (
+                        <p className="text-xs leading-5 text-gray-500">
+                            No members are available to promote yet.
+                        </p>
+                    ) : null}
+                </section>
+            ) : null}
 
             {/* THE REWARD INBOX — PERMANENT OWNER ONLY, and rendered for nobody
                 else. `PUT /group/arena/details` answers 403 for a manager who
@@ -1830,7 +1980,11 @@ const ArenaSettingsPanel = ({
                 open={arenaDeleteOtpSent}
                 confirmationValue={deleteOtp}
                 hasPermission={isOwner}
-                isDeleting={arenaDeleteOtpSent}
+                // The CONFIRM request, not the flow. `arenaDeleteLoading` is
+                // true for the initiate call too, but the dialog only exists
+                // after that one has answered, so here it can only mean the
+                // verify-and-delete round trip.
+                submitting={arenaDeleteLoading}
                 errorMessage={arenaDeleteError}
                 onConfirmationChange={setDeleteOtp}
                 onClose={handleCloseDeleteDialog}

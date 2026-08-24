@@ -5,10 +5,11 @@ import type { SagaIterator } from "redux-saga";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
 import type {
+    EarnedContestBadgesData,
+    EarnedContestBadgesPayload,
     FeedContestAchievementsData,
     FeedContestAchievementsPayload,
     FeedContestPicksData,
-    GroupMemberCommunityPicksData,
     GroupMemberPicksPayload,
     GroupMemberStatsData,
     GroupMemberStatsPayload,
@@ -18,9 +19,9 @@ import {
     fetchMemberAchievementsFailure,
     fetchMemberAchievementsRequest,
     fetchMemberAchievementsSuccess,
-    fetchMemberCommunityPicksFailure,
-    fetchMemberCommunityPicksRequest,
-    fetchMemberCommunityPicksSuccess,
+    fetchMemberEarnedBadgesFailure,
+    fetchMemberEarnedBadgesRequest,
+    fetchMemberEarnedBadgesSuccess,
     fetchMemberFeedContestPicksFailure,
     fetchMemberFeedContestPicksRequest,
     fetchMemberFeedContestPicksSuccess,
@@ -45,7 +46,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 /*
  * The member card's five reads.
  *
- * Only the achievements call sends `group_type`; the four /group/* endpoints
+ * Only the achievements call sends `group_type`; the /group/member-* endpoints
  * derive league-vs-arena from the group row itself, which is exactly why one
  * card component serves both surfaces without branching its data layer.
  *
@@ -96,27 +97,6 @@ function* handleFetchMemberSlipPicks(
     }
 }
 
-// GET /group/member-picks/community
-function* handleFetchMemberCommunityPicks(
-    action: PayloadAction<GroupMemberPicksPayload>
-): SagaIterator {
-    try {
-        const response: AxiosResponse<unknown> = yield call(
-            axiosInstance.get,
-            `${API_BASE_URL}/group/member-picks/community`,
-            { params: action.payload }
-        );
-        const payload = response.data as { data?: GroupMemberCommunityPicksData };
-        yield put(fetchMemberCommunityPicksSuccess(payload?.data ?? null));
-    } catch (error: unknown) {
-        yield put(
-            fetchMemberCommunityPicksFailure(
-                getErrorMessage(error, "Failed to load community picks")
-            )
-        );
-    }
-}
-
 // GET /group/member-picks/feed-contests. Rows carry their own `is_revealed` —
 // an entry in a contest that has not locked comes back with `pick: null`.
 function* handleFetchMemberFeedContestPicks(
@@ -161,16 +141,43 @@ function* handleFetchMemberAchievements(
     }
 }
 
+/**
+ * GET /group/contest-leaderboard/badges/earned — Capture-the-Badge awards.
+ *
+ * Mounted under the contest-leaderboard router rather than the member-card one,
+ * so it is the only read here that does not answer in the `/group/member-*`
+ * shape. Both ids are always sent: with `group_id` any member of the league may
+ * read any other member's badges, whereas `user_id` alone is restricted to the
+ * caller's own — which league somebody belongs to is not this endpoint's to
+ * disclose.
+ */
+function* handleFetchMemberEarnedBadges(
+    action: PayloadAction<EarnedContestBadgesPayload>
+): SagaIterator {
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/contest-leaderboard/badges/earned`,
+            { params: action.payload }
+        );
+        const payload = response.data as { data?: EarnedContestBadgesData };
+        yield put(fetchMemberEarnedBadgesSuccess(payload?.data ?? null));
+    } catch (error: unknown) {
+        yield put(
+            fetchMemberEarnedBadgesFailure(
+                getErrorMessage(error, "Failed to load Capture-the-Badge awards")
+            )
+        );
+    }
+}
+
 export default function* memberCardSaga(): SagaIterator {
     yield takeLatest(fetchMemberStatsRequest.type, handleFetchMemberStats);
     yield takeLatest(fetchMemberSlipPicksRequest.type, handleFetchMemberSlipPicks);
-    yield takeLatest(
-        fetchMemberCommunityPicksRequest.type,
-        handleFetchMemberCommunityPicks
-    );
     yield takeLatest(
         fetchMemberFeedContestPicksRequest.type,
         handleFetchMemberFeedContestPicks
     );
     yield takeLatest(fetchMemberAchievementsRequest.type, handleFetchMemberAchievements);
+    yield takeLatest(fetchMemberEarnedBadgesRequest.type, handleFetchMemberEarnedBadges);
 }

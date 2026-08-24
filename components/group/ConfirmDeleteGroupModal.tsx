@@ -24,7 +24,17 @@ type DeleteGroupModalProps = {
     open: boolean;
     confirmationValue: string;
     hasPermission: boolean;
-    isDeleting: boolean;
+    /**
+     * TRUE while the verify-code-and-delete request is actually IN FLIGHT.
+     *
+     * This used to be `isDeleting` and meant "the delete flow is active", which
+     * both callers set to the same value as `open` — so it said nothing the
+     * modal did not already know, and the one thing it sounded like it meant
+     * (a request is running) was tracked nowhere. The confirm button therefore
+     * stayed live through the whole round trip and a second click fired a second
+     * DELETE against an already-spent code, which the server rejects.
+     */
+    submitting: boolean;
     errorMessage: string | null;
     onConfirmationChange: (value: string) => void;
     onClose: () => void;
@@ -38,7 +48,7 @@ export const DeleteGroupConfirmationModal = ({
     open,
     confirmationValue,
     hasPermission,
-    isDeleting,
+    submitting,
     errorMessage,
     onConfirmationChange,
     onClose,
@@ -46,6 +56,11 @@ export const DeleteGroupConfirmationModal = ({
 }: DeleteGroupModalProps) => {
     const modalRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    // The Escape listener is bound once per open, so it needs a live box to read
+    // rather than a captured value — otherwise it would keep letting Escape
+    // through for the whole request, or have to re-subscribe on every render.
+    const submittingRef = useRef(submitting);
+    submittingRef.current = submitting;
     // `document` does not exist during the server render, so the portal target
     // is only claimed once this has mounted on the client.
     const [mounted, setMounted] = useState(false);
@@ -61,8 +76,11 @@ export const DeleteGroupConfirmationModal = ({
             inputRef.current?.focus();
         }, 0);
 
+        // Escape is refused mid-flight. The delete is already on its way and the
+        // code is already spent, so dismissing here would drop the owner back on
+        // a settings page that is about to stop existing, with no receipt.
         const escapeListener = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
+            if (event.key === "Escape" && !submittingRef.current) {
                 onClose();
             }
         };
@@ -100,16 +118,24 @@ export const DeleteGroupConfirmationModal = ({
         }
     };
 
+    // Backdrop dismiss, but not mid-flight — same rule as Escape above.
     const handleOverlayClick = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !submitting) {
             onClose();
         }
     };
 
-    const ctaDisabled =
-        !hasPermission ||
-        !isDeleting ||
-        !confirmationValue;
+    /*
+     * `submitting` is what actually closes the double-submit window: the code is
+     * single-use, so the second DELETE is guaranteed to come back rejected and
+     * would overwrite the real outcome with a failure message.
+     *
+     * The old `!isDeleting` term is gone rather than renamed. It meant "the
+     * delete flow is active", which both callers derived from the same state
+     * that decides `open` — so it could never be false while this rendered, and
+     * kept nothing out.
+     */
+    const ctaDisabled = !hasPermission || !confirmationValue || submitting;
 
     const permissionMessage = hasPermission
         ? "This action cannot be undone."
@@ -148,7 +174,8 @@ export const DeleteGroupConfirmationModal = ({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
+                        disabled={submitting}
+                        className="text-xs uppercase tracking-wide text-gray-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-gray-400"
                     >
                         Close
                     </button>
@@ -169,7 +196,8 @@ export const DeleteGroupConfirmationModal = ({
                             type="text"
                             onChange={(event) => onConfirmationChange(event.target.value)}
                             autoComplete="off"
-                            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70"
+                            disabled={submitting}
+                            className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-base sm:text-sm text-white outline-none transition focus:border-red-400/70 disabled:cursor-not-allowed disabled:opacity-50"
                         />
                     </label>
                 </div>
@@ -192,10 +220,10 @@ export const DeleteGroupConfirmationModal = ({
                         type="button"
                         onClick={onConfirm}
                         disabled={ctaDisabled}
-                        aria-busy={isDeleting}
+                        aria-busy={submitting}
                         className="rounded-2xl bg-red-600/80 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        Confirm Delete
+                        {submitting ? "Deleting…" : "Confirm Delete"}
                     </button>
                 </div>
             </div>

@@ -3,8 +3,12 @@
 export type MemberDirectoryView = "cards" | "list";
 export type MemberDirectoryAccent = "league" | "arena";
 
+/** The Members tab's own wrapper — the extra gutter is the MVP's, and only it
+ *  keeps the tile grid off the panel edge once the grid runs six wide. */
+export const memberDirectoryPanelClassName = "space-y-4 md:px-6";
+
 export const memberDirectoryGridClassName =
-    "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4";
+    "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
 export const memberDirectoryListClassName = "divide-y divide-white/10";
 
@@ -16,7 +20,7 @@ export const memberDirectoryListClassName = "divide-y divide-white/10";
 export const getMemberDirectoryCardClassName = (accent: MemberDirectoryAccent) =>
     `relative flex aspect-square w-full flex-col rounded-2xl border bg-clip-padding p-4 shadow-sm transition ${accent === "arena"
         ? "border-violet-200/10 bg-gradient-to-b from-violet-500/15 via-violet-500/[0.09] to-slate-950/20 hover:border-violet-300/35"
-        : "border-sky-200/10 bg-gradient-to-b from-blue-500/15 via-blue-500/[0.09] to-slate-950/20 hover:border-sky-300/35"
+        : "border-blue-400/10 bg-gradient-to-b from-blue-400/15 via-blue-400/[0.09] to-slate-950/20 hover:border-blue-400/35"
     }`;
 
 export const getMemberDirectoryAvatarClassName = (
@@ -25,8 +29,8 @@ export const getMemberDirectoryAvatarClassName = (
 ) =>
     `flex shrink-0 items-center justify-center overflow-hidden border border-white/10 bg-white/[0.05] text-xs font-semibold uppercase tracking-[0.18em] text-gray-200 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${size === "card" ? "h-14 w-14 rounded-xl" : "h-10 w-10 rounded-lg"
     } ${accent === "arena"
-        ? "hover:border-violet-300/60 hover:shadow-[0_0_16px_rgba(196,181,253,0.3)] focus-visible:outline-violet-300"
-        : "hover:border-sky-300/60 hover:shadow-[0_0_16px_rgba(125,211,252,0.3)] focus-visible:outline-sky-300"
+        ? "hover:border-violet-300/60 hover:shadow-[0_0_16px_rgba(167,139,250,0.3)] focus-visible:outline-violet-300"
+        : "hover:border-blue-400/60 hover:shadow-[0_0_16px_rgba(96,165,250,0.3)] focus-visible:outline-blue-400"
     }`;
 
 export const MemberDirectoryViewToggle = ({
@@ -81,7 +85,7 @@ export const MemberDirectorySearch = ({
     embedded?: boolean;
 }) => {
     const focusClassName =
-        accent === "arena" ? "focus:border-violet-300/60" : "focus:border-sky-300/60";
+        accent === "arena" ? "focus:border-violet-300/60" : "focus:border-blue-400/60";
 
     return (
         <label className={embedded ? "block min-w-0 w-full" : "block w-full sm:max-w-sm"}>

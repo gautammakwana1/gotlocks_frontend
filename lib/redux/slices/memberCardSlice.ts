@@ -1,9 +1,10 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type {
+    EarnedContestBadgesData,
+    EarnedContestBadgesPayload,
     FeedContestAchievementsData,
     FeedContestAchievementsPayload,
     FeedContestPicksData,
-    GroupMemberCommunityPicksData,
     GroupMemberPicksPayload,
     GroupMemberStatsData,
     GroupMemberStatsPayload,
@@ -33,10 +34,6 @@ const initialState: MemberCardState = {
     slipPicksLoading: false,
     slipPicksError: null,
 
-    communityPicks: null,
-    communityPicksLoading: false,
-    communityPicksError: null,
-
     feedContestPicks: null,
     feedContestPicksLoading: false,
     feedContestPicksError: null,
@@ -44,6 +41,10 @@ const initialState: MemberCardState = {
     achievements: null,
     achievementsLoading: false,
     achievementsError: null,
+
+    earnedBadges: null,
+    earnedBadgesLoading: false,
+    earnedBadgesError: null,
 };
 
 const memberCardSlice = createSlice({
@@ -92,27 +93,6 @@ const memberCardSlice = createSlice({
             state.slipPicksError = action.payload;
         },
 
-        /* ---------- Community picks — both surfaces ---------- */
-        fetchMemberCommunityPicksRequest: (
-            state,
-            action: PayloadAction<GroupMemberPicksPayload>
-        ) => {
-            void action;
-            state.communityPicksLoading = true;
-            state.communityPicksError = null;
-        },
-        fetchMemberCommunityPicksSuccess: (
-            state,
-            action: PayloadAction<GroupMemberCommunityPicksData | null>
-        ) => {
-            state.communityPicksLoading = false;
-            state.communityPicks = action.payload;
-        },
-        fetchMemberCommunityPicksFailure: (state, action: PayloadAction<string>) => {
-            state.communityPicksLoading = false;
-            state.communityPicksError = action.payload;
-        },
-
         /* ---------- Feed contest entries — both surfaces ---------- */
         fetchMemberFeedContestPicksRequest: (
             state,
@@ -155,6 +135,27 @@ const memberCardSlice = createSlice({
             state.achievementsError = action.payload;
         },
 
+        /* ---------- Capture-the-Badge awards — League only ---------- */
+        fetchMemberEarnedBadgesRequest: (
+            state,
+            action: PayloadAction<EarnedContestBadgesPayload>
+        ) => {
+            void action;
+            state.earnedBadgesLoading = true;
+            state.earnedBadgesError = null;
+        },
+        fetchMemberEarnedBadgesSuccess: (
+            state,
+            action: PayloadAction<EarnedContestBadgesData | null>
+        ) => {
+            state.earnedBadgesLoading = false;
+            state.earnedBadges = action.payload;
+        },
+        fetchMemberEarnedBadgesFailure: (state, action: PayloadAction<string>) => {
+            state.earnedBadgesLoading = false;
+            state.earnedBadgesError = action.payload;
+        },
+
         /** Drops every slot. See the banner: this runs BEFORE the fetch, not
          *  only on unmount. */
         resetMemberCard: () => initialState,
@@ -168,15 +169,15 @@ export const {
     fetchMemberSlipPicksRequest,
     fetchMemberSlipPicksSuccess,
     fetchMemberSlipPicksFailure,
-    fetchMemberCommunityPicksRequest,
-    fetchMemberCommunityPicksSuccess,
-    fetchMemberCommunityPicksFailure,
     fetchMemberFeedContestPicksRequest,
     fetchMemberFeedContestPicksSuccess,
     fetchMemberFeedContestPicksFailure,
     fetchMemberAchievementsRequest,
     fetchMemberAchievementsSuccess,
     fetchMemberAchievementsFailure,
+    fetchMemberEarnedBadgesRequest,
+    fetchMemberEarnedBadgesSuccess,
+    fetchMemberEarnedBadgesFailure,
     resetMemberCard,
 } = memberCardSlice.actions;
 

@@ -12,6 +12,14 @@
   --nav-border: rgba(255, 255, 255, 0.05);
   --card-bg: #0b0b0b;
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.18);
+  /*
+   * The brand ramp as raw RGB channels, alongside the literal colors below.
+   * A CSS module that composes its own gradients and shadows needs
+   * `rgb(var(--brand-rgb) / <alpha>)`, and a hex value cannot supply that.
+   * `.league-theme` / `.arena-theme` are the only scopes that repoint them.
+   */
+  --brand-rgb: 96 165 250;
+  --brand-shadow-rgb: 96 165 250;
   --brand: #60a5fa;
   --brand-soft: rgba(96, 165, 250, 0.14);
   --brand-strong: #3b82f6;
@@ -871,7 +879,20 @@ html:has([data-app-scale="desktop"]) {
  * deeply nested controls (including the Pick Builder) do not fall back to the
  * League-blue brand tokens.
  */
+/*
+ * League workspaces already inherit the :root blue, so this scope exists only
+ * so a component can name its surface explicitly — the member card sets either
+ * `.league-theme` or `.arena-theme` on its root and reads --brand-rgb from
+ * there, rather than branching on the surface in JS for every accent.
+ */
+.league-theme {
+  --brand-rgb: 96 165 250;
+  --brand-shadow-rgb: var(--brand-rgb);
+}
+
 .arena-theme {
+  --brand-rgb: 167 139 250;
+  --brand-shadow-rgb: var(--brand-rgb);
   --brand: #a78bfa;
   --brand-soft: rgba(139, 92, 246, 0.16);
   --brand-strong: #8b5cf6;

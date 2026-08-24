@@ -402,7 +402,19 @@
       "Bash(awk 'NR>3319 && /^\\\\};$/ {print NR; exit}' components/contests/StructuredContestDetail.tsx)",
       "Bash(echo \"BUILD=$?\")",
       "Bash(awk 'NR>=1960 && NR<=2010' components/arenas/ArenaDashboard.tsx)",
-      "PowerShell(npx eslint components/group/ConfirmDeleteGroupModal.tsx components/arenas/ArenaDashboard.tsx 2>&1)"
+      "PowerShell(npx eslint components/group/ConfirmDeleteGroupModal.tsx components/arenas/ArenaDashboard.tsx 2>&1)",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 3000,3001,3002,4000 } | Select-Object LocalPort, OwningProcess -Unique)",
+      "PowerShell(foreach \\($p in 14896, 19320\\) { $proc = Get-CimInstance Win32_Process -Filter \"ProcessId = $p\"; \"$p => $\\($proc.Name\\) :: $\\($proc.CommandLine\\)\" })",
+      "PowerShell($out = npx next build 2>&1 | Out-String; $lines = $out -split \"`r?`n\"; $idx = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match 'ContextualMemberCard|MemberDirectoryControls|ModifyMembers|ArenaDashboard|MembersSkeleton' }; if \\($idx\\) { $idx | ForEach-Object { $lines[$_..\\([Math]::Min\\($_+6, $lines.Count-1\\)\\)] -join \"`n\"; \"-----\" } } else { \"No warnings in the changed files.\" })",
+      "Bash(grep -o \"radial-gradient\\([^;]\\\\{0,220\\\\}\" \".next/static/css/app/arena/[arenaId]/members/[userId]/page.css\")",
+      "PowerShell(@\\('puppeteer','puppeteer-core','playwright','playwright-core','@playwright/test'\\) | ForEach-Object { if \\(Test-Path \"node_modules/$_\"\\) { \"FOUND: $_\" } }; \"---\"; \\(Get-Content package.json | Select-String -Pattern 'scripts' -Context 0,12\\).ToString\\(\\))",
+      "PowerShell(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 3000,3001,3002,3003,4000 } | Select-Object LocalPort, OwningProcess -Unique | ForEach-Object { $p = Get-CimInstance Win32_Process -Filter \"ProcessId = $\\($_.OwningProcess\\)\"; \"$\\($_.LocalPort\\) => $\\($p.CommandLine\\)\" })",
+      "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\" }; $lines = $out -split \"`r?`n\"; $hits = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match 'ContextualMemberCard|memberCard|MemberDirectory|interfaces\\\\.ts' }; if \\($hits\\) { $hits | ForEach-Object { $lines[$_..\\([Math]::Min\\($_+5,$lines.Count-1\\)\\)] -join \"`n\"; \"-----\" } } else { \"No warnings in changed files.\" })",
+      "PowerShell($c = Get-Content \".next\\\\static\\\\css\\\\d911dcadb5d1e648.css\" -Raw; $i = $c.IndexOf\\('--card-rgb:96'\\); $c.Substring\\([Math]::Max\\(0,$i-220\\), 460\\))",
+      "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\"; $out }; $lines = $out -split \"`r?`n\"; $hits = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match 'ContextualMemberCard' }; if \\($hits\\) { $hits | ForEach-Object { $lines[$_..\\([Math]::Min\\($_+5,$lines.Count-1\\)\\)] -join \"`n\" } } else { \"No warnings in ContextualMemberCard.\" })",
+      "Bash(awk -F: '$1 > 1290 && $1 < 1700')",
+      "Bash(awk -F: '$1 > 1700')",
+      "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\"; $out }; $lines = $out -split \"`r?`n\"; $i = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match '^\\\\./components/arenas/ArenaDashboard' }; if \\($i\\) { $lines[$i[0]..\\([Math]::Min\\($i[0]+30,$lines.Count-1\\)\\)] -join \"`n\" } else { \"No ArenaDashboard warnings.\" })"
     ],
     "additionalDirectories": [
       "D:\\gautam\\gotlocks_backend\\src\\controllers",

@@ -6796,7 +6796,12 @@ export type GroupMemberStatsData = {
         slip_picks: number | null;
         /** BANKED by finalization. */
         feed_contest_points: number;
-        /** RIDING on unresolved contests. Deliberately not added into the above. */
+        /**
+         * RIDING on unresolved contests. Deliberately not added into the above,
+         * and deliberately not RENDERED anywhere either: nothing in this system
+         * actually stores points in play, so the figure is not a fact a screen
+         * can stand behind. Kept only to describe the payload.
+         */
         feed_contest_points_in_play: number;
         feed_contests_entered: number;
         achievements: number;
@@ -6812,7 +6817,13 @@ export type GroupMemberPicksPayload = {
     limit?: number;
 };
 
-/** GET /group/member-picks/community — a `picks` row with no feed_contest_id. */
+/**
+ * GET /group/member-picks/community — a `picks` row with no feed_contest_id.
+ *
+ * UNWIRED as of 2026-08-22: community picks were removed from the product, so
+ * the member card no longer lists them and nothing reads this shape. Kept only
+ * to describe the endpoint; delete both types with the route.
+ */
 export type GroupMemberCommunityPickRow = {
     id: string;
     is_own: boolean;
@@ -6915,6 +6926,96 @@ export type FeedContestAchievementsData = {
     };
 };
 
+/* ----------------------------------------------------------------------------
+ * GET /group/contest-leaderboard/badges/earned — Capture-the-Badge awards.
+ *
+ * Reads only FROZEN contests, and that is the definition rather than a filter:
+ * every badge is a contest-wide argmax that can change hands on any regrade
+ * until finalization, so a live contest has no earned badges — only a current
+ * holder. Nothing that appears here can later change.
+ *
+ * `group_id` OR `user_id` is required; passing only `user_id` is allowed for
+ * the CALLER'S OWN badges alone, because the answer would otherwise span every
+ * league the target plays in. This card always sends both.
+ * -------------------------------------------------------------------------- */
+export type EarnedContestBadgesPayload = {
+    group_id?: string;
+    user_id?: string;
+    page?: number;
+    limit?: number;
+};
+
+export type EarnedContestBadgeRow = {
+    badge_id: string;
+    badge_name: string;
+    /** Matches ContestBadgeCategory; typed wide because it is a frozen snapshot
+     *  and a catalog edit must not make an old award unrenderable. */
+    badge_category: string;
+    points_awarded: number;
+    /** NUMERIC server-side — american odds, a win count, or a 0..1 accuracy. */
+    value: number;
+    value_label: string | null;
+    mark_to_beat_label: string | null;
+    sport: string | null;
+    reached_at: string | null;
+    definition: unknown;
+    extra: unknown;
+    /** Only biggest-hit and td-sniper name one pick; the other 30 badges are
+     *  aggregates over many picks and carry null. */
+    winning_pick: {
+        pick_id: string | null;
+        slip_id: string | null;
+        description: string | null;
+        odds: number | null;
+        matchup: string | null;
+    } | null;
+    contest: {
+        contest_id: string;
+        contest_name: string | null;
+        group_id: string;
+        starts_at: string | null;
+        ends_at: string | null;
+        finalized_at: string | null;
+        /** Today's badge logic replayed over historic picks, not what members
+         *  actually saw. Surfaced rather than smoothed over. */
+        is_reconstructed: boolean;
+        total_participants: number;
+    };
+    /** Frozen at finalization, so a member who left still renders. */
+    member: {
+        user_id: string;
+        username: string;
+        profile_image: string | null;
+        rank: number | null;
+        cumulative_points: number | null;
+    };
+};
+
+export type EarnedContestBadgesData = {
+    group_id: string | null;
+    user_id: string | null;
+    summary: {
+        /** Exact — from the paged query's own count, so it stays right even
+         *  when `truncated` is true. */
+        total_badges: number;
+        total_badge_points: number;
+        contests_with_badges: number;
+        members_with_badges: number;
+        /** TRUE when everything except total_badges covers only a bounded scan. */
+        truncated: boolean;
+        by_badge: Array<{
+            badge_id: string;
+            badge_name: string;
+            badge_category: string;
+            count: number;
+            points: number;
+        }>;
+    };
+    badges: EarnedContestBadgeRow[];
+    /** Snake-cased `total_pages` here, unlike the member-picks reads. */
+    pagination: { page: number; limit: number; total: number; total_pages: number };
+};
+
 /**
  * One screen, five reads — so they share a slice rather than a flag each. Every
  * field is scoped to the (group, member) pair the card was opened for; the
@@ -6930,10 +7031,6 @@ export type MemberCardState = {
     slipPicksLoading: boolean;
     slipPicksError: string | null;
 
-    communityPicks: GroupMemberCommunityPicksData | null;
-    communityPicksLoading: boolean;
-    communityPicksError: string | null;
-
     feedContestPicks: FeedContestPicksData | null;
     feedContestPicksLoading: boolean;
     feedContestPicksError: string | null;
@@ -6941,6 +7038,12 @@ export type MemberCardState = {
     achievements: FeedContestAchievementsData | null;
     achievementsLoading: boolean;
     achievementsError: string | null;
+
+    /** League only — Capture-the-Badge is a slip-contest award, and an Arena
+     *  runs no slip contests. */
+    earnedBadges: EarnedContestBadgesData | null;
+    earnedBadgesLoading: boolean;
+    earnedBadgesError: string | null;
 };
 
 /* ----------------------------------------------------------------------------

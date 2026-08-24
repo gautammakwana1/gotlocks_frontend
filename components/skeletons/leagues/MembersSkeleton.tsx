@@ -5,8 +5,10 @@ import React from "react";
 const MembersSkeleton = () => {
     return (
         <div className="animate-pulse space-y-5">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            {/* Mirrors memberDirectoryGridClassName — a different column count
+                here makes the tiles jump the moment the real list arrives. */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((i) => (
                     <div
                         key={i}
                         className="relative flex aspect-square w-full flex-col rounded-2xl border border-white/5 bg-white/5 p-4 shadow-sm"

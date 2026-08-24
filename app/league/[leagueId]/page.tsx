@@ -545,7 +545,11 @@ const LeagueDashboardPage = () => {
   const [editLeagueDescription, setEditLeagueDescription] = useState("");
   const [deleteConfirmCode, setDeleteConfirmCode] = useState("");
   const [deleteCodeInput, setDeleteCodeInput] = useState("");
-  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  // `isDeletingGroup` used to live here as a second "the delete flow is open"
+  // flag alongside `isConfirmDeleteModalOpen`, and the dialog read it to decide
+  // whether its confirm button was live. The dialog now reads the REQUEST's own
+  // `deleteLoading` instead, which is the thing that actually needs to gate the
+  // button, so nothing consumed this any more.
   const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
   const [deleteConfirmationCode, setDeleteConfirmationCode] = useState("");
   const [leavingLeague, setLeavingLeague] = useState(false);
@@ -835,7 +839,6 @@ const LeagueDashboardPage = () => {
     try {
       if (!deleteConfirmCode) return;
 
-      setIsDeletingGroup(true);
       setIsConfirmDeleteModalOpen(true);
       setDeleteError(null);
       if (group.id) {
@@ -850,7 +853,6 @@ const LeagueDashboardPage = () => {
 
   const handleCloseConfirmDeleteModal = () => {
     setIsConfirmDeleteModalOpen(false);
-    setIsDeletingGroup(false);
     setDeleteError(null);
   };
 
@@ -859,10 +861,13 @@ const LeagueDashboardPage = () => {
       setDeleteError("Only the commissioner can delete this league.");
       return;
     }
+    // The emailed code is single use, so a second submit can only be rejected.
+    // The dialog disables its own button while `deleteLoading` is true; this
+    // guard is what covers the gap between the click and that state landing.
+    if (deleteLoading) return;
     try {
       if (group?.id) dispatch(confirmDeleteGroupRequest({ group_id: group?.id, otp: deleteConfirmationCode }));
       setDeleteError(null);
-      setIsDeletingGroup(false);
       setIsConfirmDeleteModalOpen(false);
       setDeleteConfirmationCode("");
       setDeleteCodeInput("");
@@ -1481,7 +1486,11 @@ const LeagueDashboardPage = () => {
           open={isConfirmDeleteModalOpen}
           confirmationValue={deleteConfirmationCode}
           hasPermission={isCommissioner}
-          isDeleting={isDeletingGroup}
+          // The request, not the flow. League closes this dialog the moment it
+          // dispatches, so in practice it unmounts before the button could be
+          // clicked twice — but the prop has to mean the same thing on both
+          // surfaces, and this keeps the guard real if that early close ever goes.
+          submitting={deleteLoading}
           errorMessage={deleteError}
           onConfirmationChange={(value: string) => setDeleteConfirmationCode(value)}
           onClose={handleCloseConfirmDeleteModal}

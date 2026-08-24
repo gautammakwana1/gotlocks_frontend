@@ -88,11 +88,11 @@ const workspaceActionToneClassNames: Record<
     Record<"new" | "join", string>
 > = {
     league: {
-        new: "border-transparent bg-sky-300 text-slate-950 shadow-sky-950/20 hover:bg-sky-200 focus-visible:outline-sky-200",
+        new: "border-sky-200/25 bg-sky-500/[0.16] text-sky-200 shadow-sky-950/20 hover:border-sky-200/40 hover:bg-sky-500/[0.22] hover:text-sky-100 focus-visible:outline-sky-200",
         join: "border-sky-200/20 bg-sky-500/10 text-sky-50 shadow-sky-950/10 hover:border-sky-200/40 hover:bg-sky-500/20 focus-visible:outline-sky-200",
     },
     arena: {
-        new: "border-transparent bg-violet-500 text-white shadow-violet-950/30 hover:bg-violet-400 focus-visible:outline-violet-200",
+        new: "border-violet-300/25 bg-violet-500/[0.16] text-violet-200 shadow-violet-950/20 hover:border-violet-200/40 hover:bg-violet-500/[0.22] hover:text-violet-100 focus-visible:outline-violet-300",
         join: "border-violet-300/25 bg-violet-500/10 text-violet-50 shadow-violet-950/15 hover:border-violet-200/45 hover:bg-violet-500/20 focus-visible:outline-violet-300",
     },
 };
@@ -107,7 +107,7 @@ export const CommunityHubWorkspaceAction = forwardRef<
     HTMLButtonElement,
     CommunityHubWorkspaceActionProps
 >((props, ref) => {
-    const className = `inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none ${workspaceActionToneClassNames[props.tone][props.kind]}`;
+    const className = `inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none ${workspaceActionToneClassNames[props.tone][props.kind]}`;
     const content = (
         <>
             {props.kind === "new" ? <NewIcon /> : <JoinIcon />}
