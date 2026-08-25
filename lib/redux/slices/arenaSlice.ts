@@ -68,8 +68,11 @@ import type {
     StaffAnnouncement,
     UpdateArenaDetailsPayload,
     ArenaJoinRequestsData,
+    ArenaMemberContactsData,
     CompleteArenaSetupPayload,
     FetchArenaJoinRequestsPayload,
+    FetchArenaMemberContactsPayload,
+    ExportArenaMemberContactsPayload,
     RespondArenaJoinRequestPayload,
     UpdateArenaJoinPolicyPayload,
 } from "@/lib/interfaces/interfaces";
@@ -243,6 +246,13 @@ const initialState: ArenaState = {
     respondingUserId: null,
     joinRequestActionError: null,
     joinRequestActionMessage: null,
+    memberContacts: [],
+    memberContactsPagination: undefined,
+    memberContactsForId: null,
+    memberContactsLoading: false,
+    memberContactsError: null,
+    memberContactsExporting: false,
+    memberContactsExportError: null,
     subscription: null,
     subscriptionLoading: false,
     subscriptionError: null,
@@ -1521,6 +1531,85 @@ const arenaSlice = createSlice({
             state.joinRequestsError = action.payload;
         },
 
+        /* ---- The staff-only contact list -----------------------------------
+         *
+         * Scoped by `memberContactsForId` like the queue above, so the panel
+         * only re-reads page 1 when the Arena on screen actually changes and
+         * switching tabs is free. The stamp is set on REQUEST, not on success,
+         * so a failure cannot put the panel in a retry loop;
+         * `retryArenaMemberContacts` is the deliberate way back in.
+         *
+         * Appends past page 1, exactly like the roster this sits under — a
+         * "Show more" list, not a page-jump one. Note the append is guarded on
+         * the id as well: a late page 2 from the Arena you just navigated away
+         * from must not land on top of the new Arena's page 1.
+         * ------------------------------------------------------------------ */
+        fetchArenaMemberContactsRequest: (
+            state,
+            action: PayloadAction<FetchArenaMemberContactsPayload>
+        ) => {
+            state.memberContactsLoading = true;
+            state.memberContactsError = null;
+            if (state.memberContactsForId !== action.payload.arena_id) {
+                state.memberContacts = [];
+                state.memberContactsPagination = undefined;
+                state.memberContactsForId = action.payload.arena_id;
+            }
+        },
+        fetchArenaMemberContactsSuccess: (
+            state,
+            action: PayloadAction<{ arena_id: string; data: ArenaMemberContactsData }>
+        ) => {
+            const { arena_id, data } = action.payload;
+            // A response for an Arena we have already navigated away from is
+            // stale by definition — drop it rather than merge it.
+            if (state.memberContactsForId !== arena_id) return;
+
+            state.memberContactsLoading = false;
+            state.memberContacts =
+                (data.pagination?.page ?? 1) === 1
+                    ? data.contacts
+                    : [...state.memberContacts, ...data.contacts];
+            state.memberContactsPagination = data.pagination;
+        },
+        fetchArenaMemberContactsFailure: (state, action: PayloadAction<string>) => {
+            state.memberContactsLoading = false;
+            state.memberContactsError = action.payload;
+        },
+        /* Clears the id stamp so the panel's effect fires again. Separate from
+         * the request action because the effect is what owns the dispatch. */
+        retryArenaMemberContacts: (state) => {
+            state.memberContactsForId = null;
+            state.memberContactsError = null;
+        },
+
+        /* ---- The CSV download ----------------------------------------------
+         *
+         * Its OWN busy flag, not the list's. This endpoint is throttled to five
+         * calls a minute and writes an audit line each time, so it fires only on
+         * a real click — never to paint the panel — and a slow download must not
+         * grey out a list that is already on screen. Nothing is stored on
+         * success: the bytes went straight to the blob the browser saved.
+         * ------------------------------------------------------------------ */
+        exportArenaMemberContactsRequest: (
+            state,
+            action: PayloadAction<ExportArenaMemberContactsPayload>
+        ) => {
+            void action;
+            state.memberContactsExporting = true;
+            state.memberContactsExportError = null;
+        },
+        exportArenaMemberContactsSuccess: (state) => {
+            state.memberContactsExporting = false;
+        },
+        exportArenaMemberContactsFailure: (state, action: PayloadAction<string>) => {
+            state.memberContactsExporting = false;
+            state.memberContactsExportError = action.payload;
+        },
+        clearArenaMemberContactsExportMessage: (state) => {
+            state.memberContactsExportError = null;
+        },
+
         // PUT /group/arena/join-requests/respond.
         respondArenaJoinRequestRequest: (
             state,
@@ -2049,6 +2138,14 @@ export const {
     fetchArenaJoinRequestsRequest,
     fetchArenaJoinRequestsSuccess,
     fetchArenaJoinRequestsFailure,
+    fetchArenaMemberContactsRequest,
+    fetchArenaMemberContactsSuccess,
+    fetchArenaMemberContactsFailure,
+    retryArenaMemberContacts,
+    exportArenaMemberContactsRequest,
+    exportArenaMemberContactsSuccess,
+    exportArenaMemberContactsFailure,
+    clearArenaMemberContactsExportMessage,
     respondArenaJoinRequestRequest,
     respondArenaJoinRequestSuccess,
     respondArenaJoinRequestFailure,

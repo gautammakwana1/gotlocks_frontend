@@ -2,6 +2,7 @@
 import { CachedReviewData } from "@/components/pick-builder/core/reviewSheetState";
 import { ProfileBadgeProgress } from "../profile/badges";
 import { ContestLifecycleStatus } from "../domain/community";
+import type { ArenaMemberContact } from "../arenas/memberContacts";
 import type { FeedContestState } from "../redux/slices/feedContestSlice";
 
 export type Role = "member" | "commissioner" | "manager";
@@ -2424,6 +2425,34 @@ export type FetchArenaJoinRequestsPayload = {
     status?: GroupJoinRequestStatus | "all";
     page?: number;
     limit?: number;
+};
+
+/* ----------------------------------------------------------------------------
+ * The Arena's staff-only member contacts. Arena-only, owner/manager-only — a
+ * plain member gets 403 from both endpoints.
+ *
+ *   GET /group/arena/member-contacts/list   JSON, paged — the on-screen list.
+ *   GET /group/arena/member-contacts        text/csv    — the download.
+ *
+ * Two payloads because they are two acts, not one read rendered twice. See
+ * lib/arenas/memberContacts.ts for why the CSV no longer feeds the panel: the
+ * export is throttled to 5/minute and audit-logged per call, so rendering a
+ * list through it charged every glance as a file leaving the building.
+ * -------------------------------------------------------------------------- */
+export type FetchArenaMemberContactsPayload = {
+    arena_id: string;
+    /** Load-more, matching the roster's own paging. Page 1 replaces, >1 appends. */
+    page?: number;
+    limit?: number;
+};
+
+export type ArenaMemberContactsData = {
+    contacts: ArenaMemberContact[];
+    pagination: PaginationMetadata;
+};
+
+export type ExportArenaMemberContactsPayload = {
+    arena_id: string;
 };
 
 export type ArenaJoinRequestsData = {
@@ -5194,6 +5223,24 @@ export type ArenaState = {
     respondingUserId: string | null;
     joinRequestActionError: string | null;
     joinRequestActionMessage: string | null;
+    /* The staff-only member contacts panel in the Members tab.
+     *
+     * Scoped by `memberContactsForId` for the same reason the join queue is:
+     * the panel renders inside the Members tab, and one Arena's addresses
+     * appearing under another is the worst version of that bug.
+     *
+     * The LIST is paged and appends like the roster above it. The EXPORT is a
+     * separate act with its own busy flag, because it is throttled and audited
+     * server-side and must not be charged for a page turn. */
+    memberContacts: ArenaMemberContact[];
+    memberContactsPagination?: PaginationMetadata;
+    memberContactsForId: string | null;
+    memberContactsLoading: boolean;
+    memberContactsError: string | null;
+    // GET /group/arena/member-contacts — the CSV. Never stored: the bytes go
+    // straight from the response to the blob the browser saves.
+    memberContactsExporting: boolean;
+    memberContactsExportError: string | null;
     // Shared status for the three hosting writes (activate-hosting /
     // schedule-pause / cancel-pause). Only one runs at a time.
     hostingActionLoading: boolean;

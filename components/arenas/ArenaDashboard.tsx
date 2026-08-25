@@ -97,6 +97,7 @@ import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
 import ArenaVenueCheckInPanel from "./checkin/ArenaVenueCheckInPanel";
 import ArenaRewardContactSettings from "./ArenaRewardContactSettings";
 import ArenaJoinPolicySettings from "./ArenaJoinPolicySettings";
+import ArenaMemberContactsPanel from "./ArenaMemberContactsPanel";
 import {
     getMemberDirectoryAvatarClassName,
     getMemberDirectoryCardClassName,
@@ -1331,6 +1332,12 @@ const ArenaMembersPanel = ({
                     No members match your search.
                 </p>
             ) : null}
+
+            {/* Same slot as the MVP: after the roster and its empty state, before
+                Leave Arena. Renders nothing for a plain member — the component
+                gates itself on the role rather than making every call site
+                repeat the check. */}
+            <ArenaMemberContactsPanel arenaId={arenaId} viewerRole={currentRole} />
 
             {!isOwner ? (
                 <section className="border-t border-white/10 pt-5">

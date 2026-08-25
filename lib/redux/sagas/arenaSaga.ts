@@ -78,6 +78,9 @@ import type {
     ArenaJoinRequestsData,
     CompleteArenaSetupPayload,
     FetchArenaJoinRequestsPayload,
+    FetchArenaMemberContactsPayload,
+    ExportArenaMemberContactsPayload,
+    ArenaMemberContactsData,
     RespondArenaJoinRequestPayload,
     UpdateArenaJoinPolicyPayload,
 } from "@/lib/interfaces/interfaces";
@@ -244,11 +247,21 @@ import {
     updateArenaJoinPolicyFailure,
     fetchArenaJoinRequestsRequest,
     fetchArenaJoinRequestsSuccess,
+    fetchArenaMemberContactsRequest,
+    fetchArenaMemberContactsSuccess,
+    fetchArenaMemberContactsFailure,
+    exportArenaMemberContactsRequest,
+    exportArenaMemberContactsSuccess,
+    exportArenaMemberContactsFailure,
     fetchArenaJoinRequestsFailure,
     respondArenaJoinRequestRequest,
     respondArenaJoinRequestSuccess,
     respondArenaJoinRequestFailure,
 } from "../slices/arenaSlice";
+import {
+    downloadMemberContactsCsv,
+    memberContactsFilenameFrom,
+} from "@/lib/arenas/memberContacts";
 import {
     fetchGroupByIdRequest,
     fetchGroupMembersByGroupIdRequest,
@@ -281,6 +294,34 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
         return error.message || fallback;
     }
     return fallback;
+};
+
+/**
+ * The same message extraction, for the one route that answers text.
+ *
+ * `responseType: "text"` applies to FAILURE bodies too, so a 403 "You're not
+ * authorized!" or the 429 "Too many contact exports..." arrives as the raw JSON
+ * string rather than a parsed object. Without this the user would see the
+ * generic fallback for exactly the two errors that explain themselves.
+ */
+const getCsvErrorMessage = (error: unknown, fallback: string): string => {
+    if (axios.isAxiosError<unknown>(error)) {
+        const data = error.response?.data;
+
+        if (typeof data === "string" && data.trim()) {
+            try {
+                const parsed = JSON.parse(data) as ApiErrorResponse;
+                return parsed?.message ?? parsed?.error ?? fallback;
+            } catch {
+                // Not JSON — a proxy error page, say. Never surface raw HTML.
+                return fallback;
+            }
+        }
+
+        const envelope = data as ApiErrorResponse | undefined;
+        return envelope?.message ?? envelope?.error ?? fallback;
+    }
+    return getErrorMessage(error, fallback);
 };
 
 /**
@@ -1740,6 +1781,109 @@ function* handleFetchArenaJoinRequests(
 }
 
 /**
+ * GET /group/arena/member-contacts/list — the on-screen contact list.
+ *
+ * Ordinary JSON, paged, and NOT the export: the CSV route beside it is
+ * throttled and writes an audit line per call, so painting a panel through it
+ * would charge every glance as a file leaving the building. Appends past page 1
+ * like the roster it sits under.
+ */
+function* handleFetchArenaMemberContacts(
+    action: PayloadAction<FetchArenaMemberContactsPayload>
+): SagaIterator {
+    const { arena_id, page, limit } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/member-contacts/list`,
+            {
+                // Never a hand-built query string: the request interceptor signs
+                // the path plus SORTED params, and appending by hand breaks it.
+                params: {
+                    arena_id,
+                    ...(page ? { page } : {}),
+                    ...(limit ? { limit } : {}),
+                },
+            }
+        );
+
+        const payload = response.data as { data?: ArenaMemberContactsData };
+
+        if (!payload?.data) {
+            yield put(
+                fetchArenaMemberContactsFailure("Failed to load Arena member contacts")
+            );
+            return;
+        }
+
+        yield put(fetchArenaMemberContactsSuccess({ arena_id, data: payload.data }));
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaMemberContactsFailure(
+                getErrorMessage(error, "Failed to load Arena member contacts")
+            )
+        );
+    }
+}
+
+/**
+ * GET /group/arena/member-contacts — the CSV download.
+ *
+ * The one call on this slice that does NOT answer a JSON envelope, so:
+ *
+ *  - `transformResponse` is the identity. Axios otherwise tries JSON.parse on
+ *    every string body, which leaves a CSV alone but silently turns an ERROR
+ *    body into an object — two shapes for one field. Forcing raw text means
+ *    both paths are strings and the handling below is deterministic.
+ *  - the filename is read off Content-Disposition rather than rebuilt from the
+ *    Arena name, so the two can never disagree. The API CORS-exposes it.
+ *
+ * The save happens here rather than in the component because it is a side
+ * effect on a response the component never sees; nothing is kept afterwards.
+ */
+function* handleExportArenaMemberContacts(
+    action: PayloadAction<ExportArenaMemberContactsPayload>
+): SagaIterator {
+    const { arena_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/member-contacts`,
+            {
+                params: { arena_id },
+                responseType: "text",
+                transformResponse: [(data: unknown) => data],
+            }
+        );
+
+        const csv = typeof response.data === "string" ? response.data : "";
+
+        if (!csv) {
+            yield put(
+                exportArenaMemberContactsFailure("Failed to export Arena member contacts")
+            );
+            return;
+        }
+
+        const headers = response.headers as Record<string, unknown> | undefined;
+
+        yield call(
+            downloadMemberContactsCsv,
+            csv,
+            memberContactsFilenameFrom(headers?.["content-disposition"])
+        );
+
+        yield put(exportArenaMemberContactsSuccess());
+    } catch (error: unknown) {
+        yield put(
+            exportArenaMemberContactsFailure(
+                getCsvErrorMessage(error, "Failed to export Arena member contacts")
+            )
+        );
+    }
+}
+
+/**
  * PUT /group/arena/join-requests/respond.
  *
  * On an APPROVAL the roster changed, so the members list is re-read as well as
@@ -2056,6 +2200,11 @@ export default function* arenaSaga() {
     yield takeLeading(completeArenaSetupRequest.type, handleCompleteArenaSetup);
     yield takeLatest(updateArenaJoinPolicyRequest.type, handleUpdateArenaJoinPolicy);
     yield takeLatest(fetchArenaJoinRequestsRequest.type, handleFetchArenaJoinRequests);
+    /* takeLeading, NOT takeLatest: the export is rate-limited to 5 calls a
+     * minute per user, and a double-click on "Export contacts CSV" must not
+     * spend two of them. A second dispatch while one is in flight is dropped. */
+    yield takeLatest(fetchArenaMemberContactsRequest.type, handleFetchArenaMemberContacts);
+    yield takeLeading(exportArenaMemberContactsRequest.type, handleExportArenaMemberContacts);
     // takeEvery, NOT takeLatest: each Approve/Decline answers a DIFFERENT
     // request, so a second click on another row must not cancel the first.
     yield takeEvery(respondArenaJoinRequestRequest.type, handleRespondArenaJoinRequest);
