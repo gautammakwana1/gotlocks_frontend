@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import {
+    isContestFinalized,
+    toPickCardStanding,
+} from "@/lib/contests/pickStanding";
 import type {
-    ArenaCommunityPick,
     ArenaStaffPick,
     FeedContestPickRow,
     FeedGroupType,
     Pick,
-    PickReaction,
-    PickReactionSummary,
     PickResult,
     RootState,
     SlipContestPickRow,
@@ -28,16 +29,13 @@ import {
     clearUpdateCommunityPickState,
     createStaffAnnouncementRequest,
     createStaffPickRequest,
-    deleteCommunityPickRequest,
     deleteStaffAnnouncementRequest,
     deleteStaffPickRequest,
     editStaffAnnouncementRequest,
-    fetchCommunityPicksRequest,
     fetchStaffAnnouncementsRequest,
     fetchStaffPicksRequest,
     pinStaffAnnouncementRequest,
     resetGroupFeed,
-    updateCommunityPickRequest,
 } from "@/lib/redux/slices/arenaSlice";
 import { fetchFantasyPodiumsRequest } from "@/lib/redux/slices/groupsSlice";
 import { FANTASY_PODIUM_PAGE_SIZE } from "@/lib/redux/sagas/groupsSaga";
@@ -48,7 +46,6 @@ import {
 } from "@/lib/redux/slices/feedContestSlice";
 import {
     clearSlipContestPicks,
-    createPickReactionRequest,
     fetchSlipContestPicksRequest,
 } from "@/lib/redux/slices/pickSlice";
 import { fetchLiveNFLScheduleRequest } from "@/lib/redux/slices/nflSlice";
@@ -63,7 +60,6 @@ import FantasyContestWinnersBlock from "./FantasyContestWinnersBlock";
 import { StructuredFeed } from "./StructuredFeed";
 import { resolveContestEntryLifecycle } from "./formatters";
 import {
-    buildCommunityPickPayload,
     buildMoneylineStaffPickOptions,
     buildStaffPickPayload,
 } from "./staffPickOdds";
@@ -71,7 +67,7 @@ import type {
     StructuredFeedCapabilities,
     StructuredFeedContextMetadata,
     StructuredFeedFilter,
-    StructuredFeedPickSubmission,
+    StructuredFeedProps,
     StructuredFeedRecord,
     StructuredFeedRecordSelection,
     StructuredFeedRole,
@@ -97,6 +93,8 @@ type ConnectedStructuredFeedProps = {
     className?: string;
     /** Optional panel shown behind the Feed's "Standings" filter chip. */
     standings?: ReactNode;
+    /** Forwarded to StructuredFeed: the League's Fantasy/Feed flip button. */
+    standingsAction?: StructuredFeedProps["standingsAction"];
     initialFilter?: StructuredFeedFilter;
 };
 
@@ -140,41 +138,6 @@ const toStaffRole = (authorRole: string): StructuredFeedStaffRole | undefined =>
     if (normalized === "owner" || normalized === "commissioner") return "owner";
     if (normalized === "manager") return "manager";
     return undefined;
-};
-
-/**
- * Reaction tallies as the row carries them. `up` / `down` / `reaction` are the
- * same three fields the Global Social and Profile feeds read straight off a pick,
- * attached server-side from `reaction_picks`.
- */
-const reactionSummaryFromRow = (pick: Pick): PickReactionSummary => {
-    const up = pick.up ?? 0;
-    const down = pick.down ?? 0;
-    return { up, down, total: up + down, userReaction: pick.reaction ?? null };
-};
-
-/**
- * Applies a click to a summary using the SAME toggle rule the endpoint runs
- * (`reactionToPickOfTheDay`): re-clicking the active reaction removes it, the
- * other one switches sides. Keeping the two in step is what lets the button
- * respond immediately — nothing refetches this feed after a reaction.
- */
-const applyReaction = (
-    base: PickReactionSummary,
-    reaction: PickReaction,
-): PickReactionSummary => {
-    const removing = base.userReaction === reaction;
-    const up = Math.max(
-        0,
-        base.up - (base.userReaction === "up" ? 1 : 0) + (!removing && reaction === "up" ? 1 : 0),
-    );
-    const down = Math.max(
-        0,
-        base.down -
-        (base.userReaction === "down" ? 1 : 0) +
-        (!removing && reaction === "down" ? 1 : 0),
-    );
-    return { up, down, total: up + down, userReaction: removing ? null : reaction };
 };
 
 // Turn a picks row (staff or community) into the card's rich pick-detail block:
@@ -224,6 +187,7 @@ export const ConnectedStructuredFeed = ({
     currentUserId,
     className,
     standings,
+    standingsAction,
     initialFilter,
 }: ConnectedStructuredFeedProps) => {
     const dispatch = useDispatch();
@@ -250,13 +214,6 @@ export const ConnectedStructuredFeed = ({
         createdStaffPick,
         createStaffPickError,
         createStaffPickMessage,
-        communityPicks,
-        updatedCommunityPick,
-        updateCommunityPickError,
-        updateCommunityPickMessage,
-        deleteCommunityPickLoadingId,
-        deleteCommunityPickError,
-        deleteCommunityPickMessage,
     } = useSelector((state: RootState) => state.arena);
     const { nflSchedulesWithOdds } = useSelector((state: RootState) => state.nfl);
     /*
@@ -289,15 +246,6 @@ export const ConnectedStructuredFeed = ({
     // feed-contest and slip-contest reads above.
     const isArena = groupType === "arena";
     const isLeague = groupType === "league";
-    // Community picks are the member-side counterpart of a Staff Pick. The `writable`
-    // prop here actually means "is staff" (it's isArenaStaffRole from the dashboard),
-    // so it can't gate a member action — gate on role and let the endpoint enforce
-    // writable hosting (402 when paused), same as the Join flow.
-    //
-    // In an Arena, staff are noncompetitive and post Staff Picks instead. In a
-    // League there is no such split: leagueFeedController allows a community pick
-    // from "any League member, including the commissioner".
-    const canPostCommunityPick = isMember || (!isArena && isOwner);
 
     const context: StructuredFeedContextMetadata = {
         kind: groupType,
@@ -305,9 +253,12 @@ export const ConnectedStructuredFeed = ({
         name: contextName,
     };
 
-    // Announcements + Staff Picks are live for staff; Community Picks are live for
-    // members. A League offers announcements (commissioner) and Community Picks
-    // (any member) only — Staff Picks are Arena-only.
+    // Announcements are live for staff; Staff Picks for Arena staff. A League
+    // offers announcements (commissioner) only — Staff Picks are Arena-only.
+    //
+    // No community-pick mode: Community Picks were withdrawn from the Feed
+    // entirely, create first (2026-08-19) and then the read, the reactions and
+    // the replace path with them. Nothing here reaches /group/*/community-pick*.
     //
     // No competitive-pick mode: like the MVP, the Feed DISPLAYS contest entries
     // (competitive_pick records from /group/feed-contest/picks) but does not
@@ -317,12 +268,7 @@ export const ConnectedStructuredFeed = ({
     // could only ever offer a single pick off the live NFL slate, on Arena-only
     // routes, which is neither.
     const capabilities: StructuredFeedCapabilities = {
-        // WITHDRAWN 2026-08-19. The Feed no longer CREATES community picks from
-        // anywhere: the drawer's Pick Post panel is gone and this flag keeps the
-        // composer's community-pick mode unreachable too. It still READS them —
-        // they render in the Feed — and `canPostCommunityPick` below still gates
-        // the odds fetch, because REPLACING an existing pick needs that slate.
-        canCreateCommunityPick: false,
+        canCreateCommunityPick: false, // withdrawn — see above
         canCreateCompetitivePick: false, // see above — contest page only
         canCreateStaffPick: isArena && canPost, // NFL moneyline, next 2 days
         canCreateStaffPost: canPost, // announcements
@@ -397,53 +343,6 @@ export const ConnectedStructuredFeed = ({
         [currentUserId, isOwner],
     );
 
-    // Community pick -> feed record. A member's OWN pick is editable (replace) and
-    // deletable only while still pending and pregame — mirroring the backend's
-    // author + pending + pregame rule for update/delete.
-    //
-    // `pick` carries the whole row so the card renders the canonical pick body
-    // (tier tile, confidence, combo legs, result chip) instead of the compact
-    // selection block; `selection` stays as the fallback if a row ever arrives
-    // without a description.
-    const communityPickToRecord = useCallback(
-        (pick: ArenaCommunityPick): StructuredFeedRecord => {
-            const author = normalizeAuthor(pick.author) ?? pick.profiles;
-            const pending = !pick.result || pick.result === "pending";
-            const pregame =
-                !pick.match_date || Date.parse(pick.match_date) > Date.now();
-            const editable = pick.user_id === currentUserId && pending && pregame;
-            const authorId = author?.id ?? pick.user_id;
-            const authorName = author?.username ?? memberFallbackName;
-            return {
-                id: pick.id,
-                kind: "community_pick",
-                author: {
-                    id: authorId,
-                    displayName: authorName,
-                    handle: author?.username ?? undefined,
-                },
-                createdAtLabel: formatDateTime(pick.created_at ?? ""),
-                selection: buildPickSelection(pick),
-                // The fetch joins the author under `author` on some responses and
-                // `profiles` on others; the card reads `profiles`, so normalize.
-                pick: {
-                    ...pick,
-                    profiles: {
-                        ...pick.profiles,
-                        id: authorId,
-                        user_id: authorId,
-                        username: authorName,
-                        profile_image:
-                            pick.profiles?.profile_image ?? author?.profile_image ?? undefined,
-                    },
-                },
-                actions: editable
-                    ? { canDelete: true, canReplace: true }
-                    : undefined,
-            };
-        },
-        [currentUserId, memberFallbackName],
-    );
 
 
     /*
@@ -467,6 +366,31 @@ export const ConnectedStructuredFeed = ({
                     : `/league/${groupId}/feed-contests/${item.contest.id}`
                 : undefined;
             const settled = Boolean(detail?.result && detail.result !== "pending");
+
+            /* ---------- The Contest Rank tile ----------
+             *
+             * `standing` is written by finalization and is NULL until then, so
+             * it doubles as the "has this played out" test. There is no LIVE
+             * rank on this read — the board is only joined once ranks exist —
+             * so an entry is either final, or finished-but-unranked, or pending.
+             *
+             * Gated on `is_revealed` the way the MVP gates it on details being
+             * visible (MVP adapters.ts:434-436): a masked card must not leak a
+             * placement. Belt-and-braces, since a rank is only ever written
+             * after the lock that reveals the field.
+             *
+             * `placementEligible` is deliberately NOT derived from
+             * `is_awarded`: that flag is false for everyone outside the paid
+             * window, so using it would strip the podium tone off an honest 2nd
+             * place in a winner-takes-all contest. The MVP sets this only for
+             * TD Psychic's own eligibility rule and leaves it undefined
+             * everywhere else (MVP adapters.ts:516-519). */
+            const standing = toPickCardStanding({
+                standing: item.standing,
+                isRevealed: item.is_revealed,
+                isFinalized: isContestFinalized(item.contest),
+            });
+
             return {
                 id: `feed-contest:${item.id}`,
                 kind: "competitive_pick",
@@ -499,6 +423,7 @@ export const ConnectedStructuredFeed = ({
                             contestName: item.contest.name,
                             contextualPointsLabel:
                                 groupType === "arena" ? "Arena Points" : "League Points",
+                            standing,
                         }
                         : undefined,
                 contest: item.contest
@@ -643,11 +568,6 @@ export const ConnectedStructuredFeed = ({
                     record: pickToRecord(pick),
                 }))
                 : []),
-            ...communityPicks.map((pick) => ({
-                pinned: false,
-                sortKey: Date.parse(pick.created_at ?? "") || 0,
-                record: communityPickToRecord(pick),
-            })),
             // Feed contest entries, both surfaces. Scoped by group id because the
             // slice is single-tenant and one commit can still hold the previous
             // group's page while the new request is in flight.
@@ -678,82 +598,23 @@ export const ConnectedStructuredFeed = ({
         groupId,
         staffAnnouncements,
         staffPicks,
-        communityPicks,
         feedContestPicks,
         slipContestPicks,
         feedContestPickToRecord,
         slipContestPickToRecord,
         announcementToRecord,
         pickToRecord,
-        communityPickToRecord,
     ]);
 
-    /* ------------------------------------------------------------------------
-     * Reactions — Community Picks only.
+
+    /* Reactions were a COMMUNITY-PICK-ONLY surface and went with them.
      *
-     * A community pick IS a `picks` row and its Feed record id is that row's id,
-     * so POST /pick/reaction-pick-of-day takes it unchanged (the endpoint looks
-     * the pick up by id and never branches on pick_type). The other kinds stay
-     * out: an announcement lives in `staff_feed_posts` and would 404, and the
-     * contest-entry endpoints return no tallies to render. `getReactionSummary`
-     * answering null for those is what keeps their buttons off the card.
-     * -------------------------------------------------------------------- */
-    const communityPickById = useMemo(
-        () => new Map(communityPicks.map((pick) => [pick.id, pick] as const)),
-        [communityPicks],
-    );
-
-    // The Feed never refetches after a reaction, so the click is held here until
-    // a later list read carries it. Keyed by pick id.
-    const [reactionOverrides, setReactionOverrides] = useState<
-        Record<string, PickReactionSummary>
-    >({});
-
-    // Self-healing: once a refetched row reports the same reaction the override
-    // claims, the server has caught up and the override is dropped so OTHER
-    // members' votes (which the override cannot see) stop being masked.
-    useEffect(() => {
-        setReactionOverrides((current) => {
-            const entries = Object.entries(current);
-            if (!entries.length) return current;
-            const kept = entries.filter(([pickId, override]) => {
-                const pick = communityPickById.get(pickId);
-                // A pick that left the page keeps no override either.
-                if (!pick) return false;
-                return (pick.reaction ?? null) !== override.userReaction;
-            });
-            return kept.length === entries.length ? current : Object.fromEntries(kept);
-        });
-    }, [communityPickById]);
-
-    const getReactionSummary = useCallback(
-        (recordId: string): PickReactionSummary | null => {
-            const pick = communityPickById.get(recordId);
-            if (!pick) return null;
-            return reactionOverrides[recordId] ?? reactionSummaryFromRow(pick);
-        },
-        [communityPickById, reactionOverrides],
-    );
-
-    const onReaction = useCallback(
-        (recordId: string, reaction: PickReaction) => {
-            const pick = communityPickById.get(recordId);
-            if (!pick) return;
-            const base = reactionOverrides[recordId] ?? reactionSummaryFromRow(pick);
-            setReactionOverrides((current) => ({
-                ...current,
-                [recordId]: applyReaction(base, reaction),
-            }));
-            dispatch(
-                createPickReactionRequest({
-                    pick_id: recordId,
-                    action: reaction === "up" ? "liked" : "dislike",
-                }),
-            );
-        },
-        [communityPickById, reactionOverrides, dispatch],
-    );
-
+     * `getPickReactionSummary` answered null for every other kind — an
+     * announcement lives in staff_feed_posts and would 404, and the
+     * contest-entry endpoints return no tallies — which is what kept the
+     * buttons off those cards. With no community picks left to react to,
+     * nothing can reach POST /pick/reaction-pick-of-day from the Feed, so the
+     * summary/override plumbing and the reaction dispatch are gone too. */
     // Drop the previous group's rows BEFORE the new ones are requested, and again on
     // unmount. The fetch reducers only flip a loading flag — they never clear their
     // list — so without this an Arena's posts stay rendered inside a League feed for
@@ -766,11 +627,6 @@ export const ConnectedStructuredFeed = ({
         // does not reach them — drop them on the same boundary or a League feed
         // can paint the previous group's entries.
         dispatch(clearFeedContestPicks());
-        dispatch(clearSlipContestPicks());
-        // Pending reaction overrides are keyed by pick id, so they would survive
-        // the switch and re-apply to whatever the next group's list happens to
-        // contain — clear them on the same boundary as the rows they describe.
-        setReactionOverrides({});
         return () => {
             dispatch(resetGroupFeed());
             dispatch(clearFeedContestPicks());
@@ -783,7 +639,6 @@ export const ConnectedStructuredFeed = ({
     useEffect(() => {
         if (!groupId) return;
         dispatch(fetchStaffAnnouncementsRequest({ arena_id: groupId, group_type: groupType, page: 1 }));
-        dispatch(fetchCommunityPicksRequest({ arena_id: groupId, group_type: groupType, page: 1 }));
         // Feed contest entries, BOTH surfaces. One call replaces the Arena-only
         // open/closed pair for feed purposes: a page mixes contests and each row
         // states its own `is_revealed`, so there is nothing left to dedupe.
@@ -798,12 +653,18 @@ export const ConnectedStructuredFeed = ({
         if (isArena) {
             dispatch(fetchStaffPicksRequest({ arena_id: groupId, group_type: groupType, page: 1 }));
         }
-        // Staff Picks, Community Picks and Competitive entries all post from the same
-        // NFL moneyline dropdown, so pull the odds for anyone who can post a pick.
-        if (canPost || canPostCommunityPick) {
+        /* The NFL moneyline slate, and ONLY for someone who can actually post a
+         * Staff Pick — the single remaining composer mode that reads it.
+         *
+         * This used to fire for `canPost || canPostCommunityPick`, and
+         * canPostCommunityPick was true for essentially every member, so every
+         * ordinary member of every League and Arena pulled the whole odds feed
+         * on Feed mount to support a Community Pick replacement that no longer
+         * exists. Staff Picks are Arena-only, hence `isArena` here too. */
+        if (isArena && canPost) {
             dispatch(fetchLiveNFLScheduleRequest(undefined));
         }
-    }, [groupId, groupType, isArena, isLeague, canPost, canPostCommunityPick, isMember, dispatch]);
+    }, [groupId, groupType, isArena, isLeague, canPost, isMember, dispatch]);
 
     // Only surface a delete result for a delete initiated during THIS mount. A
     // delete that resolves after the Feed tab unmounts still sets the store field,
@@ -839,21 +700,6 @@ export const ConnectedStructuredFeed = ({
         dispatch(clearDeleteStaffPickState());
     }, [deleteStaffPickError, deleteStaffPickMessage, dispatch, setToast]);
 
-    // Same one-shot pattern for community-pick deletes.
-    const deleteCommunityRequestedRef = useRef(false);
-
-    useEffect(() => {
-        if (!deleteCommunityRequestedRef.current) return;
-        if (!deleteCommunityPickError && !deleteCommunityPickMessage) return;
-        deleteCommunityRequestedRef.current = false;
-        setToast({
-            id: Date.now(),
-            type: deleteCommunityPickError ? "error" : "success",
-            message: deleteCommunityPickError ?? deleteCommunityPickMessage ?? "",
-            duration: 3000,
-        });
-        dispatch(clearDeleteCommunityPickState());
-    }, [deleteCommunityPickError, deleteCommunityPickMessage, dispatch, setToast]);
 
     // One handler for both post types (the card renders a single Delete button);
     // each branch is single-flight-guarded on its own loadingId.
@@ -889,23 +735,12 @@ export const ConnectedStructuredFeed = ({
                 );
                 return;
             }
-            if (record.kind === "community_pick") {
-                if (deleteCommunityPickLoadingId) return;
-                if (typeof window !== "undefined" && !window.confirm("Delete this community pick?")) {
-                    return;
-                }
-                deleteCommunityRequestedRef.current = true;
-                dispatch(
-                    deleteCommunityPickRequest({ pick_id: record.id, arena_id: groupId, group_type: groupType }),
-                );
-            }
         },
         [
             groupId,
             groupType,
             deleteAnnouncementLoadingId,
             deleteStaffPickLoadingId,
-            deleteCommunityPickLoadingId,
             dispatch,
         ],
     );
@@ -1017,18 +852,6 @@ export const ConnectedStructuredFeed = ({
         | null
     >(null);
 
-    // The replacement composer awaits onReplaceSubmit's promise; hold its resolver
-    // (tagged by pick kind) and settle it from the matching update state. Community
-    // picks are the only replaceable kind here — contest entries are replaced on the
-    // contest page.
-    const pendingReplaceResolve = useRef<
-        | {
-            kind: "community_pick";
-            resolve: (response: StructuredFeedSubmitResponse) => void;
-        }
-        | null
-    >(null);
-
     // Drop any stale transient state left by an orphaned saga from a previous mount:
     // create-state (so it can't settle a same-type promise on this fresh instance)
     // and edit/pin/delete loadingIds (a leftover loadingId would otherwise lock a
@@ -1079,11 +902,12 @@ export const ConnectedStructuredFeed = ({
         }
     }, [createdStaffPick, createStaffPickMessage, createStaffPickError, dispatch]);
 
-    // NOTE: the create-community-pick resolver effect that sat here was removed
-    // with the Pick Post panel on 2026-08-19. `createCommunityPickRequest` is no
-    // longer dispatched from anywhere, so nothing can be awaiting its reply. The
-    // slice and saga still exist and the mount-time `clearCreateCommunityPickState()`
-    // above is kept, so a stale success left by an older build cannot leak in.
+    // NOTE: the community-pick resolver effects that sat here are gone with the
+    // rest of that surface. No community-pick action is dispatched from this
+    // Feed any more, so nothing can be awaiting a reply. The slice and saga are
+    // untouched and the mount-time `clear*CommunityPickState()` calls above are
+    // kept — they are pure reducers, and they stop a stale success or loadingId
+    // left by an older cached bundle from leaking into this instance.
 
     // The Winners strip's read lives HERE rather than in FeedContestWinnersBlock
     // because the block is rendered inside CommunitySwipePager's slide, which is
@@ -1122,28 +946,6 @@ export const ConnectedStructuredFeed = ({
         );
     }, [dispatch, groupId, isLeague]);
 
-    useEffect(() => {
-        const pending = pendingReplaceResolve.current;
-        if (!pending || pending.kind !== "community_pick") return;
-        if (updatedCommunityPick || updateCommunityPickMessage) {
-            pending.resolve({
-                status: "accepted",
-                message: updateCommunityPickMessage ?? "Community pick updated.",
-            });
-            pendingReplaceResolve.current = null;
-            dispatch(clearUpdateCommunityPickState());
-        } else if (updateCommunityPickError) {
-            pending.resolve({ status: "rejected", message: updateCommunityPickError });
-            pendingReplaceResolve.current = null;
-            dispatch(clearUpdateCommunityPickState());
-        }
-    }, [
-        updatedCommunityPick,
-        updateCommunityPickMessage,
-        updateCommunityPickError,
-        dispatch,
-    ]);
-
     const onSubmit = useCallback(
         (submission: StructuredFeedSubmission): Promise<StructuredFeedSubmitResponse> | StructuredFeedSubmitResponse => {
             if (submission.mode === "staff_post") {
@@ -1180,72 +982,18 @@ export const ConnectedStructuredFeed = ({
                     dispatch(createStaffPickRequest({ ...payload, group_type: groupType }));
                 });
             }
-            // A `community_pick` submission has no branch any more — the drawer
-            // cannot produce one, and `canCreateCommunityPick` is false, so the
-            // composer never renders that mode either. It falls through to the
-            // rejection below rather than reaching the create endpoint.
             return { status: "rejected", message: "This post type isn't available yet." };
         },
         [groupId, groupType, detailById, dispatch],
     );
 
-    /*
-     * REMOVED 2026-08-19 — `onSubmitBuiltPicks`, the create-community-pick write.
+    /* Replace went with Community Picks.
      *
-     * It dispatched `createCommunityPickRequest` with the payload the drawer's
-     * Pick Builder produced. The Pick Post panel is gone, so nothing can call it
-     * and the endpoint is no longer reached from the Feed.
-     *
-     * The slice, the saga and `CreateCommunityPickPayload` are all untouched on
-     * purpose: `onReplaceSubmit` below still PUTs an existing community pick, and
-     * the Feed still READS and renders community picks. Only the CREATE path is
-     * withdrawn.
-     */
-
-
-    // Replace = update a community pick by re-picking. The member chooses a new NFL
-    // moneyline in the replacement composer; we rebuild the full pick body and PUT
-    // it. Only community picks are replaceable today.
-    const onReplaceSubmit = useCallback(
-        (
-            record: StructuredFeedRecord,
-            submission: StructuredFeedPickSubmission,
-        ): Promise<StructuredFeedSubmitResponse> | StructuredFeedSubmitResponse => {
-            const detail = detailById[submission.selectionId];
-            if (!detail) {
-                return {
-                    status: "rejected",
-                    message: "That selection is no longer available. Refresh and try again.",
-                };
-            }
-            if (Date.parse(detail.match_date) <= Date.now()) {
-                return {
-                    status: "rejected",
-                    message: "That game has already started. Refresh for the latest slate.",
-                };
-            }
-            if (record.kind === "community_pick") {
-                const changes = buildCommunityPickPayload(detail, groupId, submission.note);
-                return new Promise<StructuredFeedSubmitResponse>((resolve) => {
-                    pendingReplaceResolve.current = { kind: "community_pick", resolve };
-                    dispatch(
-                        updateCommunityPickRequest({
-                            pick_id: record.id,
-                            arena_id: groupId,
-                            group_type: groupType,
-                            changes,
-                        }),
-                    );
-                });
-            }
-            // A competitive_pick is a contest ENTRY, replaced on the contest page
-            // via /group/feed-contest/replace-entry (FeedContestEntryShell), which
-            // swaps the whole combo and re-prices it. There is no single-leg
-            // in-feed replacement any more — see the capabilities note above.
-            return { status: "rejected", message: "This pick can't be replaced." };
-        },
-        [groupId, groupType, detailById, dispatch],
-    );
+     * They were the only replaceable kind: a competitive_pick is a contest
+     * ENTRY, replaced on the contest page via /group/feed-contest/replace-entry
+     * (FeedContestEntryShell), which swaps the whole combo and re-prices it.
+     * With no `onReplaceSubmit` passed, StructuredFeed renders no Replace
+     * affordance and the replacement composer is unreachable. */
 
     return (
         <>
@@ -1258,13 +1006,12 @@ export const ConnectedStructuredFeed = ({
              * for EVERY viewer.
              *
              * The MVP can afford that because it deleted Community Picks and
-             * Staff Picks. Here they are live REST wiring, and
-             * `canCreateStaffPost` is staff-only (:302) while
-             * `canCreateCommunityPick` is not — so routing the header through an
-             * announcement workspace would hand plain members a button they
-             * cannot post from and remove their only entry point to a Community
-             * Pick. The header button already renders the MVP's icon, position
-             * and chrome; only drawer OWNERSHIP stays here, which is not visual.
+             * Staff Picks. Community Picks are gone here too now, but Staff
+             * Picks are still live REST wiring on an Arena, so the drawer still
+             * has more than one mode to offer and cannot collapse to an
+             * announcement-only workspace. The header button already renders the
+             * MVP's icon, position and chrome; only drawer OWNERSHIP stays here,
+             * which is not visual.
              */}
             <StructuredFeed
                 context={context}
@@ -1273,6 +1020,7 @@ export const ConnectedStructuredFeed = ({
                 records={records}
                 selectionOptions={staffPickOptions}
                 standings={standings}
+                standingsAction={standingsAction}
                 // Owns its own read (/list/finalized/podium) rather than taking a
                 // node from the host, because both hosts would build the exact
                 // same one — the Feed already knows the group, the surface and
@@ -1302,10 +1050,8 @@ export const ConnectedStructuredFeed = ({
                 }
                 initialFilter={initialFilter}
                 currentUserId={currentUserId}
-                onReaction={onReaction}
-                getPickReactionSummary={getReactionSummary}
+
                 onSubmit={onSubmit}
-                onReplaceSubmit={onReplaceSubmit}
                 onDelete={onDelete}
                 onEdit={onEdit}
                 onPin={onPin}

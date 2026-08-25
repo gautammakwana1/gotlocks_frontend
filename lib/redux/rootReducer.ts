@@ -24,6 +24,7 @@ import feedContestOddsReducer from "./slices/feedContestOddsSlice";
 import pickemMoneylineReducer from "./slices/pickemMoneylineSlice";
 import tdScorersReducer from "./slices/tdScorersSlice";
 import memberCardReducer from "./slices/memberCardSlice";
+import lifetimeStandingsReducer from "./slices/lifetimeStandingsSlice";
 import venueReducer from "./slices/venueSlice";
 
 const appReducer = combineReducers({
@@ -52,6 +53,7 @@ const appReducer = combineReducers({
 	pickemMoneyline: pickemMoneylineReducer,
 	tdScorers: tdScorersReducer,
 	memberCard: memberCardReducer,
+	lifetimeStandings: lifetimeStandingsReducer,
 	venue: venueReducer,
 });
 

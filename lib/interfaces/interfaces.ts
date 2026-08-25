@@ -2455,6 +2455,89 @@ export type ExportArenaMemberContactsPayload = {
     arena_id: string;
 };
 
+/* ----------------------------------------------------------------------------
+ * GET /group/lifetime-standings — the Feed tab's Standings view.
+ *
+ * ONE endpoint behind all three boards: an Arena's Feed board, a League's Feed
+ * board and a League's Fantasy board are the same query over a different
+ * ledger. `type` defaults BY GROUP TYPE server-side, but this client always
+ * sends it explicitly — `fantasy` on an Arena is a hard 400, not an empty board.
+ *
+ * Note `pagination.totalPages` is camelCase here, unlike the snake_case
+ * `total_pages` most reads on this API use, so PaginationMetadata does not fit.
+ * -------------------------------------------------------------------------- */
+export type LifetimeStandingsType = "feed" | "fantasy";
+
+export type GroupLifetimeStandingRow = {
+    /** Server-assigned and tie-aware. Never re-derive it from the array index. */
+    rank: number;
+    user_id: string;
+    is_own: boolean;
+    member: {
+        id: string;
+        username: string | null;
+        full_name: string | null;
+        profile_image: string | null;
+    };
+    /** group_members vocabulary: commissioner | manager | member. */
+    role: string | null;
+    /** groups.created_by, which is not a role and has no group_members row. */
+    is_owner: boolean;
+    /** SIGNED — a fantasy total is legitimately negative. Never Math.abs it. */
+    points: number;
+    /** Contests this member has banked from. The Arena board's third column. */
+    contest_count: number;
+};
+
+export type GroupLifetimeStandingsData = {
+    group: { id: string; name: string; group_type: string };
+    board: {
+        type: LifetimeStandingsType;
+        title: string;
+        points_label: string;
+        /** What this group may ask for — one entry on an Arena, two on a League. */
+        available_types: LifetimeStandingsType[];
+    };
+    viewer: {
+        role: string | null;
+        /** NULL, not a zeroed row, when the viewer is absent from the board. */
+        standing: GroupLifetimeStandingRow | null;
+    };
+    standings: GroupLifetimeStandingRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+export type GroupLifetimeStandingsPayload = {
+    group_id: string;
+    type?: LifetimeStandingsType;
+    page?: number;
+    limit?: number;
+};
+
+export type LifetimeStandingsBoardSlot = {
+    data: GroupLifetimeStandingsData | null;
+    loading: boolean;
+    error: string | null;
+};
+
+/**
+ * Two slots, because a League holds both boards behind one flip button and
+ * flipping back must not refetch. `groupId` is the tenancy stamp: every other
+ * group-scoped slice in this app has been bitten by a previous group's rows
+ * painting under the next group's name.
+ */
+export type LifetimeStandingsState = {
+    groupId: string | null;
+    feed: LifetimeStandingsBoardSlot;
+    fantasy: LifetimeStandingsBoardSlot;
+};
+
 export type ArenaJoinRequestsData = {
     requests: GroupJoinRequest[];
     join_policy: GroupJoinPolicy | null;
@@ -4317,6 +4400,15 @@ export type FeedContestEntryRow = {
     submitted_at: string;
     updated_at: string;
     pick: FeedContestEntryPick | null;
+    /**
+     * Where this entry finished — the same block `/picks` returns, so one client
+     * model renders a card on either surface. NULL until the contest finalizes.
+     *
+     * A withdrawn or disqualified member is still RANKED (their points were
+     * zeroed, so they sink on their own); `participant_status` is what says so.
+     * A placement here is not a claim that they are still in the field.
+     */
+    standing?: FeedContestPickStanding | null;
 };
 
 export type FeedContestEntriesData = {
@@ -4329,6 +4421,15 @@ export type FeedContestEntriesData = {
         lifecycle_status: ContestLifecycleStatus;
         locks_at: string;
         winning_places: number;
+        /**
+         * Both halves of "has this played out". `lifecycle_status` reads
+         * 'archived' on a contest that finalized weeks ago, so `finalized_at`
+         * is the real test — see isContestFinalized.
+         */
+        is_finalized?: boolean;
+        finalized_at?: string | null;
+        /** The denominator behind every `standing.rank` — "3rd of 12". */
+        final_entry_count?: number | null;
     };
     group: { id: string; name: string; group_type: string };
     viewer: { role: string | null; is_organizer: boolean };
@@ -4379,6 +4480,36 @@ export type FetchFeedContestPicksPayload = {
     limit?: number;
 };
 
+/**
+ * One entry's FINAL placement, joined from `contest_leaderboard`.
+ *
+ * NULL on every contest that has not finalized — nothing writes a rank before
+ * settlement, so this doubles as the "has it played out" test and can never
+ * leak the standing of a field that is still secret.
+ *
+ * RANKED IS NOT AWARDED. Every entrant is ranked, including someone whose
+ * points were zeroed for withdrawing, so `rank: 1` can name a member who won
+ * nothing. `is_awarded` / `achievement` are the medal; `rank` is only the
+ * position.
+ */
+export type FeedContestPickStanding = {
+    rank: number;
+    contest_points: number;
+    correct_picks: number;
+    total_picks: number;
+    is_awarded: boolean;
+    achievement: {
+        id: string;
+        type: string;
+        label: string;
+        placement: number | null;
+        final_score: number | null;
+        contest_template: string | null;
+        context_type: string | null;
+        awarded_at: string | null;
+    } | null;
+};
+
 export type FeedContestPickRow = {
     /** The pick id. */
     id: string;
@@ -4395,12 +4526,23 @@ export type FeedContestPickRow = {
         entry_model: string;
         lifecycle_status: ContestLifecycleStatus;
         locks_at: string;
+        winning_places?: number | null;
+        /**
+         * `lifecycle_status` can read 'archived' on a contest that finalized
+         * weeks ago, so THIS is the "has it played out" test, not the status.
+         */
+        is_finalized?: boolean;
+        finalized_at?: string | null;
+        /** The denominator behind `standing.rank` — "3rd of 12". NULL until final. */
+        final_entry_count?: number | null;
         /** `locks_at` while hidden, null once revealed. */
         reveal_at: string | null;
     } | null;
     submitted_at: string;
     updated_at: string;
     pick: FeedContestEntryPick | null;
+    /** Where this entry finished. NULL until its contest finalizes. */
+    standing?: FeedContestPickStanding | null;
 };
 
 export type FeedContestPicksData = {
@@ -4412,7 +4554,12 @@ export type FeedContestPicksData = {
         user_id: string | null;
         statuses: string[];
     };
-    summary: { revealed_count: number; hidden_count: number };
+    summary: {
+        revealed_count: number;
+        hidden_count: number;
+        /** How many picks on THIS page carry a placement. */
+        ranked_count?: number;
+    };
     picks: FeedContestPickRow[];
     pagination: {
         page: number;
@@ -5359,6 +5506,7 @@ export type RootState = {
     pickemMoneyline: PickemMoneylineState;
     tdScorers: TdScorersState;
     memberCard: MemberCardState;
+    lifetimeStandings: LifetimeStandingsState;
     venue: VenueState;
 };
 

@@ -14,16 +14,7 @@ import {
     getArenaTierLabel,
     hostingMessage,
 } from "./ArenaHostingStatus";
-import type {
-    ArenaHosting,
-    ArenaMembership,
-    ArenaRole,
-    ArenaUnlock,
-    CommunityLeaderboardPeriodKind,
-} from "@/lib/domain/community";
-import { selectArenaPointsLeaderboard } from "@/lib/scoring/context";
 import { formatDateTime } from "@/lib/utils/date";
-import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useToast } from "@/lib/state/ToastContext";
 import InviteCodeCopy from "../group/InviteCodeCopy";
 import { DeleteGroupConfirmationModal } from "../group/ConfirmDeleteGroupModal";
@@ -31,12 +22,10 @@ import GroupNotFoundNotice from "../group/GroupNotFoundNotice";
 import GroupManagerSettings from "../group/GroupManagerSettings";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { ArenaHostingDetails, ArenaHostingStatus, ArenaState, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupJoinRequest, GroupSelector, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
+import { ArenaHostingDetails, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupJoinRequest, GroupSelector, LifetimeStandingsState, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
 import { fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchGroupOwnerPlanDetailsRequest } from "@/lib/redux/slices/groupsSlice";
 import { MANAGER_ROSTER_LIMIT } from "@/lib/redux/sagas/groupsSaga";
 import {
-    activateArenaHostingRequest,
-    cancelArenaPauseRequest,
     clearArenaDeleteState,
     clearArenaHostingActionMessage,
     clearArenaMemberActionMessage,
@@ -44,7 +33,6 @@ import {
     confirmArenaDeleteRequest,
     initiateArenaDeleteRequest,
     leaveArenaRequest,
-    scheduleArenaPauseRequest,
     clearArenaOwnershipTransferMessage,
     clearUnlockArenaMessage,
     fetchArenaGuideStatusRequest,
@@ -62,10 +50,7 @@ import {
     clearArenaJoinRequestActionMessage,
 } from "@/lib/redux/slices/arenaSlice";
 import {
-    getArenaHostingOffer,
     getArenaUnlockOffer,
-    SELF_SERVICE_ARENA_TIERS,
-    type ArenaSelfServiceHostingTier,
 } from "@/components/billing/arena";
 import {
     PurchaseFlowDialog,
@@ -74,7 +59,6 @@ import {
 import { getCombinedContestCapacityLabel, getGroupCapacityLabel } from "@/lib/groups/limits";
 import LeaguePageSkeleton from "../skeletons/leagues/LeaguePageSkeleton";
 import MembersSkeleton from "../skeletons/leagues/MembersSkeleton";
-import { ArenaShellActions } from "./types";
 import { groupPreviewMetaTextClassName } from "../group/GroupPreviewChip";
 import ContestCreationDrawer from "../contests/ContestCreationDrawer";
 import FeedContestDrawerBuilder from "../contests/FeedContestDrawerBuilder";
@@ -98,6 +82,12 @@ import ArenaVenueCheckInPanel from "./checkin/ArenaVenueCheckInPanel";
 import ArenaRewardContactSettings from "./ArenaRewardContactSettings";
 import ArenaJoinPolicySettings from "./ArenaJoinPolicySettings";
 import ArenaMemberContactsPanel from "./ArenaMemberContactsPanel";
+import {
+    filterArenaLifetimeStandings,
+    getLifetimeStandingsBoardMeta,
+    lifetimeStandingRoleChip,
+} from "@/lib/groups/lifetimeStandings";
+import { fetchLifetimeStandingsRequest } from "@/lib/redux/slices/lifetimeStandingsSlice";
 import {
     getMemberDirectoryAvatarClassName,
     getMemberDirectoryCardClassName,
@@ -133,22 +123,10 @@ const ARENA_TABS = [
 type ArenaTabId = (typeof ARENA_TABS)[number]["id"];
 type ArenaTab = (typeof ARENA_TABS)[number];
 
-const LEADERBOARD_PERIODS: Array<{
-    id: CommunityLeaderboardPeriodKind;
-    label: string;
-}> = [
-        { id: "current_week", label: "Week" },
-        { id: "current_month", label: "Month" },
-        { id: "last_30_days", label: "30 days" },
-        { id: "current_nfl_season", label: "NFL season" },
-        { id: "lifetime", label: "Lifetime" },
-    ];
-
 // Mirrors the validateTextField / parseCommunityUrl bounds in updateArenaDetails.
 const ARENA_NAME_MIN = 4;
 const ARENA_NAME_MAX = 25;
 const ARENA_DESCRIPTION_MAX = 50;
-const ARENA_COMMUNITY_URL_MAX = 255;
 
 const TIME_ZONE_OPTIONS = [
     "America/New_York",
@@ -307,13 +285,6 @@ const ArenaTabStrip = ({
     />
 );
 
-const EmptyPanel = ({ title, body }: { title: string; body: string }) => (
-    <div className="rounded-xl border border-dashed border-white/15 bg-black/30 p-6">
-        <p className="font-semibold text-white">{title}</p>
-        <p className="mt-2 text-sm leading-6 text-gray-400">{body}</p>
-    </div>
-);
-
 const ArenaFeedPanel = ({
     arenaId,
     arenaName,
@@ -355,7 +326,7 @@ const ArenaFeedPanel = ({
                 writable={writable}
                 currentUserId={currentUserId}
                 initialFilter={initialFilter}
-                standings={<ArenaLeaderboardPanel />}
+                standings={<ArenaLeaderboardPanel arenaId={arenaId} />}
             />
         </div>
     )
@@ -637,156 +608,168 @@ const ArenaContestsPanel = ({
     );
 };
 
-// ---------------------------------------------------------------------------
-// TEMP: static sample data until the Arena leaderboard endpoint is wired up.
-// One board per period so switching pills exercises every render case:
-//   current_week        — short board (podium only)
-//   current_month       — no rows → EmptyPanel state
-//   last_30_days        — mid-size board, includes an accuracy-less live row
-//   current_nfl_season  — tie on points broken by successful selections
-//   lifetime            — full board with a zero-successful straggler
-// ---------------------------------------------------------------------------
-
-type ArenaLeaderboardSampleRow = {
-    rank: number;
-    userId: string;
-    username: string;
-    points: number;
-    successful: number;
-    accuracy: number | null;
-};
-
-const SAMPLE_ARENA_LEADERBOARD: Record<
-    CommunityLeaderboardPeriodKind,
-    ArenaLeaderboardSampleRow[]
-> = {
-    current_week: [
-        { rank: 1, userId: "sample-user-3", username: "parlay_prophet", points: 180, successful: 6, accuracy: 0.75 },
-        { rank: 2, userId: "sample-user-1", username: "gridiron_gabe", points: 145, successful: 5, accuracy: 0.62 },
-        { rank: 3, userId: "sample-user-7", username: "moneyline_mia", points: 90, successful: 3, accuracy: 0.5 },
-    ],
-    // Intentionally empty — shows the "No ranked results in this period" state.
-    current_month: [],
-    last_30_days: [
-        { rank: 1, userId: "sample-user-1", username: "gridiron_gabe", points: 520, successful: 17, accuracy: 0.68 },
-        { rank: 2, userId: "sample-user-3", username: "parlay_prophet", points: 505, successful: 16, accuracy: 0.71 },
-        { rank: 3, userId: "sample-user-5", username: "underdog_uma", points: 340, successful: 11, accuracy: 0.55 },
-        { rank: 4, userId: "sample-user-2", username: "spread_savant", points: 275, successful: 9, accuracy: null },
-        { rank: 5, userId: "sample-user-7", username: "moneyline_mia", points: 120, successful: 4, accuracy: 0.44 },
-    ],
-    current_nfl_season: [
-        { rank: 1, userId: "sample-user-5", username: "underdog_uma", points: 960, successful: 31, accuracy: 0.64 },
-        // Tie on points — rank order falls back to successful selections.
-        { rank: 2, userId: "sample-user-1", username: "gridiron_gabe", points: 875, successful: 29, accuracy: 0.61 },
-        { rank: 3, userId: "sample-user-3", username: "parlay_prophet", points: 875, successful: 26, accuracy: 0.66 },
-        { rank: 4, userId: "sample-user-4", username: "hail_mary_hank", points: 430, successful: 14, accuracy: 0.48 },
-    ],
-    lifetime: [
-        { rank: 1, userId: "sample-user-3", username: "parlay_prophet", points: 2410, successful: 78, accuracy: 0.69 },
-        { rank: 2, userId: "sample-user-1", username: "gridiron_gabe", points: 2325, successful: 74, accuracy: 0.63 },
-        { rank: 3, userId: "sample-user-5", username: "underdog_uma", points: 1980, successful: 66, accuracy: 0.6 },
-        { rank: 4, userId: "sample-user-2", username: "spread_savant", points: 1440, successful: 47, accuracy: 0.57 },
-        { rank: 5, userId: "sample-user-4", username: "hail_mary_hank", points: 890, successful: 30, accuracy: 0.52 },
-        { rank: 6, userId: "sample-user-7", username: "moneyline_mia", points: 615, successful: 21, accuracy: 0.49 },
-        // Points with no successful settled selections yet (all pushes/voids).
-        { rank: 7, userId: "sample-user-6", username: "rookie_rick", points: 40, successful: 0, accuracy: null },
-    ],
-};
-
-/** Shared by the column header and every row, per the MVP (MVP:392). */
+/** Shared by the column header and every row, per the MVP (MVP:336). */
 const ARENA_STANDINGS_GRID_CLASS_NAME =
     "grid-cols-[3rem_minmax(0,1fr)_auto] sm:grid-cols-[4rem_minmax(0,1fr)_8rem_8rem]";
 
-const ArenaLeaderboardPanel = () => {
-    const [period, setPeriod] = useState<CommunityLeaderboardPeriodKind>("lifetime");
-    const rows = SAMPLE_ARENA_LEADERBOARD[period];
+/* The MVP renders synchronously off mock state, so it has no loading branch and
+ * StandingsCard has no `loading` prop — adding one would break its three other
+ * consumers. The card is therefore mounted EMPTY and the skeleton takes the
+ * `emptyState` slot, which keeps the MVP's DOM order intact: title bar, column
+ * header, then the rows area. Only the row contents differ. */
+const ArenaStandingsSkeleton = () => (
+    <div aria-hidden className="animate-pulse">
+        {Array.from({ length: 5 }).map((_, index) => (
+            <div
+                key={index}
+                className={`grid min-h-[3.3125rem] items-center ${ARENA_STANDINGS_GRID_CLASS_NAME} ${STANDINGS_CARD_STYLES.fullPageRow} lg:px-10`}
+            >
+                <span className="h-3 w-6 rounded bg-amber-200/10" />
+                <span className="flex items-center gap-2.5">
+                    <span className="h-10 w-10 shrink-0 rounded-full bg-amber-200/10" />
+                    <span className="h-3 w-28 rounded bg-amber-200/10" />
+                </span>
+                <span className="hidden justify-self-end sm:block">
+                    <span className="block h-3 w-6 rounded bg-amber-200/10" />
+                </span>
+                <span className="h-3.5 w-12 justify-self-end rounded bg-amber-200/10" />
+            </div>
+        ))}
+    </div>
+);
+
+/**
+ * The Arena's Feed Contest Lifetime Standings, from
+ * GET /group/lifetime-standings?type=feed.
+ *
+ * An Arena has ONE board — `contests` is League-only, so `type=fantasy` here is
+ * a 400 rather than an empty board — which is why this surface has no flip
+ * button and passes no `standingsAction` at its mount site.
+ */
+const ArenaLeaderboardPanel = ({ arenaId }: { arenaId: string }) => {
+    const dispatch = useDispatch();
+    const standingsState = useSelector(
+        (state: RootState) => state.lifetimeStandings
+    ) as LifetimeStandingsState;
+
+    const slot = standingsState.feed;
+    // Only trust rows once the slice is stamped for THIS Arena: the slot is
+    // shared, and a previous group's board must not paint under this name.
+    const isCurrent = standingsState.groupId === arenaId;
+    const data = isCurrent ? slot.data : null;
+
+    useEffect(() => {
+        if (!arenaId) return;
+        // Guarded rather than keyed on mount alone: the Feed remounts this panel
+        // every time the Standings view is re-entered, and the board is already
+        // in the store by then.
+        if (isCurrent && (slot.loading || slot.data)) return;
+        dispatch(
+            fetchLifetimeStandingsRequest({
+                group_id: arenaId,
+                type: "feed",
+                page: 1,
+                limit: 100,
+            })
+        );
+    }, [arenaId, dispatch, isCurrent, slot.loading, slot.data]);
+
+    // Prefer the server's own wording once it has answered; the local copy only
+    // keeps the title bar correct on the very first paint.
+    const board = data?.board ?? getLifetimeStandingsBoardMeta("arena", "feed");
+    const rows = filterArenaLifetimeStandings(data?.standings ?? []);
+    const isLoading = slot.loading && !data;
 
     return (
-        // StructuredFeed bleeds the whole Standings view now (`-mx-5 sm:mx-0`),
-        // and StandingsCard carries its own `px-5 sm:px-4`. The pills and the
-        // eligibility note have to repeat that inset or they run to the edge.
         <div className="space-y-4">
-            <div
-                className="flex gap-2 overflow-x-auto px-5 pb-1 sm:px-4"
-                aria-label="Leaderboard period"
-            >
-                {LEADERBOARD_PERIODS.map((option) => (
-                    <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setPeriod(option.id)}
-                        aria-pressed={period === option.id}
-                        // Violet, not sky: this now renders directly beneath the
-                        // Feed's own filter chips, which StructuredFeed tones
-                        // violet for an arena context.
-                        className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition ${period === option.id
-                            ? "border-violet-300/50 bg-violet-500/15 text-violet-100"
-                            : "border-white/10 text-gray-500 hover:border-white/25 hover:text-gray-200"
-                            }`}
-                    >
-                        {option.label}
-                    </button>
-                ))}
-            </div>
-
-            <p className="px-5 text-xs leading-5 text-gray-500 sm:px-4">
-                Only eligible participating members rank here. Arena owners and managers are excluded.
-            </p>
-
-            {/* The MVP's gold StandingsCard (MVP ArenaDashboard:375-406) in place
-                of the white/10 bordered table. Columns mirror the MVP's except
-                the third, which stays "Successful" — that is the figure these
-                rows actually carry; the MVP's "Contests" has no equivalent here.
-                Rows are NOT wrapped in a member-card Link the way the MVP's are:
-                this board is still static sample data whose user ids resolve to
-                nothing, so a link would be dead. That is exactly why StandingsCard
-                is layout-only and the row is caller-owned. */}
             <StandingsCard
                 rows={rows}
-                getRowKey={(row) => row.userId}
+                getRowKey={(row) => row.user_id}
                 columns={[
                     { key: "rank", label: "Rank" },
                     { key: "member", label: "Member" },
                     {
-                        key: "successful",
-                        label: "Successful",
+                        key: "contests",
+                        label: "Contests",
                         className: "hidden text-right sm:block",
                     },
-                    { key: "points", label: "Arena Points", className: "text-right" },
+                    {
+                        key: "points",
+                        label: board.points_label,
+                        className: "text-right",
+                    },
                 ]}
                 gridClassName={ARENA_STANDINGS_GRID_CLASS_NAME}
-                boardId="arena-feed"
-                leaderboardDataId="arena-feed"
-                scrollDataId="arena-feed"
+                title={board.title}
+                titleId={`arena-${arenaId}-feed-contest-lifetime-standings`}
                 presentation="page"
-                noTitle
+                rootClassName="lg:-mt-px"
+                titleBarClassName="lg:px-10"
+                columnHeaderClassName="lg:px-10"
                 emptyState={
-                    <div className="px-5 py-6 sm:px-4">
-                        <EmptyPanel
-                            title="No ranked results in this period"
-                            body="Eligible settled Arena activity will populate this Community Leaderboard."
-                        />
-                    </div>
+                    isLoading ? (
+                        <ArenaStandingsSkeleton />
+                    ) : isCurrent && slot.error ? (
+                        <div className="px-5 py-6 sm:px-4 lg:px-10">
+                            <p role="alert" className="text-sm leading-6 text-rose-200">
+                                {slot.error}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="px-5 py-6 sm:px-4 lg:px-10">
+                            <p className="font-semibold text-white">No lifetime standings yet</p>
+                            <p className="mt-2 text-sm leading-6 text-gray-400">
+                                Finalized eligible Arena Contest results will populate these standings.
+                            </p>
+                        </div>
+                    )
                 }
-                renderRow={(row) => (
-                    <div
-                        data-lifetime-standing-row
-                        data-lifetime-standing-theme="gold"
-                        className={`grid min-h-[3.3125rem] ${ARENA_STANDINGS_GRID_CLASS_NAME} ${STANDINGS_CARD_STYLES.fullPageRow}`}
-                    >
-                        <StandingRank rank={row.rank} />
-                        <StandingIdentity
-                            displayName={row.username}
-                            handle={row.username}
-                            rank={row.rank}
-                        />
-                        <span className="hidden text-right text-sm text-gray-400 sm:block">
-                            {row.successful}
-                        </span>
-                        <StandingPrimaryMetric value={row.points} />
-                    </div>
-                )}
+                renderRow={(row) => {
+                    const handle = row.member.username ?? "member";
+                    const chipRole = lifetimeStandingRoleChip(row);
+                    return (
+                        <Link
+                            href={`/arena/${arenaId}/members/${row.user_id}`}
+                            aria-label={`View @${handle}'s Arena member card`}
+                            data-lifetime-standing-row
+                            data-lifetime-standing-theme="gold"
+                            className={`grid min-h-[3.3125rem] ${ARENA_STANDINGS_GRID_CLASS_NAME} ${STANDINGS_CARD_STYLES.fullPageRow} lg:px-10`}
+                        >
+                            <StandingRank rank={row.rank} />
+                            <StandingIdentity
+                                avatarUrl={generateProfileImageUrl(
+                                    row.member.profile_image ?? undefined
+                                )}
+                                displayName={row.member.full_name ?? row.member.username ?? handle}
+                                handle={handle}
+                                rank={row.rank}
+                                className="gap-2"
+                            >
+                                {chipRole ? (
+                                    <span
+                                        data-standing-role={chipRole}
+                                        className="shrink-0 text-[10px] font-medium lowercase text-gray-400"
+                                    >
+                                        {chipRole}
+                                    </span>
+                                ) : null}
+                            </StandingIdentity>
+                            <span className="hidden text-right text-sm text-amber-100/45 sm:block">
+                                {row.contest_count}
+                            </span>
+                            <StandingPrimaryMetric value={row.points} />
+                        </Link>
+                    );
+                }}
             />
+
+            <p
+                data-standings-helper
+                className="px-5 text-xs leading-5 text-amber-100/40 sm:px-4"
+            >
+                Lifetime standings include only finalized Arena Contest results. Ordinary
+                posts and pending entries do not add Arena Points.
+            </p>
         </div>
     );
 };

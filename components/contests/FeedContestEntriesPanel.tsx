@@ -1,5 +1,6 @@
 "use client";
 
+import { toPickCardStanding, isContestFinalized } from "@/lib/contests/pickStanding";
 import { formatContestDateTime } from "@/lib/contests/feedContestCatalog";
 import type {
     FeedContestEntriesData,
@@ -439,6 +440,11 @@ export const FeedContestEntriesPanel = ({
     );
 
     const ownRow = entries.entries.find((row) => row.is_own) ?? null;
+
+    /* Has this contest played out — the Pending-vs-Unranked test for the rank
+     * tile. `lifecycle_status` reads 'archived' on a contest that finalized
+     * weeks ago, so the timestamp is what settles it, not the status. */
+    const contestFinalized = isContestFinalized(entries.contest);
     const ownEntry = ownRow?.pick ?? null;
 
     /*
@@ -534,6 +540,11 @@ export const FeedContestEntriesPanel = ({
                                     pickemCorrectBonus={pickemCorrectBonus}
                                     contestName={contestName}
                                     contestHref={contestHref}
+                                    standing={toPickCardStanding({
+                                        standing: ownRow?.standing,
+                                        isRevealed: ownRow?.is_revealed ?? false,
+                                        isFinalized: contestFinalized,
+                                    })}
                                 />
                             </div>
                         </section>
@@ -654,6 +665,11 @@ export const FeedContestEntriesPanel = ({
                                         // viewer's own entry above it read correctly.
                                         contestName={contestName}
                                         contestHref={contestHref}
+                                        standing={toPickCardStanding({
+                                            standing: row.standing,
+                                            isRevealed: row.is_revealed,
+                                            isFinalized: contestFinalized,
+                                        })}
                                     />
                                 ) : (
                                     <EntryStubContent row={row} />

@@ -38,9 +38,11 @@ export type PickCardPresentation =
         contestName: string;
         contextualPointsLabel: "League Points" | "Arena Points";
         /**
-         * Optional here, unlike the MVP: the group Feed's `/picks` read carries
-         * no rank, and an entry that has never been ranked is exactly what
-         * `standing: undefined` means on this surface.
+         * Optional only because not every surface holds a board. The group
+         * Feed's `/picks` read DOES carry one now — each row has a `standing`
+         * joined from contest_leaderboard, NULL until its contest finalizes —
+         * so that surface passes an explicit status rather than omitting this.
+         * Left undefined, the tile reads "Pending".
          */
         standing?: PickCardContestStanding;
         /** Defaults to General Combo when the source cannot say. */

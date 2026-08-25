@@ -15,7 +15,7 @@ import {
 } from "@/components/community/CommunityDetailChrome";
 import { CommunitySwipePager } from "@/components/community/CommunitySwipePager";
 import { displayNameGradientStyle } from "@/lib/styles/text";
-import { Contest, Group, GroupSelector, RootState } from "@/lib/interfaces/interfaces";
+import { Contest, Group, GroupSelector, LifetimeStandingsType, RootState } from "@/lib/interfaces/interfaces";
 import { useToast } from "@/lib/state/ToastContext";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
@@ -412,6 +412,11 @@ const LeagueDashboardPage = () => {
   const [initialFeedFilter] = useState<StructuredFeedFilter>(() =>
     searchParams.get("tab") === "leaderboard" ? "standings" : "updates"
   );
+  // Which lifetime board the Feed Standings view is showing. Component state,
+  // not a URL param — neither repo deep-links a specific board, and the MVP
+  // resets to fantasy on remount too (MVP league page:489).
+  const [activeLifetimeBoard, setActiveLifetimeBoard] =
+    useState<LifetimeStandingsType>("fantasy");
   // The Start-a-contest workspace. Both contest types share ONE affordance: the
   // drawer's Step 1 chooser is what picks between them, so the hub no longer
   // needs a create card per panel.
@@ -1314,7 +1319,32 @@ const LeagueDashboardPage = () => {
           currentUserId={currentUser?.userId}
           className="-mt-3"
           initialFilter={initialFeedFilter}
-          standings={<LeagueFeedStandingsPanel leagueId={leagueId} />}
+          /* The flip between the two lifetime boards. Decided from the group
+             TYPE, not from the response's `board.available_types`: the button
+             lives in the Feed header and renders before any standings request
+             has answered, so keying it on the response would make it pop in.
+             A League always has two boards; an Arena omits this prop entirely.
+
+             The accessible name names the DESTINATION board, so it changes on
+             every press. There is no visible text — the icon is the control. */
+          standingsAction={{
+            ariaLabel:
+              activeLifetimeBoard === "fantasy"
+                ? "Show Feed Contest Lifetime Standings"
+                : "Show Fantasy Contest Lifetime Standings",
+            onClick: () =>
+              setActiveLifetimeBoard((current) =>
+                current === "fantasy" ? "feed" : "fantasy"
+              ),
+          }}
+          standings={
+            <LeagueFeedStandingsPanel
+              leagueId={leagueId}
+              activeBoard={activeLifetimeBoard}
+              onActiveBoardChange={setActiveLifetimeBoard}
+              hasMembers={(group.member_count ?? 0) > 0}
+            />
+          }
         />
       )}
 

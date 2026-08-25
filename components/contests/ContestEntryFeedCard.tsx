@@ -107,9 +107,10 @@ export type ContestEntryFeedCardProps = {
     contestHref?: string;
     contestName?: string;
     /**
-     * The entry's place on the board, when the surface holds one. Absent on the
-     * Feed and in the Entries list, where the read carries no rank — and absent
-     * is exactly what "never ranked" means there, so the tile reads "Pending".
+     * The entry's place on the board, when the surface holds one. The group
+     * Feed now passes one (its `/picks` read joins contest_leaderboard); the
+     * Entries list still does not, and absent is exactly what "never ranked"
+     * means there, so the tile reads "Pending".
      */
     standing?: PickCardContestStanding;
     /** False keeps a settled non-qualifier visible without podium styling. */
