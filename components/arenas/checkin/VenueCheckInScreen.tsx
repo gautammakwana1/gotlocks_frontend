@@ -19,6 +19,7 @@ import {
     clearVenueCheckInVerification,
     redeemVenueAssistCodeRequest,
     resolveVenueCheckInTokenRequest,
+    joinArenaByVenueTokenRequest,
     verifyVenueCheckInRequest,
 } from "@/lib/redux/slices/venueSlice";
 
@@ -26,14 +27,26 @@ import {
  * The QR landing page, ported from the MVP's app/check-in/[token]/page.tsx.
  *
  * Which screen appears is the SERVER's answer, not a ladder of booleans
- * reassembled here: `/check-in/resolve/:token` returns `next_step`, four rungs
- * deep, and each rung is a different screen.
+ * reassembled here: `/check-in/resolve/:token` returns `next_step`, seven rungs
+ * deep, and each rung is a different screen. Two of them turn on the Arena's
+ * `join_policy`, which the scanner has no way to see — re-deriving that ladder
+ * client-side is exactly how the QR door and the invite-code door drift apart.
  *
- *   sign_in          no account yet — the page is readable signed-out, which is
- *                    the whole point of a poster in a restaurant
- *   join_group       signed in, not a member of this Arena
- *   verify_location  a member with no live check-in — the main event
- *   checked_in       already checked in; here is when it runs out
+ *   sign_in                 no account yet — the page is readable signed-out,
+ *                           which is the whole point of a poster in a restaurant
+ *   group_setup_incomplete  the owner never finished Arena setup; nobody may
+ *                           join yet, whoever they are
+ *   join_group              signed in, not a member, policy `automatic`
+ *   request_to_join         signed in, not a member, policy `approval_required`
+ *   join_pending            already asked, waiting on the owner — NOT a member,
+ *                           so check-in is not offered
+ *   verify_location         a member with no live check-in — the main event
+ *   checked_in              already checked in; here is when it runs out
+ *
+ * Joining is NOT checking in. `POST /check-in/join/:token` runs the same
+ * transaction the invite-code endpoint does and leaves a new member on
+ * `verify_location`; the location reading is a separate request, and that
+ * separation is what keeps "I scanned the poster" from meaning "I was there".
  *
  * The verification itself sends what this device's GPS said and NEVER a verdict.
  * Distance, radius, edge allowance, clock and session length are all the
@@ -108,6 +121,8 @@ export const VenueCheckInScreen = ({
         verifyError,
         assistRedeemLoading,
         assistRedeemError,
+        joinLoading,
+        joinError,
     } = useSelector((state: RootState) => state.venue);
 
     const [locating, setLocating] = useState(false);
@@ -183,6 +198,12 @@ export const VenueCheckInScreen = ({
     const arenaName = scoped.group.name;
     const venue = scoped.venue;
     const session = verifySuccess?.session ?? scoped.session;
+    /**
+     * The preview has no `next_step` of its own to read — the owner IS a member,
+     * so resolve answers `verify_location` for them whatever the join policy is.
+     * The policy is read directly here for that reason, and ONLY here.
+     */
+    const previewApprovalRequired = scoped.group.join_policy === "approval_required";
 
     /* ---------- The owner's "Preview customer flow" ----------
      *
@@ -202,7 +223,9 @@ export const VenueCheckInScreen = ({
                         Customer-flow preview
                     </span>
                     <h2 className="mt-5 text-xl font-bold text-white">
-                        Join this Arena and check in
+                        {previewApprovalRequired
+                            ? "Request to join this Arena"
+                            : "Join this Arena and check in"}
                     </h2>
                     <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-5 text-gray-400">
                         This preview does not join an account, request location, create a
@@ -210,7 +233,9 @@ export const VenueCheckInScreen = ({
                     </p>
                     <div className="mt-6 flex flex-wrap gap-2">
                         <span className="inline-flex min-h-11 items-center rounded-xl bg-white px-5 text-sm font-bold text-black">
-                            Join Arena &amp; Check In
+                            {previewApprovalRequired
+                                ? "Request to Join"
+                                : "Join Arena & Check In"}
                         </span>
                         <Link
                             href={`/arena/${scoped.group.id}?tab=settings`}
@@ -266,8 +291,96 @@ export const VenueCheckInScreen = ({
         );
     }
 
-    /* ---------- Rung 2: signed in, not a member ---------- */
-    if (scoped.next_step === "join_group") {
+    /* ---------- Rung 2a: the owner never finished setup ----------
+     *
+     * Not this person's fault and not a permanent refusal — `join_policy` is
+     * NULL, so the Arena refuses EVERYONE by every door until its owner answers
+     * the wizard. Worded as a wait rather than a rejection, and it offers no
+     * action, because there is none the scanner can take. */
+    if (scoped.next_step === "group_setup_incomplete") {
+        return (
+            <CheckInFrame>
+                <VenueHeader
+                    arenaName={arenaName}
+                    venueName={venue.name}
+                    address={venue.display_address}
+                />
+                <div className="px-6 py-8 text-center sm:px-8">
+                    <div
+                        aria-hidden="true"
+                        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-violet-300/25 bg-violet-400/10 text-2xl text-violet-100"
+                    >
+                        &hellip;
+                    </div>
+                    <h2 className="mt-5 text-2xl font-bold text-white">
+                        This Arena is still being set up
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-gray-300">
+                        {arenaName} is not accepting members yet. Ask venue staff to finish
+                        Arena setup, then rescan this QR.
+                    </p>
+                    <Link
+                        href="/arena?view=participating"
+                        className="mt-7 inline-flex min-h-11 items-center rounded-xl border border-white/15 px-5 text-sm font-semibold text-white"
+                    >
+                        Back to Arenas
+                    </Link>
+                </div>
+            </CheckInFrame>
+        );
+    }
+
+    /* ---------- Rung 2b: already asked, waiting on the owner ----------
+     *
+     * NOT a member, so check-in is not offered. Deliberately its own screen
+     * rather than a disabled Join button: the useful thing to say is that the
+     * request exists and who is sitting on it. */
+    if (scoped.next_step === "join_pending") {
+        return (
+            <CheckInFrame>
+                <VenueHeader
+                    arenaName={arenaName}
+                    venueName={venue.name}
+                    address={venue.display_address}
+                />
+                <div className="px-6 py-8 text-center sm:px-8">
+                    <div
+                        aria-hidden="true"
+                        className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-violet-300/25 bg-violet-400/10 text-2xl text-violet-100"
+                    >
+                        &hellip;
+                    </div>
+                    <h2 className="mt-5 text-2xl font-bold text-white">
+                        Your join request is pending
+                    </h2>
+                    <p className="mt-3 text-sm leading-6 text-gray-300">
+                        The Arena owner must approve your request before you can check in at{" "}
+                        {venue.name}.
+                    </p>
+                    <p className="mt-3 text-xs leading-5 text-gray-500">
+                        After approval, reopen or rescan this QR to verify your location.
+                    </p>
+                    <Link
+                        href="/arena?view=participating"
+                        className="mt-7 inline-flex min-h-11 items-center rounded-xl border border-white/15 px-5 text-sm font-semibold text-white"
+                    >
+                        Back to Arenas
+                    </Link>
+                </div>
+            </CheckInFrame>
+        );
+    }
+
+    /* ---------- Rung 2c: signed in, not a member ----------
+     *
+     * One screen for both policies, because the ACTION is the same POST — the
+     * Arena decides whether that lands as a membership or as a request, and the
+     * server's own `next_step` in the reply is what moves the screen on.
+     *
+     * The wording is the only difference, and it matters: "Request to Join"
+     * must not promise entry that an owner has not granted. */
+    if (scoped.next_step === "join_group" || scoped.next_step === "request_to_join") {
+        const approvalRequired = scoped.next_step === "request_to_join";
         return (
             <CheckInFrame>
                 <VenueHeader
@@ -277,30 +390,42 @@ export const VenueCheckInScreen = ({
                 />
                 <div className="px-6 py-7 sm:px-8">
                     <h2 className="text-xl font-bold text-white">
-                        Join this Arena to check in
+                        {approvalRequired
+                            ? "Request to join this Arena"
+                            : "Join this Arena and check in"}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-gray-300">
-                        Checking in is for members of {arenaName}. Joining uses the
-                        Arena&rsquo;s normal membership and capacity rules — it does not enter
-                        you into a contest or accept contest rules.
+                        Checking in is for members of {arenaName}.
                     </p>
-                    {/* TODO(api): the MVP joins straight from the poster
-                        (`joinArenaByVenueToken`). `POST /group/arena/join-arena` takes an
-                        invite CODE, and the resolve response deliberately carries none —
-                        handing one out from a public token page would turn the poster
-                        itself into an invite. Until a join-by-venue-token endpoint
-                        exists, the customer is sent to the Arenas hub with its
-                        join-by-code flow. */}
-                    <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs leading-5 text-gray-400">
-                        Ask venue staff for this Arena&rsquo;s invite code, then join from the
-                        Arenas page and scan again.
+                    <p className="mt-4 text-xs leading-5 text-gray-500">
+                        {approvalRequired
+                            ? "The Arena owner reviews every request. Approval does not enter you into a contest or create an entry."
+                            : "Joining uses the Arena’s normal membership and capacity rules. It does not enter you into a contest or create an entry."}
                     </p>
-                    <Link
-                        href="/arena"
-                        className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-white px-5 text-sm font-bold text-black transition hover:bg-gray-200"
+                    {joinError ? (
+                        <p
+                            role="alert"
+                            className="mt-4 rounded-xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100"
+                        >
+                            {joinError}
+                        </p>
+                    ) : null}
+                    <button
+                        type="button"
+                        disabled={joinLoading}
+                        onClick={() =>
+                            dispatch(joinArenaByVenueTokenRequest({ token: publicToken }))
+                        }
+                        className="mt-6 min-h-11 w-full rounded-xl bg-white px-5 text-sm font-bold text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        Go to Arenas
-                    </Link>
+                        {joinLoading
+                            ? approvalRequired
+                                ? "Sending request…"
+                                : "Joining…"
+                            : approvalRequired
+                                ? "Request to Join"
+                                : "Join Arena & Check In"}
+                    </button>
                 </div>
             </CheckInFrame>
         );

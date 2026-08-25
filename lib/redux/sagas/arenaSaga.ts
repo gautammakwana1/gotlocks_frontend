@@ -75,6 +75,11 @@ import type {
     RespondArenaOwnershipTransferPayload,
     StaffAnnouncement,
     UpdateArenaDetailsPayload,
+    ArenaJoinRequestsData,
+    CompleteArenaSetupPayload,
+    FetchArenaJoinRequestsPayload,
+    RespondArenaJoinRequestPayload,
+    UpdateArenaJoinPolicyPayload,
 } from "@/lib/interfaces/interfaces";
 import {
     fetchArenaGroupsFailure,
@@ -218,24 +223,31 @@ import {
     fetchArenaOwnershipTransferFailure,
     fetchArenaOwnershipTransferRequest,
     fetchArenaOwnershipTransferSuccess,
-    makeArenaManagerFailure,
-    makeArenaManagerRequest,
-    makeArenaManagerSuccess,
     respondArenaOwnershipTransferFailure,
     respondArenaOwnershipTransferRequest,
     respondArenaOwnershipTransferSuccess,
     updateArenaDetailsFailure,
     updateArenaDetailsRequest,
     updateArenaDetailsSuccess,
-    makeArenaMemberFailure,
-    makeArenaMemberRequest,
-    makeArenaMemberSuccess,
     removeArenaMemberFailure,
     removeArenaMemberRequest,
     removeArenaMemberSuccess,
     unlockArenaFailure,
     unlockArenaRequest,
     unlockArenaSuccess,
+    completeArenaSetupRequest,
+    completeArenaSetupSuccess,
+    completeArenaSetupFailure,
+    markArenaSetupComplete,
+    updateArenaJoinPolicyRequest,
+    updateArenaJoinPolicySuccess,
+    updateArenaJoinPolicyFailure,
+    fetchArenaJoinRequestsRequest,
+    fetchArenaJoinRequestsSuccess,
+    fetchArenaJoinRequestsFailure,
+    respondArenaJoinRequestRequest,
+    respondArenaJoinRequestSuccess,
+    respondArenaJoinRequestFailure,
 } from "../slices/arenaSlice";
 import {
     fetchGroupByIdRequest,
@@ -407,6 +419,11 @@ function* handleFetchJoinedArenas(
 // POST /group/arena/join-arena — refuses a League code with 409 + { data: { group_type } }.
 // The status is forwarded because this endpoint distinguishes far more failures than
 // the League one: 402 hosting paused, 403 full/inactive, 410 deleted.
+//
+// 202 vs 200 is the whole of the join-policy contract on this endpoint. An Arena
+// on `approval_required` answers 202 with a `data.group` that looks exactly like
+// a successful join's — reading the body alone would drop somebody into an Arena
+// they are not a member of, so the STATUS is what decides the disposition.
 function* handleJoinArena(action: PayloadAction<InviteCodePayload>): SagaIterator {
     try {
         const response: AxiosResponse<{
@@ -419,6 +436,7 @@ function* handleJoinArena(action: PayloadAction<InviteCodePayload>): SagaIterato
             joinArenaSuccess({
                 message: response.data?.message ?? null,
                 group: response.data?.data?.group ?? null,
+                disposition: response.status === 202 ? "requested" : "joined",
             })
         );
     } catch (error: unknown) {
@@ -1245,13 +1263,18 @@ function* handleDeleteStaffPick(
 }
 
 /**
- * make-manager / make-member / remove-member are the same call with a different
- * path: PUT with { arena_id, user_id }, owner-only, and a message-only body. None
- * of them echo the updated member, so each re-reads the member list (and the group,
- * whose header carries member/manager counts) once the write lands.
+ * remove-member: PUT with { arena_id, user_id }, owner-only, and a message-only
+ * body. It does not echo the updated member, so it re-reads the member list (and
+ * the group, whose header carries member/manager counts) once the write lands.
+ *
+ * make-manager and make-member used to share this shape. Both routes have since
+ * been DELETED server-side: promotion is an invitation now — POST
+ * /group/manager-invitation answers 202 with a pending row and changes nobody's
+ * role — and demotion is DELETE /group/manager, which serves Leagues too. Both
+ * live in groupsSaga.
  */
 const arenaMemberActionSaga = (
-    endpoint: "make-manager" | "make-member" | "remove-member",
+    endpoint: "remove-member",
     onSuccess: ActionCreatorWithOptionalPayload<{ message?: string } | undefined, string>,
     onFailure: ActionCreatorWithPayload<string, string>,
     fallbackError: string
@@ -1274,20 +1297,6 @@ const arenaMemberActionSaga = (
             yield put(onFailure(getErrorMessage(error, fallbackError)));
         }
     };
-
-const handleMakeArenaManager = arenaMemberActionSaga(
-    "make-manager",
-    makeArenaManagerSuccess,
-    makeArenaManagerFailure,
-    "Failed to make this member an Arena manager"
-);
-
-const handleMakeArenaMember = arenaMemberActionSaga(
-    "make-member",
-    makeArenaMemberSuccess,
-    makeArenaMemberFailure,
-    "Failed to move this manager back to member"
-);
 
 const handleRemoveArenaMember = arenaMemberActionSaga(
     "remove-member",
@@ -1614,6 +1623,162 @@ function* handleConfirmArenaDelete(
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * THE POST-PURCHASE SETUP WIZARD — POST /group/arena/complete-setup
+ *
+ * The join policy and the contact email go up TOGETHER, because
+ * `join_policy IS NOT NULL` is the gate the join path reads: an Arena whose
+ * policy landed but whose email did not would open for joining while still
+ * unable to offer a prize. The server refuses to half-land them; this just has
+ * to not split them into two calls.
+ *
+ * The 409 `arena_setup_already_complete` is NOT reported as a failure. It means
+ * setup HAS happened — a double-submit, or a wizard reopened on a finished
+ * Arena — and the only useful response is to let the screen move on.
+ * -------------------------------------------------------------------------- */
+function* handleCompleteArenaSetup(
+    action: PayloadAction<CompleteArenaSetupPayload>
+): SagaIterator {
+    const { arena_id } = action.payload;
+    try {
+        yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/arena/complete-setup`,
+            action.payload
+        );
+        yield put(completeArenaSetupSuccess());
+        // The dashboard gates its owner redirect on the group record's
+        // setup_complete, so the stale copy has to go before the wizard hands
+        // back to /arena/:id — otherwise it bounces straight back here.
+        yield put(fetchGroupByIdRequest({ groupId: arena_id }));
+    } catch (error: unknown) {
+        const status = axios.isAxiosError(error) ? error.response?.status ?? null : null;
+        const code = axios.isAxiosError(error)
+            ? (error.response?.data as { code?: string } | undefined)?.code
+            : undefined;
+        if (status === 409 && code === "arena_setup_already_complete") {
+            yield put(markArenaSetupComplete());
+            yield put(fetchGroupByIdRequest({ groupId: arena_id }));
+            return;
+        }
+        yield put(
+            completeArenaSetupFailure(
+                getErrorMessage(error, "Failed to complete Arena setup")
+            )
+        );
+    }
+}
+
+/**
+ * PUT /group/arena/join-policy — the later edit, from Arena Settings.
+ *
+ * Re-reads the group afterwards for the same reason updateArenaDetails does:
+ * the reply carries the identity columns only, and the dashboard renders the
+ * whole record.
+ */
+function* handleUpdateArenaJoinPolicy(
+    action: PayloadAction<UpdateArenaJoinPolicyPayload>
+): SagaIterator {
+    const { arena_id } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/arena/join-policy`,
+            action.payload
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: { pending_request_count?: number };
+        };
+        yield put(
+            updateArenaJoinPolicySuccess({
+                message: payload?.message,
+                pending_request_count: payload?.data?.pending_request_count,
+            })
+        );
+        yield put(fetchGroupByIdRequest({ groupId: arena_id }));
+    } catch (error: unknown) {
+        yield put(
+            updateArenaJoinPolicyFailure(
+                getErrorMessage(error, "Failed to update Arena join policy")
+            )
+        );
+    }
+}
+
+/** GET /group/arena/join-requests — the owner's queue, oldest first. */
+function* handleFetchArenaJoinRequests(
+    action: PayloadAction<FetchArenaJoinRequestsPayload>
+): SagaIterator {
+    const { arena_id, status, page, limit } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/arena/join-requests`,
+            {
+                params: {
+                    arena_id,
+                    ...(status ? { status } : {}),
+                    ...(page ? { page } : {}),
+                    ...(limit ? { limit } : {}),
+                },
+            }
+        );
+        const payload = response.data as { data?: ArenaJoinRequestsData };
+        if (!payload?.data) {
+            yield put(fetchArenaJoinRequestsFailure("Failed to load Arena join requests"));
+            return;
+        }
+        yield put(fetchArenaJoinRequestsSuccess({ arena_id, data: payload.data }));
+    } catch (error: unknown) {
+        yield put(
+            fetchArenaJoinRequestsFailure(
+                getErrorMessage(error, "Failed to load Arena join requests")
+            )
+        );
+    }
+}
+
+/**
+ * PUT /group/arena/join-requests/respond.
+ *
+ * On an APPROVAL the roster changed, so the members list is re-read as well as
+ * the queue — the approved member has to appear in the directory the owner is
+ * looking at, not on the next mount.
+ */
+function* handleRespondArenaJoinRequest(
+    action: PayloadAction<RespondArenaJoinRequestPayload>
+): SagaIterator {
+    const { arena_id, user_id, accept } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/arena/join-requests/respond`,
+            action.payload
+        );
+        const payload = response.data as { message?: string };
+        yield put(
+            respondArenaJoinRequestSuccess({ user_id, message: payload?.message })
+        );
+        yield put(fetchArenaJoinRequestsRequest({ arena_id }));
+        if (accept) {
+            yield put(
+                fetchGroupMembersByGroupIdRequest({ group_id: arena_id, page: 1, limit: 10 })
+            );
+        }
+    } catch (error: unknown) {
+        yield put(
+            respondArenaJoinRequestFailure(
+                getErrorMessage(error, "Failed to answer this join request")
+            )
+        );
+        // A 403 `full` leaves the request PENDING — the owner said yes and the
+        // room is out of seats. Re-read so the row the reducer would otherwise
+        // have dropped comes back.
+        yield put(fetchArenaJoinRequestsRequest({ arena_id }));
+    }
+}
+
 function* handleUpdateArenaDetails(
     action: PayloadAction<UpdateArenaDetailsPayload>
 ): SagaIterator {
@@ -1867,8 +2032,6 @@ export default function* arenaSaga() {
     yield takeLatest(fetchOpenContestPicksRequest.type, handleFetchOpenContestPicks);
     yield takeLatest(fetchClosedContestPicksRequest.type, handleFetchClosedContestPicks);
     yield takeEvery(deleteStaffPickRequest.type, handleDeleteStaffPick);
-    yield takeLatest(makeArenaManagerRequest.type, handleMakeArenaManager);
-    yield takeLatest(makeArenaMemberRequest.type, handleMakeArenaMember);
     yield takeLatest(removeArenaMemberRequest.type, handleRemoveArenaMember);
     yield takeLatest(
         fetchArenaOwnershipTransferRequest.type,
@@ -1887,6 +2050,15 @@ export default function* arenaSaga() {
         handleCancelArenaOwnershipTransfer
     );
     yield takeLatest(updateArenaDetailsRequest.type, handleUpdateArenaDetails);
+    /* ---- Joining: setup wizard + approval queue ---- */
+    // takeLeading: the wizard's Save is a compare-and-swap server-side, and a
+    // double-tap should not turn the second attempt into a 409 the owner sees.
+    yield takeLeading(completeArenaSetupRequest.type, handleCompleteArenaSetup);
+    yield takeLatest(updateArenaJoinPolicyRequest.type, handleUpdateArenaJoinPolicy);
+    yield takeLatest(fetchArenaJoinRequestsRequest.type, handleFetchArenaJoinRequests);
+    // takeEvery, NOT takeLatest: each Approve/Decline answers a DIFFERENT
+    // request, so a second click on another row must not cancel the first.
+    yield takeEvery(respondArenaJoinRequestRequest.type, handleRespondArenaJoinRequest);
     yield takeLatest(activateArenaHostingRequest.type, handleActivateArenaHosting);
     yield takeLatest(scheduleArenaPauseRequest.type, handleScheduleArenaPause);
     yield takeLatest(cancelArenaPauseRequest.type, handleCancelArenaPause);

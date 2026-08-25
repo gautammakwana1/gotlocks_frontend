@@ -75,7 +75,34 @@ const notificationSlice = createSlice({
         clearAllNotificationFailure: (state, action) => {
             state.loading = false;
             state.error = action.payload;
-        }
+        },
+
+        /**
+         * A manager invitation the invitee just answered from this feed.
+         *
+         * Unlike a follow request — whose verdict is written back onto the
+         * notification row as `request_status` — the manager endpoints leave the
+         * notification untouched, so `metadata.invitation_status` is frozen at
+         * 'pending' from the moment it was created. Patching it here is what
+         * retires the accept/decline buttons on the row that was just answered.
+         *
+         * SESSION-ONLY. A reload re-reads 'pending' from the server and the
+         * buttons come back; pressing them again is answered with a 409 rather
+         * than a second promotion, so this is a cosmetic gap, not a correctness
+         * one. It closes for good when /respond writes the status back.
+         */
+        resolveManagerInvitationNotification: (
+            state,
+            action: PayloadAction<{ invitation_id: string; status: string }>
+        ) => {
+            const { invitation_id, status } = action.payload;
+            if (!invitation_id) return;
+            state.notification = (state.notification ?? []).map((item) => {
+                const metadata = (item.metadata ?? {}) as Record<string, unknown>;
+                if (metadata.invitation_id !== invitation_id) return item;
+                return { ...item, metadata: { ...metadata, invitation_status: status } };
+            });
+        },
     },
 });
 
@@ -91,6 +118,7 @@ export const {
     clearAllNotificationRequest,
     clearAllNotificationSuccess,
     clearAllNotificationFailure,
+    resolveManagerInvitationNotification,
 } = notificationSlice.actions;
 
 export default notificationSlice.reducer;

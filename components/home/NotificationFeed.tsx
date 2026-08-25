@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDateTime } from "@/lib/utils/date";
-import { AppNotification, RootState } from "@/lib/interfaces/interfaces";
+import { AppNotification, GroupSelector, GroupType, RootState } from "@/lib/interfaces/interfaces";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchNotificationListRequest } from "@/lib/redux/slices/notificationSlice";
 import { accpetFollowRequest, clearAccpetFollowMessage, clearDeclineFollowMessage, declineFollowRequest } from "@/lib/redux/slices/authSlice";
+import { clearManagerRespondMessage, respondManagerInvitationRequest } from "@/lib/redux/slices/groupsSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { UserIcon } from "../layout/MainTabBar";
 import Image from "next/image";
@@ -14,7 +15,28 @@ import { generateProfileImageUrl } from "@/lib/utils/helpers";
 
 type NotificationsFeedProps = {
     onOpenProfile: (userId: string) => void;
-    onOpenGroup: (groupId: string) => void;
+    /**
+     * `groupType` is optional and only supplied where the notification actually
+     * carries it (manager invitations put it in metadata). Without it the caller
+     * keeps its League default, which is what every other notification means.
+     */
+    onOpenGroup: (groupId: string, groupType?: GroupType) => void;
+};
+
+/**
+ * The manager-invitation payload, as `notifyManagerInvitationSent` writes it.
+ *
+ * This notification IS the invitee's decision surface — they hold no settings
+ * screen for a role they do not have yet — so `invitation_id` travelling in
+ * metadata is load-bearing, not incidental.
+ */
+type ManagerInvitationMetadata = {
+    invitation_id?: string;
+    invitation_status?: string;
+    group_id?: string;
+    group_type?: GroupType;
+    expires_at?: string | null;
+    decision?: string;
 };
 
 const NotificationsFeed = ({
@@ -31,6 +53,15 @@ const NotificationsFeed = ({
 
     const { notification, loading, hasMore } = useSelector((state: RootState) => state.notifications);
     const { loading: authLoader, message: authMessage, error: authError } = useSelector((state: RootState) => state.user);
+    // The invitee's half of the manager-invitation flow. Its own slot on the
+    // group slice, so the owner's Settings panel — which can be mounted at the
+    // same time as this drawer — does not toast these outcomes as well.
+    const {
+        managerRespondLoading,
+        managerRespondInvitationId,
+        managerRespondError,
+        managerRespondMessage,
+    } = useSelector((state: GroupSelector) => state.group);
 
     const fetchData = useCallback((pageNum: number) => {
         dispatch(fetchNotificationListRequest({ page: pageNum, limit }));
@@ -83,6 +114,39 @@ const NotificationsFeed = ({
 
     }, [authLoader, authMessage, authError, dispatch, setToast]);
 
+    useEffect(() => {
+        if (!managerRespondError && !managerRespondMessage) return;
+        setToast({
+            id: Date.now(),
+            type: managerRespondError ? "error" : "success",
+            message: managerRespondError ?? managerRespondMessage ?? "",
+            duration: 4000,
+        });
+        dispatch(clearManagerRespondMessage());
+    }, [managerRespondError, managerRespondMessage, dispatch, setToast]);
+
+    /**
+     * Accept or decline a manager invitation.
+     *
+     * `group_id` rides along so the saga can re-read the group whose role just
+     * changed — on accept the caller becomes staff, and every staff-gated
+     * control on that community's screen is drawn from `current_user_member`.
+     */
+    const handleManagerInvitationResponse = (
+        meta: ManagerInvitationMetadata,
+        groupId: string | null | undefined,
+        accept: boolean
+    ) => {
+        if (!currentUser || !meta.invitation_id) return;
+        dispatch(
+            respondManagerInvitationRequest({
+                invitation_id: meta.invitation_id,
+                accept,
+                group_id: meta.group_id ?? groupId ?? null,
+            })
+        );
+    };
+
     const handleAccept = (requestId: string, notificationId: string) => {
         if (!currentUser) return;
         if (requestId) {
@@ -116,6 +180,33 @@ const NotificationsFeed = ({
                     notification.type === "follow_request" &&
                     notification.request_status === "pending" &&
                     Boolean(request);
+
+                /* MANAGER INVITATION — the invitee's only decision surface.
+                 *
+                 * `invitation_status` is read from metadata rather than from the
+                 * invitation itself because there is no invitee-scoped read for
+                 * one: GET /group/manager-invitations is the OWNER's list and
+                 * answers 403 here. Answering the invitation patches this value
+                 * locally (resolveManagerInvitationNotification) so the buttons
+                 * retire on the click. */
+                const managerMeta = (notification.metadata ?? {}) as ManagerInvitationMetadata;
+                const isManagerInvitation =
+                    notification.type === "group_manager_invitation" &&
+                    Boolean(managerMeta.invitation_id);
+                const invitationPending =
+                    isManagerInvitation && managerMeta.invitation_status === "pending";
+                const invitationSettled =
+                    isManagerInvitation &&
+                    managerMeta.invitation_status &&
+                    managerMeta.invitation_status !== "pending"
+                        ? managerMeta.invitation_status
+                        : null;
+                const invitationBusy =
+                    managerRespondLoading &&
+                    managerRespondInvitationId === managerMeta.invitation_id;
+                // Suppresses the "open …" shortcut while a decision is waiting,
+                // exactly as a pending follow request does.
+                const responsePending = requestPending || invitationPending;
                 const canOpenActorProfile = Boolean(
                     notification.sender && notification.sender_id !== currentUser?.userId
                 );
@@ -128,11 +219,16 @@ const NotificationsFeed = ({
                     ? notification.message.slice(actorMessagePrefix.length)
                     : notification.message;
 
+                /* `group_type` only travels on the notifications that carry it —
+                 * the manager pair. Everything else keeps the League default,
+                 * which is what those notifications have always meant. */
+                const groupType = managerMeta.group_type;
                 const primaryAction =
                     notification.group_id && notification.type !== "follow_request"
                         ? {
-                            label: "open league",
-                            onClick: () => onOpenGroup(notification.group_id as string),
+                            label: groupType === "arena" ? "open arena" : "open league",
+                            onClick: () =>
+                                onOpenGroup(notification.group_id as string, groupType),
                         }
                         : null;
 
@@ -153,7 +249,7 @@ const NotificationsFeed = ({
                                             onOpenProfile(notification.sender_id);
                                         }
                                     } else if (notification.group_id) {
-                                        onOpenGroup(notification.group_id);
+                                        onOpenGroup(notification.group_id, groupType);
                                     }
                                 }}
                                 disabled={!notification.sender_id && !notification.group_id}
@@ -212,9 +308,14 @@ const NotificationsFeed = ({
                                                     </span>
                                                 )
                                             }
+                                            {invitationSettled && (
+                                                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-white/75">
+                                                    {invitationSettled}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
-                                    {primaryAction && !requestPending ? (
+                                    {primaryAction && !responsePending ? (
                                         <button
                                             type="button"
                                             onClick={primaryAction.onClick}
@@ -237,6 +338,38 @@ const NotificationsFeed = ({
                                             type="button"
                                             onClick={() => handleDecline(notification.follow_request_id as string, notification.id as string)}
                                             className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-white transition hover:border-white/20 hover:bg-white/10"
+                                        >
+                                            decline
+                                        </button>
+                                    </div>
+                                ) : null}
+                                {invitationPending ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={invitationBusy}
+                                            onClick={() =>
+                                                handleManagerInvitationResponse(
+                                                    managerMeta,
+                                                    notification.group_id,
+                                                    true
+                                                )
+                                            }
+                                            className="ui-accent-button rounded-lg px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {invitationBusy ? "working…" : "accept"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={invitationBusy}
+                                            onClick={() =>
+                                                handleManagerInvitationResponse(
+                                                    managerMeta,
+                                                    notification.group_id,
+                                                    false
+                                                )
+                                            }
+                                            className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             decline
                                         </button>

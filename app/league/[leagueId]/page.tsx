@@ -22,6 +22,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { clearConfirmDeleteGroupMessage, clearCreateNewLeaderboardMessage, clearUpdateGroupMessage, confirmDeleteGroupRequest, fetchGroupByIdRequest, fetchGroupOwnerPlanDetailsRequest, fetchLeagueGuideStatusRequest, fetchUnreadCountsByLeagueIdRequest, initialGroupDeleteRequest, leaveGroupRequest, markLeagueGuideViewedRequest, removeGroupMemberRequest, updateGroupMemberRoleRequest, updateGroupRequest } from "@/lib/redux/slices/groupsSlice";
 import LeagueMemberGuideDialog from "@/components/leagues/onboarding/LeagueMemberGuideDialog";
 import ModifyMembers from "@/components/group/ModifyMembers";
+import GroupNotFoundNotice from "@/components/group/GroupNotFoundNotice";
+import GroupManagerSettings from "@/components/group/GroupManagerSettings";
 import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import ScoringModal from "@/components/modals/ScoringModal";
@@ -907,12 +909,12 @@ const LeagueDashboardPage = () => {
     />
   );
 
+  // Settled and empty — usually the commissioner deleted the League while a
+  // member sat on this page. The notice waits a few seconds before leaving,
+  // which doubles as the grace period for a read still in flight: if the record
+  // lands, this unmounts and the redirect is cancelled with it.
   if (!group && !loading) {
-    return (
-      <div className="rounded-3xl border border-white/10 bg-black/60 p-6 text-sm text-gray-400">
-        Group not found. Head back to Home and pick a different crew.
-      </div>
-    );
+    return <GroupNotFoundNotice href="/fantasy" label="Leagues" />;
   }
 
   // `!isLoadedGroup` is what keeps a leftover record from the previously viewed
@@ -1363,6 +1365,24 @@ const LeagueDashboardPage = () => {
               Save details
             </button>
           </section>
+
+          {/* LEAGUE MANAGER — commissioner-only, and specifically the PERMANENT
+              owner: GET /group/manager-invitations gates on groups.created_by,
+              so a transferred commissioner reading this tab is answered 403 and
+              the panel shows that as its own error rather than a broken list.
+              A Free League has no manager seat at all, which the panel turns
+              into the Pro upgrade card. */}
+          {group.created_by === currentUser?.userId ? (
+            <GroupManagerSettings
+              groupId={leagueId}
+              groupType="league"
+              currentUserId={currentUser?.userId}
+              upgradeHref={`/app-settings/plan/league/upgrade?intent=invite-manager&leagueId=${encodeURIComponent(
+                leagueId
+              )}`}
+              className="border-t border-white/10 pt-6"
+            />
+          ) : null}
 
           <section className="space-y-4 border-t border-white/10 pt-6">
             <div>

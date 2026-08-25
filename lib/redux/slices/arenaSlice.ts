@@ -67,6 +67,11 @@ import type {
     RespondArenaOwnershipTransferPayload,
     StaffAnnouncement,
     UpdateArenaDetailsPayload,
+    ArenaJoinRequestsData,
+    CompleteArenaSetupPayload,
+    FetchArenaJoinRequestsPayload,
+    RespondArenaJoinRequestPayload,
+    UpdateArenaJoinPolicyPayload,
 } from "@/lib/interfaces/interfaces";
 
 const initialState: ArenaState = {
@@ -222,6 +227,22 @@ const initialState: ArenaState = {
     joinArenaCrossType: false,
     joinArenaNotFound: false,
     joinedArena: null,
+    joinArenaDisposition: null,
+    setupLoading: false,
+    setupError: null,
+    setupComplete: false,
+    joinPolicyLoading: false,
+    joinPolicyError: null,
+    joinPolicyMessage: null,
+    joinRequests: [],
+    joinRequestsForId: null,
+    joinRequestsLoading: false,
+    joinRequestsError: null,
+    pendingJoinRequestCount: 0,
+    joinRequestActionLoading: false,
+    respondingUserId: null,
+    joinRequestActionError: null,
+    joinRequestActionMessage: null,
     subscription: null,
     subscriptionLoading: false,
     subscriptionError: null,
@@ -408,14 +429,37 @@ const arenaSlice = createSlice({
             state.joinArenaCrossType = false;
             state.joinArenaNotFound = false;
             state.joinedArena = null;
+            state.joinArenaDisposition = null;
         },
+        /**
+         * Serves BOTH the 200 and the 202.
+         *
+         * `disposition` is the whole reason this is not two reducers: an
+         * approval-required Arena answers 202 with a group object that looks
+         * exactly like a successful join's, and a caller that navigated on the
+         * shape alone would drop somebody into an Arena they are not a member
+         * of. The flag is what the caller branches on.
+         */
         joinArenaSuccess: (
             state,
-            action: PayloadAction<{ message?: string | null; group?: JoinedCommunity | null }>
+            action: PayloadAction<{
+                message?: string | null;
+                group?: JoinedCommunity | null;
+                disposition?: "joined" | "requested";
+            }>
         ) => {
+            const disposition = action.payload.disposition ?? "joined";
             state.joinArenaLoading = false;
-            state.joinArenaMessage = action.payload.message ?? "Arena joined successfully.";
-            state.joinedArena = action.payload.group ?? null;
+            state.joinArenaMessage =
+                action.payload.message ??
+                (disposition === "requested"
+                    ? "Join request sent. The Arena owner will review it."
+                    : "Arena joined successfully.");
+            state.joinArenaDisposition = disposition;
+            // A queued request is NOT a membership, so the record that would let
+            // a caller open the Arena is deliberately withheld.
+            state.joinedArena =
+                disposition === "requested" ? null : action.payload.group ?? null;
         },
         joinArenaFailure: (state, action: PayloadAction<JoinCommunityFailurePayload>) => {
             state.joinArenaLoading = false;
@@ -436,6 +480,7 @@ const arenaSlice = createSlice({
             state.joinArenaCrossType = false;
             state.joinArenaNotFound = false;
             state.joinedArena = null;
+            state.joinArenaDisposition = null;
         },
 
         fetchArenaHostingDetailsRequest: (
@@ -1270,14 +1315,14 @@ const arenaSlice = createSlice({
             state.deleteStaffPickMessage = null;
         },
 
-        makeArenaManagerRequest: memberActionPending,
-        makeArenaManagerSuccess: memberActionSuccess,
-        makeArenaManagerFailure: memberActionFailure,
-
-        makeArenaMemberRequest: memberActionPending,
-        makeArenaMemberSuccess: memberActionSuccess,
-        makeArenaMemberFailure: memberActionFailure,
-
+        /* make-manager / make-member are GONE, here and on the server.
+         *
+         * PUT /group/arena/{make-manager,make-member} no longer exist — the
+         * routes and their controllers were deleted once appointing a manager
+         * became an invitation. Do not re-add a client for either: promotion is
+         * POST /group/manager-invitation (202, a PENDING row, nobody's role
+         * moved) and demotion is DELETE /group/manager, both type-agnostic and
+         * both on groupsSlice. `remove-member` is a different act and stays. */
         removeArenaMemberRequest: memberActionPending,
         removeArenaMemberSuccess: memberActionSuccess,
         removeArenaMemberFailure: memberActionFailure,
@@ -1368,6 +1413,149 @@ const arenaSlice = createSlice({
         clearUpdateArenaDetailsMessage: (state) => {
             state.updateError = null;
             state.updateMessage = null;
+        },
+
+        /* ---- The post-purchase setup wizard ---------------------------------
+         *
+         * POST /group/arena/complete-setup writes the join policy and the
+         * contact email as ONE row update. Both are required, and the server
+         * refuses to half-land them, so there is one loading flag and one error
+         * for the pair.
+         * ------------------------------------------------------------------ */
+        completeArenaSetupRequest: (
+            state,
+            action: PayloadAction<CompleteArenaSetupPayload>
+        ) => {
+            void action;
+            state.setupLoading = true;
+            state.setupError = null;
+        },
+        completeArenaSetupSuccess: (state) => {
+            state.setupLoading = false;
+            state.setupError = null;
+            state.setupComplete = true;
+        },
+        completeArenaSetupFailure: (state, action: PayloadAction<string>) => {
+            state.setupLoading = false;
+            state.setupError = action.payload;
+        },
+        /**
+         * Also called for the 409 `arena_setup_already_complete`: setup HAS
+         * happened, so the wizard must move on rather than sit on an error the
+         * owner cannot clear.
+         */
+        markArenaSetupComplete: (state) => {
+            state.setupLoading = false;
+            state.setupError = null;
+            state.setupComplete = true;
+        },
+        clearArenaSetupState: (state) => {
+            state.setupLoading = false;
+            state.setupError = null;
+            state.setupComplete = false;
+        },
+
+        // PUT /group/arena/join-policy — changing the rule later, from Settings.
+        updateArenaJoinPolicyRequest: (
+            state,
+            action: PayloadAction<UpdateArenaJoinPolicyPayload>
+        ) => {
+            void action;
+            state.joinPolicyLoading = true;
+            state.joinPolicyError = null;
+            state.joinPolicyMessage = null;
+        },
+        updateArenaJoinPolicySuccess: (
+            state,
+            action: PayloadAction<{
+                message?: string | null;
+                pending_request_count?: number;
+            }>
+        ) => {
+            state.joinPolicyLoading = false;
+            state.joinPolicyMessage = action.payload.message ?? "Arena join policy saved.";
+            // The reply carries a fresh count; switching to `automatic` does NOT
+            // clear the queue, so this can legitimately stay non-zero.
+            if (typeof action.payload.pending_request_count === "number") {
+                state.pendingJoinRequestCount = action.payload.pending_request_count;
+            }
+        },
+        updateArenaJoinPolicyFailure: (state, action: PayloadAction<string>) => {
+            state.joinPolicyLoading = false;
+            state.joinPolicyError = action.payload;
+        },
+        clearArenaJoinPolicyMessage: (state) => {
+            state.joinPolicyError = null;
+            state.joinPolicyMessage = null;
+        },
+
+        /* ---- The owner's review queue --------------------------------------
+         *
+         * Scoped by `joinRequestsForId` for the same reason the guide is: this
+         * list renders over the Members tab, and the previous Arena's queue
+         * appearing on it is a bug that only shows when navigating between two.
+         * ------------------------------------------------------------------ */
+        fetchArenaJoinRequestsRequest: (
+            state,
+            action: PayloadAction<FetchArenaJoinRequestsPayload>
+        ) => {
+            state.joinRequestsLoading = true;
+            state.joinRequestsError = null;
+            if (state.joinRequestsForId !== action.payload.arena_id) {
+                state.joinRequests = [];
+                state.pendingJoinRequestCount = 0;
+                state.joinRequestsForId = action.payload.arena_id;
+            }
+        },
+        fetchArenaJoinRequestsSuccess: (
+            state,
+            action: PayloadAction<{ arena_id: string; data: ArenaJoinRequestsData }>
+        ) => {
+            state.joinRequestsLoading = false;
+            state.joinRequestsForId = action.payload.arena_id;
+            state.joinRequests = action.payload.data.requests ?? [];
+            state.pendingJoinRequestCount = action.payload.data.pending_request_count ?? 0;
+        },
+        fetchArenaJoinRequestsFailure: (state, action: PayloadAction<string>) => {
+            state.joinRequestsLoading = false;
+            state.joinRequestsError = action.payload;
+        },
+
+        // PUT /group/arena/join-requests/respond.
+        respondArenaJoinRequestRequest: (
+            state,
+            action: PayloadAction<RespondArenaJoinRequestPayload>
+        ) => {
+            state.joinRequestActionLoading = true;
+            state.respondingUserId = action.payload.user_id;
+            state.joinRequestActionError = null;
+            state.joinRequestActionMessage = null;
+        },
+        /**
+         * Drops the answered row from the list here rather than waiting for the
+         * re-read: the saga re-fetches the queue, but the row disappearing on
+         * the click is what makes a queue feel answered.
+         */
+        respondArenaJoinRequestSuccess: (
+            state,
+            action: PayloadAction<{ user_id: string; message?: string | null }>
+        ) => {
+            state.joinRequestActionLoading = false;
+            state.respondingUserId = null;
+            state.joinRequestActionMessage = action.payload.message ?? null;
+            state.joinRequests = state.joinRequests.filter(
+                (request) => request.user_id !== action.payload.user_id
+            );
+            state.pendingJoinRequestCount = Math.max(0, state.pendingJoinRequestCount - 1);
+        },
+        respondArenaJoinRequestFailure: (state, action: PayloadAction<string>) => {
+            state.joinRequestActionLoading = false;
+            state.respondingUserId = null;
+            state.joinRequestActionError = action.payload;
+        },
+        clearArenaJoinRequestActionMessage: (state) => {
+            state.joinRequestActionError = null;
+            state.joinRequestActionMessage = null;
         },
 
         activateArenaHostingRequest: (
@@ -1828,12 +2016,6 @@ export const {
     deleteStaffPickSuccess,
     deleteStaffPickFailure,
     clearDeleteStaffPickState,
-    makeArenaManagerRequest,
-    makeArenaManagerSuccess,
-    makeArenaManagerFailure,
-    makeArenaMemberRequest,
-    makeArenaMemberSuccess,
-    makeArenaMemberFailure,
     removeArenaMemberRequest,
     removeArenaMemberSuccess,
     removeArenaMemberFailure,
@@ -1855,6 +2037,22 @@ export const {
     updateArenaDetailsSuccess,
     updateArenaDetailsFailure,
     clearUpdateArenaDetailsMessage,
+    completeArenaSetupRequest,
+    completeArenaSetupSuccess,
+    completeArenaSetupFailure,
+    markArenaSetupComplete,
+    clearArenaSetupState,
+    updateArenaJoinPolicyRequest,
+    updateArenaJoinPolicySuccess,
+    updateArenaJoinPolicyFailure,
+    clearArenaJoinPolicyMessage,
+    fetchArenaJoinRequestsRequest,
+    fetchArenaJoinRequestsSuccess,
+    fetchArenaJoinRequestsFailure,
+    respondArenaJoinRequestRequest,
+    respondArenaJoinRequestSuccess,
+    respondArenaJoinRequestFailure,
+    clearArenaJoinRequestActionMessage,
     activateArenaHostingRequest,
     activateArenaHostingSuccess,
     activateArenaHostingFailure,

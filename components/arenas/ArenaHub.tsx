@@ -55,6 +55,7 @@ export const ArenaHub = () => {
         joinArenaCrossType,
         joinArenaNotFound,
         joinedArena,
+        joinArenaDisposition,
     } = useSelector((state: ArenaSelector) => state.arena);
 
     const [hostingPage, setHostingPage] = useState(1);
@@ -120,20 +121,43 @@ export const ArenaHub = () => {
         if (!joinArenaMessage || joinHandledRef.current) return;
         joinHandledRef.current = true;
 
+        /* ---------- 200 joined, 202 queued for approval ----------
+         *
+         * An Arena on `approval_required` answers the SAME endpoint with a
+         * group object that looks exactly like a successful join's, so the
+         * disposition — not the payload's shape — is what decides what happens
+         * next. A request is not a membership: there is nothing to navigate to,
+         * and the participating list has not changed, so neither fires.
+         *
+         * The toast carries the server's own wording either way ("Join request
+         * sent. The Arena owner will review it.").
+         */
+        const requested = joinArenaDisposition === "requested";
+
         setToast({
             id: Date.now(),
             type: "success",
             message: joinArenaMessage,
-            duration: 3000,
+            duration: requested ? 4000 : 3000,
         });
         setJoinOpen(false);
 
         const joinedId = joinedArena?.group_id;
         dispatch(clearJoinArenaState());
+        if (requested) return;
+
         dispatch(fetchJoinedArenasRequest({ page: 1, limit: PAGE_SIZE }));
         setParticipatingPage(1);
         if (joinedId) router.push(`/arena/${joinedId}`);
-    }, [dispatch, joinArenaLoading, joinArenaMessage, joinedArena, router, setToast]);
+    }, [
+        dispatch,
+        joinArenaDisposition,
+        joinArenaLoading,
+        joinArenaMessage,
+        joinedArena,
+        router,
+        setToast,
+    ]);
 
     const cards = activeView === "hosting" ? ownedArenas : joinedArenas;
     const listLoading = activeView === "hosting" ? ownedArenasLoading : joinedArenasLoading;

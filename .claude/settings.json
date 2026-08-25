@@ -414,7 +414,17 @@
       "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\"; $out }; $lines = $out -split \"`r?`n\"; $hits = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match 'ContextualMemberCard' }; if \\($hits\\) { $hits | ForEach-Object { $lines[$_..\\([Math]::Min\\($_+5,$lines.Count-1\\)\\)] -join \"`n\" } } else { \"No warnings in ContextualMemberCard.\" })",
       "Bash(awk -F: '$1 > 1290 && $1 < 1700')",
       "Bash(awk -F: '$1 > 1700')",
-      "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\"; $out }; $lines = $out -split \"`r?`n\"; $i = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match '^\\\\./components/arenas/ArenaDashboard' }; if \\($i\\) { $lines[$i[0]..\\([Math]::Min\\($i[0]+30,$lines.Count-1\\)\\)] -join \"`n\" } else { \"No ArenaDashboard warnings.\" })"
+      "PowerShell($out = npx next build 2>&1 | Out-String; if \\($out -match 'Compiled successfully'\\) { \"BUILD OK\" } else { \"BUILD FAILED\"; $out }; $lines = $out -split \"`r?`n\"; $i = 0..\\($lines.Count-1\\) | Where-Object { $lines[$_] -match '^\\\\./components/arenas/ArenaDashboard' }; if \\($i\\) { $lines[$i[0]..\\([Math]::Min\\($i[0]+30,$lines.Count-1\\)\\)] -join \"`n\" } else { \"No ArenaDashboard warnings.\" })",
+      "Bash(/)",
+      "Bash(grep -nE \"\\\\\"/|'/|`/)",
+      "Bash(axios)",
+      "Bash(api\\\\.)",
+      "Bash(API_\" lib/redux/sagas/venueSaga.ts | head -40)",
+      "Bash(/\" lib/redux/sagas/arenaSaga.ts lib/redux/sagas/groupsSaga.ts | head -60)",
+      "Bash(grep -nE \"\\\\\"/|'/|`/\" lib/redux/sagas/arenaSaga.ts lib/redux/sagas/groupsSaga.ts | head -60)",
+      "Bash(grep -oE \"[a-zA-Z0-9_]+\\\\\\)?;?$|[a-zA-Z0-9_]+\\\\\\)\" src/routes/venueRoutes.ts)",
+      "Bash(D=\"C:/Users/pc/.claude/projects/d--Gotlocks-gotlocks-frontend/e7b8f5fa-de50-4404-b61f-63b3e120be90/subagents/workflows/wf_26f506c9-f31\"; until grep -q '\"type\":\"workflow_complete\"\\\\|\"event\":\"complete\"\\\\|synthesize' \"$D/journal.jsonl\" 2>/dev/null; do sleep 5; done; echo \"phase reached\")",
+      "Read(//c/Users/pc/.claude/projects/d--Gotlocks-gotlocks-frontend/e7b8f5fa-de50-4404-b61f-63b3e120be90/subagents/workflows/wf_26f506c9-f31/**)"
     ],
     "additionalDirectories": [
       "D:\\gautam\\gotlocks_backend\\src\\controllers",

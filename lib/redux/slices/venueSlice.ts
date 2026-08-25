@@ -11,6 +11,8 @@ import type {
     ResolveVenueCheckInData,
     RevokeVenueAssistCodePayload,
     ResolveVenueCheckInPayload,
+    JoinArenaByVenueTokenData,
+    JoinArenaByVenueTokenPayload,
     UpdateGroupVenuePayload,
     VenueActivityData,
     VenueCheckInDetailData,
@@ -53,6 +55,9 @@ const initialState: VenueState = {
     resolveLoading: false,
     resolveError: null,
     resolveErrorCode: null,
+    joinLoading: false,
+    joinError: null,
+    joinErrorCode: null,
     verifyLoading: false,
     verifySuccess: null,
     verifyError: null,
@@ -262,6 +267,13 @@ const venueSlice = createSlice({
             state.resolveLoading = true;
             state.resolveError = null;
             state.resolveErrorCode = null;
+            // A fresh resolve supersedes any earlier join attempt, on this token
+            // or another. The screen re-resolves on mount and again after a
+            // sign-in round trip, so without this a failed join keeps reporting
+            // itself over a state the server has since re-answered.
+            state.joinLoading = false;
+            state.joinError = null;
+            state.joinErrorCode = null;
         },
         resolveVenueCheckInTokenSuccess: (
             state,
@@ -280,6 +292,63 @@ const venueSlice = createSlice({
             state.resolveError = action.payload.error;
             state.resolveErrorCode = action.payload.code ?? null;
             state.resolved = null;
+        },
+
+        /* -------------------------------------------------------------------
+         * Walking in and joining — POST /check-in/join/:token.
+         *
+         * The rung `resolve` points at when next_step is `join_group` or
+         * `request_to_join`. Joining is NOT checking in: a success leaves the
+         * member at `verify_location`, so this never touches the verify slots.
+         * ----------------------------------------------------------------- */
+        joinArenaByVenueTokenRequest: (
+            state,
+            action: PayloadAction<JoinArenaByVenueTokenPayload>
+        ) => {
+            void action;
+            state.joinLoading = true;
+            state.joinError = null;
+            state.joinErrorCode = null;
+        },
+        /**
+         * Patches `resolved` in place rather than waiting on a re-read, so the
+         * screen advances on the click.
+         *
+         * ONLY the two fields the server actually just settled are written:
+         * `next_step` — which is the server's own answer, never re-derived here,
+         * because the ladder is seven rungs deep and two of them turn on a join
+         * policy the scanner cannot see — and `is_member`. The request row is
+         * deliberately NOT synthesised: the reply carries no `requested_at`, and
+         * inventing one would put a fabricated timestamp in the store to spare a
+         * re-read that nothing currently needs.
+         */
+        joinArenaByVenueTokenSuccess: (
+            state,
+            action: PayloadAction<JoinArenaByVenueTokenData>
+        ) => {
+            state.joinLoading = false;
+            state.joinError = null;
+            state.joinErrorCode = null;
+            const joined = action.payload.status === "member";
+            if (state.resolved) {
+                state.resolved = {
+                    ...state.resolved,
+                    viewer: {
+                        ...state.resolved.viewer,
+                        is_member: joined,
+                        role: joined ? state.resolved.viewer.role ?? "member" : null,
+                    },
+                    next_step: action.payload.next_step,
+                };
+            }
+        },
+        joinArenaByVenueTokenFailure: (
+            state,
+            action: PayloadAction<{ error: string; code?: string | null }>
+        ) => {
+            state.joinLoading = false;
+            state.joinError = action.payload.error;
+            state.joinErrorCode = action.payload.code ?? null;
         },
 
         verifyVenueCheckInRequest: (
@@ -465,6 +534,9 @@ export const {
     resolveVenueCheckInTokenRequest,
     resolveVenueCheckInTokenSuccess,
     resolveVenueCheckInTokenFailure,
+    joinArenaByVenueTokenRequest,
+    joinArenaByVenueTokenSuccess,
+    joinArenaByVenueTokenFailure,
     verifyVenueCheckInRequest,
     verifyVenueCheckInSuccess,
     verifyVenueCheckInFailure,

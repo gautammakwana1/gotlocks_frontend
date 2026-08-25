@@ -86,16 +86,41 @@ const ArenaCheckoutReturn = ({ arenaId }: ArenaCheckoutReturnProps) => {
     if (!sessionId || !checkoutStatus) return null;
     if (checkoutArenaId && checkoutArenaId !== arenaId) return null;
 
+    /* ---------- Paid, and NOT yet usable ----------
+     *
+     * The MVP's post-purchase copy, moved here because this repo takes the money
+     * through Stripe: the moment the MVP calls "Arena purchased" is the return
+     * from Checkout, not the create form's success screen.
+     *
+     * A newly bought Arena lands with `join_policy` NULL, which means NOBODY can
+     * join it by any door — so "your Arena is live" would be a lie and the
+     * invite code beside it would admit no one. The banner says what is actually
+     * outstanding and hands over to the wizard.
+     *
+     * The Arena page redirects the owner to /setup on its own; this exists so
+     * the $50 is visibly acknowledged first rather than being skipped past by a
+     * redirect the owner never saw. ArenaDashboard suppresses that redirect
+     * while this banner is up.
+     */
     if (checkoutStatus === "complete") {
         return (
             <div
                 role="status"
                 className="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
             >
-                <p className="font-semibold">Payment received — your Arena is live.</p>
+                <p className="font-semibold">Payment received — finish your Arena setup.</p>
                 <p className="mt-0.5 text-emerald-100/80">
-                    Your first month is included. We&apos;ll email a receipt.
+                    Your Arena is permanently unlocked and its included month of hosting is
+                    active. Choose how members join and add a contact email before sharing
+                    the invite code.
                 </p>
+                <button
+                    type="button"
+                    onClick={() => router.push(`/arena/${arenaId}/setup`)}
+                    className="mt-3 min-h-11 rounded-xl border border-emerald-300/40 bg-emerald-500/20 px-5 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-500/30"
+                >
+                    Set up Arena
+                </button>
             </div>
         );
     }

@@ -1,8 +1,9 @@
-import { call, put, takeLatest, takeLeading } from "redux-saga/effects";
+import { call, put, select, takeLatest, takeLeading } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
-import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure, fetchLeagueGuideStatusRequest, fetchLeagueGuideStatusSuccess, fetchLeagueGuideStatusFailure, markLeagueGuideViewedRequest, markLeagueGuideViewedSuccess, markLeagueGuideViewedFailure, fetchFantasyPodiumsRequest, fetchFantasyPodiumsSuccess, fetchFantasyPodiumsFailure } from "../slices/groupsSlice";
+import { confirmDeleteGroupFailure, confirmDeleteGroupRequest, confirmDeleteGroupSuccess, createGroupFailure, createGroupRequest, createGroupSuccess, createNewLeaderboardFailure, createNewLeaderboardRequest, createNewLeaderboardSuccess, enableSecondaryLeaderboardFailure, enableSecondaryLeaderboardRequest, enableSecondaryLeaderboardSuccess, fetchAllGroupFailure, fetchAllGroupsRequest, fetchAllGroupsSuccess, fetchAllLeaderboardsFailure, fetchAllLeaderboardsRequest, fetchAllLeaderboardsSuccess, fetchArchivedLeaderboardByIdFailure, fetchArchivedLeaderboardByIdRequest, fetchArchivedLeaderboardByIdSuccess, fetchArchivedLeaderboardListFailure, fetchArchivedLeaderboardListRequest, fetchArchivedLeaderboardListSuccess, fetchGroupByIdFailure, fetchGroupByIdRequest, fetchGroupByIdSuccess, fetchGroupChatsByGroupIdFailure, fetchGroupChatsByGroupIdRequest, fetchGroupChatsByGroupIdSuccess, loadOlderGroupChatsRequest, loadOlderGroupChatsSuccess, loadOlderGroupChatsFailure, fetchGroupMembersByGroupIdFailure, fetchGroupMembersByGroupIdRequest, fetchGroupMembersByGroupIdSuccess, fetchGroupSummaryFailure, fetchGroupSummaryRequest, fetchGroupSummarySuccess, fetchLeaderboardFailure, fetchLeaderboardRequest, fetchLeaderboardSuccess, fetchMyGroupFailure, fetchMyGroupsRequest, fetchMyGroupsSuccess, initialGroupDeleteFailure, initialGroupDeleteRequest, initialGroupDeleteSuccess, joinedGroupByInviteCodeFailure, joinedGroupByInviteCodeRequest, joinedGroupByInviteCodeSuccess, leaveGroupFailure, leaveGroupRequest, leaveGroupSuccess, removeGroupMemberFailure, removeGroupMemberRequest, removeGroupMemberSuccess, sendMessageFailure, sendMessageRequest, sendMessageSuccess, updateGroupFailure, updateGroupMemberRoleFailure, updateGroupMemberRoleRequest, updateGroupMemberRoleSuccess, updateGroupRequest, updateGroupSuccess, updateLeaderboardFailure, updateLeaderboardRequest, updateLeaderboardSuccess, updateLeaderboardToArchivedFailure, updateLeaderboardToArchivedRequest, updateLeaderboardToArchivedSuccess, deleteMessageByIdSuccess, deleteMessageByIdFailure, deleteMessageByIdRequest, markGroupChatsReadSuccess, markGroupChatsReadFailure, markGroupChatsReadRequest, fetchUnreadCountsByLeagueIdSuccess, fetchUnreadCountsByLeagueIdFailure, fetchUnreadCountsByLeagueIdRequest, fetchOwnGroupsCountsSuccess, fetchOwnGroupsCountsFailure, fetchOwnGroupsCountsRequest, fetchGroupOwnerPlanDetailsSuccess, fetchGroupOwnerPlanDetailsFailure, fetchGroupOwnerPlanDetailsRequest, fetchOwnedLeaguesRequest, fetchOwnedLeaguesSuccess, fetchOwnedLeaguesFailure, fetchJoinedLeaguesRequest, fetchJoinedLeaguesSuccess, fetchJoinedLeaguesFailure, joinLeagueRequest, joinLeagueSuccess, joinLeagueFailure, fetchLeagueGuideStatusRequest, fetchLeagueGuideStatusSuccess, fetchLeagueGuideStatusFailure, markLeagueGuideViewedRequest, markLeagueGuideViewedSuccess, markLeagueGuideViewedFailure, fetchFantasyPodiumsRequest, fetchFantasyPodiumsSuccess, fetchFantasyPodiumsFailure, fetchManagerInvitationsRequest, fetchManagerInvitationsSuccess, fetchManagerInvitationsFailure, sendManagerInvitationRequest, cancelManagerInvitationRequest, respondManagerInvitationRequest, removeGroupManagerRequest, managerActionSuccess, managerActionFailure, managerRespondSuccess, managerRespondFailure } from "../slices/groupsSlice";
 import axiosInstance from "@/lib/utils/axiosInstance";
+import { resolveManagerInvitationNotification } from "../slices/notificationSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type {
@@ -45,10 +46,28 @@ import type {
 	MarkLeagueGuideViewedPayload,
 	MarkLeagueGuideViewedData,
 	FantasyContestPodiumData,
+	FetchManagerInvitationsPayload,
+	ManagerInvitationsData,
+	SendManagerInvitationPayload,
+	CancelManagerInvitationPayload,
+	RespondManagerInvitationPayload,
+	RemoveGroupManagerPayload,
 } from "@/lib/interfaces/interfaces";
 
 /** Small first page: the strip sits above the Feed, it is not the results page. */
 export const FANTASY_PODIUM_PAGE_SIZE = 5;
+
+/**
+ * The manager panel's roster page — the server's maximum for
+ * GET /group/members/:group_id.
+ *
+ * Deliberately the largest page the endpoint allows, not the 10-12 the Members
+ * tabs use. This roster IS the candidate list for a manager invitation, and a
+ * page-1 window would silently hide everyone below it from an owner who has no
+ * way to tell the difference between "not a candidate" and "not on this page".
+ * Widening it further needs a search param on that endpoint.
+ */
+export const MANAGER_ROSTER_LIMIT = 50;
 
 type ApiErrorResponse = {
 	message?: string;
@@ -769,6 +788,210 @@ function* handleMarkLeagueGuideViewed(
 	}
 }
 
+/* ============================================================================
+ * MANAGER INVITATIONS — ONE surface for Leagues and Arenas.
+ *
+ * Five endpoints on the type-agnostic /group/* path. `group_type` is NEVER sent
+ * and never branched on here: a League manager and an Arena manager are the same
+ * group_members row, and the only question with a per-type answer — how many
+ * seats the group has — is answered server-side by group_manager_seat_status()
+ * and arrives in the `seats` block.
+ *
+ * The four writes all re-read the list rather than patching it. Each of them
+ * moves the seat counts as well as a row, and the panel's badge and its disabled
+ * Invite button are drawn from those counts; patching one without the other is
+ * how a full Arena ends up offering a seat it does not have.
+ * ========================================================================== */
+
+const MANAGER_INVITATION_URL = `${API_BASE_URL}/group/manager-invitation`;
+
+/**
+ * GET /group/manager-invitations — PERMANENT OWNER ONLY (403 otherwise), so
+ * only mount the panel that dispatches this for `created_by`.
+ *
+ * Defaults to pending, newest first. The response carries `seats` and
+ * `can_invite` alongside the rows, which is the whole reason the panel needs no
+ * second call to render "1 of 2 managers, 1 invitation pending".
+ */
+function* handleFetchManagerInvitations(
+	action: PayloadAction<FetchManagerInvitationsPayload>
+): SagaIterator {
+	const { group_id, status = "pending", page = 1, limit = 20 } = action.payload;
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.get,
+			`${API_BASE_URL}/group/manager-invitations`,
+			{ params: { group_id, status, page, limit } }
+		);
+		const payload = response.data as { data?: ManagerInvitationsData };
+		// Missing seats is a FAILURE, not an empty success: every gate the panel
+		// draws is read off that block, and treating its absence as "no seats"
+		// would tell a Pro League owner they cannot invite anyone.
+		if (!payload?.data?.seats) {
+			yield put(fetchManagerInvitationsFailure("Failed to load manager invitations"));
+			return;
+		}
+		yield put(
+			fetchManagerInvitationsSuccess({ group_id, data: payload.data })
+		);
+	} catch (error: unknown) {
+		yield put(
+			fetchManagerInvitationsFailure(
+				getErrorMessage(error, "Failed to load manager invitations")
+			)
+		);
+	}
+}
+
+/**
+ * POST /group/manager-invitation — answers 202, NOT 200.
+ *
+ * The invitation was created; the manager was not. Nothing about the invitee's
+ * role changes until they accept, so nothing here re-reads the member list —
+ * the roster is unchanged and a refresh would only make it look like something
+ * happened to it.
+ */
+function* handleSendManagerInvitation(
+	action: PayloadAction<SendManagerInvitationPayload>
+): SagaIterator {
+	const { group_id, user_id } = action.payload;
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.post,
+			MANAGER_INVITATION_URL,
+			{ group_id, user_id }
+		);
+		const payload = response.data as { message?: string };
+		yield put(managerActionSuccess({ message: payload?.message }));
+		yield put(fetchManagerInvitationsRequest({ group_id }));
+	} catch (error: unknown) {
+		yield put(
+			managerActionFailure(
+				getErrorMessage(error, "Failed to send the manager invitation")
+			)
+		);
+	}
+}
+
+/** PUT /group/manager-invitation/cancel — the owner withdrawing an unanswered offer. */
+function* handleCancelManagerInvitation(
+	action: PayloadAction<CancelManagerInvitationPayload>
+): SagaIterator {
+	const { group_id, invitation_id } = action.payload;
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.put,
+			`${MANAGER_INVITATION_URL}/cancel`,
+			{ invitation_id }
+		);
+		const payload = response.data as { message?: string };
+		yield put(managerActionSuccess({ message: payload?.message }));
+		yield put(fetchManagerInvitationsRequest({ group_id }));
+	} catch (error: unknown) {
+		yield put(
+			managerActionFailure(
+				getErrorMessage(error, "Failed to cancel the manager invitation")
+			)
+		);
+	}
+}
+
+/**
+ * PUT /group/manager-invitation/respond — THE INVITEE ONLY, from Notifications.
+ *
+ * Does NOT re-read the invitation list: the caller is not the owner and would be
+ * answered 403 for it. What it does re-read, on accept, is the GROUP — the
+ * caller's own role just became 'manager', and every staff-gated control on the
+ * community screen is drawn from `current_user_member.role`.
+ *
+ * The notification is patched locally because the server does not write the
+ * verdict back onto it; see resolveManagerInvitationNotification.
+ */
+function* handleRespondManagerInvitation(
+	action: PayloadAction<RespondManagerInvitationPayload>
+): SagaIterator {
+	const { invitation_id, accept, group_id } = action.payload;
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.put,
+			`${MANAGER_INVITATION_URL}/respond`,
+			{ invitation_id, accept }
+		);
+		const payload = response.data as {
+			message?: string;
+			data?: { status?: string; group?: { id?: string } };
+		};
+		yield put(managerRespondSuccess({ message: payload?.message }));
+		yield put(
+			resolveManagerInvitationNotification({
+				invitation_id,
+				status: payload?.data?.status ?? (accept ? "accepted" : "declined"),
+			})
+		);
+		/* Re-read the group ONLY if it is the one already on screen.
+		 *
+		 * This is dispatched from the notifications drawer, which is mounted on
+		 * every page — so the accepted community is usually NOT the one the user
+		 * is looking at. `state.group.group` is single-tenant and
+		 * fetchGroupByIdRequest NULLS it when a different id is asked for, so an
+		 * unguarded re-read here would blank whichever League or Arena page the
+		 * invitee happens to be standing on. Any other screen picks up the new
+		 * role from its own mount fetch. */
+		const acceptedGroupId = payload?.data?.group?.id ?? group_id;
+		const loadedGroupId: string | undefined = yield select(
+			(state: { group?: { group?: { id?: string } } }) => state.group?.group?.id
+		);
+		if (accept && acceptedGroupId && loadedGroupId === acceptedGroupId) {
+			yield put(fetchGroupByIdRequest({ groupId: acceptedGroupId }));
+		}
+	} catch (error: unknown) {
+		yield put(
+			managerRespondFailure(
+				getErrorMessage(
+					error,
+					accept
+						? "Failed to accept the manager invitation"
+						: "Failed to decline the manager invitation"
+				)
+			)
+		);
+	}
+}
+
+/**
+ * DELETE /group/manager — stand an accepted manager back down to member.
+ *
+ * Sent as query params, matching remove-member and leave-group: the endpoint
+ * reads either, and a DELETE body is the one shape this client never uses.
+ *
+ * Re-reads the roster and the group as well as the invitations, because this is
+ * the one manager write that DOES move a member's role — and the group header
+ * prints member/manager counts derived from it.
+ */
+function* handleRemoveGroupManager(
+	action: PayloadAction<RemoveGroupManagerPayload>
+): SagaIterator {
+	const { group_id, user_id } = action.payload;
+	try {
+		const response: AxiosResponse<unknown> = yield call(
+			axiosInstance.delete,
+			`${API_BASE_URL}/group/manager`,
+			{ params: { group_id, user_id } }
+		);
+		const payload = response.data as { message?: string };
+		yield put(managerActionSuccess({ message: payload?.message }));
+		yield put(fetchManagerInvitationsRequest({ group_id }));
+		yield put(
+			fetchGroupMembersByGroupIdRequest({ group_id, page: 1, limit: MANAGER_ROSTER_LIMIT })
+		);
+		yield put(fetchGroupByIdRequest({ groupId: group_id }));
+	} catch (error: unknown) {
+		yield put(
+			managerActionFailure(getErrorMessage(error, "Failed to remove the manager"))
+		);
+	}
+}
+
 export default function* groupSaga() {
 	// takeLeading, not takeLatest: takeLatest cancels the first saga, but its POST is
 	// already on the wire and the server has already committed the group (and, for an
@@ -812,4 +1035,13 @@ export default function* groupSaga() {
 	yield takeLatest(fetchGroupOwnerPlanDetailsRequest.type, handleFetchGroupOwnerPlanDetails);
 	yield takeLatest(fetchLeagueGuideStatusRequest.type, handleFetchLeagueGuideStatus);
 	yield takeLatest(markLeagueGuideViewedRequest.type, handleMarkLeagueGuideViewed);
+	yield takeLatest(fetchManagerInvitationsRequest.type, handleFetchManagerInvitations);
+	/* takeLeading on the four writes, not takeLatest. Cancelling the first saga
+	 * does not recall its request: the invitation is already created (or the
+	 * manager already stood down) and the second one comes back 409 — an error
+	 * toast for a write that actually succeeded. */
+	yield takeLeading(sendManagerInvitationRequest.type, handleSendManagerInvitation);
+	yield takeLeading(cancelManagerInvitationRequest.type, handleCancelManagerInvitation);
+	yield takeLeading(respondManagerInvitationRequest.type, handleRespondManagerInvitation);
+	yield takeLeading(removeGroupManagerRequest.type, handleRemoveGroupManager);
 };

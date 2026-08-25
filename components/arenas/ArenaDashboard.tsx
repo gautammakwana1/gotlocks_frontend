@@ -27,10 +27,13 @@ import { getProfilePath } from "@/lib/utils/profileNavigation";
 import { useToast } from "@/lib/state/ToastContext";
 import InviteCodeCopy from "../group/InviteCodeCopy";
 import { DeleteGroupConfirmationModal } from "../group/ConfirmDeleteGroupModal";
+import GroupNotFoundNotice from "../group/GroupNotFoundNotice";
+import GroupManagerSettings from "../group/GroupManagerSettings";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
-import { ArenaHostingDetails, ArenaHostingStatus, ArenaState, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupSelector, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
+import { ArenaHostingDetails, ArenaHostingStatus, ArenaState, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupJoinRequest, GroupSelector, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
 import { fetchGroupByIdRequest, fetchGroupMembersByGroupIdRequest, fetchGroupOwnerPlanDetailsRequest } from "@/lib/redux/slices/groupsSlice";
+import { MANAGER_ROSTER_LIMIT } from "@/lib/redux/sagas/groupsSaga";
 import {
     activateArenaHostingRequest,
     cancelArenaPauseRequest,
@@ -48,12 +51,15 @@ import {
     markArenaGuideViewedRequest,
     fetchArenaHostingDetailsRequest,
     fetchArenaOwnershipTransferRequest,
-    makeArenaManagerRequest,
-    makeArenaMemberRequest,
     removeArenaMemberRequest,
     unlockArenaRequest,
     updateArenaDetailsRequest,
     clearUpdateArenaDetailsMessage,
+    updateArenaJoinPolicyRequest,
+    clearArenaJoinPolicyMessage,
+    fetchArenaJoinRequestsRequest,
+    respondArenaJoinRequestRequest,
+    clearArenaJoinRequestActionMessage,
 } from "@/lib/redux/slices/arenaSlice";
 import {
     getArenaHostingOffer,
@@ -90,6 +96,7 @@ import type { StructuredFeedFilter } from "../feed/types";
 import ArenaMemberWelcomeDialog from "./onboarding/ArenaMemberWelcomeDialog";
 import ArenaVenueCheckInPanel from "./checkin/ArenaVenueCheckInPanel";
 import ArenaRewardContactSettings from "./ArenaRewardContactSettings";
+import ArenaJoinPolicySettings from "./ArenaJoinPolicySettings";
 import {
     getMemberDirectoryAvatarClassName,
     getMemberDirectoryCardClassName,
@@ -859,12 +866,116 @@ const MEMBER_ACTION_COPY: Record<
     },
 };
 
+/* ----------------------------------------------------------------------------
+ * THE OWNER'S REVIEW QUEUE — ported from the MVP's join-requests section of
+ * components/arenas/ArenaDashboard.tsx.
+ *
+ * Sits ABOVE the directory in the Members tab, and only for the permanent
+ * owner: `PUT /group/arena/join-requests/respond` answers 403 for a manager,
+ * and `GET /group/arena/join-requests` — where `pending_request_count` comes
+ * from — withholds it from one too. A manager shown a queue they cannot clear
+ * is worse than not showing it.
+ *
+ * Rendered only when there is something waiting. An Arena on `automatic` never
+ * fills this, and one that has just been switched to `automatic` still can:
+ * the queue is not amnestied by the policy change.
+ * -------------------------------------------------------------------------- */
+const ArenaJoinRequestsSection = ({
+    arenaId,
+    requests,
+    canReview,
+    writable,
+    respondingUserId,
+    onRespond,
+}: {
+    arenaId: string;
+    requests: GroupJoinRequest[];
+    canReview: boolean;
+    writable: boolean;
+    respondingUserId: string | null;
+    onRespond: (userId: string, accept: boolean) => void;
+}) => {
+    if (requests.length === 0) return null;
+
+    return (
+        <section
+            aria-labelledby={`arena-${arenaId}-join-requests`}
+            className="space-y-3 rounded-2xl border border-violet-300/20 bg-violet-500/[0.06] p-4"
+        >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2
+                        id={`arena-${arenaId}-join-requests`}
+                        className="text-sm font-semibold text-white"
+                    >
+                        Join requests
+                    </h2>
+                    <p className="mt-1 text-xs normal-case leading-5 text-gray-400">
+                        Approve or decline people waiting to enter this Arena.
+                    </p>
+                </div>
+                <span className="rounded-full border border-violet-300/20 px-2.5 py-1 text-[10px] font-semibold text-violet-100">
+                    {requests.length} pending
+                </span>
+            </div>
+
+            <ul className="divide-y divide-white/10 border-y border-white/10">
+                {requests.map((request) => {
+                    const handle = request.profiles?.username ?? request.user_id;
+                    const busy = respondingUserId === request.user_id;
+                    return (
+                        <li
+                            key={request.id}
+                            className="flex min-h-16 flex-wrap items-center justify-between gap-3 py-3"
+                        >
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                    @{handle}
+                                </p>
+                                <p className="mt-1 text-[11px] normal-case text-gray-500">
+                                    Requested {formatDateTime(request.requested_at)}
+                                    {request.source === "venue_qr" ? " · venue QR" : ""}
+                                </p>
+                            </div>
+                            <div className="flex shrink-0 gap-2">
+                                <button
+                                    type="button"
+                                    disabled={!canReview || busy}
+                                    onClick={() => onRespond(request.user_id, false)}
+                                    className="min-h-9 rounded-lg border border-white/15 px-3 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Decline
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!canReview || busy}
+                                    onClick={() => onRespond(request.user_id, true)}
+                                    className="min-h-9 rounded-lg bg-violet-100 px-3 text-[10px] font-semibold uppercase tracking-wide text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Approve
+                                </button>
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+
+            {!writable ? (
+                <p className="text-xs normal-case text-gray-500">
+                    Requests stay pending while Arena hosting is read-only.
+                </p>
+            ) : null}
+        </section>
+    );
+};
+
 const ArenaMembersPanel = ({
     arenaId,
     memberships,
     currentUserId,
     currentRole,
     writable,
+    hostingWritable,
     loading,
     onLeaveSuccess,
 }: {
@@ -874,6 +985,15 @@ const ArenaMembersPanel = ({
     currentUserId: string | undefined;
     currentRole: string;
     writable: boolean;
+    /**
+     * Hosting writability, which is NOT what `writable` means here — that one is
+     * the owner check this call site has always passed.
+     *
+     * Approving a request INSERTS a membership, and the server refuses that with
+     * a 402 while hosting is paused or winding down. So the queue stays visible
+     * and readable, and only the two buttons go quiet.
+     */
+    hostingWritable: boolean;
     /**
      * The members fetch is separate from the arena's, so an empty list is
      * ambiguous without this: "nobody matched" and "not loaded yet" look
@@ -895,6 +1015,11 @@ const ArenaMembersPanel = ({
         arenaLeft,
         leaveArenaError,
         leaveArenaMessage,
+        joinRequests,
+        joinRequestsForId,
+        respondingUserId,
+        joinRequestActionError,
+        joinRequestActionMessage,
     } = useSelector((state: RootState) => state.arena);
     const actionBusy = memberActionLoading || leaveArenaLoading;
     const [pendingMemberAction, setPendingMemberAction] =
@@ -931,6 +1056,23 @@ const ArenaMembersPanel = ({
         setPendingMemberAction(null);
         dispatch(clearArenaMemberActionMessage());
     }, [memberActionError, memberActionMessage, dispatch, setToast]);
+
+    /**
+     * The queue's own outcomes. Toasted rather than shown inline because the
+     * answered row leaves the list on success — there would be nothing left to
+     * attach a message to. A 403 `full` is the one that matters: the owner said
+     * yes, the room is out of seats, and the saga puts the row back.
+     */
+    useEffect(() => {
+        if (!joinRequestActionError && !joinRequestActionMessage) return;
+        setToast({
+            id: Date.now(),
+            type: joinRequestActionError ? "error" : "success",
+            message: joinRequestActionError ?? joinRequestActionMessage ?? "",
+            duration: 4000,
+        });
+        dispatch(clearArenaJoinRequestActionMessage());
+    }, [joinRequestActionError, joinRequestActionMessage, dispatch, setToast]);
 
     useEffect(() => {
         if (arenaLeft) {
@@ -993,7 +1135,9 @@ const ArenaMembersPanel = ({
                 arena_id: arenaId,
                 user_id: userId,
                 page: 1,
-                limit: 10,
+                // The window this screen actually loaded — re-reading a narrower
+                // one would shrink the roster out from under the directory.
+                limit: MANAGER_ROSTER_LIMIT,
             })
         );
     };
@@ -1031,6 +1175,28 @@ const ArenaMembersPanel = ({
 
     return (
         <div className={memberDirectoryPanelClassName}>
+            {/* Owner only, and scoped by id: this list renders over the Members
+                tab, and the previous Arena's queue appearing on it is a bug that
+                only shows when navigating between two of them. */}
+            {isOwner ? (
+                <ArenaJoinRequestsSection
+                    arenaId={arenaId}
+                    requests={joinRequestsForId === arenaId ? joinRequests : []}
+                    canReview={isOwner && hostingWritable}
+                    writable={hostingWritable}
+                    respondingUserId={respondingUserId}
+                    onRespond={(userId, accept) =>
+                        dispatch(
+                            respondArenaJoinRequestRequest({
+                                arena_id: arenaId,
+                                user_id: userId,
+                                accept,
+                            })
+                        )
+                    }
+                />
+            ) : null}
+
             <div className="grid h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center rounded-xl border border-white/10 bg-black/60 p-1">
                 <MemberDirectorySearch
                     search={search}
@@ -1261,7 +1427,6 @@ const ArenaSettingsPanel = ({
     actorId,
     role,
     hosting,
-    members,
     // actions,
     // onError,
     onDeleteSuccess,
@@ -1273,7 +1438,6 @@ const ArenaSettingsPanel = ({
     actorId: string | undefined;
     role: string;
     hosting: ArenaHostingDetails | null;
-    members: Members | null;
     // actions: ArenaShellActions;
     // onError: (message: string) => void;
     onDeleteSuccess: () => void;
@@ -1283,7 +1447,6 @@ const ArenaSettingsPanel = ({
     const [timeZone, setTimeZone] = useState("America/New_York");
     const [deleteConfirmation, setDeleteConfirmation] = useState("");
     const [deleteOtp, setDeleteOtp] = useState("");
-    const [managerCandidateId, setManagerCandidateId] = useState("");
     const [unlockOpen, setUnlockOpen] = useState(false);
     const unlockButtonRef = useRef<HTMLButtonElement>(null);
     const dispatch = useDispatch();
@@ -1304,10 +1467,10 @@ const ArenaSettingsPanel = ({
         arenaDeleted,
         arenaDeleteError,
         arenaDeleteMessage,
-        memberActionLoading,
-        memberActionUserId,
-        memberActionError,
-        memberActionMessage,
+        joinPolicyLoading,
+        joinPolicyError,
+        joinPolicyMessage,
+        pendingJoinRequestCount,
     } = useSelector((state: RootState) => state.arena);
     const unlockOffer = getArenaUnlockOffer();
 
@@ -1321,6 +1484,20 @@ const ArenaSettingsPanel = ({
         });
         dispatch(clearUpdateArenaDetailsMessage());
     }, [updateError, updateMessage, dispatch, setToast]);
+
+    // The join-policy write reports the same way the identity one does. The
+    // panel's own "saved" line waits for the re-read record, so this is the only
+    // place a FAILURE is surfaced.
+    useEffect(() => {
+        if (!joinPolicyError && !joinPolicyMessage) return;
+        setToast({
+            id: Date.now(),
+            type: joinPolicyError ? "error" : "success",
+            message: joinPolicyError ?? joinPolicyMessage ?? "",
+            duration: 4000,
+        });
+        dispatch(clearArenaJoinPolicyMessage());
+    }, [joinPolicyError, joinPolicyMessage, dispatch, setToast]);
 
     useEffect(() => {
         if (!arena) return;
@@ -1417,26 +1594,6 @@ const ArenaSettingsPanel = ({
         onDeleteSuccess,
     ]);
 
-    /*
-     * Manager promote/demote outcome. ArenaMembersPanel reports the same slice,
-     * but only ONE tab panel is mounted at a time — on Settings that component
-     * does not exist, so its effect cannot report for this one and the toast
-     * would simply never appear.
-     */
-    useEffect(() => {
-        if (!memberActionError && !memberActionMessage) return;
-        setToast({
-            id: Date.now(),
-            type: memberActionError ? "error" : "success",
-            message: memberActionError ?? memberActionMessage ?? "",
-            duration: 3000,
-        });
-        // Only on success. A failed promotion leaves the member selected so the
-        // owner can read the reason and retry without hunting for them again.
-        if (!memberActionError) setManagerCandidateId("");
-        dispatch(clearArenaMemberActionMessage());
-    }, [memberActionError, memberActionMessage, dispatch, setToast]);
-
     if (!arena || !unlock || !arenaId || !actorId) return null;
 
     const isOwner = role === "commissioner";
@@ -1444,29 +1601,6 @@ const ArenaSettingsPanel = ({
     // hosting status the way the contest/billing endpoints do.
     const identityWritable = isOwner || role === "manager";
 
-    /*
-     * ARENA MANAGERS — moved here from the Members tab.
-     *
-     * `members` is the same page-1 roster the Members tab renders (limit 10), so
-     * the candidate list is the first ten members, not the whole Arena. That is
-     * the existing fetch's shape, not a decision made here; widen it by adding a
-     * search param to GET /group/members/:group_id.
-     *
-     * Unlike the MVP there is no invitation step: PUT /group/arena/make-manager
-     * writes the role immediately, so the select's button IS the assignment and
-     * there is no pending state to render.
-     */
-    const roster = members ?? [];
-    const activeManagers = roster.filter((member) => member.role === "manager");
-    const managerCandidates = roster.filter(
-        (member) => member.role === "member" && member.user_id !== actorId
-    );
-    const managerLimit = hosting?.manager_limit ?? null;
-    const managerSlotsAvailable =
-        managerLimit === null || activeManagers.length < managerLimit;
-    // The server's rule verbatim: makeArenaManager checks `created_by`, and
-    // unlike Arena identity it does not consult hosting status at all.
-    const canAssignManagers = isOwner;
 
     // Only the fields that actually changed are sent: the endpoint treats an
     // absent key as "leave alone" and null as "clear".
@@ -1662,130 +1796,7 @@ const ArenaSettingsPanel = ({
                 )}
             </section>
 
-            {/* ARENA MANAGERS — owner only, mirroring the MVP's
-                `data-arena-manager-settings` section. The MVP sends an
-                invitation the member accepts from Notifications; here the role
-                is written straight away, so the copy and the button say so. */}
-            {isOwner ? (
-                <section
-                    className="space-y-4 px-5 py-7 sm:px-6"
-                    data-arena-manager-settings
-                >
-                    <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
-                                Arena managers
-                            </h2>
-                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
-                                {activeManagers.length} of {managerLimit ?? "unlimited"}
-                            </span>
-                        </div>
-                        <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
-                            Choose members to help operate this Arena. The role applies
-                            immediately. Managers use a staff allowance instead of member
-                            capacity, and stop being eligible for the Community Leaderboard.
-                        </p>
-                    </div>
 
-                    {activeManagers.map((membership) => {
-                        const handle = membership.profiles?.username ?? membership.user_id;
-                        const isBusy = memberActionUserId === membership.user_id;
-
-                        return (
-                            <div
-                                key={membership.id}
-                                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4 py-3"
-                            >
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-white">
-                                        @{handle}
-                                    </p>
-                                    <p className="mt-1 text-[11px] text-gray-500">
-                                        Current manager
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={!canAssignManagers || memberActionLoading}
-                                    onClick={() => {
-                                        if (!membership.user_id) return;
-                                        dispatch(
-                                            makeArenaMemberRequest({
-                                                arena_id: arenaId,
-                                                user_id: membership.user_id,
-                                                page: 1,
-                                                limit: 10,
-                                            })
-                                        );
-                                    }}
-                                    className="min-h-9 rounded-lg border border-red-300/25 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {isBusy ? "Working…" : "Remove manager"}
-                                </button>
-                            </div>
-                        );
-                    })}
-
-                    {managerSlotsAvailable ? (
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <select
-                                aria-label="Arena manager candidate"
-                                value={managerCandidateId}
-                                onChange={(event) =>
-                                    setManagerCandidateId(event.target.value)
-                                }
-                                disabled={!canAssignManagers || memberActionLoading}
-                                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-violet-300/60 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                <option value="">Choose an active member</option>
-                                {managerCandidates.map((membership) => (
-                                    <option key={membership.id} value={membership.user_id}>
-                                        @{membership.profiles?.username ?? membership.user_id}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!managerCandidateId) return;
-                                    dispatch(
-                                        makeArenaManagerRequest({
-                                            arena_id: arenaId,
-                                            user_id: managerCandidateId,
-                                            page: 1,
-                                            limit: 10,
-                                        })
-                                    );
-                                }}
-                                disabled={
-                                    !managerCandidateId ||
-                                    !canAssignManagers ||
-                                    memberActionLoading
-                                }
-                                className="rounded-xl bg-violet-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                {memberActionLoading ? "Working…" : "Make manager"}
-                            </button>
-                        </div>
-                    ) : (
-                        <p className="text-xs leading-5 text-gray-500">
-                            Every manager slot on this tier is filled. Remove a manager
-                            before promoting another member.
-                        </p>
-                    )}
-
-                    {/* Gated on a NON-EMPTY roster: an empty one means the members
-                        fetch has not landed yet, and "nobody to promote" is a
-                        different statement from "not loaded". */}
-                    {managerSlotsAvailable &&
-                        roster.length > 0 &&
-                        managerCandidates.length === 0 ? (
-                        <p className="text-xs leading-5 text-gray-500">
-                            No members are available to promote yet.
-                        </p>
-                    ) : null}
-                </section>
-            ) : null}
 
             {/* THE REWARD INBOX — PERMANENT OWNER ONLY, and rendered for nobody
                 else. `PUT /group/arena/details` answers 403 for a manager who
@@ -1798,6 +1809,25 @@ const ArenaSettingsPanel = ({
                 Unlike Arena identity, this is NOT gated on hosting state: a
                 paused Arena still owes prizes on contests it already published,
                 and the address winners claim them at has to stay correctable. */}
+            {/* HOW MEMBERS JOIN — owner only, and only once setup has happened.
+                A NULL join_policy means the wizard was never finished, and
+                `PUT /group/arena/join-policy` refuses that case with a 409: it
+                changes a choice, it does not make the first one. The owner is
+                already being redirected to /arena/:id/setup in that state, so
+                there is nothing to render here. */}
+            {isOwner && arena.join_policy ? (
+                <ArenaJoinPolicySettings
+                    joinPolicy={arena.join_policy}
+                    pendingRequestCount={pendingJoinRequestCount}
+                    saving={joinPolicyLoading}
+                    onSave={(joinPolicy) =>
+                        dispatch(
+                            updateArenaJoinPolicyRequest({ arena_id: arenaId, join_policy: joinPolicy })
+                        )
+                    }
+                />
+            ) : null}
+
             {isOwner ? (
                 <ArenaRewardContactSettings
                     rewardContactEmail={arena.reward_contact_email}
@@ -1810,6 +1840,23 @@ const ArenaSettingsPanel = ({
                             })
                         )
                     }
+                />
+            ) : null}
+
+            {/* ARENA MANAGERS — PERMANENT-OWNER only.
+                Now an INVITATION, not an instant promotion: POST
+                /group/manager-invitation answers 202 with a pending row and the
+                member's role does not move until they accept from
+                Notifications. Same panel the League settings tab mounts —
+                the endpoints behind it are one type-agnostic surface, so the
+                seat limit is the only thing that differs and it comes from the
+                server. */}
+            {isOwner ? (
+                <GroupManagerSettings
+                    groupId={arenaId}
+                    groupType="arena"
+                    currentUserId={actorId}
+                    className="px-5 py-7 sm:px-6"
                 />
             ) : null}
 
@@ -2050,6 +2097,7 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
         error: arenaErr,
         guide: arenaGuide,
         guideForId: arenaGuideForId,
+        checkoutStatus,
     } = useSelector((state: RootState) => state.arena);
 
     useEffect(() => {
@@ -2065,17 +2113,71 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
         // Has this member been shown the Arena Guide for THIS Arena? Per-arena,
         // so joining a second one asks again.
         dispatch(fetchArenaGuideStatusRequest({ arena_id: arenaId }));
+        /* MANAGER_ROSTER_LIMIT, not 10, and the same page Settings > Arena
+         * managers asks for.
+         *
+         * Both this and that panel dispatch the one members action, which is
+         * takeLatest — so two different page sizes race, and React runs the
+         * child's effect first, which meant the panel's wide read was the one
+         * that lost. Asking for the same page from both removes the race
+         * instead of trying to order it. */
         dispatch(
             fetchGroupMembersByGroupIdRequest({
                 group_id: arenaId,
                 page: 1,
-                limit: 10,
+                limit: MANAGER_ROSTER_LIMIT,
             })
         );
     }, [arenaId, currentUser, dispatch]);
 
     const currentMembership = arena?.current_user_member?.role ?? "undefined";
     const isOwner = currentMembership === "commissioner";
+
+    /* ---------- Unfinished setup sends the owner back to the wizard ----------
+     *
+     * `setup_complete` is derived server-side from `join_policy IS NOT NULL`,
+     * and NULL means nobody can join this Arena by any door. So the dashboard is
+     * not a place the owner may sit: the invite code on it admits nobody, and
+     * every join answers 409 until the wizard is finished.
+     *
+     * Gated on `status === "ready"` rather than on `arena` alone — a record
+     * still loading has no `setup_complete` to read, and treating that absence
+     * as "incomplete" would bounce every visitor through /setup on first paint.
+     *
+     * Owner only. A member arriving at an unfinished Arena is already a member
+     * and has nothing to fix; only the person who bought it can answer this.
+     */
+    const ownerSetupIncomplete =
+        scopedArena.status === "ready" && isOwner && arena?.setup_complete === false;
+
+    /**
+     * HELD while the Stripe return banner is up. `checkoutStatus` is non-null
+     * only when this page mounted with a `session_id` in the URL, so outside the
+     * post-purchase return it is null and the redirect fires immediately.
+     *
+     * Without this the owner is bounced to /setup before the $50 charge is ever
+     * acknowledged — the banner is the only confirmation they get, and it owns
+     * the "Set up Arena" hand-off instead.
+     */
+    const awaitingCheckoutReturn = checkoutStatus !== null;
+
+    useEffect(() => {
+        if (!ownerSetupIncomplete || awaitingCheckoutReturn) return;
+        router.replace(`/arena/${arenaId}/setup`);
+    }, [arenaId, awaitingCheckoutReturn, ownerSetupIncomplete, router]);
+
+    /**
+     * The owner's review queue. Fetched from the dashboard rather than from the
+     * Members tab so the Settings panel's pending-count line is populated too —
+     * both read one slice, and the tab that happens to be open first must not
+     * decide whether the other has data.
+     *
+     * Owner only: the endpoint answers 403 for anybody else.
+     */
+    useEffect(() => {
+        if (!arenaId || !isOwner || !arena?.setup_complete) return;
+        dispatch(fetchArenaJoinRequestsRequest({ arena_id: arenaId }));
+    }, [arenaId, arena?.setup_complete, dispatch, isOwner]);
 
     /**
      * Auto-open on a DEFINITE yes and nothing else.
@@ -2128,12 +2230,12 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
 
     const memberCount = arena?.member_count ?? arena?.members?.length ?? 0;
 
+    // Settled and empty — the usual cause is the owner deleting the Arena while
+    // a member sat on this page. The notice waits a few seconds before leaving,
+    // which doubles as the grace period for a read still in flight: if the
+    // record lands, this unmounts and the redirect is cancelled with it.
     if (scopedArena.status === "missing") {
-        return (
-            <div className="rounded-3xl border border-white/10 bg-black/60 p-6 text-sm text-gray-400">
-                Group not found. Head back to Home and pick a different crew.
-            </div>
-        );
+        return <GroupNotFoundNotice href="/arena" label="Arenas" />;
     }
 
     // ROOT-CAUSE FIX. `loading` alone cannot cover this: arriving from /league/L the
@@ -2264,6 +2366,17 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                         currentUserId={currentUser?.userId}
                         currentRole={currentMembership}
                         writable={currentMembership === "commissioner"}
+                        // Same expression the venue panel below uses — a paused
+                        // or winding-down Arena cannot admit a new member, and
+                        // the approve/decline buttons must say so rather than
+                        // collecting a 402.
+                        hostingWritable={
+                            !hosting ||
+                            hosting.status === "not_started" ||
+                            hosting.status === "active" ||
+                            hosting.status === "included_month" ||
+                            hosting.status === "pause_scheduled"
+                        }
                         loading={loadingMembers}
                         onLeaveSuccess={() => router.replace("/fantasy")}
                     />
@@ -2277,7 +2390,6 @@ export const ArenaDashboard = ({ arenaId }: ArenaDashboardProps) => {
                         actorId={currentUser?.userId}
                         role={currentMembership}
                         hosting={hosting}
-                        members={arenaMembers ?? []}
                         // The Arena hub, mirroring the League page's
                         // `router.replace("/fantasy")` after its own delete: a
                         // deleted group drops you on the list it belonged to, not

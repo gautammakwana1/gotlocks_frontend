@@ -230,6 +230,21 @@ export type Group = {
      * manager must never be told the Arena has no inbox on the strength of it.
      */
     reward_contact_email?: string | null;
+    /**
+     * ARENA ONLY — `GET /group/:id` deletes the key for a League, which has no
+     * setup wizard and no approval flow.
+     *
+     * Unlike the reward inbox this is NOT owner-scoped: every member's screen
+     * needs to know whether the invite code they are about to share admits
+     * people or queues them.
+     *
+     * `null` is a THIRD state, not "unknown": the owner has not finished the
+     * post-purchase setup wizard, so NOBODY may join yet. Read `setup_complete`
+     * rather than null-checking this — the rule lives server-side.
+     */
+    join_policy?: GroupJoinPolicy | null;
+    /** ARENA ONLY. Derived server-side from `join_policy != null`. */
+    setup_complete?: boolean;
     lifecycle_status?: string;
 }
 
@@ -570,6 +585,47 @@ export type GroupState = {
     leagueGuideError: string | null;
     leagueGuideAckLoading: boolean;
     leagueGuideAckError: string | null;
+    /**
+     * MANAGER INVITATIONS, for BOTH community types — the endpoints are one
+     * type-agnostic surface, so this is one slot rather than a League copy and
+     * an Arena copy that could disagree.
+     *
+     * Stamped with `managerInvitationsForId` for the same reason the guide is:
+     * `state.group` survives navigation between groups, and the previous
+     * community's pending invitations rendering over this one's Settings panel
+     * is a bug that only shows when moving between two of them.
+     *
+     * `managerSeats` and `canInviteManager` are the server's verdicts verbatim.
+     * The seat rules — a Free League has no seat at all, an Arena's tier sets
+     * its count, paused hosting freezes staff changes — live in
+     * group_manager_seat_status() and are never restated on this side.
+     */
+    managerInvitationsForId: string | null;
+    managerInvitations: GroupManagerInvitation[] | null;
+    managerSeats: GroupManagerSeatStatus | null;
+    canInviteManager: boolean;
+    managerInvitationsLoading: boolean;
+    managerInvitationsError: string | null;
+    /**
+     * Shared status for the OWNER's three writes — send / cancel / remove. One
+     * at a time, so one slot; the two id fields say which row is busy.
+     */
+    managerActionLoading: boolean;
+    managerActionInvitationId: string | null;
+    managerActionUserId: string | null;
+    managerActionError: string | null;
+    managerActionMessage: string | null;
+    /**
+     * The INVITEE's respond, in its own slot rather than sharing the one above.
+     * Not because the two writes can overlap — nobody is both sides of an
+     * invitation — but because their SCREENS can: the notifications drawer is
+     * mounted alongside the owner's Settings panel, and one shared slot would
+     * make both components toast each other's outcomes.
+     */
+    managerRespondLoading: boolean;
+    managerRespondInvitationId: string | null;
+    managerRespondError: string | null;
+    managerRespondMessage: string | null;
 }
 
 export type GroupSelector = {
@@ -826,7 +882,131 @@ export type DeleteMessagePayload = {
 
 export type MembersData = {
     members: Members;
+    /**
+     * OWNER-ONLY, and a COUNT only — the invitations themselves come from
+     * GET /group/manager-invitations. Present so a roster can mark "invitation
+     * pending" without a second call; 0 for anyone but `created_by`.
+     */
+    pending_manager_invitation_count?: number;
     pagination: PaginationMetadata;
+};
+
+/* ============================================================================
+ * MANAGER INVITATIONS — ONE surface for Leagues and Arenas.
+ *
+ * The endpoints live on the type-agnostic `/group/*` path beside members and
+ * update-member-role, NOT under `/group/arena`, because a League manager and an
+ * Arena manager are the same `group_members` row holding the same role. There is
+ * no League variant of any of these five calls and there must not be one. The
+ * only per-type rule — how many manager seats a group has — is answered by the
+ * server's `group_manager_seat_status()` and arrives here as `seats`.
+ *
+ * Send / list / cancel / remove are PERMANENT-OWNER only (`groups.created_by`);
+ * a manager who could appoint managers is an owner. `respond` is the invitee's
+ * alone and is issued from Notifications, which is the only surface they have
+ * for a role they do not hold yet.
+ * ========================================================================== */
+
+export type GroupManagerInvitationStatus =
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "canceled"
+    | "expired";
+
+export type GroupManagerInvitation = {
+    id: string;
+    group_id: string;
+    from_owner_user_id: string;
+    to_user_id: string;
+    status: GroupManagerInvitationStatus;
+    requested_at: string;
+    expires_at: string | null;
+    responded_at: string | null;
+    canceled_at: string | null;
+    /** Arena only — the live entries that blocked the promotion, if any. */
+    blocking_contest_ids?: string[] | null;
+    created_at?: string;
+    /** The INVITEE, joined on `to_user_id`. Absent from write responses. */
+    profiles?: {
+        id?: string;
+        username?: string;
+        full_name?: string;
+        profile_image?: string;
+    } | null;
+};
+
+/**
+ * The seat maths, straight from the database function — never re-derived here.
+ *
+ * `manager_limit` is NULL for an uncapped tier and 0 when the group's tier has
+ * no manager seat AT ALL, which is an entitlement answer, not a capacity one: a
+ * Free League reads 0 and the only fix is Pro. `hosting_writable` is the Arena's
+ * "is this community actually running" and is always true for a League.
+ */
+export type GroupManagerSeatStatus = {
+    group_type: GroupType;
+    manager_limit: number | null;
+    manager_count: number;
+    pending_count: number;
+    hosting_writable: boolean;
+};
+
+/** GET /group/manager-invitations?group_id=&status=&page=&limit= — owner only. */
+export type FetchManagerInvitationsPayload = {
+    group_id: string;
+    /** Defaults to 'pending' server-side. 'all' returns the answered history. */
+    status?: GroupManagerInvitationStatus | "all";
+    page?: number;
+    limit?: number;
+};
+
+export type ManagerInvitationsData = {
+    invitations: GroupManagerInvitation[];
+    seats: GroupManagerSeatStatus;
+    /**
+     * Pre-computed server-side WITH the pending reservation counted, so the
+     * panel disables its Invite button without restating the seat rules.
+     */
+    can_invite: boolean;
+    pagination: PaginationMetadata;
+};
+
+/**
+ * POST /group/manager-invitation — answers 202, not 200. The invitation was
+ * created; the manager was NOT. Nothing about the invitee's role changes until
+ * they accept.
+ */
+export type SendManagerInvitationPayload = {
+    group_id: string;
+    user_id: string;
+};
+
+/** PUT /group/manager-invitation/cancel — the owner withdrawing an unanswered offer. */
+export type CancelManagerInvitationPayload = {
+    group_id: string;
+    invitation_id: string;
+};
+
+/**
+ * PUT /group/manager-invitation/respond — THE INVITEE ONLY, from Notifications.
+ * `group_id` is not sent; it is carried so the saga can re-read the group whose
+ * role just changed.
+ */
+export type RespondManagerInvitationPayload = {
+    invitation_id: string;
+    accept: boolean;
+    group_id?: string | null;
+};
+
+/**
+ * DELETE /group/manager — stand an accepted manager back down to member.
+ * Direct and immediate: consent is needed to TAKE the job, not to be relieved
+ * of it.
+ */
+export type RemoveGroupManagerPayload = {
+    group_id: string;
+    user_id: string;
 };
 
 export type EnableSecondaryLeaderboardPayload = {
@@ -1910,8 +2090,12 @@ export type CreateArenaContestPayload = {
     winning_places: number;
 };
 
-// Owner-only role/membership writes: PUT /group/arena/{make-manager,make-member,remove-member}.
-// page/limit echo the member list window so the saga can refresh it after the write.
+// Owner-only membership write: PUT /group/arena/remove-member. page/limit echo the
+// member list window so the saga can refresh it after the write.
+//
+// make-manager and make-member no longer exist. Appointing a manager is an
+// invitation (POST /group/manager-invitation) and standing one down is
+// DELETE /group/manager — both type-agnostic, both keyed by `group_id`.
 export type ArenaMemberActionPayload = {
     arena_id: string;
     user_id: string;
@@ -2141,6 +2325,154 @@ export type ArenaDetails = {
     group_type: GroupType;
     created_by: string;
     updated_at: string;
+};
+
+/* ----------------------------------------------------------------------------
+ * JOINING AN ARENA — the post-purchase setup wizard and the approval queue.
+ *
+ * Named for GROUPS rather than Arenas, matching the server: the column is
+ * `groups.join_policy` and the queue is `group_join_requests`. The approval
+ * flow ships for Arenas only, but that restriction lives in the endpoints, not
+ * in the vocabulary.
+ * -------------------------------------------------------------------------- */
+
+export type GroupJoinPolicy = "automatic" | "approval_required";
+
+export type GroupJoinRequestStatus = "pending" | "approved" | "rejected";
+
+/**
+ * Which door the request came through. Not a permission — both doors run the
+ * same policy — but an owner reviewing a queue wants to know whether this
+ * person scanned the QR in the room or was sent a code.
+ */
+export type GroupJoinRequestSource = "invite_code" | "venue_qr";
+
+/**
+ * One row of the owner's review queue. ONE ROW PER (arena, person) FOREVER:
+ * somebody declined who asks again reuses their row, so `requested_at` is the
+ * LATEST ask rather than the first.
+ */
+export type GroupJoinRequest = {
+    id: string;
+    group_id: string;
+    user_id: string;
+    status: GroupJoinRequestStatus;
+    source: GroupJoinRequestSource;
+    requested_at: string;
+    responded_at: string | null;
+    responded_by: string | null;
+    profiles?: {
+        id: string;
+        username: string | null;
+        full_name: string | null;
+        profile_image: string | null;
+    } | null;
+};
+
+/**
+ * POST /group/arena/complete-setup — the wizard's two REQUIRED steps as ONE
+ * write.
+ *
+ * Atomic on purpose: `join_policy IS NOT NULL` is the gate the join path reads,
+ * so an Arena whose policy landed but whose contact email did not would open
+ * for joining while still unable to offer a prize.
+ *
+ * 409 `arena_setup_already_complete` if it has already run — it is re-runnable
+ * only while setup is unfinished.
+ */
+export type CompleteArenaSetupPayload = {
+    arena_id: string;
+    join_policy: GroupJoinPolicy;
+    /** Normalised server-side; sent already trimmed and lower-cased. */
+    email: string;
+};
+
+export type CompleteArenaSetupData = {
+    arena: ArenaDetails & {
+        join_policy: GroupJoinPolicy;
+        reward_contact_email: string | null;
+        setup_complete: true;
+    };
+};
+
+/**
+ * PUT /group/arena/join-policy — changing the rule LATER, from Settings.
+ *
+ * Deliberately leaves pending requests alone. Switching to `automatic` is a
+ * statement about the next person through the door, not an amnesty for a queue
+ * the owner has not read.
+ */
+export type UpdateArenaJoinPolicyPayload = {
+    arena_id: string;
+    join_policy: GroupJoinPolicy;
+};
+
+export type UpdateArenaJoinPolicyData = {
+    arena: { id: string; name: string; join_policy: GroupJoinPolicy };
+    pending_request_count: number;
+};
+
+/**
+ * GET /group/arena/join-requests — the owner's review queue, oldest first: it
+ * is a work queue, so it sorts by how long somebody has been waiting.
+ *
+ * `status` defaults to `pending`; `all` returns answered rows too, for an owner
+ * auditing who they previously turned away.
+ */
+export type FetchArenaJoinRequestsPayload = {
+    arena_id: string;
+    status?: GroupJoinRequestStatus | "all";
+    page?: number;
+    limit?: number;
+};
+
+export type ArenaJoinRequestsData = {
+    requests: GroupJoinRequest[];
+    join_policy: GroupJoinPolicy | null;
+    /**
+     * ALWAYS the pending count, whatever `status` filtered by — it drives a
+     * "3 waiting" chip, which must not change because somebody opened the
+     * declined tab.
+     */
+    pending_request_count: number;
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+/**
+ * PUT /group/arena/join-requests/respond — approve or decline one request.
+ *
+ * Keyed by the REQUESTER's user_id rather than a request id: there is exactly
+ * one row per (arena, person) and the owner's list is a list of people.
+ *
+ * 403 `full` is NOT a decision — the request stays pending, because "the owner
+ * said yes and the room is out of seats" is a "free a seat and try again".
+ */
+export type RespondArenaJoinRequestPayload = {
+    arena_id: string;
+    user_id: string;
+    accept: boolean;
+};
+
+export type RespondArenaJoinRequestData = {
+    status: GroupJoinRequestStatus;
+    request: {
+        id: string | null;
+        group_id: string;
+        user_id: string;
+        status: GroupJoinRequestStatus;
+    };
+    member: {
+        id: string | null;
+        group_id: string;
+        user_id: string;
+        role: string;
+    } | null;
 };
 
 export type ArenaTransferStatus =
@@ -2476,13 +2808,31 @@ export type GroupVenueWriteData = {
  */
 
 /**
- * The four rungs of "what next", computed server-side because each is a
- * different screen and reassembling them from booleans per client is how they
- * drift apart.
+ * The rungs of "what next", computed server-side because each is a different
+ * screen and reassembling them from booleans per client is how they drift
+ * apart. Two of them turn on the Arena's `join_policy`, which the scanner has
+ * no way to see.
+ *
+ *   sign_in                 no account yet
+ *   group_setup_incomplete  the owner has not finished setup; nobody may join
+ *                           yet, whoever they are
+ *   join_group              signed in, not a member, policy `automatic`
+ *   request_to_join         signed in, not a member, policy `approval_required`
+ *                           — the button says Request to Join
+ *   join_pending            already asked, waiting on the owner. NOT a member,
+ *                           so check-in is not offered
+ *   verify_location         a member with no live check-in — the main event
+ *   checked_in              already checked in
+ *
+ * `group_setup_incomplete` is the same string the invite-code endpoint returns
+ * as `code`, deliberately: both report the same fact about the same column.
  */
 export type VenueCheckInNextStep =
     | "sign_in"
+    | "group_setup_incomplete"
     | "join_group"
+    | "request_to_join"
+    | "join_pending"
     | "verify_location"
     | "checked_in";
 
@@ -2497,15 +2847,78 @@ export type ResolveVenueCheckInPayload = {
 };
 
 export type ResolveVenueCheckInData = {
-    group: { id: string; name: string; group_type: string };
+    group: {
+        id: string;
+        name: string;
+        group_type: string;
+        /**
+         * Arena only, and NULL when the owner never finished setup. Decides
+         * whether the poster's button says Join or Request to Join — but the
+         * SCREEN is chosen by `next_step`, which already folds this in.
+         */
+        join_policy?: GroupJoinPolicy | null;
+    };
     /** The MEMBER projection — no QR token, and never any coordinates. */
     venue: GroupVenue;
     viewer: {
         is_authenticated: boolean;
         is_member: boolean;
         role?: string | null;
+        /**
+         * The viewer's own row in this Arena's approval queue, or null.
+         *
+         * A DECLINED request is returned too, and deliberately: the member may
+         * ask again, and the page must not pretend the earlier answer never
+         * happened. Read `next_step` to decide the screen — a pending request
+         * outranks the setup gate there, which no client should re-derive.
+         */
+        join_request?: {
+            id: string;
+            status: GroupJoinRequestStatus;
+            source: GroupJoinRequestSource;
+            requested_at: string;
+            responded_at: string | null;
+        } | null;
     };
     session: VenueCheckInSessionSummary;
+    next_step: VenueCheckInNextStep;
+};
+
+/**
+ * POST /group/venue/check-in/join/:token — walking in and joining.
+ *
+ * The rung `resolve` points at when next_step is `join_group` or
+ * `request_to_join`. Keyed by TOKEN like resolve, because the scanner holds an
+ * opaque token and never sees an invite code.
+ *
+ * Runs the SAME join transaction `/group/arena/join-arena` does; only the
+ * recorded `source` differs. Joining is still NOT checking in — a success
+ * leaves the member at `verify_location`, which is a separate POST.
+ */
+export type JoinArenaByVenueTokenPayload = {
+    token: string;
+};
+
+/**
+ * 200 with `status: "member"` when they are in (including a re-scan by somebody
+ * who already was), 202 with `status: "pending"` when the Arena queues them.
+ */
+export type JoinArenaByVenueTokenData = {
+    status: "member" | GroupJoinRequestStatus;
+    group: { id: string; name: string | null; group_type?: string };
+    member?: {
+        id: string | null;
+        group_id: string;
+        user_id: string;
+        role: string;
+    };
+    request?: {
+        id: string | null;
+        group_id: string;
+        user_id: string;
+        status: GroupJoinRequestStatus;
+        source: GroupJoinRequestSource;
+    };
     next_step: VenueCheckInNextStep;
 };
 
@@ -2725,6 +3138,19 @@ export type VenueState = {
     resolveError: string | null;
     /** The server's own `code`, so a dead token gets its own screen. */
     resolveErrorCode: string | null;
+
+    /**
+     * POST /check-in/join/:token — walking in and joining.
+     *
+     * There is no disposition flag here on purpose: the outcome is folded into
+     * `resolved.next_step`, which the server computes and the screen already
+     * branches on. A second copy of "did they get in?" would be one more thing
+     * to keep in step with it. Joining is NOT checking in, so this never mints
+     * a session and never touches the verify slots.
+     */
+    joinLoading: boolean;
+    joinError: string | null;
+    joinErrorCode: string | null;
 
     verifyLoading: boolean;
     verifySuccess: VerifyVenueCheckInData | null;
@@ -4720,9 +5146,9 @@ export type ArenaState = {
     unlockLoading: boolean;
     unlockError: string | null;
     unlockMessage: string | null;
-    // Shared status for the three owner-only member writes (make-manager /
-    // make-member / remove-member). Only one can run at a time, so they share
-    // one slot; memberActionUserId is the row currently being written.
+    // Status for the owner-only remove-member write. memberActionUserId is the
+    // row currently being written. Manager promote/demote used to share this
+    // slot and now lives on groupsSlice as `managerAction*`.
     memberActionLoading: boolean;
     memberActionUserId: string | null;
     memberActionError: string | null;
@@ -4742,6 +5168,32 @@ export type ArenaState = {
     updateLoading: boolean;
     updateError: string | null;
     updateMessage: string | null;
+
+    /* ---- Joining: the setup wizard and the owner's approval queue ---- */
+    // POST /group/arena/complete-setup. `setupComplete` latches the 200 so the
+    // wizard can advance to its optional third step without re-reading the group.
+    setupLoading: boolean;
+    setupError: string | null;
+    setupComplete: boolean;
+    // PUT /group/arena/join-policy — the later edit, from Settings.
+    joinPolicyLoading: boolean;
+    joinPolicyError: string | null;
+    joinPolicyMessage: string | null;
+    // GET /group/arena/join-requests. Scoped by id for the same reason the guide
+    // is: this list renders over the Members tab, and the previous Arena's queue
+    // appearing on it is a bug that only shows when navigating between two.
+    joinRequests: GroupJoinRequest[];
+    joinRequestsForId: string | null;
+    joinRequestsLoading: boolean;
+    joinRequestsError: string | null;
+    // Always the PENDING count, whatever the list was filtered by.
+    pendingJoinRequestCount: number;
+    // PUT /group/arena/join-requests/respond. `respondingUserId` is the requester
+    // being answered, so only that row shows a busy state.
+    joinRequestActionLoading: boolean;
+    respondingUserId: string | null;
+    joinRequestActionError: string | null;
+    joinRequestActionMessage: string | null;
     // Shared status for the three hosting writes (activate-hosting /
     // schedule-pause / cancel-pause). Only one runs at a time.
     hostingActionLoading: boolean;
@@ -4824,6 +5276,12 @@ export type ArenaState = {
     joinArenaCrossType: boolean;
     joinArenaNotFound: boolean;
     joinedArena: JoinedCommunity | null;
+    /**
+     * 200 vs 202. `requested` means the Arena runs on approval and the owner has
+     * been rung — the caller must NOT navigate into the Arena, because no
+     * membership exists yet.
+     */
+    joinArenaDisposition: "joined" | "requested" | null;
 };
 
 export type ArenaSelector = {
@@ -6638,7 +7096,15 @@ export type NotificationType =
     | "follow_request"
     | "follow_request_accepted"
     | "commissioner_transfer"
-    | "contest_badges";
+    | "contest_badges"
+    /**
+     * The invited member's copy, and their ONLY surface for the decision — they
+     * hold no settings screen for a role they do not have yet. The accept and
+     * decline controls read `metadata.invitation_id`.
+     */
+    | "group_manager_invitation"
+    /** Sent back to the OWNER; `metadata.decision` carries the verdict. */
+    | "group_manager_response";
 
 export type FollowRequestStatus = "pending" | "accepted" | "declined";
 

@@ -56,6 +56,14 @@ import type {
 	MarkLeagueGuideViewedData,
 	FantasyContestPodiumData,
 	FantasyContestPodiumState,
+	GroupManagerInvitation,
+	GroupManagerSeatStatus,
+	FetchManagerInvitationsPayload,
+	ManagerInvitationsData,
+	SendManagerInvitationPayload,
+	CancelManagerInvitationPayload,
+	RespondManagerInvitationPayload,
+	RemoveGroupManagerPayload,
 } from "@/lib/interfaces/interfaces";
 
 type GroupState = {
@@ -145,6 +153,44 @@ type GroupState = {
 	leagueGuideError: string | null;
 	leagueGuideAckLoading: boolean;
 	leagueGuideAckError: string | null;
+	/* ---- Manager invitations (/group/manager-invitation*, /group/manager) ----
+	 *
+	 * ONE slot for BOTH community types, because the endpoints are one surface:
+	 * a League manager and an Arena manager are the same group_members row. A
+	 * per-type copy of this state would be two homes for one rule.
+	 *
+	 * `managerInvitationsForId` stamps which group the list belongs to, for the
+	 * same reason the guides carry one — `state.group` survives navigation
+	 * between groups, so an unstamped list renders the PREVIOUS Arena's pending
+	 * invitations over this one's Settings panel.
+	 *
+	 * `seats` and `canInvite` are the server's answers verbatim. The seat rules
+	 * (Free League = 0 seats, Arena tier = N, paused hosting = frozen) live in
+	 * group_manager_seat_status() and are never re-derived here.
+	 */
+	managerInvitationsForId: string | null;
+	managerInvitations: GroupManagerInvitation[] | null;
+	managerSeats: GroupManagerSeatStatus | null;
+	canInviteManager: boolean;
+	managerInvitationsLoading: boolean;
+	managerInvitationsError: string | null;
+	/* Shared status for the OWNER's three writes — send / cancel / remove. Only
+	 * one can run at a time, so they share one slot; the two id fields say WHICH
+	 * row is busy so a roster can disable just that button. */
+	managerActionLoading: boolean;
+	managerActionInvitationId: string | null;
+	managerActionUserId: string | null;
+	managerActionError: string | null;
+	managerActionMessage: string | null;
+	/* The INVITEE's respond, kept in its OWN slot rather than sharing the one
+	 * above. Not because the two can overlap — no one person is both sides of an
+	 * invitation — but because their SCREENS can: the notifications drawer is
+	 * mounted alongside the owner's Settings panel, and one shared slot means
+	 * both components toast every outcome, including each other's. */
+	managerRespondLoading: boolean;
+	managerRespondInvitationId: string | null;
+	managerRespondError: string | null;
+	managerRespondMessage: string | null;
 };
 
 const initialState: GroupState = {
@@ -212,6 +258,21 @@ const initialState: GroupState = {
 	leagueGuideError: null,
 	leagueGuideAckLoading: false,
 	leagueGuideAckError: null,
+	managerInvitationsForId: null,
+	managerInvitations: null,
+	managerSeats: null,
+	canInviteManager: false,
+	managerInvitationsLoading: false,
+	managerInvitationsError: null,
+	managerActionLoading: false,
+	managerActionInvitationId: null,
+	managerActionUserId: null,
+	managerActionError: null,
+	managerActionMessage: null,
+	managerRespondLoading: false,
+	managerRespondInvitationId: null,
+	managerRespondError: null,
+	managerRespondMessage: null,
 };
 
 const groupSlice = createSlice({
@@ -1026,6 +1087,132 @@ const groupSlice = createSlice({
 			// their next visit, which is what an unrecorded acknowledgement
 			// costs.
 		},
+
+		/* --------------------------------------------------------------------
+		 * MANAGER INVITATIONS
+		 *
+		 * The four writes never patch the list themselves. Send answers 202 with
+		 * a PENDING invitation and cancel/remove answer with a settled one, but
+		 * every one of them also moves `seats` — and seats is the number the
+		 * panel's badge and its disabled Invite button are drawn from. Re-reading
+		 * the list is the only way to keep the row and the seat maths from
+		 * disagreeing, so the saga re-reads and these reducers only carry status.
+		 * ------------------------------------------------------------------ */
+		fetchManagerInvitationsRequest: (
+			state,
+			action: PayloadAction<FetchManagerInvitationsPayload>
+		) => {
+			// Drop another group's list on sight. Without this the previous
+			// community's pending invitations render over this one for as long
+			// as the fetch is in flight.
+			if (state.managerInvitationsForId !== action.payload.group_id) {
+				state.managerInvitations = null;
+				state.managerSeats = null;
+				state.canInviteManager = false;
+			}
+			state.managerInvitationsForId = action.payload.group_id;
+			state.managerInvitationsLoading = true;
+			state.managerInvitationsError = null;
+		},
+		fetchManagerInvitationsSuccess: (
+			state,
+			action: PayloadAction<{ group_id: string; data: ManagerInvitationsData }>
+		) => {
+			state.managerInvitationsLoading = false;
+			state.managerInvitationsError = null;
+			// A response that landed after the user moved on is dropped, not
+			// rendered against the group they are looking at now.
+			if (state.managerInvitationsForId !== action.payload.group_id) return;
+			state.managerInvitations = action.payload.data.invitations ?? [];
+			state.managerSeats = action.payload.data.seats ?? null;
+			state.canInviteManager = Boolean(action.payload.data.can_invite);
+		},
+		fetchManagerInvitationsFailure: (state, action: PayloadAction<string>) => {
+			state.managerInvitationsLoading = false;
+			state.managerInvitationsError = action.payload;
+			// Nulled, not left stale: a 402/403 here means the caller may not
+			// see this list at all, and the last group's seats are not an answer.
+			state.managerInvitations = null;
+			state.managerSeats = null;
+			state.canInviteManager = false;
+		},
+
+		sendManagerInvitationRequest: (
+			state,
+			action: PayloadAction<SendManagerInvitationPayload>
+		) => {
+			state.managerActionLoading = true;
+			state.managerActionUserId = action.payload.user_id;
+			state.managerActionInvitationId = null;
+			state.managerActionError = null;
+			state.managerActionMessage = null;
+		},
+		cancelManagerInvitationRequest: (
+			state,
+			action: PayloadAction<CancelManagerInvitationPayload>
+		) => {
+			state.managerActionLoading = true;
+			state.managerActionInvitationId = action.payload.invitation_id;
+			state.managerActionUserId = null;
+			state.managerActionError = null;
+			state.managerActionMessage = null;
+		},
+		removeGroupManagerRequest: (
+			state,
+			action: PayloadAction<RemoveGroupManagerPayload>
+		) => {
+			state.managerActionLoading = true;
+			state.managerActionUserId = action.payload.user_id;
+			state.managerActionInvitationId = null;
+			state.managerActionError = null;
+			state.managerActionMessage = null;
+		},
+		/** THE INVITEE's side, dispatched from Notifications — its own slot. */
+		respondManagerInvitationRequest: (
+			state,
+			action: PayloadAction<RespondManagerInvitationPayload>
+		) => {
+			state.managerRespondLoading = true;
+			state.managerRespondInvitationId = action.payload.invitation_id;
+			state.managerRespondError = null;
+			state.managerRespondMessage = null;
+		},
+		managerRespondSuccess: (
+			state,
+			action: PayloadAction<{ message?: string } | undefined>
+		) => {
+			state.managerRespondLoading = false;
+			state.managerRespondInvitationId = null;
+			state.managerRespondMessage = action.payload?.message ?? null;
+		},
+		managerRespondFailure: (state, action: PayloadAction<string>) => {
+			state.managerRespondLoading = false;
+			state.managerRespondInvitationId = null;
+			state.managerRespondError = action.payload;
+		},
+		clearManagerRespondMessage: (state) => {
+			state.managerRespondError = null;
+			state.managerRespondMessage = null;
+		},
+		managerActionSuccess: (
+			state,
+			action: PayloadAction<{ message?: string } | undefined>
+		) => {
+			state.managerActionLoading = false;
+			state.managerActionInvitationId = null;
+			state.managerActionUserId = null;
+			state.managerActionMessage = action.payload?.message ?? null;
+		},
+		managerActionFailure: (state, action: PayloadAction<string>) => {
+			state.managerActionLoading = false;
+			state.managerActionInvitationId = null;
+			state.managerActionUserId = null;
+			state.managerActionError = action.payload;
+		},
+		clearManagerActionMessage: (state) => {
+			state.managerActionError = null;
+			state.managerActionMessage = null;
+		},
 	},
 });
 
@@ -1166,6 +1353,19 @@ export const {
 	markLeagueGuideViewedRequest,
 	markLeagueGuideViewedSuccess,
 	markLeagueGuideViewedFailure,
+	fetchManagerInvitationsRequest,
+	fetchManagerInvitationsSuccess,
+	fetchManagerInvitationsFailure,
+	sendManagerInvitationRequest,
+	cancelManagerInvitationRequest,
+	respondManagerInvitationRequest,
+	removeGroupManagerRequest,
+	managerActionSuccess,
+	managerActionFailure,
+	clearManagerActionMessage,
+	managerRespondSuccess,
+	managerRespondFailure,
+	clearManagerRespondMessage,
 } = groupSlice.actions;
 
 export default groupSlice.reducer;

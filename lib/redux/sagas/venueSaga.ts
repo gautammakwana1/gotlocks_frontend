@@ -1,4 +1,4 @@
-import { all, call, put, takeLatest } from "redux-saga/effects";
+import { all, call, put, takeLatest, takeLeading } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
@@ -15,6 +15,8 @@ import type {
     RedeemVenueAssistCodePayload,
     ResolveVenueCheckInData,
     ResolveVenueCheckInPayload,
+    JoinArenaByVenueTokenData,
+    JoinArenaByVenueTokenPayload,
     RevokeVenueAssistCodePayload,
     UpdateGroupVenuePayload,
     VenueActivityData,
@@ -45,6 +47,9 @@ import {
     revokeVenueAssistCodeRequest,
     revokeVenueAssistCodeSuccess,
     resolveVenueCheckInTokenFailure,
+    joinArenaByVenueTokenRequest,
+    joinArenaByVenueTokenSuccess,
+    joinArenaByVenueTokenFailure,
     resolveVenueCheckInTokenRequest,
     resolveVenueCheckInTokenSuccess,
     updateGroupVenueRequest,
@@ -277,6 +282,50 @@ function* handleResolveVenueCheckInToken(
 }
 
 /**
+ * POST /check-in/join/:token — walking in and joining.
+ *
+ * The rung `resolve` has been pointing at since the feature shipped: the QR
+ * landing page returned `next_step: "join_group"` and there was nothing to
+ * call, because the scanner holds an opaque token and every join endpoint was
+ * keyed on an invite code.
+ *
+ * 202 is NOT a failure — it is an Arena on `approval_required` queueing the
+ * request and ringing its owner. Both statuses carry the server's own
+ * `next_step`, which is what the screen advances to; re-deriving that ladder
+ * here is how the two doors drift apart.
+ *
+ * Joining is still not checking in. A success leaves the member at
+ * `verify_location`, and the location reading is a separate POST.
+ */
+function* handleJoinArenaByVenueToken(
+    action: PayloadAction<JoinArenaByVenueTokenPayload>
+): SagaIterator {
+    const { token } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.post,
+            `${API_BASE_URL}/group/venue/check-in/join/${encodeURIComponent(token)}`,
+            {}
+        );
+        const payload = response.data as { data?: JoinArenaByVenueTokenData };
+        if (!payload?.data) {
+            yield put(
+                joinArenaByVenueTokenFailure({ error: "Failed to join this Arena." })
+            );
+            return;
+        }
+        yield put(joinArenaByVenueTokenSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            joinArenaByVenueTokenFailure({
+                error: getErrorMessage(error, "Failed to join this Arena."),
+                code: getErrorCode(error),
+            })
+        );
+    }
+}
+
+/**
  * POST /check-in/verify/:token — the client posts what its GPS said, never a
  * verdict.
  *
@@ -465,6 +514,9 @@ export default function* venueSaga(): SagaIterator {
         takeLatest(enableGroupVenueRequest.type, handleEnableGroupVenue),
         takeLatest(regenerateVenueTokenRequest.type, handleRegenerateVenueToken),
         takeLatest(resolveVenueCheckInTokenRequest.type, handleResolveVenueCheckInToken),
+        // takeLeading: the join is not idempotent-free — a double-tap on a
+        // queueing Arena would file, then re-file, the same request.
+        takeLeading(joinArenaByVenueTokenRequest.type, handleJoinArenaByVenueToken),
         takeLatest(verifyVenueCheckInRequest.type, handleVerifyVenueCheckIn),
         takeLatest(fetchVenueActivityRequest.type, handleFetchVenueActivity),
         takeLatest(issueVenueAssistCodeRequest.type, handleIssueVenueAssistCode),

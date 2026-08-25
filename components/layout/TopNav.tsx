@@ -12,7 +12,7 @@ import {
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 // TUTORIAL DISABLED 2026-08-17 — `TutorialKeys` dropped from this import.
-import type { CurrentUser, RootState } from "@/lib/interfaces/interfaces";
+import type { CurrentUser, GroupType, RootState } from "@/lib/interfaces/interfaces";
 import { displayNameGradientStyle } from "@/lib/styles/text";
 import Image from "next/image";
 // TUTORIAL DISABLED 2026-08-17
@@ -234,10 +234,17 @@ export const TopNav = () => {
     [currentUserId, router]
   );
 
+  /**
+   * `groupType` is supplied only by the notifications that actually carry it —
+   * the manager-invitation pair puts it in metadata. Everything else keeps the
+   * League destination, which is what those notifications have always meant;
+   * this is not a guess that defaults to League, it is the absence of a reason
+   * to send anyone anywhere else.
+   */
   const handleOpenGroup = useCallback(
-    (groupId: string) => {
+    (groupId: string, groupType?: GroupType) => {
       setNotificationsOpen(false);
-      router.push(`/league/${groupId}`);
+      router.push(groupType === "arena" ? `/arena/${groupId}` : `/league/${groupId}`);
     },
     [router]
   );
