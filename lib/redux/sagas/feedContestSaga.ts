@@ -26,6 +26,8 @@ import type {
     FeedContestLifecycleData,
     FeedContestListData,
     FeedContestPicksData,
+    FeedContestUpdatesData,
+    FetchFeedContestUpdatesPayload,
     FeedContestPodiumListData,
     FeedContestStatsData,
     FeedContestRewardPrizesData,
@@ -82,6 +84,9 @@ import {
     fetchFeedContestPicksRequest,
     fetchFeedContestPicksSuccess,
     fetchFeedContestPicksFailure,
+    fetchFeedContestUpdatesRequest,
+    fetchFeedContestUpdatesSuccess,
+    fetchFeedContestUpdatesFailure,
     fetchFeedContestsFailure,
     fetchFeedContestsRequest,
     fetchFeedContestsSuccess,
@@ -698,6 +703,38 @@ function* handleFetchFeedContestPicks(
     }
 }
 
+/**
+ * GET /group/feed-contest/updates — the Feed tab's Updates view.
+ *
+ * One card per RUNNING contest, projected live: nothing is stored when a
+ * contest opens or locks, so this is simply re-read rather than invalidated by
+ * any write. Upcoming contests are dropped server-side.
+ */
+function* handleFetchFeedContestUpdates(
+    action: PayloadAction<FetchFeedContestUpdatesPayload>
+): SagaIterator {
+    const { group_id, group_type, page = 1, limit = 25 } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/group/feed-contest/updates`,
+            { params: { group_id, group_type, page, limit } }
+        );
+        const payload = response.data as { data?: FeedContestUpdatesData };
+        if (!payload?.data?.group) {
+            yield put(fetchFeedContestUpdatesFailure("Failed to load contest updates"));
+            return;
+        }
+        yield put(fetchFeedContestUpdatesSuccess(payload.data));
+    } catch (error: unknown) {
+        yield put(
+            fetchFeedContestUpdatesFailure(
+                getErrorMessage(error, "Failed to load contest updates")
+            )
+        );
+    }
+}
+
 // GET /group/feed-contest/stats/:contest_id — the whole tally in one read, for
 // any member of the group. Unlike /entries this never pages and never grows
 // with the field, so the dashboard can call it once per contest.
@@ -1043,6 +1080,9 @@ export default function* feedContestSaga(): SagaIterator {
         handleFetchFeedContestLeaderboard
     );
     yield takeLatest(fetchFeedContestPicksRequest.type, handleFetchFeedContestPicks);
+    // takeLatest: the Updates view shows one group at a time and the read is a
+    // live projection — only the newest answer can be right.
+    yield takeLatest(fetchFeedContestUpdatesRequest.type, handleFetchFeedContestUpdates);
     // takeLatest: one contest's dashboard at a time, and the post-write refetch
     // is the same read — the newest tally is the only correct one.
     yield takeLatest(fetchFeedContestStatsRequest.type, handleFetchFeedContestStats);

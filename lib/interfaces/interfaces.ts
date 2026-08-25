@@ -3347,6 +3347,14 @@ export type FeedContestParticipation = {
  * per-viewer counters the card needs.
  */
 export type FeedContest = ArenaContest & {
+    /**
+     * The size of the finalized field — travels with `finalized_at` because it
+     * means nothing without it. Present on FEED_CONTEST_LIST_COLUMNS, so every
+     * /list and /list/finalized/podium row carries it.
+     */
+    final_entry_count?: number | null;
+    /** Arena prize snapshot, where the read that produced this row attached one. */
+    reward?: FeedContestUpdateReward | null;
     sports?: string[] | null;
     minimum_legs?: number | null;
     maximum_legs?: number | null;
@@ -3426,6 +3434,29 @@ export type FeedContestWinner = {
     awarded_at: string;
     is_tie: boolean;
     tied_count: number;
+    /**
+     * HOW the placement was earned — the entry's own `contest_leaderboard` line.
+     * NULL where that row could not be read; the placement is still true, so a
+     * card degrades to "2nd place" without the detail rather than disappearing.
+     */
+    entry?: {
+        /** Legs that landed, out of legs played. */
+        correct_picks: number;
+        total_picks: number;
+        /**
+         * THE COMBINED PRICE, AND ITS UNITS DEPEND ON THE TEMPLATE — read
+         * `contest.template` before rendering it:
+         *
+         *   general_combo   the combined AMERICAN price (+545, often negative),
+         *   td_psychic      the correct-only DECIMAL product, written purely as
+         *                   the placement tiebreak — NOT a price to display,
+         *   sunday_pickem   always NULL; a card has no combined price.
+         */
+        combo_odds: number | null;
+        /** The board's figure. Equals `points` on every row finalization wrote. */
+        contest_points: number;
+        pick_id: string | null;
+    } | null;
 };
 
 /**
@@ -4545,6 +4576,109 @@ export type FeedContestPickRow = {
     standing?: FeedContestPickStanding | null;
 };
 
+
+/* ----------------------------------------------------------------------------
+ * GET /group/feed-contest/updates — the Feed tab's Updates view.
+ *
+ * One card per RUNNING contest, a LIVE PROJECTION rather than a stored post:
+ * nothing is written when a contest opens or locks, and the same card changes
+ * status in place. UPCOMING contests are filtered out server-side, so `status`
+ * is only ever open or locked here — the MVP's third "Opening soon" state has
+ * no counterpart on this read.
+ *
+ * NOT a merge of /list/open and /list/locked: those two sort differently, so
+ * combining them client-side has no single order to page and double-counts a
+ * contest that locks between the two requests.
+ * -------------------------------------------------------------------------- */
+export type FeedContestUpdateStatus = "open" | "locked";
+
+/** Which timestamp the card's timing line is built from. */
+export type FeedContestUpdateTimingBasis = "locks_at" | "results_pending";
+
+/**
+ * The Arena prize strip. ARENA ONLY — feed_contest_rewards carries an
+ * arena_only CHECK, so a League response never contains one.
+ */
+export type FeedContestUpdateReward = {
+    settlement_method: "in_person" | "virtual";
+    /** Spelled server-side so no client composes it. */
+    settlement_label: string;
+    venue_name: string | null;
+    provider_name: string | null;
+    prizes: {
+        place: number | null;
+        title: string | null;
+        description: string | null;
+        approximate_value: string | null;
+    }[];
+};
+
+export type FeedContestUpdateEntrant = {
+    id: string;
+    /** NULL where the participant's profile row is gone — still holds its seat. */
+    username: string | null;
+    profile_image: string | null;
+};
+
+export type FeedContestUpdateRow = {
+    /** `contest-update:<contestId>` — stable across polls AND status changes. */
+    id: string;
+    kind: "contest_update";
+    status: FeedContestUpdateStatus;
+    /**
+     * A TIMESTAMP, never a formatted string — only the client knows the
+     * viewer's zone. `at` is null on a locked contest: it is waiting on games,
+     * not on a clock.
+     */
+    timing: { basis: FeedContestUpdateTimingBasis; at: string | null };
+    contest: {
+        id: string;
+        name: string;
+        template: string;
+        entry_model: string;
+        lifecycle_status: ContestLifecycleStatus;
+        sport: string | null;
+        sports: string[] | null;
+        time_zone: string | null;
+        opens_at: string | null;
+        locks_at: string;
+        expected_ends_at: string | null;
+        winning_places: number | null;
+        created_at: string;
+        updated_at: string;
+        reward: FeedContestUpdateReward | null;
+    };
+    /** The organizer who published it. Degrades to `{ id }`. */
+    author: { id: string; username?: string | null; profile_image?: string | null };
+    /** The WHOLE live field — withdrawn and disqualified excluded. */
+    entrant_count: number;
+    /** At most 4, most recent first. The "+N" chip is count - entrants.length. */
+    entrants: FeedContestUpdateEntrant[];
+    /** The caller's own row, so the card can say "You're in". NULL if never joined. */
+    my_participation: Record<string, unknown> | null;
+};
+
+export type FeedContestUpdatesData = {
+    group: { id: string; name: string; group_type: string };
+    context_type: string;
+    viewer: { role: string | null; is_organizer: boolean };
+    summary: { open_count: number; locked_count: number };
+    updates: FeedContestUpdateRow[];
+    pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
+};
+
+export type FetchFeedContestUpdatesPayload = {
+    group_id: string;
+    group_type: FeedGroupType;
+    page?: number;
+    limit?: number;
+};
 export type FeedContestPicksData = {
     group: { id: string; name: string; group_type: string };
     context_type: string;

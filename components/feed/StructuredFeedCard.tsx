@@ -1,5 +1,7 @@
 "use client";
+import { FeedContestWinnersCard } from "./FeedContestWinnersCard";
 
+import { ContestUpdateContent } from "./ContestUpdateContent";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -356,6 +358,10 @@ export const StructuredFeedCard = ({
     const pointLabel = getStructuredFeedPointLabel(context);
     const isNoncompetitiveStaffPick = record.kind === "staff_pick";
     const isAnnouncement = record.kind === "staff_announcement";
+    const isContestUpdate = record.kind === "contest_update";
+    const isContestWinners = record.kind === "contest_winners";
+    // Same suppression the update card gets: the podium is the card, so the
+    // eyebrow and context chip above it are noise.
     const feedAuthorName = record.author.handle?.replace(/^@/, "") ?? record.author.displayName;
     const compactFeedAuthorName =
         feedAuthorName.length > 12 ? `${feedAuthorName.slice(0, 12)}…` : feedAuthorName;
@@ -672,6 +678,27 @@ export const StructuredFeedCard = ({
                             </span>
                         </span>
                     </Link>
+                ) : isContestUpdate || isContestWinners ? (
+                    /* The MVP's own eyebrow for both contest kinds: a word, a dot
+                       and a date — no author row and no avatar. The card below
+                       carries the identity that matters, which is the contest's,
+                       not the organizer's. */
+                    <div
+                        data-feed-contest-update-status-header
+                        className="flex min-w-0 items-center gap-1.5 py-1"
+                    >
+                        <span
+                            className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.16em] ${accentTone.recordLabel}`}
+                        >
+                            {isContestWinners ? "Final results" : "Contest update"}
+                        </span>
+                        <span aria-hidden="true" className="text-white/25">
+                            ·
+                        </span>
+                        <span className="truncate text-[9px] font-semibold text-slate-400">
+                            {isContestWinners ? "Finalized" : "Posted"} {record.createdAtLabel}
+                        </span>
+                    </div>
                 ) : (
                     <div className="min-w-0">
                         {record.kind === "competitive_pick" && hasContestHeaderLink ? (
@@ -707,13 +734,31 @@ export const StructuredFeedCard = ({
                             onEdit={onEdit}
                             onDelete={onDelete}
                         />
-                    ) : (
+                    ) : isContestUpdate || isContestWinners ? null : (
                         <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400">
                             {getStructuredFeedContextLabel(context)}
                         </span>
                     )}
                 </div>
             </header>
+
+            {isContestUpdate ? (
+                <ContestUpdateContent
+                    record={record}
+                    accent={accent}
+                    contextKind={context.kind}
+                />
+            ) : null}
+
+            {isContestWinners && record.winnersCard ? (
+                <FeedContestWinnersCard
+                    context={context}
+                    card={record.winnersCard}
+                    accent={accent}
+                    pointsLabel={pointLabel}
+                    currentUserId={currentUserId}
+                />
+            ) : null}
 
             {/* A sealed entry never reaches here — it returns its own compact row
                 above — so everything below is the revealed body. */}

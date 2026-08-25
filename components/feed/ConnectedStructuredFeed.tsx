@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
+    buildFantasyPodiumCards,
+    buildFeedContestPodiumCards,
+} from "@/lib/contests/feedContestPodium";
+import {
     isContestFinalized,
     toPickCardStanding,
 } from "@/lib/contests/pickStanding";
 import type {
-    ArenaStaffPick,
     FeedContestPickRow,
+    FeedContestUpdateRow,
     FeedGroupType,
+    GroupSelector,
     Pick,
     PickResult,
     RootState,
@@ -28,12 +33,9 @@ import {
     clearPinStaffAnnouncementState,
     clearUpdateCommunityPickState,
     createStaffAnnouncementRequest,
-    createStaffPickRequest,
     deleteStaffAnnouncementRequest,
-    deleteStaffPickRequest,
     editStaffAnnouncementRequest,
     fetchStaffAnnouncementsRequest,
-    fetchStaffPicksRequest,
     pinStaffAnnouncementRequest,
     resetGroupFeed,
 } from "@/lib/redux/slices/arenaSlice";
@@ -41,6 +43,8 @@ import { fetchFantasyPodiumsRequest } from "@/lib/redux/slices/groupsSlice";
 import { FANTASY_PODIUM_PAGE_SIZE } from "@/lib/redux/sagas/groupsSaga";
 import {
     clearFeedContestPicks,
+    clearFeedContestUpdates,
+    fetchFeedContestUpdatesRequest,
     fetchFeedContestPicksRequest,
     fetchFeedContestPodiumsRequest,
 } from "@/lib/redux/slices/feedContestSlice";
@@ -48,28 +52,18 @@ import {
     clearSlipContestPicks,
     fetchSlipContestPicksRequest,
 } from "@/lib/redux/slices/pickSlice";
-import { fetchLiveNFLScheduleRequest } from "@/lib/redux/slices/nflSlice";
 import { useToast } from "@/lib/state/ToastContext";
 import { formatDateTime } from "@/lib/utils/date";
 import { AnnouncementEditModal } from "./AnnouncementEditModal";
-import {
-    FeedContestWinnersBlock,
-    FEED_CONTEST_WINNERS_PAGE_SIZE,
-} from "./FeedContestWinnersBlock";
-import FantasyContestWinnersBlock from "./FantasyContestWinnersBlock";
+import { FEED_CONTEST_WINNERS_PAGE_SIZE } from "./FeedContestWinnersBlock";
 import { StructuredFeed } from "./StructuredFeed";
 import { resolveContestEntryLifecycle } from "./formatters";
-import {
-    buildMoneylineStaffPickOptions,
-    buildStaffPickPayload,
-} from "./staffPickOdds";
 import type {
     StructuredFeedCapabilities,
     StructuredFeedContextMetadata,
     StructuredFeedFilter,
     StructuredFeedProps,
     StructuredFeedRecord,
-    StructuredFeedRecordSelection,
     StructuredFeedRole,
     StructuredFeedStaffRole,
     StructuredFeedSubmission,
@@ -161,23 +155,6 @@ const toGradedPickResult = (raw: unknown): PickResult | undefined =>
         ? (raw as PickResult)
         : undefined;
 
-const buildPickSelection = (pick: Pick): StructuredFeedRecordSelection => {
-    const parsed = parseAmericanOdds(pick.odds_bracket);
-    const settled = Boolean(pick.result && pick.result !== "pending");
-    return {
-        summary: pick.description,
-        marketLabel:
-            pick.selection?.market ?? pick.market ?? pick.source_tab ?? undefined,
-        acceptedAmericanOdds: parsed ?? 0,
-        potentialPoints: pick.points ?? 0,
-        awardedPoints: settled ? pick.awardedPoints ?? null : undefined,
-        result: settled ? toGradedPickResult(pick.result) : undefined,
-        resultLabel: settled
-            ? String(pick.result).replaceAll("_", " ")
-            : undefined,
-    };
-};
-
 export const ConnectedStructuredFeed = ({
     groupId,
     groupType = "arena",
@@ -195,27 +172,20 @@ export const ConnectedStructuredFeed = ({
     const {
         staffAnnouncements,
         staffAnnouncementsLoading,
-        staffPicks,
+
         createdAnnouncement,
         createAnnouncementError,
         createAnnouncementMessage,
         deleteAnnouncementLoadingId,
         deleteAnnouncementError,
         deleteAnnouncementMessage,
-        deleteStaffPickLoadingId,
-        deleteStaffPickError,
-        deleteStaffPickMessage,
         editAnnouncementLoadingId,
         editAnnouncementError,
         editAnnouncementMessage,
         pinAnnouncementLoadingId,
         pinAnnouncementError,
         pinAnnouncementMessage,
-        createdStaffPick,
-        createStaffPickError,
-        createStaffPickMessage,
     } = useSelector((state: RootState) => state.arena);
-    const { nflSchedulesWithOdds } = useSelector((state: RootState) => state.nfl);
     /*
      * Feed contest entries for BOTH surfaces — GET /group/feed-contest/picks.
      *
@@ -229,7 +199,7 @@ export const ConnectedStructuredFeed = ({
      * One call rather than two also removes the open/closed dedupe: a contest
      * that locked between the two fetches used to come back in both lists.
      */
-    const { groupPicks: feedContestPicks } = useSelector(
+    const { groupPicks: feedContestPicks, updates: contestUpdates } = useSelector(
         (state: RootState) => state.feedContest
     );
     // Slip (Fantasy) contest picks — GET /pick/slip-contest-picks. League-only,
@@ -238,7 +208,6 @@ export const ConnectedStructuredFeed = ({
 
     const feedRole = toFeedRole(currentRole);
     const isStaff = STAFF_ROLES.has(currentRole);
-    const isMember = currentRole === "member";
     const isOwner = currentRole === "commissioner" || currentRole === "owner";
     const canPost = writable && isStaff;
     // Staff Picks remain an Arena-only surface; a League's staff surface is
@@ -253,33 +222,31 @@ export const ConnectedStructuredFeed = ({
         name: contextName,
     };
 
-    // Announcements are live for staff; Staff Picks for Arena staff. A League
-    // offers announcements (commissioner) only — Staff Picks are Arena-only.
-    //
-    // No community-pick mode: Community Picks were withdrawn from the Feed
-    // entirely, create first (2026-08-19) and then the read, the reactions and
-    // the replace path with them. Nothing here reaches /group/*/community-pick*.
-    //
-    // No competitive-pick mode: like the MVP, the Feed DISPLAYS contest entries
-    // (competitive_pick records from /group/feed-contest/picks) but does not
-    // create them. Entering is the contest page's job — FeedContestEntryShell,
-    // which posts multi-leg combos through /group/feed-contest/enter and
-    // validates them against the contest's own eligible slate. The composer
-    // could only ever offer a single pick off the live NFL slate, on Arena-only
-    // routes, which is neither.
+    /* THE COMPOSER IS ANNOUNCEMENT-ONLY. All three pick modes are withdrawn,
+     * each for its own reason, and the composer hides a mode whose capability is
+     * false — so the drawer offers a single mode and its chooser does not render.
+     *
+     *   community_pick   withdrawn 2026-08-19 (create) and then entirely: the
+     *                    read, the reactions and the replace path went too.
+     *   staff_pick       withdrawn from BOTH surfaces: the Feed no longer
+     *                    creates, reads or renders one, and nothing here reaches
+     *                    /group/*​/staff-pick*.
+     *   competitive_pick never created here. The Feed DISPLAYS contest entries
+     *                    (from /group/feed-contest/picks) but entering is the
+     *                    contest page's job — FeedContestEntryShell posts
+     *                    multi-leg combos through /group/feed-contest/enter and
+     *                    validates them against the contest's own slate. The
+     *                    composer could only ever offer a single pick off the
+     *                    live NFL slate, which is neither.
+     *
+     * The keys stay on the capability object because StructuredFeed's composer
+     * is shared and reads all four; `false` is how a host declines a mode. */
     const capabilities: StructuredFeedCapabilities = {
         canCreateCommunityPick: false, // withdrawn — see above
-        canCreateCompetitivePick: false, // see above — contest page only
-        canCreateStaffPick: isArena && canPost, // NFL moneyline, next 2 days
-        canCreateStaffPost: canPost, // announcements
+        canCreateCompetitivePick: false, // contest page only
+        canCreateStaffPick: false, // withdrawn — see above
+        canCreateStaffPost: canPost, // announcements — the only live mode
     };
-
-    // Priced-selection dropdown: NFL moneyline main lines for the next 2 days.
-    // detailById lets onSubmit rebuild the full payload from the chosen id.
-    const { options: staffPickOptions, detailById } = useMemo(
-        () => buildMoneylineStaffPickOptions(nflSchedulesWithOdds?.events, Date.now()),
-        [nflSchedulesWithOdds],
-    );
 
     // The author join can come back without a username. This Feed also serves
     // Leagues, so the placeholder has to follow the surface rather than always
@@ -320,28 +287,6 @@ export const ConnectedStructuredFeed = ({
         [currentUserId, isOwner, staffFallbackName],
     );
 
-    // Staff pick -> feed record. Rendered as a noncompetitive text record (the
-    // "Staff Pick · Noncompetitive" label comes from the kind). Deletable by the
-    // pick's author or the Arena owner (matches the backend rule).
-    const pickToRecord = useCallback(
-        (pick: ArenaStaffPick): StructuredFeedRecord => {
-            const author = normalizeAuthor(pick.author) ?? pick.profiles;
-            const canDelete = pick.user_id === currentUserId || isOwner;
-            return {
-                id: pick.id,
-                kind: "staff_pick",
-                author: {
-                    id: author?.id ?? pick.user_id,
-                    displayName: author?.username ?? "Arena staff",
-                    handle: author?.username ?? undefined,
-                },
-                createdAtLabel: formatDateTime(pick.created_at),
-                selection: buildPickSelection(pick),
-                actions: canDelete ? { canDelete: true } : undefined,
-            };
-        },
-        [currentUserId, isOwner],
-    );
 
 
 
@@ -469,6 +414,92 @@ export const ConnectedStructuredFeed = ({
         [groupId, groupType, memberFallbackName],
     );
 
+
+    /*
+     * Contest update -> feed record. BOTH surfaces, from
+     * GET /group/feed-contest/updates.
+     *
+     * A LIVE PROJECTION, not a stored post: nothing is written when a contest
+     * opens or locks, and the same card changes status in place. That is why
+     * the record id is the server's stable `contest-update:<id>` — keying on it
+     * animates the card rather than tearing it down on every status change.
+     *
+     * Sorted by the CONTEST's created_at, matching the MVP: an update card does
+     * not jump to the top of the Feed when its contest locks.
+     */
+    const contestUpdateToRecord = useCallback(
+        (item: FeedContestUpdateRow): StructuredFeedRecord => {
+            const contestHref =
+                groupType === "arena"
+                    ? `/arena/${groupId}/feed-contests/${item.contest.id}`
+                    : `/league/${groupId}/feed-contests/${item.contest.id}`;
+
+            /* The API sends TIMESTAMPS, never copy — only the client knows the
+             * viewer's zone. A locked contest has no date to show at all: it is
+             * waiting on games, not on a clock we own. */
+            const timingLabel =
+                item.timing.basis === "results_pending" || !item.timing.at
+                    ? "Results pending"
+                    : `Locks ${formatDateTime(item.timing.at)}`;
+
+            const reward = item.contest.reward;
+
+            return {
+                id: item.id,
+                kind: "contest_update",
+                author: {
+                    id: item.author.id,
+                    displayName: item.author.username ?? memberFallbackName,
+                    handle: item.author.username ?? undefined,
+                },
+                createdAtLabel: formatDateTime(item.contest.created_at),
+                contest: {
+                    id: item.contest.id,
+                    name: item.contest.name,
+                    href: contestHref,
+                    // Arena-only server-side, and the card gates on context too.
+                    ...(reward
+                        ? {
+                            reward: {
+                                settlementLabel: reward.settlement_label,
+                                providerName: reward.provider_name ?? "the Arena organizer",
+                                // A prize with no place cannot be ordered or
+                                // labelled, so it is dropped rather than drawn
+                                // as "NaNth Place".
+                                prizes: reward.prizes.flatMap((prize) =>
+                                    typeof prize.place === "number"
+                                        ? [{
+                                            place: prize.place,
+                                            title: prize.title ?? "Prize",
+                                            description: prize.description ?? "",
+                                            approximateValue: prize.approximate_value,
+                                        }]
+                                        : []
+                                ),
+                            },
+                        }
+                        : {}),
+                },
+                contestUpdate: {
+                    status: item.status,
+                    template:
+                        item.contest.template === "td_psychic"
+                            ? "td_psychic"
+                            : item.contest.template === "sunday_pickem"
+                                ? "sunday_pickem"
+                                : "general_combo",
+                    entrantCount: item.entrant_count,
+                    entrants: item.entrants.map((entrant) => ({
+                        id: entrant.id,
+                        displayName: entrant.username ?? memberFallbackName,
+                        handle: entrant.username ?? undefined,
+                    })),
+                    timingLabel,
+                },
+            };
+        },
+        [groupId, groupType, memberFallbackName],
+    );
     /*
      * Slip (Fantasy) contest pick -> feed record. League-only, from
      * GET /pick/slip-contest-picks.
@@ -544,6 +575,65 @@ export const ConnectedStructuredFeed = ({
         [groupId, memberFallbackName],
     );
 
+
+    /*
+     * Finalized podiums -> feed records.
+     *
+     * These used to render as a "Winners" block pinned above the list. They are
+     * rows now, so a result sorts against the contest updates and posts around
+     * it by DATE — a podium from last month no longer sits on top of this
+     * morning's update.
+     *
+     * Both podium sources produce the same card, so one record kind carries
+     * both: Feed contests from `feedContest.podium`, and a League's Fantasy
+     * contests from `group.fantasyPodium`.
+     *
+     * Guarded on each slot's own group id, not just on the fetch: the Feed
+     * renders on the same tick the group changes, and an unguarded read would
+     * show the previous community's winners until the refetch landed.
+     */
+    const feedPodium = useSelector((state: RootState) => state.feedContest.podium);
+    const fantasyPodium = useSelector(
+        (state: GroupSelector) => state.group.fantasyPodium
+    );
+
+    const winnersRecords = useMemo(() => {
+        const cards = [
+            ...(feedPodium.groupId === groupId
+                ? buildFeedContestPodiumCards(feedPodium.contests, groupType, groupId)
+                : []),
+            // Fantasy contests are a League surface only.
+            ...(isLeague && fantasyPodium.groupId === groupId
+                ? buildFantasyPodiumCards(fantasyPodium.contests, groupId, currentUserId)
+                : []),
+        ];
+
+        return cards.map((card) => ({
+            pinned: false,
+            sortKey: Date.parse(card.sortAt ?? "") || 0,
+            record: {
+                id: `contest-winners:${card.contestId}`,
+                kind: "contest_winners" as const,
+                // The podium names its own members; this author block exists only
+                // because every record carries one.
+                author: { id: card.contestId, displayName: card.contestName },
+                createdAtLabel: card.sortAt ? formatDateTime(card.sortAt) : "",
+                contest: {
+                    id: card.contestId,
+                    name: card.contestName,
+                    href: card.detailHref,
+                },
+                winnersCard: card,
+            } satisfies StructuredFeedRecord,
+        }));
+    }, [
+        feedPodium,
+        fantasyPodium,
+        groupId,
+        groupType,
+        isLeague,
+        currentUserId,
+    ]);
     // Merge announcements + picks into one feed: pinned announcements first, then
     // everything newest-first. (Picks are never pinned.)
     const records = useMemo(() => {
@@ -553,21 +643,6 @@ export const ConnectedStructuredFeed = ({
                 sortKey: Date.parse(announcement.created_at) || 0,
                 record: announcementToRecord(announcement),
             })),
-            // Staff Picks and competitive entries are Arena-only surfaces, never
-            // fetched for a League (see the mount effect's `if (isArena)`), but
-            // arenaSlice has NO reset for these three lists. Arena -> League in one
-            // SPA session would otherwise render leftover Arena rows inside the
-            // League feed with live buttons: "Delete post" on a leaked staff pick
-            // would dispatch group_type "league" at /group/league/staff-pick/:id — a
-            // route leagueFeedRoutes does not declare — and the contest link is
-            // built as /arena/${groupId}/...
-            ...(isArena
-                ? staffPicks.map((pick) => ({
-                    pinned: false,
-                    sortKey: Date.parse(pick.created_at ?? "") || 0,
-                    record: pickToRecord(pick),
-                }))
-                : []),
             // Feed contest entries, both surfaces. Scoped by group id because the
             // slice is single-tenant and one commit can still hold the previous
             // group's page while the new request is in flight.
@@ -586,6 +661,18 @@ export const ConnectedStructuredFeed = ({
                     record: slipContestPickToRecord(item),
                 }))
                 : []),
+            // Contest UPDATE cards — one per running contest, both surfaces.
+            // Sorted on the CONTEST's created_at like the MVP, so a card does
+            // not jump to the top of the Feed the moment its contest locks.
+            ...(contestUpdates?.group.id === groupId
+                ? contestUpdates.updates.map((item) => ({
+                    pinned: false,
+                    sortKey: Date.parse(item.contest.created_at ?? "") || 0,
+                    record: contestUpdateToRecord(item),
+                }))
+                : []),
+            // Finalized podiums, ordered by date with everything else.
+            ...winnersRecords,
         ];
         items.sort(
             (left, right) =>
@@ -593,17 +680,18 @@ export const ConnectedStructuredFeed = ({
         );
         return items.map((item) => item.record);
     }, [
-        isArena,
         isLeague,
         groupId,
         staffAnnouncements,
-        staffPicks,
         feedContestPicks,
         slipContestPicks,
+        contestUpdates,
+        winnersRecords,
+        contestUpdateToRecord,
         feedContestPickToRecord,
         slipContestPickToRecord,
         announcementToRecord,
-        pickToRecord,
+
     ]);
 
 
@@ -627,15 +715,22 @@ export const ConnectedStructuredFeed = ({
         // does not reach them — drop them on the same boundary or a League feed
         // can paint the previous group's entries.
         dispatch(clearFeedContestPicks());
+        dispatch(clearFeedContestUpdates());
         return () => {
             dispatch(resetGroupFeed());
             dispatch(clearFeedContestPicks());
+            dispatch(clearFeedContestUpdates());
             dispatch(clearSlipContestPicks());
         };
     }, [groupId, groupType, dispatch]);
 
-    // Load both lists when the Feed mounts (only rendered while the Feed tab is
-    // active). Staff also pull the odds that populate the Staff Pick dropdown.
+    // Everything the Feed lists, loaded on mount (this only renders while the
+    // Feed tab is active).
+    //
+    // NO NFL ODDS READ any more. The slate populated the Staff Pick dropdown and
+    // nothing else once Community Picks went, so withdrawing Staff Picks took
+    // its last consumer with it — the composer is announcement-only and asks the
+    // odds feed for nothing.
     useEffect(() => {
         if (!groupId) return;
         dispatch(fetchStaffAnnouncementsRequest({ arena_id: groupId, group_type: groupType, page: 1 }));
@@ -645,26 +740,16 @@ export const ConnectedStructuredFeed = ({
         dispatch(
             fetchFeedContestPicksRequest({ group_id: groupId, group_type: groupType, page: 1 })
         );
+        // Contest update cards — one per RUNNING contest, both surfaces. A live
+        // projection, so it is simply re-read on mount rather than invalidated.
+        dispatch(
+            fetchFeedContestUpdatesRequest({ group_id: groupId, group_type: groupType, page: 1 })
+        );
         // Slip (Fantasy) contests exist on Leagues only.
         if (isLeague) {
             dispatch(fetchSlipContestPicksRequest({ group_id: groupId, page: 1 }));
         }
-        // Staff Picks stay an Arena-only surface; a League 404s on them.
-        if (isArena) {
-            dispatch(fetchStaffPicksRequest({ arena_id: groupId, group_type: groupType, page: 1 }));
-        }
-        /* The NFL moneyline slate, and ONLY for someone who can actually post a
-         * Staff Pick — the single remaining composer mode that reads it.
-         *
-         * This used to fire for `canPost || canPostCommunityPick`, and
-         * canPostCommunityPick was true for essentially every member, so every
-         * ordinary member of every League and Arena pulled the whole odds feed
-         * on Feed mount to support a Community Pick replacement that no longer
-         * exists. Staff Picks are Arena-only, hence `isArena` here too. */
-        if (isArena && canPost) {
-            dispatch(fetchLiveNFLScheduleRequest(undefined));
-        }
-    }, [groupId, groupType, isArena, isLeague, canPost, isMember, dispatch]);
+    }, [groupId, groupType, isLeague, dispatch]);
 
     // Only surface a delete result for a delete initiated during THIS mount. A
     // delete that resolves after the Feed tab unmounts still sets the store field,
@@ -683,22 +768,6 @@ export const ConnectedStructuredFeed = ({
         });
         dispatch(clearDeleteStaffAnnouncementState());
     }, [deleteAnnouncementError, deleteAnnouncementMessage, dispatch, setToast]);
-
-    // Same one-shot pattern for staff-pick deletes.
-    const deletePickRequestedRef = useRef(false);
-
-    useEffect(() => {
-        if (!deletePickRequestedRef.current) return;
-        if (!deleteStaffPickError && !deleteStaffPickMessage) return;
-        deletePickRequestedRef.current = false;
-        setToast({
-            id: Date.now(),
-            type: deleteStaffPickError ? "error" : "success",
-            message: deleteStaffPickError ?? deleteStaffPickMessage ?? "",
-            duration: 3000,
-        });
-        dispatch(clearDeleteStaffPickState());
-    }, [deleteStaffPickError, deleteStaffPickMessage, dispatch, setToast]);
 
 
     // One handler for both post types (the card renders a single Delete button);
@@ -724,23 +793,12 @@ export const ConnectedStructuredFeed = ({
                 );
                 return;
             }
-            if (record.kind === "staff_pick") {
-                if (deleteStaffPickLoadingId) return;
-                if (typeof window !== "undefined" && !window.confirm("Delete this staff pick?")) {
-                    return;
-                }
-                deletePickRequestedRef.current = true;
-                dispatch(
-                    deleteStaffPickRequest({ pick_id: record.id, arena_id: groupId, group_type: groupType }),
-                );
-                return;
-            }
         },
         [
             groupId,
             groupType,
             deleteAnnouncementLoadingId,
-            deleteStaffPickLoadingId,
+
             dispatch,
         ],
     );
@@ -846,7 +904,7 @@ export const ConnectedStructuredFeed = ({
     // success lands late could resolve the wrong in-flight promise.
     const pendingResolve = useRef<
         | {
-            kind: "staff_post" | "staff_pick";
+            kind: "staff_post";
             resolve: (response: StructuredFeedSubmitResponse) => void;
         }
         | null
@@ -884,23 +942,6 @@ export const ConnectedStructuredFeed = ({
             dispatch(clearCreateStaffAnnouncementState());
         }
     }, [createdAnnouncement, createAnnouncementMessage, createAnnouncementError, dispatch]);
-
-    useEffect(() => {
-        const pending = pendingResolve.current;
-        if (!pending || pending.kind !== "staff_pick") return;
-        if (createdStaffPick || createStaffPickMessage) {
-            pending.resolve({
-                status: "accepted",
-                message: createStaffPickMessage ?? "Staff pick posted.",
-            });
-            pendingResolve.current = null;
-            dispatch(clearCreateStaffPickState());
-        } else if (createStaffPickError) {
-            pending.resolve({ status: "rejected", message: createStaffPickError });
-            pendingResolve.current = null;
-            dispatch(clearCreateStaffPickState());
-        }
-    }, [createdStaffPick, createStaffPickMessage, createStaffPickError, dispatch]);
 
     // NOTE: the community-pick resolver effects that sat here are gone with the
     // rest of that surface. No community-pick action is dispatched from this
@@ -958,33 +999,9 @@ export const ConnectedStructuredFeed = ({
                     dispatch(createStaffAnnouncementRequest({ arena_id: groupId, group_type: groupType, text }));
                 });
             }
-            if (submission.mode === "staff_pick") {
-                const detail = detailById[submission.selectionId];
-                if (!detail) {
-                    return {
-                        status: "rejected",
-                        message: "That selection is no longer available. Refresh and try again.",
-                    };
-                }
-                // The option list froze its kickoff window at fetch time and never
-                // refreshes while the tab stays mounted, and the backend doesn't
-                // validate kickoff — so a game that started during the session can
-                // still be in the dropdown. Re-check the live clock before dispatch.
-                if (Date.parse(detail.match_date) <= Date.now()) {
-                    return {
-                        status: "rejected",
-                        message: "That game has already started. Refresh for the latest slate.",
-                    };
-                }
-                const payload = buildStaffPickPayload(detail, groupId, submission.note);
-                return new Promise<StructuredFeedSubmitResponse>((resolve) => {
-                    pendingResolve.current = { kind: "staff_pick", resolve };
-                    dispatch(createStaffPickRequest({ ...payload, group_type: groupType }));
-                });
-            }
             return { status: "rejected", message: "This post type isn't available yet." };
         },
-        [groupId, groupType, detailById, dispatch],
+        [groupId, groupType, dispatch],
     );
 
     /* Replace went with Community Picks.
@@ -1018,36 +1035,17 @@ export const ConnectedStructuredFeed = ({
                 currentRole={feedRole}
                 capabilities={capabilities}
                 records={records}
-                selectionOptions={staffPickOptions}
+                // Announcement-only composer: no mode reads a priced selection.
+                selectionOptions={[]}
                 standings={standings}
                 standingsAction={standingsAction}
-                // Owns its own read (/list/finalized/podium) rather than taking a
-                // node from the host, because both hosts would build the exact
-                // same one — the Feed already knows the group, the surface and
-                // the accent, which is everything the block needs.
-                winners={
-                    <>
-                        {/* Fantasy results first: they are the League's own
-                            contests, and a League that runs both should not have
-                            to scroll past its Feed contests to find them. Each
-                            block renders nothing at all when it has no cards, so
-                            an Arena — which has no Fantasy contests — is
-                            unaffected by the extra node. */}
-                        {isLeague ? (
-                            <FantasyContestWinnersBlock
-                                context={context}
-                                accent="sky"
-                                currentUserId={currentUserId}
-                            />
-                        ) : null}
-                        <FeedContestWinnersBlock
-                            context={context}
-                            groupType={groupType}
-                            accent={isArena ? "violet" : "sky"}
-                            currentUserId={currentUserId}
-                        />
-                    </>
-                }
+                /* No `winners` node any more. The podiums those two blocks drew
+                   are now `contest_winners` RECORDS merged into `records`, so a
+                   result orders by date against the updates and posts around it
+                   instead of being pinned above them in a "Winners" strip.
+                   FeedContestWinnersCard still draws each one — see
+                   StructuredFeedCard. This component still owns both podium
+                   FETCHES below; only the rendering moved. */
                 initialFilter={initialFilter}
                 currentUserId={currentUserId}
 

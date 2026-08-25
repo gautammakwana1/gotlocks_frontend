@@ -1,4 +1,5 @@
 import type { ReactNode, Ref } from "react";
+import type { FeedContestPodiumCard } from "@/lib/contests/feedContestPodium";
 import type { PickCardPresentation } from "@/components/social/pick-card/types";
 import type {
     Pick,
@@ -101,7 +102,38 @@ export type StructuredFeedRecordKind =
     | "community_pick"
     | "competitive_pick"
     | "staff_pick"
-    | "staff_announcement";
+    | "staff_announcement"
+    | "contest_update"
+    | "contest_winners";
+
+/**
+ * The live contest-status card in the Updates view. Projected per read from
+ * GET /group/feed-contest/updates, never stored — the same card changes status
+ * in place when its contest locks.
+ *
+ * No "upcoming" arm, unlike the MVP: that read filters out contests whose
+ * opens_at is still in the future, so the state is unreachable here.
+ */
+export type StructuredFeedContestUpdate = {
+    status: "open" | "locked";
+    template: "general_combo" | "sunday_pickem" | "td_psychic";
+    entrantCount: number;
+    entrants: readonly StructuredFeedAuthor[];
+    /** Already formatted for the viewer's zone — the API sends a timestamp. */
+    timingLabel: string;
+};
+
+/** Arena-only prize strip. A League response never carries one. */
+export type StructuredFeedContestReward = {
+    settlementLabel: string;
+    providerName: string;
+    prizes: readonly {
+        place: number;
+        title: string;
+        description: string;
+        approximateValue: string | null;
+    }[];
+};
 
 export type StructuredFeedRecordSelection = {
     summary: string;
@@ -142,7 +174,22 @@ export type StructuredFeedRecord = {
      * even when their payload is redacted until lock.
      */
     presentation?: PickCardPresentation;
-    contest?: { id: string; name: string; locksAtLabel?: string; href?: string };
+    contest?: {
+        id: string;
+        name: string;
+        locksAtLabel?: string;
+        href?: string;
+        /** Arena-only reward snapshot, shown under a contest update card. */
+        reward?: StructuredFeedContestReward;
+    };
+    /** Live contest-level summary. Only set on a `contest_update` record. */
+    contestUpdate?: StructuredFeedContestUpdate;
+    /**
+     * A finalized contest's podium, rendered inline in the Updates view so it
+     * orders against every other card by date rather than sitting in a block
+     * pinned above them. Only set on a `contest_winners` record.
+     */
+    winnersCard?: FeedContestPodiumCard;
     staffRole?: StructuredFeedStaffRole;
     visibility?: "visible" | "hidden_until_lock";
     /**

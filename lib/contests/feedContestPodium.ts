@@ -1,5 +1,6 @@
 import type {
     FeedContest,
+    FeedContestUpdateReward,
     FeedContestPodiumEntry,
     FeedGroupType,
     FantasyPodiumBadge,
@@ -50,9 +51,36 @@ export type FeedContestPodiumPlacement = {
      */
     badges?: FantasyPodiumBadge[];
     badgePoints?: number;
-    /** Avatar url, where the podium row carried one. */
+    /**
+     * The member's STORED avatar path, not a resolved URL — both podium reads
+     * hand back `profiles.profile_image` verbatim. The card runs it through
+     * `generateProfileImageUrl` at render, the same way every other surface
+     * that draws a profile image does.
+     */
     avatarUrl?: string | null;
+    /**
+     * The MVP's sub-score line under a podium member. Which shape a contest
+     * produces is a TEMPLATE decision, made once in `podiumResultDetail`:
+     *
+     *   general_combo   `feed_combo` — the combined American price,
+     *   sunday_pickem   `feed` — "3/5 teams correct",
+     *   td_psychic      `feed` — "2/3 TD scorers correct". Its `combo_odds` is a
+     *                   decimal tiebreak, not a price, so it is never shown.
+     *
+     * Absent where the board row could not be read, or on a Fantasy podium,
+     * which shows its badge rail instead.
+     */
+    detail?: FeedContestPodiumDetail;
 };
+
+export type FeedContestPodiumDetail =
+    | { kind: "feed_combo"; combinedAmericanOdds: number }
+    | {
+        kind: "feed";
+        correctCount: number;
+        selectionCount: number;
+        correctLabel: "teams correct" | "TD scorers correct";
+    };
 
 export type FeedContestPodiumCard = {
     contestId: string;
@@ -68,6 +96,34 @@ export type FeedContestPodiumCard = {
      * card can say the podium is a window rather than the whole result.
      */
     hasMorePlacements: boolean;
+    /**
+     * When this result landed, so the card can be ordered against the rest of
+     * the Feed instead of sitting in a block above it. `finalized_at` where the
+     * source has one, falling back through the contest's own stamps. NULL only
+     * where a row carries no timestamp at all, which sorts it to the bottom
+     * rather than to the top.
+     */
+    sortAt: string | null;
+    /**
+     * The size of the field this podium was measured against — the MVP's
+     * "N ranked entries" line, right of the header title.
+     *
+     * NULL where the source cannot say, which is what keeps the line off a card
+     * rather than printing "0 ranked entries" over a contest that had a field.
+     */
+    entryCount: number | null;
+    /**
+     * What that count counts. A Feed contest ranks ENTRIES (one card each); a
+     * Fantasy contest ranks PARTICIPANTS across their slips. The MVP pluralises
+     * off exactly this distinction.
+     */
+    entryNoun: "entry" | "participant";
+    /**
+     * Arena-only prize strip, shown under the podium when the contest offered
+     * one. Optional because `/list/finalized/podium` does not attach rewards
+     * today — the card renders it the moment that read does.
+     */
+    reward?: FeedContestUpdateReward | null;
 };
 
 /**
@@ -89,6 +145,39 @@ const displayNameFor = (
     // surfaces, so the placeholder follows the surface rather than always
     // saying "Arena" — same rule ConnectedStructuredFeed's fallbacks use.
     return groupType === "arena" ? "Arena member" : "League member";
+};
+
+/**
+ * One podium row's `entry` -> the card's sub-score line, chosen by TEMPLATE.
+ *
+ * The template decides because `combo_odds` is not one unit: it is an American
+ * price on a General Combo, a decimal tiebreak product on a TD Psychic card, and
+ * NULL on a Pick'em. Rendering it blind would print a tiebreak as if it were a
+ * payout. Mirrors the MVP's own branch (adapters.ts:189-214).
+ */
+const podiumResultDetail = (
+    entry: FeedContestPodiumEntry["entry"],
+    template: string
+): FeedContestPodiumDetail | undefined => {
+    if (!entry) return undefined;
+
+    if (template === "general_combo" || template === "multi_pick") {
+        // Only where a price actually came back. The MVP drops the detail
+        // entirely rather than showing "even" for a missing number.
+        return typeof entry.combo_odds === "number"
+            ? { kind: "feed_combo", combinedAmericanOdds: entry.combo_odds }
+            : undefined;
+    }
+
+    return {
+        kind: "feed",
+        correctCount: entry.correct_picks,
+        // The server counts the legs, so unlike the MVP there is nothing to
+        // derive from the slate here.
+        selectionCount: entry.total_picks,
+        correctLabel:
+            template === "td_psychic" ? "TD scorers correct" : "teams correct",
+    };
 };
 
 export const feedContestPodiumHeaderLabel = (contest: FeedContest): string => {
@@ -155,12 +244,23 @@ export const buildFeedContestPodiumCard = ({
             isOwn: Boolean(entry.is_own),
             isTie: Boolean(entry.is_tie),
             tiedCount: entry.tied_count ?? 1,
+            detail: podiumResultDetail(entry.entry, contest.template),
+            // The podium read joins profiles, so a Feed result carries an avatar
+            // exactly as a Fantasy one does.
+            avatarUrl: entry.profile_image ?? null,
         })),
         // `podium_is_truncated` is the SERVER's overflow flag (a mega-tie past
         // its per-contest row cap); `rows.length > visible.length` is this
         // card's own. Either one means "more members placed than are shown".
         hasMorePlacements:
             rows.length > visible.length || Boolean(contest.podium_is_truncated),
+        sortAt: contest.finalized_at ?? contest.updated_at ?? contest.created_at ?? null,
+        // `final_entry_count` travels with `finalized_at` on the contest row
+        // precisely because it means nothing without it: the size of the field a
+        // placement was measured against.
+        entryCount: contest.final_entry_count ?? null,
+        entryNoun: "entry",
+        reward: contest.reward ?? null,
     };
 };
 
@@ -238,6 +338,13 @@ export const buildFantasyPodiumCard = ({
             avatarUrl: entry.profile_image,
         })),
         hasMorePlacements: rows.length > visible.length,
+        // Always present on this source — the frozen board is stamped when it
+        // is captured — so there is nothing to fall back through.
+        sortAt: contest.finalized_at ?? null,
+        // A Fantasy contest ranks members across their slips, so the figure to
+        // show is the field size, not `total_slips`.
+        entryCount: contest.total_participants ?? null,
+        entryNoun: "participant",
     };
 };
 

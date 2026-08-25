@@ -21,6 +21,8 @@ import type {
     FeedContestLifecycleData,
     FeedContestListData,
     FeedContestPicksData,
+    FeedContestUpdatesData,
+    FetchFeedContestUpdatesPayload,
     FeedContestPodiumListData,
     FeedContestSection,
     FeedContestStatsData,
@@ -186,6 +188,13 @@ export type FeedContestState = {
     groupPicksLoading: boolean;
     groupPicksError: string | null;
 
+    /* GET /group/feed-contest/updates — one card per RUNNING contest in the
+     * Feed tab's Updates view. A live projection, so it is re-read on mount
+     * rather than mutated by any write on this slice. */
+    updates: FeedContestUpdatesData | null;
+    updatesLoading: boolean;
+    updatesError: string | null;
+
     /**
      * GET /list/finalized/podium — the group's results board, for the Feed tab's
      * Winners block.
@@ -317,6 +326,9 @@ const initialState: FeedContestState = {
     groupPicks: null,
     groupPicksLoading: false,
     groupPicksError: null,
+    updates: null,
+    updatesLoading: false,
+    updatesError: null,
     stats: null,
     statsLoading: false,
     statsError: null,
@@ -945,6 +957,59 @@ const feedContestSlice = createSlice({
             state.groupPicksError = action.payload;
             state.groupPicks = null;
         },
+
+        /* ---- Contest updates — the Feed tab's Updates view -----------------
+         *
+         * Page 1 REPLACES rather than merging, unlike the picks feed above.
+         * These cards are a live projection of the running contests: a contest
+         * that locked, finalized or was canceled since the last read must
+         * disappear, and merging would keep it on screen forever. Later pages
+         * append, de-duped on the row id.
+         * ------------------------------------------------------------------ */
+        fetchFeedContestUpdatesRequest: (
+            state,
+            action: PayloadAction<FetchFeedContestUpdatesPayload>
+        ) => {
+            state.updatesLoading = true;
+            state.updatesError = null;
+            // Drop another group's cards before the new ones land, the same
+            // guard groupPicks applies — this slice is single-tenant.
+            if (state.updates && state.updates.group.id !== action.payload.group_id) {
+                state.updates = null;
+            }
+        },
+        fetchFeedContestUpdatesSuccess: (
+            state,
+            action: PayloadAction<FeedContestUpdatesData>
+        ) => {
+            const incoming = action.payload;
+            const page = incoming?.pagination?.page ?? 1;
+
+            state.updatesLoading = false;
+            state.updatesError = null;
+
+            if (page <= 1 || !state.updates || state.updates.group.id !== incoming.group.id) {
+                state.updates = incoming;
+                return;
+            }
+            const seen = new Set(state.updates.updates.map((row) => row.id));
+            state.updates = {
+                ...incoming,
+                updates: [
+                    ...state.updates.updates,
+                    ...incoming.updates.filter((row) => !seen.has(row.id)),
+                ],
+            };
+        },
+        fetchFeedContestUpdatesFailure: (state, action: PayloadAction<string>) => {
+            state.updatesLoading = false;
+            state.updatesError = action.payload;
+        },
+        clearFeedContestUpdates: (state) => {
+            state.updates = null;
+            state.updatesLoading = false;
+            state.updatesError = null;
+        },
         clearFeedContestPicks: (state) => {
             state.groupPicks = null;
             state.groupPicksLoading = false;
@@ -1206,6 +1271,10 @@ export const {
     fetchFeedContestPicksRequest,
     fetchFeedContestPicksSuccess,
     fetchFeedContestPicksFailure,
+    fetchFeedContestUpdatesRequest,
+    fetchFeedContestUpdatesSuccess,
+    fetchFeedContestUpdatesFailure,
+    clearFeedContestUpdates,
     clearFeedContestPicks,
     fetchFeedContestStatsRequest,
     fetchFeedContestStatsSuccess,

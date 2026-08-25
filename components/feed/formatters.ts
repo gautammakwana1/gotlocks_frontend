@@ -35,6 +35,7 @@ export const getStructuredFeedRecordLabel = (record: StructuredFeedRecord) => {
     if (record.kind === "competitive_pick") {
         return `Competitive Pick · ${record.contest?.name ?? "Contest"}`;
     }
+    if (record.kind === "contest_update") return "Contest update";
     if (record.kind === "staff_pick") return "Staff Pick · Noncompetitive";
     return `${record.staffRole ? getStructuredFeedRoleLabel(record.staffRole) : "Staff"} Announcement`;
 };

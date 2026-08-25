@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
+import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import Link from "next/link";
 
 import {
@@ -8,9 +10,15 @@ import {
     CONTEST_POST_PRIMARY_TONES,
     NEUTRAL_POST_CARD_SURFACE,
 } from "@/lib/styles/postCards";
-import type { FeedContestPodiumCard, FeedContestPodiumPlacement } from "@/lib/contests/feedContestPodium";
+import type {
+    FeedContestPodiumCard,
+    FeedContestPodiumDetail,
+    FeedContestPodiumPlacement,
+} from "@/lib/contests/feedContestPodium";
+import { formatStructuredFeedAmericanOdds } from "./formatters";
 import type { StructuredFeedContextMetadata } from "./types";
 import { BadgeIcon } from "@/components/badges/BadgeIcon";
+import { FeedContestRewardDisclosure } from "./FeedContestRewardDisclosure";
 import type { ContestBadgeCategory } from "@/lib/interfaces/interfaces";
 
 /**
@@ -21,17 +29,23 @@ import type { ContestBadgeCategory } from "@/lib/interfaces/interfaces";
  * gold avatar plates are that file's, kept token-for-token so the two surfaces
  * cannot drift apart.
  *
- * TWO DELIBERATE DIFFERENCES FROM THE MVP, both asked for:
+ * ONE DELIBERATE DIFFERENCE FROM THE MVP, asked for: no "show remaining ranks"
+ * disclosure. The MVP card holds the whole frozen standings document, so it can
+ * open ranks 4..8 inline. This one is fed by `/list/finalized/podium`, which
+ * returns placements 1..3 and nothing else — the rest of the board is not hidden
+ * here, it was never fetched. The contest link in the header goes to the
+ * standings tab that has it.
  *
- *  1. NO "show remaining ranks" disclosure. The MVP card holds the whole frozen
- *     standings document, so it can open ranks 4..8 inline. This one is fed by
- *     `/list/finalized/podium`, which returns placements 1..3 and nothing else —
- *     the rest of the board is not hidden here, it was never fetched. The
- *     contest link in the header goes to the standings tab that has it.
- *  2. NO per-placement result detail or badge rail. The MVP renders combined
- *     odds / "7/10 teams correct" / a Fantasy badge rail under each podium
- *     member; the podium endpoint carries only `final_score`, so the card shows
- *     points and stops rather than inventing a number.
+ * Everything else the MVP shows is now on the wire and drawn:
+ *  - the field-size line ("12 ranked entries"), from `final_entry_count`,
+ *  - the per-placement sub-score, from each row's `entry` block — combined odds
+ *    on a General Combo, "3/5 teams correct" on the tally templates. WHICH of
+ *    the two a contest gets is decided once, by template, in
+ *    `podiumResultDetail`: `combo_odds` is an American price on a General
+ *    Combo, a DECIMAL TIEBREAK on a TD Psychic card and NULL on a Pick'em, so
+ *    rendering it blind would print a tiebreak as a payout,
+ *  - the Fantasy badge rail, where that podium carried badges,
+ *  - the Arena prize strip, when the read attaches a `reward`.
  */
 
 type FeedContestWinnersCardProps = {
@@ -148,6 +162,50 @@ const contextualMemberCard = (
     };
 };
 
+
+/**
+ * The sub-score line under a podium member — the MVP's ResultDetail, at podium
+ * scale. Combined odds on a General Combo, "3/5 teams correct" on the tally
+ * templates. Renders nothing where the board row could not be read.
+ */
+const StageResultDetail = ({
+    detail,
+    valueClassName,
+}: {
+    detail: FeedContestPodiumDetail;
+    valueClassName: string;
+}) => {
+    const isCombo = detail.kind === "feed_combo";
+    const value = isCombo
+        ? formatStructuredFeedAmericanOdds(detail.combinedAmericanOdds)
+        : `${detail.correctCount}/${detail.selectionCount}`;
+
+    return (
+        <span
+            data-feed-contest-result-odds={
+                isCombo ? detail.combinedAmericanOdds : undefined
+            }
+            data-feed-contest-result-score={isCombo ? undefined : value}
+            data-feed-contest-result-detail-treatment="plain"
+            data-feed-contest-result-detail-layout="stacked-centered"
+            className="mt-1.5 flex max-w-full flex-col items-center text-center"
+        >
+            <span
+                data-feed-contest-result-detail-value
+                data-feed-contest-result-detail-emphasis="points-adjacent"
+                className={`font-black leading-none tabular-nums tracking-[-0.02em] text-white/90 ${valueClassName}`}
+            >
+                {value}
+            </span>
+            <span
+                data-feed-contest-result-detail-label
+                className="mt-0.5 text-[8px] font-semibold leading-tight text-slate-300/65 sm:text-[9px]"
+            >
+                {isCombo ? "combined odds" : detail.correctLabel}
+            </span>
+        </span>
+    );
+};
 const StagePlacement = ({
     context,
     placement,
@@ -169,6 +227,18 @@ const StagePlacement = ({
         placement.userId,
         placement.displayName
     );
+
+    /* The member's own photo, where they have one.
+     *
+     * Keyed on the resolved URL rather than a bare boolean so a re-sorted or
+     * refetched podium cannot leave one member's failure suppressing a
+     * different member's photo in the same slot — the same guard
+     * LifetimeStandingAvatar uses. These paths can 404 for a deleted or
+     * half-uploaded avatar, and the gold initials plate underneath is the
+     * fallback, so a broken image degrades to what the card drew before. */
+    const avatarSrc = generateProfileImageUrl(placement.avatarUrl ?? undefined);
+    const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+    const showAvatar = Boolean(avatarSrc) && failedAvatarUrl !== avatarSrc;
     // `is_own` is the server's, so this never compares ids; currentUserId only
     // has to be present for the row to be worth announcing as the viewer's.
     const isViewer = placement.isOwn && Boolean(currentUserId);
@@ -223,10 +293,27 @@ const StagePlacement = ({
                         href={memberCard.href}
                         aria-label={memberCard.label}
                         data-feed-contest-result-avatar
+                        data-feed-contest-result-avatar-kind={showAvatar ? "image" : "initials"}
                         data-feed-contest-result-member-card-link="avatar"
-                        className={`grid h-[78%] w-[78%] place-items-center rounded-full border border-amber-100/60 bg-gradient-to-br from-amber-200 via-amber-400 to-orange-500 font-black text-amber-950 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_5px_14px_rgba(0,0,0,0.3)] transition hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${slot.avatarText}`}
+                        // `overflow-hidden` so a photo is clipped to the plate;
+                        // the gradient and the initials stay underneath as the
+                        // fallback, which is what shows when there is no image.
+                        className={`grid h-[78%] w-[78%] place-items-center overflow-hidden rounded-full border border-amber-100/60 bg-gradient-to-br from-amber-200 via-amber-400 to-orange-500 font-black text-amber-950 shadow-[inset_0_2px_4px_rgba(255,255,255,0.45),0_5px_14px_rgba(0,0,0,0.3)] transition hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${slot.avatarText}`}
                     >
-                        {initialsFor(placement.displayName)}
+                        {showAvatar && avatarSrc ? (
+                            <Image
+                                src={avatarSrc}
+                                alt=""
+                                aria-hidden="true"
+                                width={96}
+                                height={96}
+                                unoptimized
+                                onError={() => setFailedAvatarUrl(avatarSrc)}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            initialsFor(placement.displayName)
+                        )}
                     </Link>
                 </span>
 
@@ -251,6 +338,13 @@ const StagePlacement = ({
                         {pointsLabel}
                     </span>
                 </span>
+
+                {placement.detail ? (
+                    <StageResultDetail
+                        detail={placement.detail}
+                        valueClassName={slot.name === "center" ? "text-sm sm:text-base" : "text-xs sm:text-sm"}
+                    />
+                ) : null}
 
                 {/* FANTASY ONLY. The badges this member finished holding, with
                     what they contributed to the score above — the MVP's
@@ -319,6 +413,18 @@ export const FeedContestWinnersCard = ({
 }: FeedContestWinnersCardProps) => {
     const stageTone = contestResultStageTone[accent];
 
+    /* "12 ranked entries" / "8 ranked participants" — the MVP pluralises off
+     * WHICH thing the board ranked, not off the count alone. */
+    const rankedCountLabel =
+        card.entryCount === null
+            ? null
+            : `${card.entryCount} ranked ${card.entryCount === 1
+                ? card.entryNoun
+                : card.entryNoun === "entry"
+                    ? "entries"
+                    : "participants"
+            }`;
+
     return (
         <section
             aria-label={`Final results for ${card.contestName}`}
@@ -348,6 +454,14 @@ export const FeedContestWinnersCard = ({
                         </span>
                     </Link>
                 </h3>
+                {/* The MVP's field-size line, right of the title. Hidden rather
+                    than shown as "0" where the source cannot say — see
+                    FeedContestPodiumCard.entryCount. */}
+                {rankedCountLabel ? (
+                    <span className="relative z-[1] shrink-0 text-[9px] font-medium text-slate-400">
+                        {rankedCountLabel}
+                    </span>
+                ) : null}
             </header>
 
             <div data-feed-contest-results-body="showcase">
@@ -400,6 +514,31 @@ export const FeedContestWinnersCard = ({
                     </div>
                 ) : null}
             </div>
+
+            {/* Prizes, when the contest offered them. Arena-only by construction
+                — feed_contest_rewards carries an arena_only CHECK — and gated on
+                the surface too so a League can never draw one. Renders nothing
+                until the podium read attaches `reward`. */}
+            {context.kind === "arena" && card.reward && card.reward.prizes.length ? (
+                <FeedContestRewardDisclosure
+                    accent={accent}
+                    contestName={card.contestName}
+                    reward={{
+                        settlementLabel: card.reward.settlement_label,
+                        providerName: card.reward.provider_name ?? "the Arena organizer",
+                        prizes: (card.reward?.prizes ?? []).flatMap((prize) =>
+                            typeof prize.place === "number"
+                                ? [{
+                                    place: prize.place,
+                                    title: prize.title ?? "Prize",
+                                    description: prize.description ?? "",
+                                    approximateValue: prize.approximate_value,
+                                }]
+                                : []
+                        ),
+                    }}
+                />
+            ) : null}
         </section>
     );
 };
