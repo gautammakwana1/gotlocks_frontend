@@ -19,6 +19,8 @@ import type {
     ReplaceTdPsychicFeedContestEntryData,
     ReplaceTdPsychicFeedContestEntryPayload,
     FeedContest,
+    FeedContestAwardReversalData,
+    FeedContestAwardReversalPayload,
     FeedContestDetailData,
     FeedContestEntriesData,
     FeedContestLeaderboardData,
@@ -108,6 +110,9 @@ import {
     updateFeedContestRewardPrizesFailure,
     updateFeedContestRewardPrizesRequest,
     updateFeedContestRewardPrizesSuccess,
+    reverseFeedContestAwardFailure,
+    reverseFeedContestAwardRequest,
+    reverseFeedContestAwardSuccess,
 } from "../slices/feedContestSlice";
 
 type ApiErrorResponse = { message?: string };
@@ -579,6 +584,53 @@ function* handleUpdateFeedContestRewardPrizes(
         yield put(
             updateFeedContestRewardPrizesFailure(
                 getErrorMessage(error, "Failed to update the contest prizes")
+            )
+        );
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * PUT /award-reversal/:contest_id — the whole-award audit reversal, and the one
+ * write on this router the group OWNER alone may make. An Arena manager is an
+ * organizer for everything else here and is answered 403 by this route, which
+ * is why the panel gates its button on ownership rather than on `is_organizer`.
+ *
+ * `contest_points` is NOT moved by this write. The server keeps the figure the
+ * member won so the board can strike it through beside the reason, and the
+ * lifetime standings and the badge are untouched by design.
+ *
+ * A repeat is a 200 ("This award was already reversed.") carrying the standing
+ * already on record — a SUCCESS, not an error, and it flows through this same
+ * path so the panel needs no special case for it.
+ * -------------------------------------------------------------------------- */
+function* handleReverseFeedContestAward(
+    action: PayloadAction<FeedContestAwardReversalPayload>
+): SagaIterator {
+    const { contest_id, user_id, reason } = action.payload;
+    try {
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.put,
+            `${API_BASE_URL}/group/feed-contest/award-reversal/${encodeURIComponent(
+                contest_id
+            )}`,
+            { user_id, reason }
+        );
+        const payload = response.data as {
+            message?: string;
+            data?: FeedContestAwardReversalData;
+        };
+        yield put(
+            reverseFeedContestAwardSuccess({
+                contest_id,
+                user_id,
+                data: payload?.data ?? null,
+                message: payload?.message,
+            })
+        );
+    } catch (error: unknown) {
+        yield put(
+            reverseFeedContestAwardFailure(
+                getErrorMessage(error, "Failed to reverse the award!")
             )
         );
     }
@@ -1069,6 +1121,12 @@ export default function* feedContestSaga(): SagaIterator {
     yield takeLatest(
         updateFeedContestRewardPrizesRequest.type,
         handleUpdateFeedContestRewardPrizes
+    );
+    // takeLatest, AND the Confirm button is disabled while it runs. A repeat is
+    // a harmless idempotent 200, but two in flight would report the write twice.
+    yield takeLatest(
+        reverseFeedContestAwardRequest.type,
+        handleReverseFeedContestAward
     );
     // takeLatest: one contest's field is on screen at a time, and the "Show
     // more" page and the post-write refetch are the same read — newest wins.

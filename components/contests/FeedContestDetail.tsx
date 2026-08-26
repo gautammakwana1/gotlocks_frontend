@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import BackButton from "@/components/ui/BackButton";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import {
+    FEED_CONTEST_AWARD_REVERSE_REASON_MAX,
     formatContestDateTime,
     gameKickoffFormatter,
 } from "@/lib/contests/feedContestCatalog";
@@ -14,9 +15,11 @@ import { useToast } from "@/lib/state/ToastContext";
 import type {
     FeedContest,
     FeedContestGameSnapshot,
+    FeedContestStandingRow,
     RootState,
 } from "@/lib/interfaces/interfaces";
 import {
+    clearFeedContestAwardReversalState,
     clearFeedContestDeleteState,
     clearFeedContestDetail,
     clearFeedContestEntries,
@@ -27,6 +30,7 @@ import {
     fetchFeedContestEntriesRequest,
     fetchFeedContestLeaderboardRequest,
     fetchFeedContestStatsRequest,
+    reverseFeedContestAwardRequest,
 } from "@/lib/redux/slices/feedContestSlice";
 import ArenaContestPrizeSettings from "./ArenaContestPrizeSettings";
 import ArenaContestRewardCard from "./ArenaContestRewardCard";
@@ -76,7 +80,13 @@ import type {
  *
  * Live organizer writes: the copy edit (`PUT .../update/…`, on its own route
  * behind the Edit link) and the permanent delete (`DELETE .../delete/…`, behind
- * the drawer). Reverse-award is still a stub — see TODO(api).
+ * the drawer).
+ *
+ * Plus ONE owner-only write, narrower than every other on this screen: the
+ * whole-award audit reversal (`PUT .../award-reversal/…`, in the Award
+ * corrections panel). The endpoint answers an Arena MANAGER 403 — it tests
+ * `groups.created_by`, not a `group_members` role — so that panel's button
+ * gates on `isOwner`, never on `organizer`.
  * -------------------------------------------------------------------------- */
 
 export type FeedContestAccent = "league" | "arena";
@@ -334,6 +344,10 @@ export const FeedContestDetail = ({
         leaderboardError,
         stats,
         statsError,
+        awardReversalLoading,
+        awardReversalMessage,
+        awardReversalError,
+        awardReversalContestId,
     } = useSelector((state: RootState) => state.feedContest);
     // The MVP's inline action result line, rendered above the panels.
     const [feedback, setFeedback] = useState<string>();
@@ -370,11 +384,16 @@ export const FeedContestDetail = ({
     // contest's field, including who entered. `stats` and `leaderboard` are the
     // same again: left behind, the next contest's Standings tab opens on THIS
     // contest's numbers and board until its own reads land.
+    // The award-reversal slot goes with them, so an outcome nobody was left to
+    // report does not sit in the store waiting for the next screen. It is belt
+    // and braces over the effect's own contest guard: a receipt that lands AFTER
+    // this cleanup runs still gets stamped, and only that guard catches it.
     useEffect(() => () => {
         dispatch(clearFeedContestDetail());
         dispatch(clearFeedContestEntries());
         dispatch(clearFeedContestStats());
         dispatch(clearFeedContestLeaderboard());
+        dispatch(clearFeedContestAwardReversalState());
     }, [dispatch]);
 
     /*
@@ -431,11 +450,87 @@ export const FeedContestDetail = ({
         setToast,
     ]);
 
+    /*
+     * ONE place reports the award reversal, mirroring the delete effect above:
+     * it writes the MVP's inline feedback line, toasts, closes the inline form
+     * on success, and clears the slice so a re-render cannot report the same
+     * write twice.
+     *
+     * NO refetch. The reducer already patched the loaded board from the reply's
+     * seven columns, and re-reading would collapse a board the organizer may
+     * have paged open.
+     *
+     * The success copy is the SERVER's own message, which is the MVP's string
+     * verbatim — and on the idempotent path it is the more accurate "This award
+     * was already reversed." instead. The form is left OPEN on failure so the
+     * reason that was typed survives a 403 or a 409.
+     */
+    useEffect(() => {
+        if (!awardReversalMessage && !awardReversalError) return;
+        /*
+         * THE RECEIPT MUST BELONG TO THIS CONTEST — the same guard the delete
+         * effect puts on `deletedContestId`. A PUT still in flight when the
+         * organizer hits Back resolves against an unmounted screen and leaves
+         * its outcome in the slot; without this check the NEXT contest detail to
+         * mount would read a stranger's receipt and toast "the confirmed award
+         * was reversed" over a contest nothing happened on. Worse on the failure
+         * path, which would report a 403 about an Arena the viewer never touched.
+         */
+        if (awardReversalContestId && awardReversalContestId !== contestId) return;
+        const message =
+            awardReversalError ??
+            awardReversalMessage ??
+            "The confirmed award was reversed with an audit record.";
+        setFeedback(message);
+        setToast({
+            id: Date.now(),
+            type: awardReversalError ? "error" : "success",
+            message,
+            duration: 4000,
+        });
+        if (!awardReversalError) {
+            setReversalTarget(undefined);
+            setReversalReason("");
+        }
+        dispatch(clearFeedContestAwardReversalState());
+    }, [
+        awardReversalContestId,
+        awardReversalError,
+        awardReversalMessage,
+        contestId,
+        dispatch,
+        setToast,
+    ]);
+
     // Checked during RENDER, not in an effect: a record belonging to any other
     // id is never read, whatever the loading flag says (see useScopedGroup).
     const scoped = detail?.contest?.id === contestId ? detail : null;
     const contest = scoped?.contest ?? null;
     const organizer = scoped?.viewer?.is_organizer ?? false;
+    /*
+     * OWNER, not merely staff. `is_organizer` above is TRUE for an Arena manager
+     * as well, and the award-reversal endpoint answers a manager 403: it tests
+     * `groups.created_by`, never a `group_members` role. No feed-contest read
+     * carries an owner flag today, and this screen must NOT fetch the group to
+     * find one — `state.group.group` is the single-tenant slot the header
+     * comment above forbids reading here.
+     *
+     * So the role string stands in, exactly as FeedContestEditRouter already
+     * uses it for the Arena owner: "commissioner" is how the API spells owner in
+     * `group_members.role`, on a League and an Arena alike.
+     *
+     * The `??` shape is deliberate, matching ArenaVenueCheckInPanel — the day
+     * the server adds `viewer.is_owner` to this envelope, the flag is a drop-in
+     * and nothing else changes. Until then the one known imprecision is the
+     * window after an ownership TRANSFER, where `created_by` is rewritten
+     * synchronously while the member roles are synced in the background: the
+     * button may briefly be hidden from the new owner or shown to the old one.
+     * The server remains the authority, and its 403 copy surfaces verbatim
+     * through the failure toast.
+     */
+    const isOwner =
+        (scoped?.viewer as { is_owner?: boolean } | undefined)?.is_owner ??
+        scoped?.viewer?.role === "commissioner";
     const scopedEntries = entries?.contest?.id === contestId ? entries : null;
     const scopedStats = stats?.contest?.id === contestId ? stats : null;
 
@@ -514,6 +609,11 @@ export const FeedContestDetail = ({
         setStandingsPage(1);
     }, [contestId]);
 
+    /** Read by the Settings-tab board fetch below, not by the Standings one. */
+    const boardIsFinal =
+        lifecycleStatus === "final" || lifecycleStatus === "archived";
+    const boardIsLoadedForContest = leaderboard?.contest?.id === contestId;
+
     useEffect(() => {
         if (activeTab !== "standings" || !contestId) return;
         if (!lifecycleStatus || lifecycleStatus === "draft") return;
@@ -524,6 +624,56 @@ export const FeedContestDetail = ({
             })
         );
     }, [activeTab, contestId, dispatch, lifecycleStatus, standingsPage]);
+
+    /*
+     * SETTINGS reads this board too. Award corrections is built from the same
+     * standings rows — who holds a confirmed award, and whose was already
+     * reversed — so without this the panel is permanently empty for an organizer
+     * who never opened the Standings tab.
+     *
+     * A SECOND effect, not a branch of the one above, and the split is the whole
+     * point: this one has to watch whether the board is already loaded, and the
+     * Standings read must NOT. Folded together, `boardIsLoadedForContest` flips
+     * false -> true the moment the first reply lands, re-running the effect and
+     * firing a duplicate request on every visit to the Standings tab. Apart,
+     * each guard only re-runs the read it belongs to.
+     *
+     * Narrowed to a FINALIZED contest, which is the only phase the Award
+     * corrections panel renders in, so a Settings tab on an open contest still
+     * costs zero requests. Page 1 is what it needs — the server orders rank asc
+     * nulls last and only `winning_places` rows are ever awarded — and
+     * `my_standing` rides on every page, so an owner's own award is covered even
+     * on a field large enough to page it off.
+     *
+     * Skipped entirely once the board is loaded, because the success reducer
+     * REPLACES on page 1: asking again would collapse a board the organizer had
+     * already paged open on the Standings tab. That also makes this self-
+     * limiting — the reply flips the guard, and the re-run returns here.
+     */
+    useEffect(() => {
+        if (activeTab !== "settings" || !contestId) return;
+        if (!boardIsFinal || boardIsLoadedForContest) return;
+        dispatch(
+            fetchFeedContestLeaderboardRequest({ contest_id: contestId, page: 1 })
+        );
+    }, [
+        activeTab,
+        boardIsFinal,
+        boardIsLoadedForContest,
+        contestId,
+        dispatch,
+    ]);
+
+    /*
+     * The MVP's reset (StructuredContestDetail ~4249): leaving Settings discards
+     * a half-typed reversal rather than leaving the form primed to fire against
+     * a row the organizer can no longer see.
+     */
+    useEffect(() => {
+        if (activeTab === "settings") return;
+        setReversalTarget(undefined);
+        setReversalReason("");
+    }, [activeTab]);
 
     const setDetailTab = (tab: DetailTab) => {
         if (!availableTabs.includes(tab)) return;
@@ -908,7 +1058,19 @@ export const FeedContestDetail = ({
      * is the wider one. Which is true decides both the link label and which of
      * the three summary sentences prints below it.
      */
-    const contestInformationEditable = canEditContest && phase === "open";
+    /*
+     * The lock CLOCK as well as the status, matching the MVP's own clause
+     * (`Date.now() < Date.parse(contest.locksAt)`, StructuredContestDetail.tsx:4611)
+     * and the same reason `entriesArePublic` above checks it: the cron that
+     * flips 'open' -> 'locked' runs on an interval, so between locks_at and that
+     * sweep a contest still READS as open. Without this the link offered
+     * "Edit details" — and the full details form — on a contest whose deadline
+     * had already passed, where the MVP offers "Rename contest".
+     */
+    const contestInformationEditable =
+        canEditContest &&
+        phase === "open" &&
+        Date.now() < Date.parse(contest.locks_at);
     const contestNameEditable = canEditContest && phase !== "finalized";
 
     /* ---------- Entries tab: the member's "build entry" CTA ----------
@@ -1010,24 +1172,108 @@ export const FeedContestDetail = ({
         : null;
 
     /*
-     * The MVP builds these from the finalized standings joined against the
-     * community point ledger — which award landed for whom, and which was
-     * already reversed. Neither read exists here yet, so the list is empty and
-     * the section renders its own awaiting-data note. Wiring is to fill this
-     * array; every row below already reads from it.
-     * TODO(api): needs the finalized standings (rank / points per entrant) and
-     * the point ledger for this contest.
+     * THE AWARD CORRECTIONS LIST — the finalized board, read as "who holds a
+     * confirmed award, and whose was already reversed".
+     *
+     * The MVP derives this from the community point ledger. This backend has no
+     * client-side ledger and needs none: on a finalized standing
+     * `contest_points > 0` IS the confirmed award — it is the exact figure the
+     * reversal endpoint refuses to act on when it is not positive (409 "This
+     * member has no award to reverse.") — and `is_points_reverse` is the
+     * reversal already on record. The same two booleans the MVP computes come
+     * straight off the board, with no second read.
+     *
+     * `awarded` goes FALSE once reversed, matching the MVP's ledger row flipping
+     * to status "reversed": the row then survives the filter on `reversed`
+     * alone, which is what keeps the audit line visible after the correction.
+     *
+     * `my_standing` is folded in and de-duped by the contest_leaderboard row id.
+     * The server reads the viewer's own line separately and it can land on a
+     * page this screen never asked for, so an owner's own award must be neither
+     * missing from nor doubled in the list of awards they may correct.
      */
-    const awardCorrectionRows: AwardCorrectionRow[] = [];
+    const awardCorrectionBoardRows =
+        phase === "finalized" && !canceled && scopedLeaderboard
+            ? scopedLeaderboard.standings
+            : [];
+    /*
+     * `my_standing` is folded in SEPARATELY, not concatenated, because its
+     * position carries no meaning: the board rows arrive in the server's own
+     * order, so a board row's index is a usable stand-in for a missing rank,
+     * while the viewer's own line was read by a different query and could belong
+     * anywhere in the field. Numbering it by where it happens to sit in a
+     * concatenated array would print a confident, wrong "#N".
+     */
+    const awardCorrectionSourceRows: {
+        row: FeedContestStandingRow;
+        positionalRank: number | null;
+    }[] = [
+            ...awardCorrectionBoardRows.map((row, index) => ({
+                row,
+                positionalRank: index + 1,
+            })),
+            ...(awardCorrectionBoardRows.length && scopedLeaderboard?.my_standing
+                ? [{ row: scopedLeaderboard.my_standing, positionalRank: null }]
+                : []),
+        ];
+    const seenAwardCorrectionIds = new Set<string>();
+    const awardCorrectionRows: AwardCorrectionRow[] =
+        awardCorrectionSourceRows.flatMap(({ row, positionalRank }) => {
+            if (!row?.id || seenAwardCorrectionIds.has(row.id)) return [];
+            seenAwardCorrectionIds.add(row.id);
+            const reversed = Boolean(row.is_points_reverse);
+            const points = row.contest_points ?? 0;
+            const awarded = !reversed && points > 0;
+            // A member appears iff they hold a live confirmed award OR already
+            // have a reversal on record. Losers and pending entries are omitted.
+            if (!awarded && !reversed) return [];
+            // The member id is what the write posts back. A row whose profiles
+            // embed came back empty still carries it, but one with neither is
+            // unactionable and is dropped rather than sent as a blank user_id.
+            const userId = row.member?.id;
+            if (!userId) return [];
+            return [
+                {
+                    entryId: row.id,
+                    userId,
+                    userName: row.member?.username?.trim() || "Member",
+                    // `rank` is null only until a settlement job fills it in, and
+                    // every row here is finalized — so this fallback is close to
+                    // unreachable. When it is reached, the server's own ordering
+                    // stands in for a BOARD row, and a `my_standing` read off a
+                    // page this screen never asked for gets 0 rather than an
+                    // invented position (`#0` reads as unranked; a wrong "#4"
+                    // would not).
+                    rank: row.rank ?? positionalRank ?? 0,
+                    points,
+                    awarded,
+                    reversed,
+                },
+            ];
+        });
+
+    /*
+     * OWNER-ONLY, and writable. The endpoint answers an Arena manager 403 even
+     * though they clear every other organizer check on this router, so the
+     * button is hidden from them rather than offered and then refused.
+     */
+    const canReverseAward = writable && isOwner;
+
     const reversibleAwardCount = awardCorrectionRows.filter(
-        (row) => writable && row.awarded && !row.reversed && row.points > 0
+        (row) => canReverseAward && row.awarded && !row.reversed && row.points > 0
     ).length;
     const reversedAwardCount = awardCorrectionRows.filter(
         (row) => row.reversed
     ).length;
-    const awardCorrectionSummary = !awardCorrectionRows.length
-        ? "Confirmed awards appear here once the standings read lands."
-        : reversibleAwardCount > 0
+    /*
+     * The MVP's three branches, in its precedence: "available to reverse" wins
+     * whenever there is at least one; else "N reversed", but only when EVERY row
+     * is reversed; else the neutral confirmed count. Its old "awaiting the
+     * standings read" branch is gone with the placeholder — the panel now
+     * renders only when it has rows, exactly as the MVP's does.
+     */
+    const awardCorrectionSummary =
+        reversibleAwardCount > 0
             ? `${reversibleAwardCount} ${reversibleAwardCount === 1 ? "award" : "awards"
             } available to reverse`
             : reversedAwardCount === awardCorrectionRows.length
@@ -1042,12 +1288,18 @@ export const FeedContestDetail = ({
     const entrantCount =
         scopedStats?.counts?.participants?.active ?? contest.participant_count ?? 0;
 
-    // TODO(api): still a STUB — a whole-award audit reversal for one finalized
-    // standing row has no endpoint. Everything around it is final: wiring is to
-    // replace the message below with the dispatch. It is also currently
-    // unreachable, since the rows that open this form need the standings read.
+    /*
+     * PUT /group/feed-contest/award-reversal/:contest_id — owner-only, and the
+     * one write on this screen that creates a permanent audit record.
+     *
+     * The form is NOT closed here. The write is asynchronous and can fail (403
+     * for a manager, 409 for a contest that is not finalized or a member with no
+     * award, 400 for a reason the server trims to empty), and closing on
+     * dispatch would throw away the reason the organizer typed along with the
+     * server's own message. The outcome effect above closes it on success.
+     */
     const handleReverseAward = (userId: string) => {
-        if (!userId || !writable) return;
+        if (!userId || !canReverseAward || awardReversalLoading) return;
         const reason = reversalReason.trim();
         // Kept client-side even though the endpoint will re-check it: an award
         // reversal with no audit reason is the one thing this form exists to
@@ -1056,14 +1308,22 @@ export const FeedContestDetail = ({
             setFeedback("Add an audit reason before reversing an award.");
             return;
         }
-        // TODO(api): dispatch(reverseFeedContestAwardRequest({
-        //     contest_id: contest.id, user_id: userId, reason,
-        // })) → "The confirmed award was reversed with an audit record."
-        const message = "Reversing a confirmed award is not available yet.";
-        setFeedback(message);
-        setToast({ id: Date.now(), type: "info", message, duration: 3000 });
-        setReversalTarget(undefined);
-        setReversalReason("");
+        // Pre-checked rather than capped with `maxLength`, which would silently
+        // truncate what was written. The server answers 400 with this same
+        // sentence; catching it here keeps the typed reason on screen.
+        if (reason.length > FEED_CONTEST_AWARD_REVERSE_REASON_MAX) {
+            setFeedback(
+                `reason must be ${FEED_CONTEST_AWARD_REVERSE_REASON_MAX} characters or fewer.`
+            );
+            return;
+        }
+        dispatch(
+            reverseFeedContestAwardRequest({
+                contest_id: contest.id,
+                user_id: userId,
+                reason,
+            })
+        );
     };
 
     /*
@@ -1601,13 +1861,13 @@ export const FeedContestDetail = ({
                         </div>
                     </details>
 
-                    {/* The MVP drops this disclosure entirely when it has no rows.
-                        We keep it on a finalized contest so the organizer is told
-                        WHY it is empty — the standings + ledger reads it maps over
-                        do not exist yet (see the TODO(api) on awardCorrectionRows).
-                        `!canceled` because a contest that was called off and then
-                        archived reads as the finalized phase but never had awards. */}
-                    {phase === "finalized" && !canceled ? (
+                    {/* The MVP's own gate, restored now that the rows are real:
+                        the disclosure DISAPPEARS when nothing was awarded or
+                        reversed, rather than standing open to explain itself.
+                        `awardCorrectionRows` is already empty outside a
+                        finalized, uncanceled contest, so the phase check this
+                        used to carry is folded into the array. */}
+                    {awardCorrectionRows.length ? (
                         <details
                             aria-label="Award corrections"
                             className="group px-5 sm:px-6"
@@ -1639,98 +1899,96 @@ export const FeedContestDetail = ({
                             <div className="-mx-5 border-t border-white/10 sm:-mx-6">
                                 <p className="px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
                                     A correction reverses the full confirmed award and creates a
-                                    permanent audit record. Rank and point values cannot be
-                                    edited.
+                                    permanent audit record. Rank and {standingPointsLabel} values
+                                    cannot be edited.
                                 </p>
-                                {awardCorrectionRows.length ? (
-                                    <ul className="divide-y divide-white/10 border-t border-white/10">
-                                        {awardCorrectionRows.map((row) => (
-                                            <li key={row.entryId} className="px-5 py-4 sm:px-6">
-                                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-white">
-                                                            {row.userName}
-                                                        </p>
-                                                        <p className="mt-1 text-xs text-gray-500">
-                                                            #{row.rank} · {row.points} confirmed points
-                                                            {row.reversed ? " · reversed" : ""}
-                                                        </p>
-                                                    </div>
-                                                    {writable &&
-                                                        row.awarded &&
-                                                        !row.reversed &&
-                                                        row.points > 0 ? (
+                                <ul className="divide-y divide-white/10 border-t border-white/10">
+                                    {awardCorrectionRows.map((row) => (
+                                        <li key={row.entryId} className="px-5 py-4 sm:px-6">
+                                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-white">
+                                                        {row.userName}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-gray-500">
+                                                        #{row.rank} · {row.points} confirmed{" "}
+                                                        {standingPointsLabel}
+                                                        {row.reversed ? " · reversed" : ""}
+                                                    </p>
+                                                </div>
+                                                {canReverseAward &&
+                                                    row.awarded &&
+                                                    !row.reversed &&
+                                                    row.points > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setReversalTarget(row.userId);
+                                                            setReversalReason("");
+                                                        }}
+                                                        className="ml-auto rounded-lg border border-red-300/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-200 transition hover:bg-red-500/10"
+                                                    >
+                                                        Reverse award
+                                                    </button>
+                                                ) : null}
+                                            </div>
+                                            {reversalTarget === row.userId ? (
+                                                <section
+                                                    aria-labelledby="reverse-award-title"
+                                                    className="mt-4 border-t border-white/10 pt-4"
+                                                >
+                                                    <h3
+                                                        id="reverse-award-title"
+                                                        className="text-sm font-semibold text-red-100"
+                                                    >
+                                                        Reverse {row.userName}’s{" "}
+                                                        {row.points} {standingPointsLabel} award?
+                                                    </h3>
+                                                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                                                        This creates a permanent whole-award reversal.
+                                                        Rank and {standingPointsLabel} values cannot
+                                                        be changed.
+                                                    </p>
+                                                    <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400">
+                                                        Audit reason
+                                                        <textarea
+                                                            autoFocus
+                                                            rows={3}
+                                                            value={reversalReason}
+                                                            onChange={(event) =>
+                                                                setReversalReason(event.target.value)
+                                                            }
+                                                            className="mt-2 w-full rounded-lg border border-white/15 bg-black/30 px-3.5 py-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-red-200/50"
+                                                        />
+                                                    </label>
+                                                    <div className="mt-3 flex flex-wrap justify-end gap-2">
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                setReversalTarget(row.userId);
+                                                                setReversalTarget(undefined);
                                                                 setReversalReason("");
                                                             }}
-                                                            className="ml-auto rounded-lg border border-red-300/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-200 transition hover:bg-red-500/10"
+                                                            className="min-h-10 rounded-lg px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
                                                         >
-                                                            Reverse award
+                                                            Cancel
                                                         </button>
-                                                    ) : null}
-                                                </div>
-                                                {reversalTarget === row.userId ? (
-                                                    <section
-                                                        aria-labelledby="reverse-award-title"
-                                                        className="mt-4 border-t border-white/10 pt-4"
-                                                    >
-                                                        <h3
-                                                            id="reverse-award-title"
-                                                            className="text-sm font-semibold text-red-100"
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleReverseAward(row.userId)}
+                                                            disabled={
+                                                                !reversalReason.trim() ||
+                                                                awardReversalLoading
+                                                            }
+                                                            className="min-h-10 rounded-lg bg-red-100 px-3.5 py-2 text-xs font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
                                                         >
-                                                            Reverse {row.userName}’s {row.points}-point
-                                                            award?
-                                                        </h3>
-                                                        <p className="mt-1 text-xs leading-5 text-gray-500">
-                                                            This creates a permanent whole-award reversal.
-                                                            Rank and point values cannot be changed.
-                                                        </p>
-                                                        <label className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.1em] text-gray-400">
-                                                            Audit reason
-                                                            <textarea
-                                                                autoFocus
-                                                                rows={3}
-                                                                value={reversalReason}
-                                                                onChange={(event) =>
-                                                                    setReversalReason(event.target.value)
-                                                                }
-                                                                className="mt-2 w-full rounded-lg border border-white/15 bg-black/30 px-3.5 py-3 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-red-200/50"
-                                                            />
-                                                        </label>
-                                                        <div className="mt-3 flex flex-wrap justify-end gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setReversalTarget(undefined);
-                                                                    setReversalReason("");
-                                                                }}
-                                                                className="min-h-10 rounded-lg px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleReverseAward(row.userId)}
-                                                                disabled={!reversalReason.trim()}
-                                                                className="min-h-10 rounded-lg bg-red-100 px-3.5 py-2 text-xs font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-40"
-                                                            >
-                                                                Confirm reversal
-                                                            </button>
-                                                        </div>
-                                                    </section>
-                                                ) : null}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="border-t border-white/10 px-5 py-4 text-xs leading-5 text-gray-500 sm:px-6">
-                                        Confirmed awards appear here once the standings read
-                                        lands.
-                                    </p>
-                                )}
+                                                            Confirm reversal
+                                                        </button>
+                                                    </div>
+                                                </section>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         </details>
                     ) : null}
@@ -1743,7 +2001,7 @@ export const FeedContestDetail = ({
                                 </h2>
                                 <p className="mt-1 text-xs leading-5 text-gray-500">
                                     {phase === "finalized"
-                                        ? "Permanent · entrants are notified and awarded points are reversed."
+                                        ? `Permanent · entrants are notified and awarded ${standingPointsLabel} are reversed.`
                                         : "Permanent · the contest and its entries are removed, and entrants are notified."}
                                 </p>
                             </div>

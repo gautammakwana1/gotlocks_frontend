@@ -4280,6 +4280,22 @@ export type FeedContestStandingRow = {
     achievement_id: string | null;
     /** TRUE once an organizer reversed this row's confirmed award. */
     is_points_reverse: boolean | null;
+    /**
+     * The audit reason the OWNER typed, and when the reversal was recorded.
+     * NULL on every unreversed row, guaranteed by the server's
+     * `contest_leaderboard_points_reverse_audit_check` rather than by this shape
+     * remembering to blank them.
+     *
+     * `contest_points` above is deliberately LEFT at the figure the member won:
+     * the write moves only these three columns plus `points_reversed_by`, so the
+     * board renders the original struck through beside the reason. A reversal is
+     * DISPLAY-ONLY — nothing in the points ledger moved, so the member still
+     * counts toward the group's lifetime standings and still holds the badge.
+     *
+     * This board is the ONLY read in the backend that returns either field.
+     */
+    points_reverse_reason: string | null;
+    points_reversed_at: string | null;
     entered_at: string;
     updated_at: string;
 };
@@ -4321,6 +4337,46 @@ export type FeedContestLeaderboardData = {
         total: number;
         totalPages: number;
         hasMore: boolean;
+    };
+};
+
+/* ----------------------------------------------------------------------------
+ * PUT /group/feed-contest/award-reversal/:contest_id — the whole-award audit
+ * reversal, and the ONE write on this router the group OWNER alone may make. An
+ * Arena manager clears every other organizer check here and is answered 403 by
+ * this route, which tests `groups.created_by` rather than a `group_members`
+ * role. That is why the panel gates its button on ownership, not `is_organizer`.
+ *
+ * Idempotent: a repeat answers 200 "This award was already reversed." carrying
+ * the standing already on record, NOT an error the client has to special-case.
+ * -------------------------------------------------------------------------- */
+export type FeedContestAwardReversalPayload = {
+    contest_id: string;
+    /** The MEMBER whose award is reversed — `standing.member.id` off the board. */
+    user_id: string;
+    /** Trimmed server-side, then capped at FEED_CONTEST_AWARD_REVERSE_REASON_MAX. */
+    reason: string;
+};
+
+/**
+ * SEVEN columns and nothing else — the server's
+ * `CONTEST_LEADERBOARD_REVERSAL_COLUMNS`.
+ *
+ * Notably ABSENT: `contest_id`, `points_reversed_by` (written, never returned),
+ * `updated_at`, and any member embed. That is why the saga echoes the request's
+ * `contest_id` and `user_id` back into the success action — the reducer needs
+ * the first for its single-tenant guard and the second to find the row.
+ */
+export type FeedContestAwardReversalData = {
+    standing: {
+        id: string;
+        user_id: string;
+        rank: number | null;
+        /** LEFT at the figure the member won. The reversal does not zero it. */
+        contest_points: number | null;
+        is_points_reverse: boolean;
+        points_reverse_reason: string | null;
+        points_reversed_at: string | null;
     };
 };
 

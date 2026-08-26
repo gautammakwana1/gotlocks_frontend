@@ -11,6 +11,7 @@ import {
     clearFeedContestUpdateState,
     updateFeedContestRequest,
 } from "@/lib/redux/slices/feedContestSlice";
+import ArenaContestPrizeSettings from "./ArenaContestPrizeSettings";
 import ContestRulesDisclosure from "./ContestRulesDisclosure";
 import {
     contestAccentClasses,
@@ -413,6 +414,39 @@ export const FeedContestEditForm = ({
                                         : "Eligible members can submit from anywhere while entries are open."}
                                 </p>
                             </div>
+                        </section>
+                    ) : null}
+
+                    {/* PODIUM PRIZES, the MVP's reward block on this same screen
+                        (MVP StructuredContestDetail.tsx:2928-2949).
+
+                        Mounted in "card" surface: the section below already
+                        supplies the heading and the divider, so the disclosure
+                        chrome the Settings tab uses would be a third nested
+                        frame inside the hero card.
+
+                        Gated on a reward EXISTING. A contest published without
+                        prizes cannot gain them — the disclosure has to be in
+                        rules_text on the row's first version, and the endpoint
+                        answers 409 — so there is nothing to offer here. The
+                        detail screen's Settings tab says so in words; a form
+                        does not need to repeat it.
+
+                        `editable`, not `copyEditable`: prize WORDING outlives
+                        the copy freeze on this backend exactly as the name does,
+                        and PATCH /reward/:id/prizes carries no lifecycle gate.
+                        Its own Cancel / Save prizes footer stays — the two
+                        writes hit different endpoints and the prize save takes a
+                        fresh organizer attestation, so chaining them behind one
+                        button would let a copy 409 strand a saved prize. */}
+                    {isArenaContest && scoped?.reward ? (
+                        <section className="border-t border-white/10 pt-6">
+                            <ArenaContestPrizeSettings
+                                surface="card"
+                                contestId={contestId}
+                                reward={scoped.reward}
+                                editable={editable}
+                            />
                         </section>
                     ) : null}
 

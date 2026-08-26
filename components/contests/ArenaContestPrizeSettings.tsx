@@ -75,6 +75,17 @@ export type ArenaContestPrizeSettingsProps = {
     addRewardHref?: string;
     /** Finalized contests still allow a wording fix; the copy says what that means. */
     finalized?: boolean;
+    /**
+     * How the block frames itself.
+     *
+     *   "panel"  (default) the collapsible row the contest detail's Settings tab
+     *            uses — its own heading, summary line and full-bleed body.
+     *   "card"   bare children, for a caller that already supplies a heading and
+     *            a border. The edit form mounts it this way: a disclosure inside
+     *            a section that is itself inside the hero card would be a third
+     *            nested frame, and the MVP shows the reward editor inline there.
+     */
+    surface?: "panel" | "card";
 };
 
 export const ArenaContestPrizeSettings = ({
@@ -83,6 +94,7 @@ export const ArenaContestPrizeSettings = ({
     editable,
     addRewardHref,
     finalized = false,
+    surface = "panel",
 }: ArenaContestPrizeSettingsProps) => {
     const dispatch = useDispatch();
     const { setToast } = useToast();
@@ -189,50 +201,14 @@ export const ArenaContestPrizeSettings = ({
         );
     };
 
-    return (
-        <details
-            aria-label="Podium prizes"
-            data-arena-contest-prize-settings
-            className="group px-5 sm:px-6"
+    const body = (
+        <div
+            className={
+                surface === "card"
+                    ? ""
+                    : "-mx-5 border-t border-white/10 px-5 py-6 sm:-mx-6 sm:px-6"
+            }
         >
-            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-5 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-300/40 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0">
-                    <span className="block text-sm font-semibold uppercase tracking-[0.12em] text-white">
-                        Podium prizes
-                    </span>
-                    <span
-                        data-arena-contest-prize-settings-summary
-                        className="mt-1 block text-xs normal-case leading-5 text-gray-500"
-                    >
-                        {reward
-                            ? arenaRewardSummary(reward.prizes.length, reward.settlement_method)
-                            : "No prizes were offered"}
-                    </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3">
-                    {reward && editable ? (
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200">
-                            Update prizes
-                        </span>
-                    ) : null}
-                    <svg
-                        aria-hidden="true"
-                        viewBox="0 0 16 16"
-                        className="h-4 w-4 text-gray-500 transition-transform duration-200 group-open:rotate-180"
-                    >
-                        <path
-                            d="m4 6 4 4 4-4"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="1.5"
-                        />
-                    </svg>
-                </span>
-            </summary>
-
-            <div className="-mx-5 border-t border-white/10 px-5 py-6 sm:-mx-6 sm:px-6">
                 {!reward || !draft ? (
                     <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm normal-case leading-6 text-gray-400">
@@ -326,7 +302,55 @@ export const ArenaContestPrizeSettings = ({
                         </div>
                     </div>
                 )}
-            </div>
+        </div>
+    );
+
+    if (surface === "card") return body;
+
+    return (
+        <details
+            aria-label="Podium prizes"
+            data-arena-contest-prize-settings
+            className="group px-5 sm:px-6"
+        >
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 py-5 outline-none transition hover:text-white focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-300/40 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0">
+                    <span className="block text-sm font-semibold uppercase tracking-[0.12em] text-white">
+                        Podium prizes
+                    </span>
+                    <span
+                        data-arena-contest-prize-settings-summary
+                        className="mt-1 block text-xs normal-case leading-5 text-gray-500"
+                    >
+                        {reward
+                            ? arenaRewardSummary(reward.prizes.length, reward.settlement_method)
+                            : "No prizes were offered"}
+                    </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                    {reward && editable ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-violet-200">
+                            Update prizes
+                        </span>
+                    ) : null}
+                    <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        className="h-4 w-4 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                    >
+                        <path
+                            d="m4 6 4 4 4-4"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="1.5"
+                        />
+                    </svg>
+                </span>
+            </summary>
+
+            {body}
         </details>
     );
 };

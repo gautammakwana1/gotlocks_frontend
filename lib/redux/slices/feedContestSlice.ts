@@ -14,9 +14,12 @@ import type {
     ReplaceTdPsychicFeedContestEntryData,
     ReplaceTdPsychicFeedContestEntryPayload,
     FeedContest,
+    FeedContestAwardReversalData,
+    FeedContestAwardReversalPayload,
     FeedContestDetailData,
     FeedContestEntriesData,
     FeedContestLeaderboardData,
+    FeedContestStandingRow,
     FeedContestLifecycleActionPayload,
     FeedContestLifecycleData,
     FeedContestListData,
@@ -155,6 +158,25 @@ export type FeedContestState = {
     rewardPrizesLoading: boolean;
     rewardPrizesMessage: string | null;
     rewardPrizesError: string | null;
+
+    /**
+     * PUT /award-reversal/:contest_id — the OWNER-ONLY whole-award audit
+     * reversal. Its own slot for the same reason `rewardPrizes*` has one: it is
+     * driven from the Settings tab's Award corrections panel while a copy edit
+     * can be in flight from the edit route, and a shared error slot would report
+     * one screen's failure on the other.
+     */
+    awardReversalLoading: boolean;
+    awardReversalMessage: string | null;
+    awardReversalError: string | null;
+    /**
+     * WHICH contest the outcome above belongs to. The receipt can land after the
+     * screen that asked for it unmounted — the organizer hit Back while the PUT
+     * was in flight — and without this the next contest detail to mount would
+     * read a stranger's receipt and toast it. Same job `deletedContestId` does
+     * for the delete path.
+     */
+    awardReversalContestId: string | null;
 
     /**
      * GET /entries/:contest_id — the field. Held in its own slot for the same
@@ -317,6 +339,10 @@ const initialState: FeedContestState = {
     rewardPrizesLoading: false,
     rewardPrizesMessage: null,
     rewardPrizesError: null,
+    awardReversalLoading: false,
+    awardReversalMessage: null,
+    awardReversalError: null,
+    awardReversalContestId: null,
     entries: null,
     entriesLoading: false,
     entriesError: null,
@@ -808,6 +834,90 @@ const feedContestSlice = createSlice({
         },
 
         /* --------------------------------------------------------------------
+         * PUT /award-reversal/:contest_id — the OWNER-ONLY whole-award audit
+         * reversal.
+         *
+         * The reply carries seven columns of the standing and NOTHING else — no
+         * contest_id, no member embed — so the saga echoes `contest_id` and
+         * `user_id` back from the request. The first is what makes the patch
+         * below single-tenant; the second is what still finds the row when the
+         * board was paged and the reply's `id` is all there is to match on.
+         * ------------------------------------------------------------------ */
+        reverseFeedContestAwardRequest: (
+            state,
+            action: PayloadAction<FeedContestAwardReversalPayload>
+        ) => {
+            state.awardReversalLoading = true;
+            state.awardReversalMessage = null;
+            state.awardReversalError = null;
+            // Stamped at REQUEST time so a FAILURE, which carries no contest of
+            // its own, is still attributable to the contest that asked for it.
+            state.awardReversalContestId = action.payload.contest_id;
+        },
+        reverseFeedContestAwardSuccess: (
+            state,
+            action: PayloadAction<{
+                contest_id: string;
+                user_id: string;
+                data: FeedContestAwardReversalData | null;
+                message?: string;
+            }>
+        ) => {
+            state.awardReversalLoading = false;
+            state.awardReversalError = null;
+            state.awardReversalMessage =
+                action.payload.message ??
+                "The confirmed award was reversed with an audit record.";
+            state.awardReversalContestId = action.payload.contest_id;
+
+            const standing = action.payload.data?.standing;
+            // Single-tenant, like every other slot here: a receipt for a contest
+            // the organizer has already navigated away from is DROPPED rather
+            // than written over the board now on screen.
+            if (
+                !standing ||
+                !state.leaderboard ||
+                state.leaderboard.contest.id !== action.payload.contest_id
+            ) {
+                return;
+            }
+            /*
+             * MERGE, never replace. The reply is seven columns; the row on the
+             * board also carries the member embed, the entry, the achievement
+             * and the odds, and rebuilding it from the reply would blank all
+             * four. `contest_points` is taken from the reply but is the SAME
+             * number — the server does not move it, because the board renders
+             * the won figure struck through beside the reason.
+             */
+            const patch = (row: FeedContestStandingRow): FeedContestStandingRow =>
+                row.id === standing.id
+                    ? {
+                        ...row,
+                        rank: standing.rank ?? row.rank,
+                        contest_points: standing.contest_points ?? row.contest_points,
+                        is_points_reverse: standing.is_points_reverse,
+                        points_reverse_reason: standing.points_reverse_reason,
+                        points_reversed_at: standing.points_reversed_at,
+                    }
+                    : row;
+            state.leaderboard.standings = state.leaderboard.standings.map(patch);
+            if (state.leaderboard.my_standing) {
+                state.leaderboard.my_standing = patch(state.leaderboard.my_standing);
+            }
+        },
+        reverseFeedContestAwardFailure: (state, action: PayloadAction<string>) => {
+            state.awardReversalLoading = false;
+            state.awardReversalError = action.payload;
+        },
+        /** Cleared once the screen has reported the outcome, so it toasts once. */
+        clearFeedContestAwardReversalState: (state) => {
+            state.awardReversalLoading = false;
+            state.awardReversalMessage = null;
+            state.awardReversalError = null;
+            state.awardReversalContestId = null;
+        },
+
+        /* --------------------------------------------------------------------
          * The field — GET /group/feed-contest/entries/:contest_id.
          * ------------------------------------------------------------------ */
         fetchFeedContestEntriesRequest: (
@@ -1261,6 +1371,10 @@ export const {
     updateFeedContestRewardPrizesSuccess,
     updateFeedContestRewardPrizesFailure,
     clearFeedContestRewardPrizesState,
+    reverseFeedContestAwardRequest,
+    reverseFeedContestAwardSuccess,
+    reverseFeedContestAwardFailure,
+    clearFeedContestAwardReversalState,
     fetchFeedContestEntriesRequest,
     fetchFeedContestEntriesSuccess,
     fetchFeedContestEntriesFailure,

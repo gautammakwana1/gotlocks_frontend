@@ -133,10 +133,20 @@ export const FeedContestEditRouter = ({
         );
     }
 
-    // Published, canceled, archived, or a template this wizard does not build:
-    // the copy-only form is the only edit left, and it re-reads the detail itself.
+    /* Published, canceled, archived, or a template this wizard does not build:
+     * the copy-only form is the only edit left, and it re-reads the detail itself.
+     *
+     * `accent` is NOT optional in practice. The form defaults it to "league",
+     * so an Arena contest opened here rendered the whole screen in slate/blue —
+     * the League card gradient, the sky focus rings, the sky Save button — and
+     * never emitted the `arena-theme` class its violet tokens hang off. Same
+     * expression the draft branch above already uses. */
     return (
-        <FeedContestEditForm contestId={contestId} detailHref={`${detailHref}?tab=entries`} />
+        <FeedContestEditForm
+            contestId={contestId}
+            detailHref={`${detailHref}?tab=entries`}
+            accent={scoped.group.group_type === "arena" ? "arena" : "league"}
+        />
     );
 };
 

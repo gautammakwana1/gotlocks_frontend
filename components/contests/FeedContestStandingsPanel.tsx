@@ -14,6 +14,7 @@ import type {
     FeedContestStandingRow,
 } from "@/lib/interfaces/interfaces";
 import type { FeedContestEntryFormat } from "@/components/social/pick-card/types";
+import { formatContestDateTime } from "@/lib/contests/feedContestCatalog";
 import { tdPsychicSelectionResult } from "@/lib/contests/tdPsychicEntry";
 import ContestEntryFeedCard from "./ContestEntryFeedCard";
 
@@ -519,6 +520,22 @@ const StandingRow = ({
     const reversed = Boolean(row.is_points_reverse);
     const points = row.contest_points ?? 0;
     /*
+     * THE AUDIT TRAIL, on the board itself. `is_points_reverse` alone says that
+     * a reversal happened; these two say WHY and WHEN, and this board is the
+     * only read in the backend that returns either — so if they are not printed
+     * here they are not visible anywhere in the product.
+     *
+     * Both are guaranteed null on an unreversed row by a server-side check
+     * constraint; they are still read behind `reversed` rather than trusted to
+     * be absent. The stamp is gated on the RAW value, not on its formatting:
+     * `formatContestDateTime` answers "—" for a null, which would otherwise
+     * print as a stray dash.
+     */
+    const reversalReason = row.points_reverse_reason?.trim() || null;
+    const reversalStamp = row.points_reversed_at
+        ? formatContestDateTime(row.points_reversed_at)
+        : null;
+    /*
      * The MVP tints this emerald for a CONFIRMED award, which it reads off the
      * community point ledger. The nearest thing on this row is `achievement_id`
      * — set when the settlement job recorded the contest achievement that comes
@@ -657,9 +674,31 @@ const StandingRow = ({
                             </p>
                         ) : null}
                         {reversed ? (
-                            <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-red-200">
-                                {pointsLabel} award reversed
-                            </p>
+                            <>
+                                {/* The MVP's line, byte for byte
+                                    (StructuredContestDetail ~5807). */}
+                                <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-red-200">
+                                    {pointsLabel} award reversed
+                                </p>
+                                {/* <p
+                                    data-standing-reversal-detail
+                                    title={reversalReason ?? undefined}
+                                    className="mt-0.5 line-clamp-3 break-words text-[10px] font-normal normal-case leading-4 tracking-normal text-red-200/70"
+                                >
+                                    <span className="font-semibold tabular-nums">
+                                        −{points} {pointsLabel}
+                                    </span>
+                                    {reversalReason ? (
+                                        <span> · {reversalReason}</span>
+                                    ) : null}
+                                    {reversalStamp ? (
+                                        <span className="text-red-200/50">
+                                            {" "}
+                                            · {reversalStamp}
+                                        </span>
+                                    ) : null}
+                                </p> */}
+                            </>
                         ) : null}
                     </div>
                 </div>

@@ -50,6 +50,14 @@ export const FEED_CONTEST_MAX_LEGS = 8;
 /** FEED_CONTEST_LOCK_LEAD_MS — entries lock this far before the earliest kickoff. */
 export const FEED_CONTEST_LOCK_LEAD_MS = 5 * 60 * 1000;
 
+/**
+ * FEED_CONTEST_AWARD_REVERSE_REASON_MAX, mirrored from the server so the Award
+ * corrections form can refuse an over-long audit reason before it costs a round
+ * trip. Pre-checked rather than capped with `maxLength`, which would silently
+ * truncate what the owner wrote.
+ */
+export const FEED_CONTEST_AWARD_REVERSE_REASON_MAX = 280;
+
 /** SUNDAY_PICKEM_MIN_GAMES. */
 export const SUNDAY_PICKEM_MIN_GAMES = 2;
 

@@ -1386,14 +1386,17 @@ const LeagueDashboardPage = () => {
                 </p>
               )}
             </label>
-            <button
-              type="button"
-              onClick={handleSaveLeague}
-              disabled={loading}
-              className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Save details
-            </button>
+            {/* Right-aligned, matching the MVP (MVP league page:1238). */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleSaveLeague}
+                disabled={loading}
+                className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save details
+              </button>
+            </div>
           </section>
 
           {/* LEAGUE MANAGER — commissioner-only, and specifically the PERMANENT
@@ -1442,14 +1445,17 @@ const LeagueDashboardPage = () => {
               spellCheck={false}
               className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black px-4 py-2.5 font-mono text-sm tracking-[0.2em] normal-case text-white outline-none transition placeholder:tracking-normal placeholder:text-gray-600 focus:border-red-400/70"
             />
-            <button
-              type="button"
-              onClick={handleDeleteLeague}
-              disabled={deleteLoading || !deleteConfirmCode || deleteCodeInput !== deleteConfirmCode}
-              className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Delete league
-            </button>
+            {/* Right-aligned like the MVP's (MVP league page:1276). */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={handleDeleteLeague}
+                disabled={deleteLoading || !deleteConfirmCode || deleteCodeInput !== deleteConfirmCode}
+                className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete league
+              </button>
+            </div>
           </section>
         </div>
       )}

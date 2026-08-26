@@ -91,24 +91,16 @@ const MemberActions = ({
     leavingGroup?: boolean;
     state?: ActionState;
 }) => (
-    <div className="flex w-full flex-col items-center gap-2">
-        {showPromote && (
-            <button
-                type="button"
-                disabled={disablePromote}
-                onClick={onPromote}
-                className="ui-accent-button w-full rounded-lg px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
-            >
-                {state?.promoting ? "transferring..." : "transfer ownership"}
-            </button>
+    <div className="mt-auto flex w-full flex-col items-center gap-1.5 pt-2">
+        {state?.error && (
+            <p className="text-[9px] leading-tight text-red-300">{state.error}</p>
         )}
-        {state?.error && <p className="text-xs text-red-300">{state.error}</p>}
         {showLeave && (
             <button
                 type="button"
                 onClick={onLeave}
                 disabled={leavingGroup}
-                className="w-full rounded-lg border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:py-1.5 sm:text-[10px] sm:tracking-[0.12em]"
+                className="w-full rounded-md border border-red-500/30 bg-gradient-to-br from-red-900/70 via-red-700/40 to-black/40 px-2 py-1 text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-white transition hover:border-red-400/40 hover:from-red-800/80 hover:via-red-600/50 disabled:cursor-not-allowed disabled:opacity-60"
             >
                 {leavingGroup ? "Leaving..." : "Leave group"}
             </button>

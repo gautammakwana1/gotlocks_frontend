@@ -1769,14 +1769,18 @@ const ArenaSettingsPanel = ({
                 </label>
 
                 {identityWritable ? (
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={!hasIdentityChanges || Boolean(identityError) || updateLoading}
-                        className="rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        {updateLoading ? "Saving…" : "Save Arena details"}
-                    </button>
+                    // Right-aligned, as every section-footer action in the MVP's
+                    // settings tab is (MVP ArenaDashboard:1005).
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={!hasIdentityChanges || Boolean(identityError) || updateLoading}
+                            className="rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            {updateLoading ? "Saving…" : "Save Arena details"}
+                        </button>
+                    </div>
                 ) : (
                     <p className="text-xs text-gray-500">
                         {isOwner
@@ -1998,16 +2002,19 @@ const ArenaSettingsPanel = ({
                         disabled={arenaDeleteLoading}
                         className="w-full rounded-xl border border-red-300/20 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-red-300/60 disabled:cursor-not-allowed disabled:opacity-55"
                     />
-                    <button
-                        type="button"
-                        onClick={handleDelete}
-                        disabled={deleteConfirmation !== arena.name || arenaDeleteLoading}
-                        className="rounded-xl border border-red-300/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        {arenaDeleteLoading && !arenaDeleteOtpSent
-                            ? "Sending code…"
-                            : "Delete Arena permanently"}
-                    </button>
+                    {/* Right-aligned like the MVP's (MVP ArenaDashboard:1243). */}
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            disabled={deleteConfirmation !== arena.name || arenaDeleteLoading}
+                            className="rounded-xl border border-red-300/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            {arenaDeleteLoading && !arenaDeleteOtpSent
+                                ? "Sending code…"
+                                : "Delete Arena permanently"}
+                        </button>
+                    </div>
                 </section>
             ) : null}
 

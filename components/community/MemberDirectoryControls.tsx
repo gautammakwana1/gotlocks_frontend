@@ -7,8 +7,15 @@ export type MemberDirectoryAccent = "league" | "arena";
  *  keeps the tile grid off the panel edge once the grid runs six wide. */
 export const memberDirectoryPanelClassName = "space-y-4 md:px-6";
 
+/**
+ * `auto-rows-fr` is what makes EVERY tile the same height, not just the ones
+ * sharing a row. Grid already stretches items within a row, so a row was only
+ * ever as tall as its own tallest card — which meant a row holding the viewer's
+ * own card (the one with Leave / Transfer buttons) stood taller than the rows
+ * around it. `1fr` rows all take the height of the tallest row in the grid.
+ */
 export const memberDirectoryGridClassName =
-    "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+    "grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
 export const memberDirectoryListClassName = "divide-y divide-white/10";
 
@@ -17,8 +24,18 @@ export const memberDirectoryListClassName = "divide-y divide-white/10";
  * accent here is what keeps a League tile blue and an Arena tile violet without
  * either caller restating the gradient.
  */
+/**
+ * `h-full` + a MINIMUM, deliberately not `aspect-square`.
+ *
+ * aspect-square gives the tile a DEFINITE height derived from its width, which
+ * is exactly what stopped the grid from equalising: a card whose content
+ * outgrew that square (the action buttons) simply pushed past it, while every
+ * card without buttons stayed at the square. Height now comes from the row —
+ * see `auto-rows-fr` above — and the min-height keeps a sparse directory
+ * looking square rather than collapsing to the name and avatar.
+ */
 export const getMemberDirectoryCardClassName = (accent: MemberDirectoryAccent) =>
-    `relative flex aspect-square w-full flex-col rounded-2xl border bg-clip-padding p-4 shadow-sm transition ${accent === "arena"
+    `relative flex h-full min-h-[9.5rem] w-full flex-col rounded-2xl border bg-clip-padding p-4 shadow-sm transition ${accent === "arena"
         ? "border-violet-200/10 bg-gradient-to-b from-violet-500/15 via-violet-500/[0.09] to-slate-950/20 hover:border-violet-300/35"
         : "border-blue-400/10 bg-gradient-to-b from-blue-400/15 via-blue-400/[0.09] to-slate-950/20 hover:border-blue-400/35"
     }`;
