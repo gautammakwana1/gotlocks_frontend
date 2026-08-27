@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { getContestEntryFeedHeaderLabel } from "@/lib/feed/contestEntryHeader";
 import type { ContestPresentation } from "./types";
 
@@ -47,7 +48,7 @@ export const ContestEntryHeader = ({
             className={`inline-flex min-h-6 min-w-0 items-start gap-1 text-left font-semibold uppercase tracking-wide text-slate-300 transition hover:text-white focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${className}`.trim()}
         >
             <span className="min-w-0 break-words">{label}</span>
-            <span aria-hidden="true" className="shrink-0">↗</span>
+            <AnimatedArrow direction="up-right" className="shrink-0" />
         </Link>
     );
 };

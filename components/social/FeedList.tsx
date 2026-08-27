@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, useCallback, useState, type ReactNode } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useRouter } from "next/navigation";
 import { Pick, PickReaction, PickReactionSummary, Picks } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
@@ -265,7 +266,9 @@ const FeedList = ({
                                         : "text-white/90 hover:text-white"
                                         }`}
                                 >
-                                    {isCollapsed ? COLLAPSE_DOWN_TRIANGLE : COLLAPSE_UP_TRIANGLE}
+                                    <AnimatedArrow direction={isCollapsed ? "down" : "up"}>
+                                        {isCollapsed ? COLLAPSE_DOWN_TRIANGLE : COLLAPSE_UP_TRIANGLE}
+                                    </AnimatedArrow>
                                 </button>
                             </div>
                         </div>

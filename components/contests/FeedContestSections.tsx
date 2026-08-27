@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import type { ContestAccent } from "./FeedContestCard";
 import { ContestPreviewCard } from "./preview/ContestPreviewCard";
 import { buildFeedContestPreviewModel } from "./preview/feedContestPreview";
@@ -214,9 +215,12 @@ export const FeedContestSections = ({
                                     {details.description}
                                 </p>
                             </div>
-                            <span aria-hidden className="text-sm text-gray-500">
+                            <AnimatedArrow
+                                direction={expandedSections[sectionId] ? "up" : "down"}
+                                className="text-sm text-gray-500"
+                            >
                                 {expandedSections[sectionId] ? "▴" : "▾"}
-                            </span>
+                            </AnimatedArrow>
                         </summary>
 
                         {isLoadingFirstPage ? (

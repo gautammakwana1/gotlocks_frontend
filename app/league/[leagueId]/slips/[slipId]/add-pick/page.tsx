@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useParams, useRouter } from "next/navigation";
 import { PickBuilderShell } from "@/components/pick-builder/core/PickBuilderShell";
 import { canUserEditSlipPicks, isSlipFinal } from "@/lib/slips/state";
@@ -230,7 +231,7 @@ const SlipAddPickPage = () => {
                         onClick={returnToSlip}
                         className="text-xs lowercase tracking-wide text-gray-400 transition hover:text-white"
                     >
-                        ← back to slip
+                        <AnimatedArrow direction="left" /> back to slip
                     </button>
                     <p className="text-xs lowercase tracking-wide text-gray-400">pick builder</p>
                 </div>

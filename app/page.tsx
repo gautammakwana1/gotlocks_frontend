@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import Image from "next/image";
 import Link from "next/link";
 import FeatureAudienceTabs from "@/components/marketing/FeatureAudienceTabs";
@@ -249,12 +250,7 @@ export default function PublicHomePage() {
                 className="group inline-flex min-h-11 items-center gap-2 text-sm font-bold leading-6 text-sky-200 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-200 motion-reduce:transition-none sm:text-base"
               >
                 Explore pricing plans
-                <span
-                  aria-hidden="true"
-                  className="text-sky-300 transition-transform group-hover:translate-x-1 motion-reduce:transition-none"
-                >
-                  →
-                </span>
+                <AnimatedArrow direction="right" className="text-sky-300" />
               </Link>
             </div>
           </div>

@@ -2,6 +2,14 @@
 
 import { useEffect, useId, useState } from "react";
 import {
+    SettingsActionBar,
+    SettingsSection,
+    SettingsStatus,
+    settingsFieldLabelClassName,
+    settingsInputClassName,
+    settingsPrimaryButtonClassName,
+} from "@/components/settings/SettingsUI";
+import {
     ARENA_REWARD_CONTACT_EMAIL_MAX,
     isValidArenaRewardContactEmail,
     normalizeArenaRewardContactEmail,
@@ -34,14 +42,22 @@ export type ArenaRewardContactSettingsProps = {
     /** Receives the NORMALISED address, or null to clear it. */
     onSave: (rewardContactEmail: string | null) => void;
     saving?: boolean;
+    /**
+     * Drop the settings-screen chrome. The Arena settings tab wants the
+     * full-bleed ruled SettingsSection; the contest wizard drops this panel
+     * inside its own bordered violet card mid-draft, where that section rule
+     * would land right on top of the card border and read as a doubled line.
+     */
+    embedded?: boolean;
 };
 
 export const ArenaRewardContactSettings = ({
     rewardContactEmail,
     onSave,
     saving = false,
+    embedded = false,
 }: ArenaRewardContactSettingsProps) => {
-    const titleId = useId();
+    const headingId = useId();
     const descriptionId = useId();
     const validationErrorId = useId();
     const [email, setEmail] = useState(rewardContactEmail ?? "");
@@ -73,30 +89,16 @@ export const ArenaRewardContactSettings = ({
         onSave(normalizedEmail || null);
     };
 
-    return (
-        <section
-            aria-labelledby={titleId}
-            data-arena-reward-contact-settings
-            className="space-y-4 px-5 py-7 sm:px-6"
-        >
-            <div>
-                <h2
-                    id={titleId}
-                    className="text-sm font-semibold uppercase tracking-[0.14em] text-white"
-                >
-                    Arena contact email
-                </h2>
-                <p
-                    id={descriptionId}
-                    className="mt-1 max-w-2xl text-xs normal-case leading-5 text-gray-500"
-                >
-                    Users can expect Arena emails from this address and contact it with questions.
-                    An Arena contact email is required before contest prizes can be added or
-                    changed.
-                </p>
-            </div>
+    const description = (
+        <span id={descriptionId}>
+            Users can expect Arena emails from this address and contact it with questions. An
+            Arena contact email is required before contest prizes can be added or changed.
+        </span>
+    );
 
-            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+    const body = (
+        <div className="space-y-4">
+            <label className={`block ${settingsFieldLabelClassName}`}>
                 Arena contact email
                 <input
                     type="email"
@@ -116,7 +118,7 @@ export const ArenaRewardContactSettings = ({
                             ? `${descriptionId} ${validationErrorId}`
                             : descriptionId
                     }
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition placeholder:text-gray-600 focus:border-violet-300/60 disabled:cursor-not-allowed disabled:opacity-55"
+                    className={`${settingsInputClassName} mt-2 bg-black/60 normal-case`}
                 />
             </label>
 
@@ -126,22 +128,53 @@ export const ArenaRewardContactSettings = ({
                 </p>
             ) : null}
 
-            <div className="flex flex-wrap items-center justify-end gap-3">
-                {saved && !dirty ? (
-                    <p role="status" className="mr-auto text-xs text-emerald-200">
-                        Arena contact email saved.
-                    </p>
-                ) : null}
+            <SettingsActionBar>
+                <SettingsStatus tone="success" className="border-0 bg-transparent px-0 py-0">
+                    {saved && !dirty ? "Arena contact email saved." : null}
+                </SettingsStatus>
                 <button
                     type="button"
                     onClick={handleSave}
                     disabled={!valid || !dirty || saving}
-                    className="rounded-xl bg-violet-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className={settingsPrimaryButtonClassName}
                 >
                     {saving ? "Saving…" : "Save Arena contact email"}
                 </button>
-            </div>
-        </section>
+            </SettingsActionBar>
+        </div>
+    );
+
+    /* The wizard's copy of this panel. Same controls, no section rule — the
+       card it sits in draws its own border, and SettingsSection's would land
+       directly on it. */
+    if (embedded) {
+        return (
+            <section
+                aria-labelledby={headingId}
+                data-arena-reward-contact-settings
+                className="space-y-4 px-5 py-7 sm:px-6"
+            >
+                <div className="space-y-1">
+                    <h2 id={headingId} className="text-base font-semibold tracking-tight text-white">
+                        Arena contact email
+                    </h2>
+                    <p className="text-sm normal-case leading-6 text-[var(--text-secondary)]">
+                        {description}
+                    </p>
+                </div>
+                {body}
+            </section>
+        );
+    }
+
+    return (
+        <SettingsSection
+            data-arena-reward-contact-settings
+            title="Arena contact email"
+            description={description}
+        >
+            {body}
+        </SettingsSection>
     );
 };
 

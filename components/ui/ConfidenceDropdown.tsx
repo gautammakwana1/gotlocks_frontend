@@ -135,8 +135,14 @@ const ConfidenceDropdown = ({ value, onChange, disabled = false }: Props) => {
                         {selectedOption?.label ?? "select"}
                     </span>
                 </span>
+                {/* The rotation flips the shared hover nudge along with the
+                    glyph, so the fixed "down" direction always reads as
+                    "toward where this points". */}
                 <span className="shrink-0 text-[10px] text-slate-500" aria-hidden>
-                    <ChevronUpDownIcon className={`h-3 w-3 transition ${open ? "rotate-180" : ""}`} />
+                    <ChevronUpDownIcon
+                        data-directional-arrow="down"
+                        className={`ui-directional-arrow h-3 w-3 transition motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+                    />
                 </span>
             </button>
 

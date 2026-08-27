@@ -8,8 +8,19 @@ import { useToast } from "@/lib/state/ToastContext";
 import { changePasswordRequest, clearChangePasswordMessage } from "@/lib/redux/slices/authSlice";
 import { RootState } from "@/lib/interfaces/interfaces";
 import FootballAnimation from "@/components/animations/FootballAnimation";
-import { ArrowLeft, EyeClosedIcon, EyeIcon } from "lucide-react";
+import { EyeClosedIcon, EyeIcon } from "lucide-react";
 import { getLocalStorage } from "@/lib/utils/jwtUtils";
+import {
+    SettingsActionBar,
+    SettingsHeader,
+    SettingsPage,
+    SettingsSection,
+    SettingsStatus,
+    settingsFieldLabelClassName,
+    settingsInputClassName,
+    settingsPrimaryButtonClassName,
+    settingsSecondaryButtonClassName,
+} from "@/components/settings/SettingsUI";
 
 interface FormData {
     currentPassword?: string;
@@ -23,8 +34,13 @@ interface FormErrors {
     confirmPassword?: string;
 }
 
-const inputClassName =
-    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base sm:text-sm text-[var(--app-text)] outline-none transition focus:border-white/20";
+/* Room for the reveal button, which is absolutely positioned over the field. */
+const passwordInputClassName = `${settingsInputClassName} pr-12`;
+
+const fieldErrorClassName = "block text-xs font-medium normal-case text-red-400";
+
+const revealButtonClassName =
+    "absolute inset-y-0 right-3 my-auto flex h-11 w-8 items-center justify-center text-gray-400 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50";
 
 const ChangePasswordPage = () => {
     const dispatch = useDispatch();
@@ -70,25 +86,25 @@ const ChangePasswordPage = () => {
         const nextErrors: FormErrors = {};
 
         if (!form.currentPassword?.trim()) {
-            nextErrors.currentPassword = "Current Password is required.";
+            nextErrors.currentPassword = "Current password is required.";
         }
 
         if (!form.nextPassword?.trim()) {
-            nextErrors.nextPassword = "New Password is required.";
+            nextErrors.nextPassword = "New password is required.";
         } else if (form.nextPassword.length < 6) {
             nextErrors.nextPassword = "Password must be at least 6 characters.";
         }
 
         if (form.currentPassword.trim() === form.nextPassword.trim()) {
-            nextErrors.nextPassword = "Current & New Password must be different.";
+            nextErrors.nextPassword = "Current and new password must be different.";
         }
 
         if (!form.confirmPassword.trim()) {
-            nextErrors.confirmPassword = "Confirm Password is required.";
+            nextErrors.confirmPassword = "Confirm password is required.";
         }
 
         if (form.nextPassword.trim() !== form.confirmPassword.trim()) {
-            nextErrors.confirmPassword = "New & Confirm Password do not match.";
+            nextErrors.confirmPassword = "New and confirm password do not match.";
         }
 
         setErrors(nextErrors);
@@ -146,153 +162,167 @@ const ChangePasswordPage = () => {
         )
     }
 
+    /* The MVP's live field hints — stated as the field is filled rather than
+       held back until submit, so the rule is visible before it is broken. */
+    const passwordMeetsLength = form.nextPassword.length >= 6;
+    const confirmationStarted = form.confirmPassword.length > 0;
+    const passwordsMatch =
+        confirmationStarted && form.nextPassword === form.confirmPassword;
+    const formReady =
+        !isGoogleUser &&
+        form.currentPassword.length > 0 &&
+        passwordMeetsLength &&
+        passwordsMatch;
+
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-6 lg:max-w-7xl">
-            <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
-                <Link
-                    href="/app-settings"
-                    className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
+        <SettingsPage>
+            <SettingsHeader title="Change your password" backHref="/app-settings" />
+
+            <form onSubmit={handleSubmit}>
+                <SettingsSection
+                    title="Password"
+                    description="Verify your current password, then choose the replacement."
+                    bodyClassName="space-y-7"
+                    layout="split"
                 >
-                    <span className="flex items-center gap-2">
-                        <ArrowLeft size={14} /> account settings
-                    </span>
-                </Link>
-                <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
-                    Change your password
-                </h1>
-                <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Update the password you use to sign in to this account.
-                </p>
-            </header>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Current password
-                    </span>
-                    <div className="relative" onClick={() => isGoogleUser && setShowGoogleMsg(true)}>
-                        <input
-                            type={showCurrentPassword ? "text" : "password"}
-                            value={form.currentPassword}
-                            onChange={handleInputChange("currentPassword")}
-                            className={`${inputClassName} disabled:cursor-not-allowed`}
-                            autoComplete="current-password"
-                            disabled={isGoogleUser}
-                        />
-                        <button
-                            type="button"
-                            className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
-                            onClick={() => togglePasswordVisibility("current")}
-                            aria-label={showCurrentPassword ? "Hide password" : "Show password"}
-                            disabled={isGoogleUser}
+                    <label className="block space-y-2">
+                        <span className={settingsFieldLabelClassName}>Current password</span>
+                        {/* A Google account has no password to rotate. The overlay is
+                            what surfaces that, since the disabled input fires nothing. */}
+                        <span
+                            className="relative block"
+                            onClick={() => isGoogleUser && setShowGoogleMsg(true)}
                         >
-                            {showCurrentPassword ? (
-                                <EyeIcon size={20} />
-                            ) : (
-                                <EyeClosedIcon size={20} />
-                            )}
-                        </button>
-                        {isGoogleUser && (
-                            <div className="absolute inset-0 cursor-pointer" />
+                            <input
+                                name="currentPassword"
+                                type={showCurrentPassword ? "text" : "password"}
+                                value={form.currentPassword}
+                                onChange={handleInputChange("currentPassword")}
+                                className={passwordInputClassName}
+                                autoComplete="current-password"
+                                disabled={isGoogleUser}
+                            />
+                            <button
+                                type="button"
+                                className={revealButtonClassName}
+                                onClick={() => togglePasswordVisibility("current")}
+                                aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                                disabled={isGoogleUser}
+                            >
+                                {showCurrentPassword ? <EyeIcon size={20} /> : <EyeClosedIcon size={20} />}
+                            </button>
+                            {isGoogleUser && <span className="absolute inset-0 cursor-pointer" />}
+                        </span>
+                        {errors.currentPassword && (
+                            <span className={fieldErrorClassName}>{errors.currentPassword}</span>
                         )}
-                    </div>
-                    {errors.currentPassword && (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.currentPassword}
-                        </span>
-                    )}
-                </label>
+                    </label>
 
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        New password
-                    </span>
-                    <div className="relative">
-                        <input
-                            type={showNewPassword ? "text" : "password"}
-                            value={form.nextPassword}
-                            onChange={handleInputChange("nextPassword")}
-                            className={`${inputClassName} disabled:cursor-not-allowed`}
-                            autoComplete="new-password"
-                            disabled={isGoogleUser}
-                        />
-                        <button
-                            type="button"
-                            className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
-                            onClick={() => togglePasswordVisibility("new")}
-                            aria-label={showNewPassword ? "Hide password" : "Show password"}
-                            disabled={isGoogleUser}
-                        >
-                            {showNewPassword ? (
-                                <EyeIcon size={20} />
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block space-y-2">
+                            <span className={settingsFieldLabelClassName}>New password</span>
+                            <span className="relative block">
+                                <input
+                                    name="newPassword"
+                                    aria-label="New password"
+                                    type={showNewPassword ? "text" : "password"}
+                                    value={form.nextPassword}
+                                    onChange={handleInputChange("nextPassword")}
+                                    className={passwordInputClassName}
+                                    autoComplete="new-password"
+                                    minLength={6}
+                                    disabled={isGoogleUser}
+                                    aria-describedby="new-password-requirement"
+                                />
+                                <button
+                                    type="button"
+                                    className={revealButtonClassName}
+                                    onClick={() => togglePasswordVisibility("new")}
+                                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                                    disabled={isGoogleUser}
+                                >
+                                    {showNewPassword ? <EyeIcon size={20} /> : <EyeClosedIcon size={20} />}
+                                </button>
+                            </span>
+                            {errors.nextPassword ? (
+                                <span className={fieldErrorClassName}>{errors.nextPassword}</span>
                             ) : (
-                                <EyeClosedIcon size={20} />
+                                <span
+                                    id="new-password-requirement"
+                                    className={`block text-xs normal-case leading-5 ${form.nextPassword.length > 0 && !passwordMeetsLength
+                                        ? "text-amber-200"
+                                        : "text-[var(--text-muted)]"
+                                        }`}
+                                >
+                                    Use at least 6 characters.
+                                </span>
                             )}
-                        </button>
-                    </div>
-                    {errors.nextPassword && (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.nextPassword}
-                        </span>
-                    )}
-                </label>
+                        </label>
 
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Confirm new password
-                    </span>
-                    <div className="relative">
-                        <input
-                            type={showConfirmPassword ? "text" : "password"}
-                            value={form.confirmPassword}
-                            onChange={handleInputChange("confirmPassword")}
-                            className={`${inputClassName} disabled:cursor-not-allowed`}
-                            autoComplete="new-password"
-                            disabled={isGoogleUser}
-                        />
-                        <button
-                            type="button"
-                            className="absolute inset-y-0 right-3 my-auto text-xs uppercase tracking-wide text-gray-400 transition hover:text-white"
-                            onClick={() => togglePasswordVisibility("confirm")}
-                            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                            disabled={isGoogleUser}
-                        >
-                            {showConfirmPassword ? (
-                                <EyeIcon size={20} />
-                            ) : (
-                                <EyeClosedIcon size={20} />
-                            )}
-                        </button>
+                        <label className="block space-y-2">
+                            <span className={settingsFieldLabelClassName}>Confirm new password</span>
+                            <span className="relative block">
+                                <input
+                                    name="confirmPassword"
+                                    aria-label="Confirm new password"
+                                    type={showConfirmPassword ? "text" : "password"}
+                                    value={form.confirmPassword}
+                                    onChange={handleInputChange("confirmPassword")}
+                                    className={passwordInputClassName}
+                                    autoComplete="new-password"
+                                    minLength={6}
+                                    disabled={isGoogleUser}
+                                    aria-invalid={confirmationStarted && !passwordsMatch}
+                                    aria-describedby={confirmationStarted ? "password-match-status" : undefined}
+                                />
+                                <button
+                                    type="button"
+                                    className={revealButtonClassName}
+                                    onClick={() => togglePasswordVisibility("confirm")}
+                                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                    disabled={isGoogleUser}
+                                >
+                                    {showConfirmPassword ? <EyeIcon size={20} /> : <EyeClosedIcon size={20} />}
+                                </button>
+                            </span>
+                            {errors.confirmPassword ? (
+                                <span className={fieldErrorClassName}>{errors.confirmPassword}</span>
+                            ) : confirmationStarted ? (
+                                <span
+                                    id="password-match-status"
+                                    role={passwordsMatch ? "status" : "alert"}
+                                    className={`block text-xs normal-case leading-5 ${passwordsMatch ? "text-emerald-200" : "text-red-200"
+                                        }`}
+                                >
+                                    {passwordsMatch ? "Passwords match." : "New passwords do not match."}
+                                </span>
+                            ) : null}
+                        </label>
                     </div>
-                    {errors.confirmPassword && (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.confirmPassword}
-                        </span>
-                    )}
-                </label>
-                {isGoogleUser && showGoogleMsg && (
-                    <span className="text-xs font-medium text-amber-400">
-                        Your account is linked with Google sign-in, so you don’t have a password to update.
-                    </span>
-                )}
 
-                <div className="flex flex-wrap gap-3 pt-2">
-                    <button
-                        type="submit"
-                        className="rounded-full border border-white/10 bg-[var(--app-text)] px-4 py-2 text-sm font-medium text-[var(--app-bg)] transition hover:opacity-90 disabled:bg-white/50 disabled:cursor-not-allowed"
-                        disabled={!form.currentPassword || !form.nextPassword || !form.confirmPassword || isGoogleUser}
-                    >
-                        Save password
-                    </button>
-                    <Link
-                        href="/app-settings"
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm lowercase text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
-                    >
-                        back
-                    </Link>
-                </div>
+                    <div className="space-y-4 pt-1">
+                        <SettingsStatus tone="info">
+                            {isGoogleUser && showGoogleMsg
+                                ? "Your account is linked with Google sign-in, so you don’t have a password to update."
+                                : null}
+                        </SettingsStatus>
+
+                        <SettingsActionBar>
+                            <Link href="/app-settings" className={settingsSecondaryButtonClassName}>
+                                Cancel
+                            </Link>
+                            <button
+                                type="submit"
+                                disabled={!formReady}
+                                className={settingsPrimaryButtonClassName}
+                            >
+                                Save password
+                            </button>
+                        </SettingsActionBar>
+                    </div>
+                </SettingsSection>
             </form>
-        </div>
+        </SettingsPage>
     );
 };
 

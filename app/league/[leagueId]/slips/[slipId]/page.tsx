@@ -10,6 +10,7 @@ import {
     useRef,
     useCallback,
 } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useParams, useRouter } from "next/navigation";
 import { PickLimitIndicator } from "@/components/slips/PickLimitIndicator";
 import BackButton from "@/components/ui/BackButton";
@@ -1209,9 +1210,12 @@ const SlipDetailsPage = () => {
                                                                         <span className="min-w-0 flex-1 truncate">
                                                                             {slateWindowLabel}
                                                                         </span>
-                                                                        <span className="text-sm text-gray-300">
+                                                                        <AnimatedArrow
+                                                                            direction={isSlateWindowDropdownOpen ? "up" : "down"}
+                                                                            className="text-sm text-gray-300"
+                                                                        >
                                                                             {isSlateWindowDropdownOpen ? "▴" : "▾"}
-                                                                        </span>
+                                                                        </AnimatedArrow>
                                                                     </button>
                                                                 </div>
                                                                 {isSlateWindowDropdownOpen &&
@@ -1426,7 +1430,12 @@ const SlipDetailsPage = () => {
                                                     <div className="space-y-1">
                                                         <p className="text-sm uppercase tracking-wide text-red-300">Delete slip</p>
                                                     </div>
-                                                    <span className="text-red-200">{isDeleteSlipOpen ? "▴" : "▾"}</span>
+                                                    <AnimatedArrow
+                                                        direction={isDeleteSlipOpen ? "up" : "down"}
+                                                        className="text-red-200"
+                                                    >
+                                                        {isDeleteSlipOpen ? "▴" : "▾"}
+                                                    </AnimatedArrow>
                                                 </button>
                                                 {isDeleteSlipOpen && (
                                                     <div id="delete-slip-content" className="mt-4 space-y-3">
@@ -1582,9 +1591,12 @@ const SlipDetailsPage = () => {
                                             <span className="min-w-0 flex-1 truncate">
                                                 {secondaryAssignLabel}
                                             </span>
-                                            <span className="text-sm text-gray-300">
+                                            <AnimatedArrow
+                                                direction={isSecondaryAssignDropdownOpen ? "up" : "down"}
+                                                className="text-sm text-gray-300"
+                                            >
                                                 {isSecondaryAssignDropdownOpen ? "▴" : "▾"}
-                                            </span>
+                                            </AnimatedArrow>
                                         </button>
                                         {isSecondaryAssignDropdownOpen && (
                                             <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-2xl border border-white/20 bg-black shadow-[0_18px_45px_rgba(0,0,0,0.6)]">

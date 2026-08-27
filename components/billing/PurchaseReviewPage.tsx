@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 
@@ -159,7 +160,7 @@ export const PurchaseReviewPage = ({
                         href={backHref}
                         className="inline-flex min-h-11 items-center text-sm font-semibold text-gray-300 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                     >
-                        <span aria-hidden>←</span>&nbsp;{backLabel}
+                        <AnimatedArrow direction="left" />&nbsp;{backLabel}
                     </Link>
                 )}
                 <div>

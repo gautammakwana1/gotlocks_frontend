@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useMemo, useState, CSSProperties } from
 import { useRouter } from "next/navigation";
 import { GlobalLeaderboadPostRows, Pick, PickReaction, PickResult, Picks, PickType, RootState } from "@/lib/interfaces/interfaces";
 import { useDispatch, useSelector } from "react-redux";
-import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersPostsRequest, fetchFollowingUsersWinTopHitPostsRequest, fetchGlobalLeaderboardRequest, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingTopHitPostsRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
+import { clearFetchAllGlobalPostPicksMessage, createPickReactionRequest, fetchFollowingUsersAllStatusPostsRequest, fetchGlobalAllStatusPostsRequest, fetchGlobalLeaderboardRequest, fetchGlobalWinnerTopHitPostsRequest } from "@/lib/redux/slices/pickSlice";
 import Image from "next/image";
 import { formatTierPrimary, getAppliedGlobalXpForPick, getCalculatedGlobalXpForPick, getTierMetaForPick } from "@/lib/utils/scoring";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
@@ -46,6 +46,24 @@ import PostReactionButtons from "@/components/social/PostReactionButtons";
  */
 type SocialTab = "for-you" | "following" | "wins" | "rankings";
 
+/*
+ * The two all-status feeds clamp `limit` at 50 server-side and say nothing about
+ * it — ask for 60, get 50, with the clamped figure echoed back in
+ * `pagination.limit` as the only tell. The refresh effect below asks for the
+ * whole rendered window after any pick mutation, so past page 5 it has to clamp
+ * itself: otherwise a single thumbs-up returns a short page, the page-1 branch
+ * REPLACES the list with it, and the cursor is left pointing past a hole.
+ *
+ * Per tab, because the legacy wins feed has no server cap — clamping that one
+ * too would truncate a deep Wins scroll that works fine today.
+ */
+const FEED_LIMIT_CEILING: Record<SocialTab, number | null> = {
+    "for-you": 50,
+    following: 50,
+    wins: null,
+    rankings: null,
+};
+
 const resultTone = (result: PickResult | null | undefined) => {
     switch (result) {
         case "win":
@@ -62,9 +80,6 @@ const resultTone = (result: PickResult | null | undefined) => {
             return "border-white/10 bg-white/5 text-[var(--text-secondary)]";
     }
 };
-
-const isPendingResult = (result: PickResult | null | undefined) =>
-    (result ?? "pending") === "pending";
 
 const postedAtLabel = (iso: string | undefined) =>
     `posted at: ${formatDateTime(iso)}`;
@@ -214,40 +229,6 @@ const GlobalXpCell = ({
     );
 };
 
-// Segmented sub-tab toggle shared by the for-you, following, and winners tabs.
-function SubToggle<T extends string>({
-    options,
-    value,
-    onChange,
-}: {
-    options: readonly { value: T; label: string }[];
-    value: T;
-    onChange: (next: T) => void;
-}) {
-    return (
-        <div className="-mr-1 shrink-0 sm:mr-0">
-            <div className="inline-flex w-fit items-center gap-0.5 rounded-md border border-white/10 bg-white/5 p-0.5 sm:gap-1 sm:p-1">
-                {options.map((option) => {
-                    const active = value === option.value;
-                    return (
-                        <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => onChange(option.value)}
-                            className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition sm:px-3 sm:py-1 sm:text-[11px] ${active
-                                ? "bg-white/10 text-white"
-                                : "text-[var(--text-secondary)] hover:text-white"
-                                }`}
-                        >
-                            {option.label}
-                        </button>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
 const resolveLegCategoryLabel = (market?: string) => {
     if (!market) return null;
     const upper = market.toUpperCase();
@@ -285,36 +266,38 @@ const SocialPage = () => {
     const dispatch = useDispatch();
     const [activeTab, setActiveTab] = useState<SocialTab>("for-you");
     const [winnersRange, setWinnersRange] = useState<WeeklyWinnersRange>("this-week");
-    const [forYouScope, setForYouScope] = useState<"posts" | "reacted">("posts");
-    const [followingScope, setFollowingScope] = useState<"posts" | "winning">("posts");
     const [collapsedPicks, setCollapsedPicks] = useState<Record<string, boolean>>({});
     const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
+    /*
+     * The page the newest request ASKED for, and whether one is still out. Both
+     * are refs rather than state: they steer the settle effect below and must
+     * not themselves cause a render. See that effect for why the cursor is only
+     * committed once a reply lands.
+     */
+    const requestedPageRef = useRef(1);
+    const awaitingFeedResponseRef = useRef(false);
     const observer = useRef<IntersectionObserver | null>(null);
     const limit = 10;
 
     const currentUser = useCurrentUser();
 
-    const { loading: pickLoader, message: pickMessage, postPicks, globalLeaderboard, globalLeaderboardLoading } = useSelector((state: RootState) => state.pick);
+    const { loading: pickLoader, message: pickMessage, postPicks, hasMore: feedHasMore, error: feedError, globalLeaderboard, globalLeaderboardLoading } = useSelector((state: RootState) => state.pick);
     // TUTORIAL DISABLED 2026-08-17
     // const { hasSeenSocialIntro, hasSeenWelcomeIntro } = useSelector((state: RootState) => state.progress);
 
     const fetchDataByTab = (pageNum: number, customLimit?: number) => {
         const payload = { page: pageNum, limit: customLimit ?? limit };
         if (activeTab === "for-you") {
-            if (forYouScope === "posts") {
-                dispatch(fetchGlobalPendingTopHitPostsRequest(payload));
-            } else if (forYouScope === "reacted") {
-                dispatch(fetchGlobalPendingReactedPostsRequest(payload));
-            }
+            // EVERY status, every user, newest first. The sub-toggle is gone, so
+            // the tab IS the feed — MVP parity.
+            dispatch(fetchGlobalAllStatusPostsRequest(payload));
         }
         else if (activeTab === "following") {
-            if (followingScope === "posts") {
-                dispatch(fetchFollowingUsersPostsRequest(payload));
-            } else if (followingScope === "winning") {
-                dispatch(fetchFollowingUsersWinTopHitPostsRequest(payload));
-            }
+            // The same feed, scoped server-side to the people the caller follows
+            // (minus anyone they have blocked).
+            dispatch(fetchFollowingUsersAllStatusPostsRequest(payload));
         }
         else if (activeTab === "wins") {
             dispatch(fetchGlobalWinnerTopHitPostsRequest(payload));
@@ -327,8 +310,20 @@ const SocialPage = () => {
         if (!currentUser) return;
         setPage(1);
         setHasMore(true);
+        /*
+         * Both cursors reset with the tab, and `awaitingFeedResponse` matters
+         * most: the OUTGOING tab can still have a page in flight, and its
+         * reply lands against this tab’s state. Clearing the flag makes that
+         * stale reply a no-op instead of letting it stamp the previous feed’s
+         * `hasMore` (often false, at the end of that feed) onto a tab that has
+         * not loaded anything yet — which would arrive with infinite scroll
+         * already switched off. takeLatest cannot help here: it is keyed per
+         * action type, and the two feeds are two different types.
+         */
+        requestedPageRef.current = 1;
+        awaitingFeedResponseRef.current = false;
         fetchDataByTab(1);
-    }, [activeTab, forYouScope, dispatch, currentUser, followingScope]);
+    }, [activeTab, dispatch, currentUser]);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -341,9 +336,23 @@ const SocialPage = () => {
         if (pickLoader || !pickMessage) return;
 
         dispatch(clearFetchAllGlobalPostPicksMessage());
-        // Refresh all pages from 1 up to the current viewport to ensure data consistency
-        fetchDataByTab(1, page * limit);
-    }, [pickLoader, pickMessage, dispatch, page, limit]);
+        /*
+         * Refresh all pages from 1 up to the current viewport to ensure data
+         * consistency — but the two all-status feeds clamp `limit` at 50 without
+         * erroring, so past page 5 the request silently comes back short and the
+         * page-1 branch REPLACES the rendered list with it. Clamp to the tab’s own
+         * ceiling and pull the cursor back to the window actually refetched, or the
+         * next scroll asks for a page already on screen and leaves a hole behind it.
+         *
+         * The cursor is handed to the settle effect rather than moved here, so
+         * a refresh that FAILS leaves the list and the cursor as they were.
+         */
+        const requestedLimit = page * limit;
+        const ceiling = FEED_LIMIT_CEILING[activeTab];
+        const refreshLimit = ceiling ? Math.min(requestedLimit, ceiling) : requestedLimit;
+        requestedPageRef.current = Math.ceil(refreshLimit / limit);
+        fetchDataByTab(1, refreshLimit);
+    }, [pickLoader, pickMessage, dispatch, page, limit, activeTab]);
 
     const lastItemRef = useCallback((node: HTMLDivElement | null) => {
         if (pickLoader) return;
@@ -351,22 +360,62 @@ const SocialPage = () => {
 
         observer.current = new IntersectionObserver((entries) => {
             if (entries[0].isIntersecting && hasMore) {
-                const nextPage = page + 1;
-                setPage(nextPage);
-                fetchDataByTab(nextPage);
+                /*
+                 * REQUESTED, not committed. `page` only advances once the
+                 * reply lands (see the settle effect). Advancing it here and
+                 * never rolling it back on failure is what silently loses a
+                 * page: the sentinel re-attaches after the error, reads the
+                 * already-incremented cursor, and asks for page N+1 — so
+                 * page N’s rows are never fetched, and the recency re-sort
+                 * hides the hole they left.
+                 */
+                requestedPageRef.current = page + 1;
+                fetchDataByTab(requestedPageRef.current);
             }
         });
 
         if (node) observer.current.observe(node);
     }, [pickLoader, hasMore, page]);
 
+    /*
+     * `pagination.hasMore` is authoritative. The old heuristic compared the raw
+     * store length against `page * limit`, which reads a server-clamped short
+     * page as "end of feed" and kills infinite scroll for the rest of the
+     * session — and it never matched the rendered list anyway, since that list
+     * is filtered down to POSTs.
+     *
+     * Applied only once a request has actually SETTLED, which the ref is for.
+     * Both effects run in the same commit on a tab change, this one second, and
+     * `pickLoader` in its closure is still the pre-dispatch `false` — so a bare
+     * `if (pickLoader) return` would sail past the guard and overwrite the
+     * `setHasMore(true)` reset above with the OUTGOING tab's value. Landing on a
+     * tab whose predecessor was scrolled to its end would then start with
+     * infinite scroll switched off until the first response arrived.
+     *
+     * The LOCAL flag stays rather than reading the store directly: the store
+     * value belongs to whichever feed answered last, and only local state can
+     * say "this tab is starting over".
+     */
     useEffect(() => {
-        if (!pickLoader && postPicks) {
-            if (postPicks.length < page * limit) {
-                setHasMore(false);
-            }
+        if (pickLoader) {
+            awaitingFeedResponseRef.current = true;
+            return;
         }
-    }, [postPicks, pickLoader, page]);
+        if (!awaitingFeedResponseRef.current) return;
+        awaitingFeedResponseRef.current = false;
+        /*
+         * A FAILED page leaves `postPicks` untouched, so the sentinel is still
+         * sitting on the same last row. Stop paging rather than let it re-fire
+         * against a cursor that never advanced — an endless retry — or against
+         * one that did, which would skip the page that just failed.
+         */
+        if (feedError) {
+            setHasMore(false);
+            return;
+        }
+        setPage(requestedPageRef.current);
+        setHasMore(feedHasMore);
+    }, [feedError, feedHasMore, pickLoader]);
 
     const feedItems: Picks = useMemo(() => {
         if (!Array.isArray(postPicks) || !postPicks?.length) return [];
@@ -379,14 +428,18 @@ const SocialPage = () => {
         return timeB - timeA;
     }, []);
 
-    const forYouBaseFeed = useMemo(
+    /*
+     * ONE recency-sorted list, shared by For You and Following — which of the two
+     * feeds filled it is decided server-side by the endpoint the tab fetched.
+     *
+     * The server already returns created_at DESC; this local sort is what keeps
+     * the order stable after a page-1 refresh merges a freshly mutated pick back
+     * in. NO result filter any more: both tabs show pending, win, loss and void,
+     * which is the MVP's shape.
+     */
+    const sortedFeed = useMemo(
         () => feedItems.slice().sort(recencySort),
         [feedItems, recencySort]
-    );
-
-    const forYouFeed = useMemo(
-        () => forYouBaseFeed.filter((item) => isPendingResult(item.result)),
-        [forYouBaseFeed]
     );
 
     const winnersLeaderboard = globalLeaderboard;
@@ -442,7 +495,6 @@ const SocialPage = () => {
         emptyCopy: string,
         showReactions = true,
         showTopBorder = true,
-        showResult = true,
     ) => (
         <div
             className={`-mx-5 divide-y divide-white/10 overflow-visible sm:mx-0 sm:overflow-y-auto ${showTopBorder ? "border-y border-white/10" : "border-b border-white/10"
@@ -451,7 +503,7 @@ const SocialPage = () => {
         >
             {items.map((item, index) => {
                 if (!currentUser?.userId) return;
-                const showResultChip = showResult && item.result && item.result !== "pending";
+                const showResultChip = item.result && item.result !== "pending";
                 const isCollapsed = Boolean(collapsedPicks[item.id]);
                 const resultLabel = item.result === "not_found" ? "n/a" : item.result;
                 const username = item?.profiles?.username ?? "";
@@ -985,7 +1037,7 @@ const SocialPage = () => {
         <div className="space-y-6">
             <section className="space-y-4">
                 <div className="-mx-5 sm:mx-0">
-                    <div className="flex flex-nowrap items-center justify-between sm:gap-2 overflow-x-auto px-2 sm:px-6">
+                    <div className="flex flex-nowrap items-center sm:gap-2 overflow-x-auto px-2 sm:px-6">
                         <div className="inline-flex w-fit items-center sm:gap-1">
                             {renderTabButton("for-you", "for you")}
                             {renderTabButton("following", "following")}
@@ -1003,28 +1055,6 @@ const SocialPage = () => {
                                 <SearchIcon className="h-4 w-4" />
                             </button>
                         </div>
-                        {/* No SubToggle for wins/rankings any more — each is its
-                            own tab, so the strip above already IS the choice. */}
-                        {activeTab === "for-you" && (
-                            <SubToggle
-                                value={forYouScope}
-                                onChange={setForYouScope}
-                                options={[
-                                    { value: "posts", label: "latest" },
-                                    { value: "reacted", label: "reacted" },
-                                ]}
-                            />
-                        )}
-                        {activeTab === "following" && (
-                            <SubToggle
-                                value={followingScope}
-                                onChange={setFollowingScope}
-                                options={[
-                                    { value: "posts", label: "latest" },
-                                    { value: "winning", label: "wins" },
-                                ]}
-                            />
-                        )}
                     </div>
                 </div>
 
@@ -1048,44 +1078,19 @@ const SocialPage = () => {
 
                 {activeTab === "for-you" && (
                     <section className="space-y-4">
-                        {forYouScope === "posts"
-                            ? renderFeedItems(
-                                forYouFeed,
-                                "No pending public posts yet. Share a pick from the builder to light this up.",
-                                true,
-                                true,
-                                false,
-                            )
-                            : renderFeedItems(
-                                feedItems,
-                                "No reacted posts yet. Tap like or dislike on a post to save it here.",
-                                true,
-                                true,
-                                false,
-                            )}
+                        {renderFeedItems(
+                            sortedFeed,
+                            "No public posts yet. Share a pick from the builder to light this up.",
+                        )}
                     </section>
                 )}
 
                 {activeTab === "following" && (
                     <section className="space-y-4">
-                        {followingScope === "posts"
-                            ? renderFeedItems(
-                                feedItems,
-                                feedItems.length === 0
-                                    ? "Follow members to see their posts land here."
-                                    : "No posts from people you follow yet. Check back after they drop picks.",
-                                true,
-                                true,
-                                false,
-                            )
-                            : renderFeedItems(
-                                feedItems,
-                                feedItems.length === 0
-                                    ? "Follow members to see their wins land here."
-                                    : "No winning posts from people you follow yet.",
-                                true
-                            )
-                        }
+                        {renderFeedItems(
+                            sortedFeed,
+                            "No posts from people you follow yet. Follow members to see their picks land here.",
+                        )}
                     </section>
                 )}
             </section>

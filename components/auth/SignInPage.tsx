@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSafeRelativeReturnPath } from "@/lib/auth/safeReturnPath";
@@ -171,7 +172,7 @@ const SignInPage = ({
           href={backHref}
           className="absolute left-0 top-0 inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-slate-400 transition hover:bg-white/[0.04] hover:text-white lg:text-base"
         >
-          <span aria-hidden="true" className="mr-2">←</span>
+          <AnimatedArrow direction="left" className="mr-2" />
           {backLabel}
         </Link>
         <div className="relative flex items-center justify-center">

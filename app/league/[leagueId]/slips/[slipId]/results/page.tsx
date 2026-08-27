@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
 import { GroupSelector, Pick, RootState, Slip } from "@/lib/interfaces/interfaces";
@@ -565,7 +566,12 @@ const SlipResultsPage = () => {
                                                 <div className="space-y-1">
                                                     <p className="text-sm uppercase tracking-wide text-red-300">Delete slip</p>
                                                 </div>
-                                                <span className="text-red-200">{isDeleteSlipOpen ? "▴" : "▾"}</span>
+                                                <AnimatedArrow
+                                                    direction={isDeleteSlipOpen ? "up" : "down"}
+                                                    className="text-red-200"
+                                                >
+                                                    {isDeleteSlipOpen ? "▴" : "▾"}
+                                                </AnimatedArrow>
                                             </button>
                                             {isDeleteSlipOpen && (
                                                 <div id="delete-slip-content" className="mt-4 space-y-3">

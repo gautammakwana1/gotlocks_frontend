@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 
 import {
     CONTEST_POST_HEADER_TONES,
@@ -114,7 +115,7 @@ export const ContestUpdateContent = ({
                         <span className="truncate">{status.label}</span>
                     </span>
                     <span className="shrink-0 text-[9px] font-semibold text-slate-300">
-                        View contest <span aria-hidden="true">↗</span>
+                        View contest <AnimatedArrow direction="up-right" />
                     </span>
                 </div>
 

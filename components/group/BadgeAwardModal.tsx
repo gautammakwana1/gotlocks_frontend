@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 
 import { ContestBadgeAward } from "@/lib/interfaces/interfaces";
 import { BadgeIcon } from "../badges/BadgeIcon";
@@ -87,7 +88,7 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                                 priority
                             />
                             <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-wide text-white/35">
-                                tap to flip ⇄
+                                tap to flip <AnimatedArrow direction="right">⇄</AnimatedArrow>
                             </span>
                         </div>
 
@@ -120,7 +121,7 @@ export const BadgeAwardModal = ({ award, onClose }: Props) => {
                                 </span>
                             </div>
                             <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-wide text-white/35">
-                                tap to flip ⇄
+                                tap to flip <AnimatedArrow direction="right">⇄</AnimatedArrow>
                             </span>
                         </div>
                     </div>

@@ -415,7 +415,8 @@ export const ArenaVenueSetupDialog = ({
                                     <svg
                                         aria-hidden="true"
                                         viewBox="0 0 16 16"
-                                        className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                        data-directional-arrow="down"
+                                        className="ui-directional-arrow h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
                                     >
                                         <path
                                             d="m4 6 4 4 4-4"

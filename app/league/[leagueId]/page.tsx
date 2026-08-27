@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { createPortal } from "react-dom";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/ui/BackButton";
@@ -24,6 +25,17 @@ import LeagueMemberGuideDialog from "@/components/leagues/onboarding/LeagueMembe
 import ModifyMembers from "@/components/group/ModifyMembers";
 import GroupNotFoundNotice from "@/components/group/GroupNotFoundNotice";
 import GroupManagerSettings from "@/components/group/GroupManagerSettings";
+import {
+  SettingsActionBar,
+  SettingsDisclosure,
+  SettingsPage,
+  SettingsSection,
+  SettingsStatus,
+  settingsDangerButtonClassName,
+  settingsFieldLabelClassName,
+  settingsInputClassName,
+  settingsPrimaryButtonClassName,
+} from "@/components/settings/SettingsUI";
 import { fetchActiveContestsRequest, fetchArchivedContestsRequest } from "@/lib/redux/slices/contestSlice";
 import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import ScoringModal from "@/components/modals/ScoringModal";
@@ -550,6 +562,17 @@ const LeagueDashboardPage = () => {
   const [showArchived, setShowArchived] = useState(false);
   const [editLeagueName, setEditLeagueName] = useState("");
   const [editLeagueDescription, setEditLeagueDescription] = useState("");
+  /* The inline "League information saved." line, on the MVP's contract: it
+   * appears only once the GROUP RECORD comes back carrying what was submitted.
+   * `updateGroupRequest` re-reads the group, so a refused write never reaches
+   * this state and never claims a save — the same echo pattern the two Arena
+   * settings panels use. */
+  const [submittedLeagueDetails, setSubmittedLeagueDetails] = useState(false);
+  /* Seed the two fields ONCE per League. Without the latch the sync effect
+   * below re-runs on every `group` reference change — a members read, an unread
+   * count, the post-save re-read — and would wipe whatever the owner had typed
+   * since. */
+  const initializedLeagueIdRef = useRef<string | null>(null);
   const [deleteConfirmCode, setDeleteConfirmCode] = useState("");
   const [deleteCodeInput, setDeleteCodeInput] = useState("");
   // `isDeletingGroup` used to live here as a second "the delete flow is open"
@@ -635,9 +658,11 @@ const LeagueDashboardPage = () => {
   }, [chatOpen]);
 
   useEffect(() => {
-    if (!group) return;
+    if (!group?.id || initializedLeagueIdRef.current === group.id) return;
+    initializedLeagueIdRef.current = group.id;
     setEditLeagueName(group.name ?? "");
     setEditLeagueDescription(group.description ?? "");
+    setSubmittedLeagueDetails(false);
   }, [group]);
 
   useEffect(() => {
@@ -817,6 +842,7 @@ const LeagueDashboardPage = () => {
     }
 
     if (group.id) {
+      setSubmittedLeagueDetails(true);
       dispatch(
         updateGroupRequest({
           group_id: group.id,
@@ -945,6 +971,12 @@ const LeagueDashboardPage = () => {
   const memberCount = group?.member_count ?? group?.members?.length ?? 0;
   const activeContestCount = group?.active_contest ?? activeContests?.length ?? 0;
   const createContestCheck = canCreateContestInGroup(group, activeContestCount);
+  // Dirty against the STORED record, so the Save button is live only when there
+  // is something to write — and so the saved line can key off the same fact.
+  const leagueDetailsDirty =
+    editLeagueName !== (group?.name ?? "") ||
+    editLeagueDescription !== (group?.description ?? "");
+  const leagueDetailsSaved = submittedLeagueDetails && !leagueDetailsDirty;
 
   return (
     <div className="flex flex-col gap-3 pb-10">
@@ -1154,9 +1186,12 @@ const LeagueDashboardPage = () => {
                     <span className="ml-auto truncate text-right text-[11px] text-gray-500">
                       Active Fantasy Contests accepting picks or awaiting results
                     </span>
-                    <span aria-hidden className="text-sm text-gray-500">
+                    <AnimatedArrow
+                      direction={showOpenContests ? "up" : "down"}
+                      className="text-sm text-gray-500"
+                    >
                       {showOpenContests ? "▴" : "▾"}
-                    </span>
+                    </AnimatedArrow>
                   </button>
 
                   {showOpenContests ? (
@@ -1215,9 +1250,12 @@ const LeagueDashboardPage = () => {
                     <span className="ml-auto truncate text-right text-[11px] font-normal text-gray-500">
                       Completed contest history
                     </span>
-                    <span aria-hidden className="text-sm text-gray-500">
+                    <AnimatedArrow
+                      direction={showArchived ? "up" : "down"}
+                      className="text-sm text-gray-500"
+                    >
                       {showArchived ? "▴" : "▾"}
-                    </span>
+                    </AnimatedArrow>
                   </button>
                   {showArchived && (
                     <div id="league-archived-slip-contests">
@@ -1349,62 +1387,78 @@ const LeagueDashboardPage = () => {
       )}
 
       {activeTab === "settings" && isCommissioner && (
-        <div className="space-y-8">
-          <section className="space-y-4">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
-                Group details
-              </h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Contest settings live inside each contest.
-              </p>
-            </div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+        /* THE SETTINGS SCREEN — the MVP's shared settings chrome, ported in
+           components/settings/SettingsUI.tsx. Full-bleed sections ruled by a
+           hairline rather than a stack of bordered cards, each re-insetting its
+           own body back onto the page gutter.
+
+           `SettingsPage` cancels AppShell's `px-5 sm:px-6` with `-mx-5 sm:-mx-6`
+           so the rules reach the container edge, exactly as the Arena settings
+           tab and CommunityDetailChrome above already do. Every section draws
+           its OWN `border-b`, so this container must not also carry `divide-y`
+           or the hairline would be doubled wherever one lands. */
+        <SettingsPage className="workspace-tab-panel pt-1" data-settings-page="league">
+          <SettingsSection
+            title="League information"
+            description="Update the name and description members see. Contest-specific settings stay inside each contest."
+            bodyClassName="space-y-5"
+          >
+            <label className={`block ${settingsFieldLabelClassName}`}>
               Group name
               <input
                 value={editLeagueName}
-                onChange={(event) => setEditLeagueName(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+                onChange={(event) => {
+                  setEditLeagueName(event.target.value);
+                  setSubmittedLeagueDetails(false);
+                }}
+                className={`${settingsInputClassName} mt-2 bg-black/60 normal-case`}
               />
               {errors.name && (
-                <p className="mt-1 text-xs text-red-400">
-                  {errors.name}
-                </p>
+                <p className="mt-1 text-xs normal-case text-red-400">{errors.name}</p>
               )}
             </label>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <label className={`block ${settingsFieldLabelClassName}`}>
               Description
               <textarea
                 value={editLeagueDescription}
-                onChange={(event) => setEditLeagueDescription(event.target.value)}
+                onChange={(event) => {
+                  setEditLeagueDescription(event.target.value);
+                  setSubmittedLeagueDetails(false);
+                }}
                 rows={3}
-                className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70"
+                className={`${settingsInputClassName} mt-2 min-h-28 resize-none bg-black/60 normal-case`}
               />
               {errors.description && (
-                <p className="mt-1 text-xs text-red-400">
-                  {errors.description}
-                </p>
+                <p className="mt-1 text-xs normal-case text-red-400">{errors.description}</p>
               )}
             </label>
-            {/* Right-aligned, matching the MVP (MVP league page:1238). */}
-            <div className="flex justify-end">
+            {/* The action bar right-aligns from `sm` up and goes full-width on a
+                phone; the status line renders nothing at all until there is
+                something to say, so the row never jumps. */}
+            <SettingsActionBar>
+              <SettingsStatus tone="success" className="border-0 bg-transparent px-0 py-0">
+                {leagueDetailsSaved ? "League information saved." : null}
+              </SettingsStatus>
               <button
                 type="button"
                 onClick={handleSaveLeague}
-                disabled={loading}
-                className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={loading || !leagueDetailsDirty || !editLeagueName.trim()}
+                className={settingsPrimaryButtonClassName}
               >
-                Save details
+                Save League information
               </button>
-            </div>
-          </section>
+            </SettingsActionBar>
+          </SettingsSection>
 
           {/* LEAGUE MANAGER — commissioner-only, and specifically the PERMANENT
               owner: GET /group/manager-invitations gates on groups.created_by,
               so a transferred commissioner reading this tab is answered 403 and
               the panel shows that as its own error rather than a broken list.
               A Free League has no manager seat at all, which the panel turns
-              into the Pro upgrade card. */}
+              into the Pro upgrade card.
+
+              It draws its own SettingsDisclosure now, so it needs no spacing
+              class from here — the rule and the padding come with it. */}
           {group.created_by === currentUser?.userId ? (
             <GroupManagerSettings
               groupId={leagueId}
@@ -1413,51 +1467,52 @@ const LeagueDashboardPage = () => {
               upgradeHref={`/app-settings/plan/league/upgrade?intent=invite-manager&leagueId=${encodeURIComponent(
                 leagueId
               )}`}
-              className="border-t border-white/10 pt-6"
             />
           ) : null}
 
-          <section className="space-y-4 border-t border-white/10 pt-6">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-red-300">
-                Delete League
-              </h2>
-              <p className="mt-1 text-xs text-gray-500">
-                Type the delete phrase to permanently delete the league, contests, slips, and picks.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="min-w-0">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Delete phrase
-                </span>
-                <div className="ml-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
-                  {deleteConfirmCode}
+          {/* Collapsed by default, as in the MVP: deletion is the one action on
+              this screen that should take a deliberate extra click to reach. */}
+          <SettingsDisclosure summary="Danger zone" summaryDetail="Delete League">
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold text-red-300">Delete League</h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  Type the delete phrase to permanently delete the league, contests, slips, and picks.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Delete phrase
+                  </span>
+                  <div className="ml-3 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/60 px-3 py-2 font-mono text-base font-semibold tracking-[0.3em] text-red-200 select-none">
+                    {deleteConfirmCode}
+                  </div>
                 </div>
               </div>
+              <input
+                type="text"
+                value={deleteCodeInput}
+                onChange={(event) => setDeleteCodeInput(event.target.value.toUpperCase())}
+                placeholder={deleteConfirmCode}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="Delete phrase confirmation"
+                className={`${settingsInputClassName} bg-black/60 font-mono normal-case tracking-[0.2em] placeholder:tracking-normal`}
+              />
+              <SettingsActionBar>
+                <button
+                  type="button"
+                  onClick={handleDeleteLeague}
+                  disabled={deleteLoading || !deleteConfirmCode || deleteCodeInput !== deleteConfirmCode}
+                  className={settingsDangerButtonClassName}
+                >
+                  Delete League
+                </button>
+              </SettingsActionBar>
             </div>
-            <input
-              type="text"
-              value={deleteCodeInput}
-              onChange={(event) => setDeleteCodeInput(event.target.value.toUpperCase())}
-              placeholder={deleteConfirmCode}
-              autoComplete="off"
-              spellCheck={false}
-              className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black px-4 py-2.5 font-mono text-sm tracking-[0.2em] normal-case text-white outline-none transition placeholder:tracking-normal placeholder:text-gray-600 focus:border-red-400/70"
-            />
-            {/* Right-aligned like the MVP's (MVP league page:1276). */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleDeleteLeague}
-                disabled={deleteLoading || !deleteConfirmCode || deleteCodeInput !== deleteConfirmCode}
-                className="rounded-lg border border-red-300/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Delete league
-              </button>
-            </div>
-          </section>
-        </div>
+          </SettingsDisclosure>
+        </SettingsPage>
       )}
 
       {/* Chat drawer — the only entry point to group chat now that the tab is gone,

@@ -10,9 +10,20 @@ import { clearUpdateProfileMessage, fetchMemberProfileRequest, updateProfilePubl
 import { Profile } from "@/lib/interfaces/interfaces";
 import { calculateAge, checkAnyRestrictedWords, checkForReservedWords } from "@/lib/utils/helpers";
 import AccountInformationSkeleton from "@/components/skeletons/app-settings/AccountInformationSkeleton";
-import { ArrowLeft } from "lucide-react";
-import { normalizeUserPlan } from "@/lib/groups/limits";
 import { getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
+import {
+    SettingsActionBar,
+    SettingsHeader,
+    SettingsPage,
+    SettingsSection,
+    SettingsStatus,
+    SettingsSurface,
+    settingsFieldLabelClassName,
+    settingsInputClassName,
+    settingsPrimaryButtonClassName,
+    settingsSecondaryButtonClassName,
+    settingsTextButtonClassName,
+} from "@/components/settings/SettingsUI";
 
 type AuthSliceState = {
     user: {
@@ -57,8 +68,10 @@ const formatDobWithAge = (dob?: string) => {
     return `${formattedDate} • ${age} years`;
 };
 
-const inputClassName =
-    "w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base sm:text-sm text-[var(--app-text)] outline-none transition focus:border-white/20 disabled:text-white/50";
+const membershipValueClassName =
+    "text-base font-semibold leading-6 text-[var(--app-text)]";
+
+const fieldErrorClassName = "block text-xs font-medium normal-case text-red-400";
 
 const AccountInformationPage = () => {
     const dispatch = useDispatch();
@@ -75,6 +88,10 @@ const AccountInformationPage = () => {
     const [isPublicDraft, setIsPublicDraft] = useState(true);
     const { user, loading, profileUpdateMessage, error } = useSelector((state: RootState) => state.user);
     const [showGoogleMsg, setShowGoogleMsg] = useState(false);
+    /* Drives the inline "Saving…" line and the disabled state of the whole
+     * form. The OUTCOME still arrives as a toast — the effect below owns that —
+     * so this only covers the round trip the MVP fills with the same line. */
+    const [submitting, setSubmitting] = useState(false);
     const isGoogleUser = user?.profile?.provider === "google";
 
     useEffect(() => {
@@ -97,6 +114,7 @@ const AccountInformationPage = () => {
 
     useEffect(() => {
         if (!loading && profileUpdateMessage) {
+            setSubmitting(false);
             setToast({
                 id: Date.now(),
                 type: "success",
@@ -109,6 +127,7 @@ const AccountInformationPage = () => {
             }
         }
         if (!loading && error) {
+            setSubmitting(false);
             setToast({
                 id: Date.now(),
                 type: "error",
@@ -138,7 +157,7 @@ const AccountInformationPage = () => {
         }
 
         if (!form.fullName.trim()) {
-            nextErrors.fullName = "Full Name us required.";
+            nextErrors.fullName = "Full name is required.";
         }
 
         if (!form.email.trim()) {
@@ -179,7 +198,6 @@ const AccountInformationPage = () => {
         )
         : "Recently joined";
 
-    // const plan = normalizeUserPlan(user?.profile?.plan);
     const planView = getProLifetimePlanViewModel({
         plan: user?.profile?.plan,
         offerKind: user?.profile?.proLifetimeOfferKind,
@@ -191,8 +209,16 @@ const AccountInformationPage = () => {
     const remainingUsernameChangesLabel =
         `You can update your username ${remainingUsernameChanges} more time${remainingUsernameChanges === 1 ? "" : "s"}. Please choose carefully, as username changes are limited.`;
 
+    const hasIdentityChanges =
+        form.username.trim() !== user?.profile?.username ||
+        form.email.trim() !== user?.profile?.email ||
+        form.fullName.trim() !== (user?.profile?.full_name ?? "");
+    const hasPrivacyChanges = isPublicDraft !== user?.profile?.is_public;
+    const isDirty = hasIdentityChanges || hasPrivacyChanges;
+
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (!isDirty || submitting) return;
         if (!validate()) return;
 
         const usernameChanged = form.username.trim() !== user?.profile?.username;
@@ -211,177 +237,218 @@ const AccountInformationPage = () => {
         }
 
         if (usernameChanged || emailChanged || fullNameChanged) {
+            setSubmitting(true);
             dispatch(updateProfileRequest(formData));
         }
 
-        if (isPublicDraft !== user?.profile?.is_public) {
+        if (hasPrivacyChanges) {
+            setSubmitting(true);
             dispatch(updateProfilePublicOrPrivateRequest());
         }
     };
 
     if (!currentUser) return null;
 
-    if (loading) {
+    if (loading && !submitting) {
         return <AccountInformationSkeleton />;
     }
 
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-6 lg:max-w-7xl">
-            <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
-                <Link
-                    href="/app-settings"
-                    className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
+        <SettingsPage>
+            <SettingsHeader title="Account information" backHref="/app-settings" />
+
+            <form onSubmit={handleSubmit} aria-busy={submitting}>
+                {/* `layout="split"` is the MVP's two-column settings shape: the
+                    heading and its blurb sit in a left rail from `md` up, the
+                    controls in the wider right column. */}
+                <SettingsSection
+                    title="Basic details"
+                    description="These details identify your account across Got Locks."
+                    bodyClassName="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+                    layout="split"
                 >
-                    <span className="flex items-center gap-2">
-                        <ArrowLeft size={14} /> account settings
-                    </span>
-                </Link>
-                <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
-                    Account information
-                </h1>
-                <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    View and edit the basic details tied to your account.
-                </p>
-            </header>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Full name
-                    </span>
-                    <input
-                        value={form.fullName}
-                        onChange={handleInputChange("fullName")}
-                        className={inputClassName}
-                        autoComplete="name"
-                    />
-                    {errors.fullName && (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.fullName}
-                        </span>
-                    )}
-                </label>
-
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Username
-                    </span>
-                    <input
-                        value={form.username}
-                        onChange={handleInputChange("username")}
-                        className={inputClassName}
-                        autoComplete="username"
-                        disabled={remainingUsernameChanges === 0}
-                    />
-                    {errors.username ? (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.username}
-                        </span>
-                    ) : (
-                        <span className="text-xs font-medium text-amber-400" >
-                            {remainingUsernameChangesLabel}
-                        </span>
-                    )}
-                </label>
-
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Email
-                    </span>
-                    <div className="relative" onClick={() => isGoogleUser && setShowGoogleMsg(true)}>
+                    <label className="block space-y-2 sm:col-span-2 xl:col-span-1">
+                        <span className={settingsFieldLabelClassName}>Full name</span>
                         <input
-                            type="email"
-                            value={form.email}
-                            disabled={user?.profile?.provider === "google"}
-                            onChange={handleInputChange("email")}
-                            className={`${inputClassName} disabled:cursor-not-allowed`}
-                            autoComplete="email"
+                            name="fullName"
+                            value={form.fullName}
+                            onChange={handleInputChange("fullName")}
+                            className={settingsInputClassName}
+                            autoComplete="name"
+                            disabled={submitting}
                         />
-                        {isGoogleUser && (
-                            <div className="absolute inset-0 cursor-pointer" />
+                        {errors.fullName && (
+                            <span className={fieldErrorClassName}>{errors.fullName}</span>
                         )}
-                    </div>
-                    {isGoogleUser && showGoogleMsg ? (
-                        <span className="text-xs font-medium text-amber-400">
-                            You signed in with Google, so your email can&apos;t be updated here.
-                        </span>
-                    ) : errors.email ? (
-                        <span className="text-xs font-medium text-red-400">
-                            {errors.email}
-                        </span>
-                    ) : null}
-                </label>
-                <label className="block space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        DOB / Age
-                    </span>
-                    <input
-                        readOnly
-                        value={formatDobWithAge(user?.profile?.dob)}
-                        onChange={handleInputChange("age")}
-                        className={inputClassName}
-                        disabled
-                    />
-                </label>
+                    </label>
 
-                <div className="space-y-2">
-                    <span className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                        Account visibility
-                    </span>
-                    <button
-                        type="button"
-                        onClick={() => setIsPublicDraft((prev) => !prev)}
-                        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:border-white/20"
-                    >
-                        <div>
-                            <p className="text-sm font-medium text-[var(--app-text)]">
-                                {isPublicDraft ? "Public" : "Private"}
-                            </p>
-                        </div>
+                    <label className="block space-y-2">
+                        <span className={settingsFieldLabelClassName}>Username</span>
+                        <input
+                            name="username"
+                            value={form.username}
+                            onChange={handleInputChange("username")}
+                            className={settingsInputClassName}
+                            autoComplete="username"
+                            disabled={submitting || remainingUsernameChanges === 0}
+                        />
+                        {errors.username ? (
+                            <span className={fieldErrorClassName}>{errors.username}</span>
+                        ) : (
+                            <span className="block text-xs font-medium normal-case text-amber-400">
+                                {remainingUsernameChangesLabel}
+                            </span>
+                        )}
+                    </label>
+
+                    <label className="block space-y-2">
+                        <span className={settingsFieldLabelClassName}>Email</span>
+                        {/* A Google account's email lives with Google. The click
+                            target over the disabled input is what surfaces that,
+                            since a disabled control fires no events of its own. */}
                         <span
-                            className={`flex h-6 w-11 items-center rounded-full border px-1 transition ${isPublicDraft
-                                ? "justify-start border-white/15 bg-white/10"
-                                : "justify-end border-sky-400/50 bg-sky-500/20"
-                                }`}
+                            className="relative block"
+                            onClick={() => isGoogleUser && setShowGoogleMsg(true)}
                         >
-                            <span className="h-4 w-4 rounded-full bg-[var(--app-text)]" />
+                            <input
+                                name="email"
+                                type="email"
+                                value={form.email}
+                                disabled={submitting || isGoogleUser}
+                                onChange={handleInputChange("email")}
+                                className={settingsInputClassName}
+                                autoComplete="email"
+                            />
+                            {isGoogleUser && <span className="absolute inset-0 cursor-pointer" />}
                         </span>
-                    </button>
-                </div>
+                        {isGoogleUser && showGoogleMsg ? (
+                            <span className="block text-xs font-medium normal-case text-amber-400">
+                                You signed in with Google, so your email can&apos;t be updated here.
+                            </span>
+                        ) : errors.email ? (
+                            <span className={fieldErrorClassName}>{errors.email}</span>
+                        ) : null}
+                    </label>
 
-                <div suppressHydrationWarning className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--text-secondary)]">
-                    Member since {joinedLabel}
-                </div>
+                    {/* Frontend-only: date of birth is captured at sign-up and is
+                        not editable anywhere, so it reads as a stated fact. */}
+                    <label className="block space-y-2">
+                        <span className={settingsFieldLabelClassName}>Date of birth / age</span>
+                        <input
+                            readOnly
+                            disabled
+                            value={formatDobWithAge(user?.profile?.dob)}
+                            className={settingsInputClassName}
+                        />
+                    </label>
+                </SettingsSection>
 
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-[var(--text-secondary)]">
-                    <p className="font-medium text-[var(--app-text)]">
-                        {planView.currentPlanName} plan
-                    </p>
-                    <p className="mt-1 leading-6">{planView.currentPlanSummary}</p>
-                    <Link
-                        href="/app-settings/plan"
-                        className="mt-3 inline-flex text-sm font-medium text-[var(--app-text)] transition hover:text-white"
-                    >
-                        Manage plan
-                    </Link>
-                </div>
+                <SettingsSection
+                    title="Profile visibility"
+                    description="Choose who can open your full profile."
+                    layout="split"
+                >
+                    <fieldset disabled={submitting}>
+                        <legend className="sr-only">Account visibility</legend>
+                        <SettingsSurface padding="none" className="grid gap-2 p-2 md:grid-cols-2">
+                            {([
+                                {
+                                    value: true,
+                                    title: "Public",
+                                    description: "Anyone can open your profile.",
+                                },
+                                {
+                                    value: false,
+                                    title: "Private",
+                                    description: "Only approved followers can open your profile.",
+                                },
+                            ] as const).map((option) => (
+                                <label
+                                    key={option.title}
+                                    className={`relative flex min-h-20 cursor-pointer items-start gap-3 rounded-xl px-4 py-4 transition hover:bg-white/[0.055] ${option.value === isPublicDraft
+                                        ? "bg-sky-500/[0.11] shadow-sm"
+                                        : "bg-white/[0.025]"
+                                        } ${submitting ? "cursor-not-allowed opacity-50" : ""}`}
+                                >
+                                    <input
+                                        type="radio"
+                                        name="accountVisibility"
+                                        value={option.value ? "public" : "private"}
+                                        checked={isPublicDraft === option.value}
+                                        onChange={() => setIsPublicDraft(option.value)}
+                                        className="peer mt-0.5 h-5 w-5 shrink-0 accent-sky-300 focus-visible:outline-none"
+                                    />
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-semibold text-[var(--app-text)]">
+                                            {option.title}
+                                        </span>
+                                        <span className="mt-1 block text-sm leading-5 text-[var(--text-secondary)]">
+                                            {option.description}
+                                        </span>
+                                    </span>
+                                    <span className="pointer-events-none absolute inset-0 peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-sky-300/70" />
+                                </label>
+                            ))}
+                        </SettingsSurface>
+                    </fieldset>
+                </SettingsSection>
 
-                <div className="flex flex-wrap gap-3 pt-2">
-                    <button
-                        type="submit"
-                        className="rounded-full border border-white/10 bg-[var(--app-text)] px-4 py-2 text-sm font-medium text-[var(--app-bg)] transition hover:opacity-90"
-                    >
-                        Save changes
-                    </button>
-                    <Link
-                        href="/app-settings"
-                        className="rounded-full border border-white/10 px-4 py-2 text-sm lowercase text-[var(--app-text)] transition hover:border-white/20 hover:bg-white/5"
-                    >
-                        back
-                    </Link>
-                </div>
+                <SettingsSection bodyClassName="space-y-4" className="bg-white/[0.012]">
+                    <SettingsStatus tone="info">
+                        {submitting ? "Saving account information…" : null}
+                    </SettingsStatus>
+
+                    <SettingsActionBar>
+                        <Link href="/app-settings" className={settingsSecondaryButtonClassName}>
+                            Cancel
+                        </Link>
+                        <button
+                            type="submit"
+                            disabled={!isDirty || submitting}
+                            className={settingsPrimaryButtonClassName}
+                        >
+                            {submitting ? "Saving…" : "Save changes"}
+                        </button>
+                    </SettingsActionBar>
+                </SettingsSection>
             </form>
-        </div>
+
+            <SettingsSection
+                title="Account membership"
+                description="Plan and membership details are managed separately from your profile edits."
+                bodyClassName="space-y-4"
+                layout="split"
+            >
+                <dl className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-x-3 gap-y-6 text-sm sm:grid-cols-2 sm:gap-x-8 lg:gap-x-10">
+                    <div className="grid grid-rows-[auto_1fr] gap-2">
+                        <dt className={settingsFieldLabelClassName}>Member since</dt>
+                        <dd className="flex min-h-11 items-center">
+                            <span suppressHydrationWarning className={membershipValueClassName}>
+                                {joinedLabel}
+                            </span>
+                        </dd>
+                    </div>
+                    <div className="grid grid-rows-[auto_1fr] gap-2">
+                        <dt className={settingsFieldLabelClassName}>Current plan</dt>
+                        <dd className="flex min-h-11 flex-wrap items-center gap-x-2">
+                            <span className={membershipValueClassName}>
+                                {planView.currentPlanName}
+                            </span>
+                            <Link
+                                href="/app-settings/plan"
+                                aria-label="Manage plan"
+                                className={`${settingsTextButtonClassName} px-1 underline decoration-white/25 underline-offset-4`}
+                            >
+                                Manage
+                            </Link>
+                        </dd>
+                    </div>
+                </dl>
+                <p className="text-sm leading-6 text-[var(--text-secondary)]">
+                    {planView.currentPlanSummary}
+                </p>
+            </SettingsSection>
+        </SettingsPage>
     );
 };
 

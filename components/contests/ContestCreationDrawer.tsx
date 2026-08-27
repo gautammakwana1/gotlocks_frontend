@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import {
     useEffect,
     useId,
@@ -181,7 +182,11 @@ const ChoiceBody = ({
                     }`}
             >
                 {choice.allowed ? (
-                    choice.actionLabel ?? "Choose format →"
+                    choice.actionLabel ?? (
+                        <>
+                            Choose format <AnimatedArrow direction="right" />
+                        </>
+                    )
                 ) : choice.upgradeAction ? (
                     <>
                         <span className="block">{choice.upgradeAction.title}</span>

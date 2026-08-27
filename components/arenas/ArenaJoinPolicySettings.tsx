@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import {
+    SettingsActionBar,
+    SettingsSection,
+    SettingsStatus,
+    settingsPrimaryButtonClassName,
+} from "@/components/settings/SettingsUI";
 import type { GroupJoinPolicy } from "@/lib/interfaces/interfaces";
 
 /* ----------------------------------------------------------------------------
@@ -78,54 +84,48 @@ export const ArenaJoinPolicySettings = ({
     };
 
     return (
-        <section
-            aria-labelledby={titleId}
+        <SettingsSection
             data-arena-join-policy-settings
-            className="space-y-4 px-5 py-7 sm:px-6"
+            title="Joining this Arena"
+            description="Choose what happens after someone uses the Arena invite code or scans its venue QR."
+            bodyClassName="space-y-4"
         >
-            <div>
-                <h2
-                    id={titleId}
-                    className="text-sm font-semibold uppercase tracking-[0.14em] text-white"
-                >
-                    Joining this Arena
-                </h2>
-                <p className="mt-1 max-w-2xl text-xs normal-case leading-5 text-gray-500">
-                    Choose what happens after someone uses the Arena invite code or scans its
-                    venue QR.
-                </p>
-            </div>
-
-            <div
-                role="radiogroup"
-                aria-label="Arena join policy"
-                className="grid gap-3 sm:grid-cols-2"
-            >
+            {/* Real radios in a fieldset rather than the old two-up card grid:
+                the choice is exclusive, so it should arrive at a screen reader
+                as one group with a selected member, and arrow keys should move
+                between the options for free. `titleId` still namespaces the
+                radio group so two Arena panels on one page cannot share a name. */}
+            <fieldset className="divide-y divide-white/10 border-y border-white/10">
+                <legend className="sr-only">Arena join policy</legend>
                 {OPTIONS.map((option) => {
                     const active = selected === option.id;
                     return (
-                        <button
+                        <label
                             key={option.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={active}
-                            disabled={saving}
-                            onClick={() => setSelected(option.id)}
-                            className={`rounded-xl border p-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-300 disabled:cursor-not-allowed disabled:opacity-55 ${active
-                                ? "border-violet-300/55 bg-violet-500/15"
-                                : "border-white/10 bg-white/[0.025] hover:border-violet-300/30"
+                            className={`flex min-h-16 cursor-pointer gap-3 py-4 text-left transition focus-within:outline focus-within:outline-2 focus-within:outline-violet-300 ${active ? "text-violet-100" : "text-gray-300 hover:text-white"
                                 }`}
                         >
-                            <span className="block text-sm font-semibold text-white">
-                                {option.title}
+                            <input
+                                type="radio"
+                                name={`${titleId}-join-policy`}
+                                value={option.id}
+                                checked={active}
+                                disabled={saving}
+                                onChange={() => setSelected(option.id)}
+                                className="mt-0.5 h-5 w-5 shrink-0 accent-violet-300 disabled:cursor-not-allowed disabled:opacity-55"
+                            />
+                            <span>
+                                <span className="block text-sm font-semibold text-white">
+                                    {option.title}
+                                </span>
+                                <span className="mt-1 block text-xs normal-case leading-5 text-gray-400">
+                                    {option.description}
+                                </span>
                             </span>
-                            <span className="mt-1 block text-xs normal-case leading-5 text-gray-400">
-                                {option.description}
-                            </span>
-                        </button>
+                        </label>
                     );
                 })}
-            </div>
+            </fieldset>
 
             {pendingRequestCount > 0 ? (
                 <p className="rounded-xl border border-amber-300/20 bg-amber-500/[0.07] px-4 py-3 text-xs normal-case leading-5 text-amber-100">
@@ -137,22 +137,20 @@ export const ArenaJoinPolicySettings = ({
                 </p>
             ) : null}
 
-            <div className="flex flex-wrap items-center justify-end gap-3">
-                {saved && !dirty ? (
-                    <p role="status" className="mr-auto text-xs text-emerald-200">
-                        Arena join policy saved.
-                    </p>
-                ) : null}
+            <SettingsActionBar>
+                <SettingsStatus tone="success" className="border-0 bg-transparent px-0 py-0">
+                    {saved && !dirty ? "Arena join policy saved." : null}
+                </SettingsStatus>
                 <button
                     type="button"
                     onClick={save}
                     disabled={!dirty || saving}
-                    className="rounded-xl bg-violet-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-violet-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className={settingsPrimaryButtonClassName}
                 >
                     {saving ? "Saving…" : "Save join policy"}
                 </button>
-            </div>
-        </section>
+            </SettingsActionBar>
+        </SettingsSection>
     );
 };
 

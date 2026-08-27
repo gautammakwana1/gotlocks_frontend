@@ -338,6 +338,72 @@ const pickSlice = createSlice({
             state.message = null;
         },
 
+        /*
+         * Social "for you" — GET /pick/all-global-post-picks. EVERY status
+         * (pending, win, loss, void), every user, newest first.
+         *
+         * NOT the same thing as `fetchAllGlobalPostPicks*` above, which hits the
+         * same URL UNPAGED and replaces `postPicks` wholesale. That triple is
+         * dead — nothing dispatches it, only its `clear…Message` sibling
+         * survives as a generic reset shared with HomeTab — and its contract
+         * cannot carry a paged feed. Keep the two apart.
+         */
+        fetchGlobalAllStatusPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchGlobalAllStatusPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
+        },
+        fetchGlobalAllStatusPostsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchGlobalAllStatusPostsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
+        // Social "following" — GET /pick/following-users-all-post-picks. Same
+        // feed as above, scoped server-side to the people the caller follows.
+        // The server also subtracts anyone they have BLOCKED from that list, so
+        // this can return fewer rows than the follow count implies.
+        fetchFollowingUsersAllStatusPostsRequest: (state, action: PayloadAction<FetchPostPicksPayload | undefined>) => {
+            void action;
+            state.loading = true;
+            state.error = null;
+        },
+        fetchFollowingUsersAllStatusPostsSuccess: (state, action: PayloadAction<{ picks: Picks, page: number, hasMore: boolean }>) => {
+            state.loading = false;
+            const { picks, page, hasMore } = action.payload;
+            state.hasMore = hasMore;
+            if (page === 1) {
+                state.postPicks = picks;
+            } else {
+                const existingIds = new Set(state.postPicks?.map(p => p.id) || []);
+                const newUniquePicks = picks.filter(p => !existingIds.has(p.id));
+                state.postPicks = [...(state.postPicks || []), ...newUniquePicks];
+            }
+        },
+        fetchFollowingUsersAllStatusPostsFailure: (state, action) => {
+            state.loading = false;
+            state.error = action.payload;
+        },
+        clearFetchFollowingUsersAllStatusPostsMessage(state) {
+            state.error = null;
+            state.message = null;
+        },
+
         fetchPostPicksByUserIdRequest: (state, action: PayloadAction<FetchPostPicksByUserIdPayload>) => {
             void action;
             state.loading = true;
@@ -590,6 +656,14 @@ export const {
     fetchFollowingUsersPostsSuccess,
     fetchFollowingUsersPostsFailure,
     clearFetchFollowingUsersPostsMessage,
+    fetchGlobalAllStatusPostsRequest,
+    fetchGlobalAllStatusPostsSuccess,
+    fetchGlobalAllStatusPostsFailure,
+    clearFetchGlobalAllStatusPostsMessage,
+    fetchFollowingUsersAllStatusPostsRequest,
+    fetchFollowingUsersAllStatusPostsSuccess,
+    fetchFollowingUsersAllStatusPostsFailure,
+    clearFetchFollowingUsersAllStatusPostsMessage,
     fetchPostPicksByUserIdRequest,
     fetchPostPicksByUserIdSuccess,
     fetchPostPicksByUserIdFailure,

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { SlipCategorySection } from "@/components/slips/SlipCategorySection";
@@ -26,7 +27,14 @@ import { createDefaultContestBadgeSettings, getAppliedBadgeSettings, getBadgeMin
 import ContestPageSkeleton from "@/components/skeletons/leagues/ContestPageSkeleton";
 import { BadgeIcon } from "@/components/badges/BadgeIcon";
 import { canUseProLeagueScoringControls, isContestInLeague } from "@/lib/permissions/leaguePermissions";
+import { DEFAULT_ELIGIBLE_WINDOW_DAYS, eligibleWindowEnd } from "@/lib/utils/games";
+import { checkAnyRestrictedWords } from "@/lib/utils/helpers";
 import { useUserPlan } from "@/lib/plan/useUserPlan";
+
+/* The server’s own bounds for a contest name — validateTextField(name,
+ * "Contest name", { min: 4, max: 25 }) inside updateContest. */
+const CONTEST_NAME_MIN = 4;
+const CONTEST_NAME_MAX = 25;
 
 const CONTEST_TABS = [
     { id: "standings", label: "Standings" },
@@ -329,9 +337,8 @@ const ContestDetailPage = () => {
     const { setToast } = useToast();
     const router = useRouter();
     const [activeContestTab, setActiveContestTab] = useState<ContestTabId>("standings");
-    const [editStartsAt, setEditStartsAt] = useState("");
+    const [editName, setEditName] = useState("");
     const [editEndsAt, setEditEndsAt] = useState("");
-    const [editBadgesEnabled, setEditBadgesEnabled] = useState(false);
     const [leaderboardList, setLeaderboardList] = useState<Leaderboard[]>([]);
     const [leaderboardSlipsList, setLeaderboardSlipsList] = useState<Slip[]>([]);
     const [leaderboardDataList, setLeaderboardDataList] = useState<LeaderboardList[]>([]);
@@ -390,9 +397,8 @@ const ContestDetailPage = () => {
 
     useEffect(() => {
         if (!contest) return;
-        setEditStartsAt(contest.starts_at);
+        setEditName(contest.name);
         setEditEndsAt(contest.ends_at);
-        setEditBadgesEnabled(Boolean(contest.badges_enabled));
         // The draft and its saved baseline both reset off the persisted
         // settings, so an in-flight save that comes back committed clears the
         // dirty state instead of leaving the board looking unsaved.
@@ -659,6 +665,79 @@ const ContestDetailPage = () => {
         : `Ends ${formatDateTime(contest.ends_at)}`;
     const hasOpenSlips = ((openSlips?.length ?? 0) + (reviewSlips?.length ?? 0)) > 0;
 
+    /* CONTEST INFORMATION — what the settings form may still write.
+     *
+     * The MVP splits this in two, because its Fantasy lifecycle has a
+     * "resolving" phase where a rename is still allowed but the schedule is
+     * frozen. A contest here is only ACTIVE or ARCHIVED, so both gates open and
+     * close together — kept as two names so the JSX reads the same as the MVP's,
+     * and so a resolving phase can be wired to one of them later. */
+    const canMutateContest = canManage && !isArchived;
+    const canRenameContest = canMutateContest;
+
+    /* Name rules are the SERVER's, restated: PATCH /contest/update runs
+     * validateTextField(name, "Contest name", { min: 4, max: 25 }) and answers
+     * 400 outside those bounds, so checking here only saves the round trip. */
+    const trimmedContestName = editName.trim();
+    const contestNameError =
+        trimmedContestName.length < CONTEST_NAME_MIN ||
+            trimmedContestName.length > CONTEST_NAME_MAX
+            ? `Contest name must be ${CONTEST_NAME_MIN}-${CONTEST_NAME_MAX} characters.`
+            : checkAnyRestrictedWords(trimmedContestName)
+                ? "Contest name contains inappropriate language."
+                : null;
+
+    /* THE END DATE, and the one rule that makes moving it dangerous.
+     *
+     * A Slip lives inside its contest's window: its deadline may not precede the
+     * contest start, and its eligibility window may not run past the contest
+     * end. Pulling the end date back can therefore orphan a Slip that was legal
+     * when it was created. The MVP refuses that save outright; nothing on
+     * PATCH /contest/update refuses it server-side, so the check has to be here.
+     *
+     * BEST EFFORT, and deliberately so: the three Slip lists this tab loads are
+     * paged at 12 each, so a contest with more Slips than that can hide an
+     * offender. Catching the visible ones still beats catching none, and with
+     * the start date now locked this is the only edit that can orphan one. */
+    const scheduledSlips = [
+        ...(openSlips ?? []),
+        ...(reviewSlips ?? []),
+        ...(finalizeSlips ?? []),
+    ];
+    const contestStartTime = new Date(contest.starts_at).getTime();
+    const proposedEndTime = new Date(editEndsAt).getTime();
+    const endsAtBeforeStart =
+        Number.isFinite(contestStartTime) &&
+        Number.isFinite(proposedEndTime) &&
+        proposedEndTime <= contestStartTime;
+    const endsAtOrphansSlip =
+        !endsAtBeforeStart &&
+        Number.isFinite(proposedEndTime) &&
+        scheduledSlips.some((slip) => {
+            const deadlineTime = new Date(slip.pick_deadline_at).getTime();
+            const windowEnd = eligibleWindowEnd(
+                slip.pick_deadline_at,
+                slip.window_days ?? DEFAULT_ELIGIBLE_WINDOW_DAYS
+            );
+            const windowEndTime = windowEnd ? new Date(windowEnd).getTime() : NaN;
+            if (!Number.isFinite(deadlineTime) || !Number.isFinite(windowEndTime)) return false;
+            return deadlineTime < contestStartTime || windowEndTime > proposedEndTime;
+        });
+    const contestEndsAtError = endsAtBeforeStart
+        ? "End date must be later than the start date."
+        : endsAtOrphansSlip
+            ? "This end date would place an existing Slip outside the contest schedule. Choose a later end date."
+            : null;
+
+    const contestInfoDirty =
+        trimmedContestName !== contest.name || editEndsAt !== contest.ends_at;
+    const canSaveContestInfo =
+        canRenameContest &&
+        contestInfoDirty &&
+        !contestNameError &&
+        !contestEndsAtError &&
+        !contestLoader;
+
     // Staff who can still edit see every badge they could switch on; everyone
     // else sees the ones already in play, so the same list drives the board,
     // the category rail and both counters.
@@ -803,11 +882,19 @@ const ContestDetailPage = () => {
 
     const handleSaveContestSettings = () => {
         if (!contestId || !canManage) return;
-        if (contest.starts_at === editStartsAt && contest.ends_at === editEndsAt && contest.badges_enabled === editBadgesEnabled) return;
+        const name = editName.trim();
+        // Nothing to write, or something the server would reject anyway. The
+        // button is already disabled on both counts; this covers the gap while
+        // a re-read is in flight.
+        if (name === contest.name && editEndsAt === contest.ends_at) return;
 
         dispatch(updateContestRequest({
             contest_id: contestId,
-            starts_at: editStartsAt,
+            name,
+            // Locked at creation and sent unchanged: the endpoint treats a
+            // missing starts_at as "leave alone", but the payload type requires
+            // it, and echoing the stored value is the honest form of both.
+            starts_at: contest.starts_at,
             ends_at: editEndsAt
         }));
     };
@@ -1151,7 +1238,7 @@ const ContestDetailPage = () => {
                                             className="mt-3 inline-flex min-h-9 w-full items-center justify-center rounded-lg bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:mt-5 sm:min-h-10 sm:w-auto sm:px-4 sm:text-xs"
                                         >
                                             View Pro upgrade
-                                            <span aria-hidden className="ml-2">→</span>
+                                            <AnimatedArrow direction="right" className="ml-2" />
                                         </Link>
                                     ) : (
                                         <p
@@ -1744,7 +1831,7 @@ const ContestDetailPage = () => {
                     {loadingMembers ? (
                         <PlayersSkeleton />
                     ) : (
-                        <section className="space-y-4">
+                        <section className={`space-y-4 ${FANTASY_CONTEST_TAB_CONTENT_CLASS_NAME}`}>
                             <div>
                                 <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
                                     Players
@@ -1764,7 +1851,7 @@ const ContestDetailPage = () => {
                                     return (
                                         <div
                                             key={member.id}
-                                            className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
+                                            className="flex min-h-16 items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
                                         >
                                             <div className="min-w-0">
                                                 <p className="truncate text-sm font-semibold text-white">
@@ -1782,9 +1869,9 @@ const ContestDetailPage = () => {
                                                             handleToggleExcluded(member.user_id)
                                                         }
                                                     }}
-                                                    className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-sky-300/60 hover:text-white"
+                                                    className="min-h-10 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-sky-300/60 hover:text-white"
                                                 >
-                                                    {excluded ? "restore" : "remove"}
+                                                    {excluded ? "add back" : "remove"}
                                                 </button>
                                             )}
                                         </div>
@@ -1810,37 +1897,72 @@ const ContestDetailPage = () => {
             )}
 
             {activeContestTab === "settings" && canManage && (
-                <section className="space-y-7">
+                <section className={`space-y-7 ${FANTASY_CONTEST_TAB_CONTENT_CLASS_NAME}`}>
                     <div className="space-y-4">
                         <div>
                             <h2 className="text-sm font-semibold uppercase tracking-wide text-white">
                                 Contest settings
                             </h2>
                             <p className="mt-1 text-xs text-gray-500">
-                                Update contest dates. Badge rules live in the Badges tab.
+                                {isArchived
+                                    ? "Archived contests are read-only. Standings and results remain available."
+                                    : badgeFeatureEntitled
+                                        ? "Update the contest name and end date. Badge rules live in the Badges tab."
+                                        : "Update the contest name and end date. Capture the Badge requires Pro."}
                             </p>
                         </div>
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            Contest name
+                            <input
+                                value={editName}
+                                onChange={(event) => setEditName(event.target.value)}
+                                disabled={!canRenameContest}
+                                maxLength={CONTEST_NAME_MAX}
+                                aria-invalid={Boolean(contestNameError)}
+                                className="mt-2 w-full rounded-lg border border-white/10 bg-black px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-400/70 disabled:cursor-not-allowed disabled:opacity-55"
+                            />
+                            {canRenameContest && contestNameError ? (
+                                <span className="mt-1 block text-[10px] normal-case text-amber-200">
+                                    {contestNameError}
+                                </span>
+                            ) : null}
+                        </label>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            {/* Starts is now DISPLAY ONLY. The MVP locks it at creation —
+                                every Slip in the contest was scheduled against this date,
+                                so moving it would invalidate their windows retroactively.
+                                Rendered as a disabled picker rather than dropped, because
+                                the date is still the answer to "when did this start?". */}
                             <DateTimeWheelPicker
-                                label="Starts"
-                                value={editStartsAt}
-                                onChange={setEditStartsAt}
+                                label="Starts (locked)"
+                                value={contest.starts_at}
+                                onChange={() => { }}
+                                disabled
                                 className="min-w-0"
                             />
                             <DateTimeWheelPicker
                                 label="Ends"
                                 value={editEndsAt}
                                 onChange={setEditEndsAt}
+                                disabled={!canMutateContest}
+                                error={canMutateContest ? contestEndsAtError ?? undefined : undefined}
                                 className="min-w-0"
                             />
                         </div>
-                        <button
-                            type="button"
-                            onClick={handleSaveContestSettings}
-                            className="rounded-lg bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200"
-                        >
-                            Save settings
-                        </button>
+                        <p className="text-xs leading-5 text-gray-500">
+                            The start date is fixed after creation. The end date can only be changed
+                            when every existing Slip remains inside the contest schedule.
+                        </p>
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={handleSaveContestSettings}
+                                disabled={!canSaveContestInfo}
+                                className="min-h-10 rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {contestLoader ? "Saving…" : "Save contest information"}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="space-y-3 border-t border-white/10 pt-5">

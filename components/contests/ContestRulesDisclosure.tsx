@@ -89,8 +89,9 @@ export const ContestRulesDisclosure = ({
             </span>
             <svg
                 aria-hidden="true"
+                data-directional-arrow="down"
                 viewBox="0 0 16 16"
-                className={`h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180 ${accent === "arena" ? "text-violet-300/70" : "text-sky-300/70"
+                className={`ui-directional-arrow h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none ${accent === "arena" ? "text-violet-300/70" : "text-sky-300/70"
                     }`}
             >
                 <path

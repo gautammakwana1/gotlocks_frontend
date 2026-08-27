@@ -9,6 +9,7 @@ import {
     type ReactNode,
     type TouchEvent,
 } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 
 /* ----------------------------------------------------------------------------
  * One-slide-at-a-time matchup navigation, ported VERBATIM from the MVP's
@@ -159,7 +160,7 @@ export const PickemCarousel = ({
                                 : "rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-35"
                         }
                     >
-                        {compact ? <span aria-hidden="true">←</span> : `Previous ${itemName}`}
+                        {compact ? <AnimatedArrow direction="left" /> : `Previous ${itemName}`}
                     </button>
                     {compact ? (
                         <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-gray-600">
@@ -177,7 +178,7 @@ export const PickemCarousel = ({
                                 : "rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-gray-200 transition hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-35"
                         }
                     >
-                        {compact ? <span aria-hidden="true">→</span> : `Next ${itemName}`}
+                        {compact ? <AnimatedArrow direction="right" /> : `Next ${itemName}`}
                     </button>
                 </div>
             )}

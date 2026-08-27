@@ -1,5 +1,6 @@
 "use client";
 import { FeedContestWinnersCard } from "./FeedContestWinnersCard";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 
 import { ContestUpdateContent } from "./ContestUpdateContent";
 import Image from "next/image";
@@ -150,7 +151,7 @@ const StructuredContestHeaderLink = ({
             className={`inline-flex min-h-6 min-w-0 items-start gap-1 rounded-md text-left text-[10px] font-semibold uppercase tracking-[0.13em] transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${labelTone}`}
         >
             <span className="min-w-0 break-words">{label}</span>
-            <span aria-hidden="true" className="shrink-0">↗</span>
+            <AnimatedArrow direction="up-right" className="shrink-0" />
         </Link>
     );
 };

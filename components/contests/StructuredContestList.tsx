@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useState } from "react";
 import type { FeedContest } from "@/lib/interfaces/interfaces";
 import { ContestPreviewCard } from "./preview/ContestPreviewCard";
@@ -270,9 +271,12 @@ export const StructuredContestList = ({
                                         {details.description}
                                     </p>
                                 </div>
-                                <span aria-hidden className="text-sm text-gray-500">
+                                <AnimatedArrow
+                                    direction={expandedSections[sectionId] ? "up" : "down"}
+                                    className="text-sm text-gray-500"
+                                >
                                     {expandedSections[sectionId] ? "▴" : "▾"}
-                                </span>
+                                </AnimatedArrow>
                             </summary>
 
                             {sectionContests.length > 0 ? (

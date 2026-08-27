@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import { useAppDispatch } from "@/lib/redux/hooks";
@@ -194,7 +195,7 @@ const AccountCreationPage = () => {
         onClick={handleGoBack}
         aria-label="Go back to landing page"
       >
-        ← go back
+        <AnimatedArrow direction="left" /> go back
       </button>
 
       <header className="flex flex-col gap-2">

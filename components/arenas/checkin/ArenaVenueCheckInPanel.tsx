@@ -210,12 +210,15 @@ export const ArenaVenueCheckInPanel = ({
             configureAction === "regenerate");
 
     return (
-        <section className="px-5 py-6 sm:px-6" aria-labelledby="venue-check-in-heading">
+        <section
+            className="border-b border-[var(--border-soft)] px-5 py-7 sm:px-6"
+            aria-labelledby="venue-check-in-heading"
+        >
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <h2
                         id="venue-check-in-heading"
-                        className="text-sm font-semibold uppercase tracking-[0.14em] text-white"
+                        className="text-base font-semibold text-white"
                     >
                         Venue Check-In
                     </h2>
@@ -270,7 +273,7 @@ export const ArenaVenueCheckInPanel = ({
                                 </p>
                             ) : !configurationWritable ? (
                                 <p className="mt-1 text-xs leading-5 text-gray-500">
-                                    Venue configuration is read-only while Arena hosting is
+                                    Venue configuration is read-only while the Arena plan is
                                     inactive.
                                 </p>
                             ) : isDisabled ? (
@@ -286,7 +289,7 @@ export const ArenaVenueCheckInPanel = ({
                                     type="button"
                                     onClick={() => setConfirmingAction("enable")}
                                     disabled={lifecycleBusy}
-                                    className="ml-auto min-h-10 shrink-0 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-gray-100 transition hover:bg-white/[0.05] disabled:opacity-50"
+                                    className="ml-auto min-h-11 shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-white/[0.05] disabled:opacity-50"
                                 >
                                     {lifecycleBusy ? "Working…" : "Enable Venue Check-In"}
                                 </button>
@@ -294,7 +297,7 @@ export const ArenaVenueCheckInPanel = ({
                                 <button
                                     type="button"
                                     onClick={() => setSetupOpen(true)}
-                                    className="ml-auto min-h-10 shrink-0 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-gray-100 transition hover:bg-white/[0.05]"
+                                    className="ml-auto min-h-11 shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-gray-100 transition hover:bg-white/[0.05]"
                                 >
                                     Set up Venue Check-In
                                 </button>
@@ -315,7 +318,7 @@ export const ArenaVenueCheckInPanel = ({
                             <button
                                 type="button"
                                 onClick={() => setSetupOpen(true)}
-                                className="ml-auto min-h-10 shrink-0 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/[0.05]"
+                                className="ml-auto min-h-11 shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-white/[0.05]"
                             >
                                 Edit venue details
                             </button>
@@ -332,7 +335,7 @@ export const ArenaVenueCheckInPanel = ({
                                 <button
                                     type="button"
                                     onClick={() => setConfirmingAction(null)}
-                                    className="min-h-10 rounded-lg px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
+                                    className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
                                 >
                                     Cancel
                                 </button>
@@ -340,7 +343,7 @@ export const ArenaVenueCheckInPanel = ({
                                     type="button"
                                     onClick={() => runLifecycleAction("enable")}
                                     disabled={lifecycleBusy}
-                                    className="min-h-10 rounded-lg border border-violet-300/30 px-3.5 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/10 disabled:opacity-50"
+                                    className="min-h-11 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/10 disabled:opacity-50"
                                 >
                                     {lifecycleBusy ? "Enabling…" : "Confirm"}
                                 </button>
@@ -378,7 +381,7 @@ export const ArenaVenueCheckInPanel = ({
                             <button
                                 type="button"
                                 onClick={() => setSetupOpen(true)}
-                                className="ml-auto min-h-10 shrink-0 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-gray-200 transition hover:bg-white/[0.05]"
+                                className="ml-auto min-h-11 shrink-0 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:bg-white/[0.05]"
                             >
                                 Update venue
                             </button>
@@ -406,7 +409,8 @@ export const ArenaVenueCheckInPanel = ({
                             <svg
                                 aria-hidden="true"
                                 viewBox="0 0 16 16"
-                                className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                data-directional-arrow="down"
+                                className="ui-directional-arrow h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
                             >
                                 <path
                                     d="m4 6 4 4 4-4"
@@ -469,7 +473,7 @@ export const ArenaVenueCheckInPanel = ({
                                             }
                                             disabled={assistIssueLoading}
                                             aria-busy={assistIssueLoading}
-                                            className="ml-auto min-h-10 shrink-0 rounded-lg border border-violet-300/30 px-3.5 py-2 text-xs font-semibold text-violet-100 transition hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                            className="ml-auto min-h-11 shrink-0 rounded-xl border border-violet-300/30 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                             {assistIssueLoading
                                                 ? "Generating…"
@@ -676,7 +680,7 @@ export const ArenaVenueCheckInPanel = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => setConfirmingAction(null)}
-                                                    className="min-h-10 rounded-lg px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
+                                                    className="min-h-11 rounded-xl px-4 py-2 text-sm font-semibold text-gray-300 transition hover:bg-white/[0.05] hover:text-white"
                                                 >
                                                     Cancel
                                                 </button>
@@ -684,7 +688,7 @@ export const ArenaVenueCheckInPanel = ({
                                                     type="button"
                                                     onClick={() => runLifecycleAction(confirmingAction)}
                                                     disabled={lifecycleBusy}
-                                                    className={`min-h-10 rounded-lg border px-3.5 py-2 text-xs font-semibold transition disabled:opacity-50 ${confirmingAction === "regenerate"
+                                                    className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${confirmingAction === "regenerate"
                                                         ? "border-violet-300/30 text-violet-100 hover:bg-violet-500/10"
                                                         : "border-red-300/30 text-red-100 hover:bg-red-500/10"
                                                         }`}
@@ -703,7 +707,7 @@ export const ArenaVenueCheckInPanel = ({
                                                 type="button"
                                                 onClick={() => setConfirmingAction("regenerate")}
                                                 disabled={!staff?.can_regenerate_token || lifecycleBusy}
-                                                className="min-h-10 rounded-lg border border-white/15 px-3.5 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="min-h-11 rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-gray-300 transition hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-40"
                                             >
                                                 Regenerate permanent QR
                                             </button>
@@ -716,7 +720,7 @@ export const ArenaVenueCheckInPanel = ({
                                                         ? "Finish or cancel active venue-required contests first."
                                                         : undefined
                                                 }
-                                                className="min-h-10 rounded-lg border border-red-300/25 px-3.5 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="min-h-11 rounded-xl border border-red-300/25 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                                             >
                                                 Disable Venue Check-In
                                             </button>

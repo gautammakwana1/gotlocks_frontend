@@ -333,11 +333,12 @@ export const LeftWorkspaceDrawer = ({
                     >
                         <svg
                             aria-hidden
+                            data-directional-arrow="left"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="1.8"
-                            className="h-4 w-4"
+                            className="ui-directional-arrow h-4 w-4"
                         >
                             <path d="m15 18-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>

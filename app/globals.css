@@ -40,6 +40,95 @@
   --mtb-reserve: 88px;
 }
 
+/* Directional affordances move with their control without shifting layout. */
+.ui-directional-arrow {
+  display: inline-block;
+}
+
+/*
+ * Preflight blockifies every <svg>, and the rule above would quietly demote the
+ * chevrons that opt into this class back to inline-block — which lets the line
+ * box add a descender below them and grows their row by a couple of pixels.
+ * The arrows that actually need `inline-block` are the text glyphs rendered by
+ * AnimatedArrow (transform is a no-op on a truly inline box); SVGs already
+ * accept transform while staying blocks, so hand them back their display.
+ */
+svg.ui-directional-arrow {
+  display: block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /*
+   * `rotate` rides along with `transform` here for a repo-specific reason: the
+   * MVP's chevrons swap their SVG path to point the other way, ours flip one
+   * shared icon with `rotate-180` / `group-open:rotate-180`. Tailwind v4 emits
+   * that as the standalone `rotate` property, and because this rule is
+   * unlayered it outranks the `transition` / `transition-transform` utility on
+   * the same element — so listing `transform` alone would silently turn every
+   * animated chevron flip in the app into a snap.
+   */
+  .ui-directional-arrow {
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+      rotate 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :is(
+      a:not([aria-disabled="true"]),
+      button:not(:disabled),
+      summary,
+      [role="button"]:not([aria-disabled="true"])
+    ):is(:hover, :focus-visible)
+    .ui-directional-arrow[data-directional-arrow="left"] {
+    transform: translateX(-0.125rem);
+  }
+
+  :is(
+      a:not([aria-disabled="true"]),
+      button:not(:disabled),
+      summary,
+      [role="button"]:not([aria-disabled="true"])
+    ):is(:hover, :focus-visible)
+    .ui-directional-arrow[data-directional-arrow="right"] {
+    transform: translateX(0.125rem);
+  }
+
+  :is(
+      a:not([aria-disabled="true"]),
+      button:not(:disabled),
+      summary,
+      [role="button"]:not([aria-disabled="true"])
+    ):is(:hover, :focus-visible)
+    .ui-directional-arrow[data-directional-arrow="up"] {
+    transform: translateY(-0.125rem);
+  }
+
+  :is(
+      a:not([aria-disabled="true"]),
+      button:not(:disabled),
+      summary,
+      [role="button"]:not([aria-disabled="true"])
+    ):is(:hover, :focus-visible)
+    .ui-directional-arrow[data-directional-arrow="up-right"] {
+    transform: translate(0.125rem, -0.125rem);
+  }
+
+  :is(
+      a:not([aria-disabled="true"]),
+      button:not(:disabled),
+      summary,
+      [role="button"]:not([aria-disabled="true"])
+    ):is(:hover, :focus-visible)
+    .ui-directional-arrow[data-directional-arrow="down"] {
+    transform: translateY(0.125rem);
+  }
+
+  .peer:not(:disabled):is(:hover, :focus-visible)
+    ~ *
+    .ui-directional-arrow[data-directional-arrow="down"] {
+    transform: translateY(0.125rem);
+  }
+}
+
 @media (min-width: 640px) {
   :root {
     --mtb-reserve: 96px;

@@ -4,14 +4,16 @@ import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ArenaBillingSection from "@/components/billing/ArenaBillingSection";
+import ProBillingSection from "@/components/billing/ProBillingSection";
 import { getLeaguePlanCapacity, normalizeUserPlan } from "@/lib/groups/limits";
 import { useDispatch, useSelector } from "react-redux";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import type { PlanDowngrade, PlanState } from "@/lib/interfaces/interfaces";
 import { clearPlanOverviewMessage, clearUpdateUserPlanMessage, fetchPlanOverviewRequest, updateUserPlanRequest } from "@/lib/redux/slices/planSlice";
-import { ArrowLeft, CheckCircle2, Clock, Loader2 } from "lucide-react";
-import { FREE_PLAN_SUMMARY, getProLifetimeOffer, getProLifetimePlanViewModel, PRO_PLAN_SUMMARY } from "@/lib/billing/proLifetime";
+import { CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { getProLifetimeOffer, getProLifetimePlanViewModel } from "@/lib/billing/proLifetime";
+import { SettingsHeader, SettingsPage } from "@/components/settings/SettingsUI";
 
 type PaymentPhase = "processing" | "confirmed" | "timeout" | null;
 
@@ -33,7 +35,7 @@ const planSummary = {
 
 const BILLING_TABS: { id: BillingProduct; label: string; href: string }[] = [
     { id: "league", label: "League Plan", href: "/app-settings/plan?product=league" },
-    { id: "arena", label: "Arena Hosting", href: "/app-settings/plan?product=arena" },
+    { id: "arena", label: "Arena Plans", href: "/app-settings/plan?product=arena" },
 ];
 
 const AppPlanContent = () => {
@@ -95,10 +97,7 @@ const AppPlanContent = () => {
         offerKind: currentUser?.proLifetimeOfferKind,
         entitlement: currentUser?.proLifetimeEntitlement,
     });
-    const foundingOffer = getProLifetimeOffer("founding");
-    const standardOffer = getProLifetimeOffer("standard");
     const availableOffer = getProLifetimeOffer(currentUser?.proLifetimeOfferKind);
-    const offer = planView.offer;
 
     const planRef = useRef(plan);
     useEffect(() => {
@@ -115,14 +114,9 @@ const AppPlanContent = () => {
         maxFreeLeagues: 3,
     };
 
-    const proOwned = planView.status === "owned";
     const planLimit = getLeaguePlanCapacity(plan);
     const ownedLeagueCount = downgradeBlockers.ownedLeagueCount;
     const ownedLeagueLimit = plan === "pro" ? planLimit.maxOwnedLeagues : downgradeBlockers.maxFreeLeagues;
-    const leagueSlotPercent =
-        ownedLeagueLimit && ownedLeagueLimit > 0
-            ? Math.min(100, Math.round((ownedLeagueCount / ownedLeagueLimit) * 100))
-            : 0;
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -212,7 +206,7 @@ const AppPlanContent = () => {
     };
 
     return (
-        <div className="mx-auto w-full max-w-3xl space-y-6">
+        <SettingsPage>
             {paymentPhase && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm">
                     <div
@@ -284,28 +278,15 @@ const AppPlanContent = () => {
                 </div>
             )}
 
-            <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
-                <Link
-                    href="/app-settings"
-                    className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
-                >
-                    <span className="flex items-center gap-2">
-                        <ArrowLeft size={14} /> account settings
-                    </span>
-                </Link>
-                <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
-                    Plan and billing
-                </h1>
-                <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    League organizer access and Arena hosting are separate products with separate
-                    billing.
-                </p>
-            </header>
+            <SettingsHeader title="Plan and billing" backHref="/app-settings" />
 
+            {/* Underline tabs, not a pill group: the panel below them is a full
+                settings surface rather than a card, so the selected tab has to
+                read as continuous with it. */}
             <nav
                 role="tablist"
                 aria-label="Billing products"
-                className="grid grid-cols-2 rounded-2xl border border-white/10 bg-white/[0.025] p-1"
+                className="grid grid-cols-2 border-b border-white/10"
             >
                 {BILLING_TABS.map((tab) => {
                     const active = product === tab.id;
@@ -335,11 +316,11 @@ const AppPlanContent = () => {
                                 document.getElementById(`billing-${nextProduct}-tab`)?.focus();
                                 router.push(`/app-settings/plan?product=${nextProduct}`);
                             }}
-                            className={`flex min-h-11 items-center justify-center rounded-xl px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active
+                            className={`-mb-px flex min-h-12 items-center justify-center border-b-2 px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${active
                                 ? tab.id === "league"
-                                    ? "bg-sky-500/15 text-sky-100 focus-visible:outline-sky-200"
-                                    : "bg-violet-500/15 text-violet-100 focus-visible:outline-violet-200"
-                                : "text-gray-400 hover:bg-white/5 hover:text-white focus-visible:outline-white"
+                                    ? "border-sky-300 text-white focus-visible:outline-white/70"
+                                    : "border-violet-300 text-white focus-visible:outline-white/70"
+                                : "border-transparent text-gray-400 hover:bg-white/[0.025] hover:text-white focus-visible:outline-white"
                                 }`}
                         >
                             {tab.label}
@@ -354,151 +335,15 @@ const AppPlanContent = () => {
                 aria-labelledby={`billing-${product}-tab`}
                 className="space-y-6"
             >
-                {product === "arena" ? <ArenaBillingSection /> : (
-                    <>
-                        <section aria-labelledby="league-plan-title" className="space-y-5">
-                            <div className="rounded-3xl border border-sky-300/20 bg-[linear-gradient(145deg,rgba(14,165,233,0.13),rgba(255,255,255,0.025))] p-5 sm:p-6">
-                                <div className="flex flex-wrap items-start justify-between gap-4">
-                                    <div>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">
-                                            League Plan
-                                        </p>
-                                        <h2
-                                            id="league-plan-title"
-                                            className="mt-2 text-xl font-semibold text-white"
-                                        >
-                                            {planView.currentPlanName}
-                                        </h2>
-                                    </div>
-                                    <span className="rounded-full border border-sky-200/20 bg-sky-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100">
-                                        {planView.currentPlanBadge}
-                                    </span>
-                                </div>
-
-                                <div
-                                    className="mt-5"
-                                    aria-label={`${ownedLeagueCount} of ${ownedLeagueLimit} hosted League slots used`}
-                                >
-                                    <div className="flex items-center justify-between gap-3 text-sm">
-                                        <span className="font-semibold text-white">Organizer slots</span>
-                                        <span className="text-sky-100">
-                                            {ownedLeagueCount} of {ownedLeagueLimit} hosted
-                                        </span>
-                                    </div>
-                                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                                        <span
-                                            className="block h-full rounded-full bg-gradient-to-r from-sky-400 to-blue-400 transition-[width] motion-reduce:transition-none"
-                                            style={{ width: `${leagueSlotPercent}%` }}
-                                        />
-                                    </div>
-                                </div>
-
-                                <p className="mt-4 max-w-xl text-sm leading-6 text-gray-300">
-                                    {planView.currentPlanSummary}
-                                </p>
-
-                                {!proOwned ? (
-                                    // Routes to the full-page review instead of a
-                                    // confirm dialog: the next step hands the browser
-                                    // to Stripe, and a modal has nothing to return to.
-                                    <Link
-                                        href="/app-settings/plan/league/upgrade"
-                                        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-300/50 bg-sky-500/20 px-5 py-3 text-sm font-semibold text-sky-50 transition hover:bg-sky-500/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-200"
-                                    >
-                                        Review Pro upgrade
-                                    </Link>
-                                ) : (
-                                    <p className="mt-5 text-sm font-semibold text-emerald-200">
-                                        Pro Lifetime is permanently owned. No recurring League plan
-                                        payment is required.
-                                    </p>
-                                )}
-
-                                {/* Kept from the previous layout. The MVP's ProBillingSection has
-                                    no payment-history link, but ours is live and must stay. */}
-                                <div className="mt-5 border-t border-white/10 pt-4">
-                                    <Link
-                                        href="/app-settings/transaction-history"
-                                        className="text-sm font-medium text-sky-300 transition hover:text-sky-200"
-                                    >
-                                        View payment history &rarr;
-                                    </Link>
-                                </div>
-                            </div>
-
-                            <div
-                                className="grid gap-3 sm:grid-cols-2"
-                                aria-label="League plan comparison"
-                            >
-                                <article className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <h3 className="font-semibold text-white">Free</h3>
-                                        <span className="text-sm font-semibold text-gray-300">$0</span>
-                                    </div>
-                                    <p className="mt-2 text-sm leading-6 text-gray-400">
-                                        {FREE_PLAN_SUMMARY}
-                                    </p>
-                                </article>
-                                <article className="rounded-2xl border border-sky-300/25 bg-sky-500/[0.08] p-4">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <h3 className="font-semibold text-white">Pro Lifetime</h3>
-                                        <span className="text-sm font-semibold text-sky-100">
-                                            {offer.priceLabel} once
-                                        </span>
-                                    </div>
-                                    <p className="mt-2 text-sm leading-6 text-gray-300">
-                                        {PRO_PLAN_SUMMARY}
-                                    </p>
-                                    <p className="mt-2 text-xs leading-5 text-gray-500">
-                                        {offer.kind === "founding"
-                                            ? `${foundingOffer.priceLabel} one time during the founding offer; ${standardOffer.priceLabel} afterward.`
-                                            : `${standardOffer.priceLabel} one time. The founding offer has ended.`}
-                                    </p>
-                                </article>
-                            </div>
-
-                            <details className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-                                <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-white">
-                                    Benefits and simulated receipt
-                                </summary>
-                                <div className="mt-3 border-t border-white/10 pt-4">
-                                    <ul className="grid gap-2 text-sm text-gray-300 sm:grid-cols-2">
-                                        {offer.entitlements.map((entitlement) => (
-                                            <li
-                                                key={entitlement}
-                                                className="rounded-xl bg-white/[0.035] px-3 py-2"
-                                            >
-                                                {entitlement}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    {currentUser?.proLifetimeEntitlement ? (
-                                        <dl className="mt-4 grid gap-3 text-xs text-gray-400 sm:grid-cols-2">
-                                            <div>
-                                                <dt className="uppercase tracking-[0.12em]">purchased</dt>
-                                                <dd className="mt-1 font-semibold text-white">
-                                                    {offer.priceLabel} one time &middot;{" "}
-                                                    {currentUser.proLifetimeEntitlement.purchasedAt.slice(0, 10)}
-                                                </dd>
-                                            </div>
-                                            <div>
-                                                <dt className="uppercase tracking-[0.12em]">
-                                                    simulated receipt
-                                                </dt>
-                                                <dd className="mt-1 break-all font-mono text-white">
-                                                    {currentUser.proLifetimeEntitlement.simulatedPaymentReference}
-                                                </dd>
-                                            </div>
-                                        </dl>
-                                    ) : (
-                                        <p className="mt-4 text-xs text-gray-500">
-                                            No Pro Lifetime receipt yet.
-                                        </p>
-                                    )}
-                                </div>
-                            </details>
-                        </section>
-                    </>
+                {product === "arena" ? (
+                    <ArenaBillingSection />
+                ) : (
+                    <ProBillingSection
+                        planView={planView}
+                        entitlement={currentUser?.proLifetimeEntitlement ?? null}
+                        ownedLeagueCount={ownedLeagueCount}
+                        ownedLeagueLimit={ownedLeagueLimit}
+                    />
                 )}
             </div>
 
@@ -577,7 +422,7 @@ const AppPlanContent = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </SettingsPage>
     );
 };
 

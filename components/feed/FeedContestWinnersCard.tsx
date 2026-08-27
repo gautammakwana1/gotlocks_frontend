@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import Image from "next/image";
 import { generateProfileImageUrl } from "@/lib/utils/helpers";
 import Link from "next/link";
@@ -447,7 +448,8 @@ export const FeedContestWinnersCard = ({
                         <span className="truncate">{card.headerLabel}</span>
                         <span
                             aria-hidden="true"
-                            className="shrink-0"
+                            data-directional-arrow="up-right"
+                            className="ui-directional-arrow shrink-0"
                             data-feed-contest-results-link-arrow
                         >
                             ↗
@@ -507,9 +509,7 @@ export const FeedContestWinnersCard = ({
                             <span className="min-w-0 flex-1">
                                 more members placed — view full standings
                             </span>
-                            <span aria-hidden="true" className="shrink-0">
-                                ↗
-                            </span>
+                            <AnimatedArrow direction="up-right" className="shrink-0" />
                         </Link>
                     </div>
                 ) : null}

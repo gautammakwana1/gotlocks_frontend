@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 
 type Props = {
     label?: string;
@@ -38,11 +39,12 @@ export const BackButton = ({
     return (
         <button
             type="button"
+            data-back-button
             onClick={handleBack}
             className={`${alignSelf === "center" ? "self-center" : "self-start"
                 } text-xs lowercase tracking-wide text-gray-400 transition hover:text-white ${className ?? ""}`}
         >
-            ← {label}
+            <AnimatedArrow direction="left" /> {label}
         </button>
     );
 };

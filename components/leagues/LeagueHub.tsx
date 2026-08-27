@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -358,7 +359,7 @@ export const LeagueHub = () => {
                                 aria-hidden
                             >
                                 <span>Upgrade</span>
-                                <span className="text-base leading-none">↗</span>
+                                <AnimatedArrow direction="up-right" className="text-base leading-none" />
                             </span>
                         </span>
                         <span

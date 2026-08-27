@@ -6,6 +6,12 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { useToast } from "@/lib/state/ToastContext";
 import {
+    SettingsDisclosure,
+    settingsInputClassName,
+    settingsPrimaryButtonClassName,
+    settingsSecondaryButtonClassName,
+} from "@/components/settings/SettingsUI";
+import {
     cancelManagerInvitationRequest,
     clearManagerActionMessage,
     fetchGroupMembersByGroupIdRequest,
@@ -54,37 +60,29 @@ type GroupManagerSettingsProps = {
     className?: string;
 };
 
+/* The settings chrome supplies the controls now (inputs, buttons, the rule and
+ * the padding), so the per-type accent is down to the two things it genuinely
+ * still decides: how a member row is ruled, and the League's Pro link.
+ *
+ * ROW RULES follow the MVP exactly. A League has at most one row, so it is
+ * closed on both sides (`border-y`); an Arena can list several and rules only
+ * the top of each so consecutive rows share one hairline. */
 type Accent = {
-    heading: string;
-    radius: string;
-    pending: string;
+    row: string;
     pendingNote: string;
-    select: string;
-    primaryButton: string;
-    upgradeBox: string;
     upgradeButton: string;
 };
 
 const ACCENTS: Record<GroupType, Accent> = {
     league: {
-        heading: "text-base font-semibold text-white",
-        radius: "rounded-lg",
-        pending: "border-amber-300/20 bg-amber-500/[0.07]",
+        row: "border-y border-white/10",
         pendingNote: "text-amber-100/70",
-        select: "focus:border-sky-400/70",
-        primaryButton: "bg-white text-black hover:bg-gray-200",
-        upgradeBox: "border-sky-300/15 bg-sky-500/[0.07]",
         upgradeButton:
             "border-sky-300/30 bg-sky-500/10 text-sky-100 hover:border-sky-300/50 hover:bg-sky-500/15",
     },
     arena: {
-        heading: "text-sm font-semibold uppercase tracking-[0.14em] text-white",
-        radius: "rounded-xl",
-        pending: "border-amber-300/20 bg-amber-500/[0.07]",
+        row: "border-t border-white/10",
         pendingNote: "text-amber-100/70",
-        select: "focus:border-violet-300/60",
-        primaryButton: "bg-violet-100 text-violet-950 hover:bg-white",
-        upgradeBox: "border-violet-300/15 bg-violet-500/[0.07]",
         upgradeButton:
             "border-violet-300/30 bg-violet-500/10 text-violet-100 hover:border-violet-300/50 hover:bg-violet-500/15",
     },
@@ -266,12 +264,13 @@ const GroupManagerSettings = ({
     const refusalRedundant =
         groupType === "league" && (activeManagers.length > 0 || invitations.length > 0);
 
-    /* The badge. A Free League reads "Pro" rather than "0 of 0", because zero
-     * seats there is an entitlement fact and "0 of 0" reads as a bug. */
+    /* The disclosure's summary detail. A Free League reads "Pro required"
+     * rather than "0 of 0", because zero seats there is an entitlement fact and
+     * "0 of 0" reads as a bug. */
     const seatBadge = !seats
         ? "—"
         : needsUpgrade
-            ? "Pro"
+            ? "Pro required"
             : `${seats.manager_count} of ${managerLimit ?? "unlimited"}`;
 
     /* A manager sitting past the first roster page cannot be drawn as a row —
@@ -292,178 +291,175 @@ const GroupManagerSettings = ({
     };
 
     return (
-        <section
-            className={`space-y-4 ${className ?? ""}`}
+        <SettingsDisclosure
+            summary={copy.title}
+            summaryDetail={seatBadge}
+            className={className}
             data-group-manager-settings
             data-group-type={groupType}
         >
-            <div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <h2 className={accent.heading}>{copy.title}</h2>
-                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">
-                        {seatBadge}
-                    </span>
-                </div>
+            <div className="space-y-4">
                 <p className="mt-1 max-w-2xl text-xs leading-5 text-gray-500">
                     {copy.description}
                 </p>
-            </div>
 
-            {managerInvitationsError ? (
-                <p role="alert" className="text-xs leading-5 text-red-300">
-                    {managerInvitationsError}
-                </p>
-            ) : null}
-
-            {needsUpgrade ? (
-                <div
-                    className={`flex flex-wrap items-center justify-between gap-3 border px-4 py-3 ${accent.radius} ${accent.upgradeBox}`}
-                >
-                    <p className="text-xs leading-5 text-gray-400">
-                        Upgrade this League to Pro before inviting a manager.
+                {managerInvitationsError ? (
+                    <p role="alert" className="text-xs leading-5 text-red-300">
+                        {managerInvitationsError}
                     </p>
-                    {upgradeHref ? (
-                        <Link
-                            href={upgradeHref}
-                            className={`inline-flex min-h-9 items-center rounded-lg border px-3 text-[10px] font-semibold uppercase tracking-wide transition ${accent.upgradeButton}`}
-                        >
-                            View Pro
-                        </Link>
-                    ) : null}
-                </div>
-            ) : (
-                <>
-                    {activeManagers.map((manager) => {
-                        const busy =
-                            managerActionLoading && managerActionUserId === manager.user_id;
-                        return (
-                            <div
-                                key={manager.id ?? manager.user_id}
-                                className={`flex flex-wrap items-center justify-between gap-3 border border-white/10 bg-white/[0.025] px-4 py-3 ${accent.radius}`}
-                            >
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-white">
-                                        @{memberHandle(manager)}
-                                    </p>
-                                    <p className="mt-1 text-[11px] leading-4 text-gray-500">
-                                        Current manager
-                                    </p>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={managerActionLoading}
-                                    onClick={() => {
-                                        if (!manager.user_id) return;
-                                        dispatch(
-                                            removeGroupManagerRequest({
-                                                group_id: groupId,
-                                                user_id: manager.user_id,
-                                            })
-                                        );
-                                    }}
-                                    className="min-h-9 rounded-lg border border-red-300/25 px-3 text-[10px] font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {busy ? "Working…" : "Remove manager"}
-                                </button>
-                            </div>
-                        );
-                    })}
+                ) : null}
 
-                    {hiddenManagerCount > 0 ? (
-                        <p className="text-xs leading-5 text-gray-500">
-                            {hiddenManagerCount === 1
-                                ? "1 more manager is not on this page of the roster."
-                                : `${hiddenManagerCount} more managers are not on this page of the roster.`}
+                {needsUpgrade ? (
+                    <div
+                        className={`flex flex-wrap items-center justify-between gap-3 py-3 ${accent.row}`}
+                    >
+                        <p className="text-xs leading-5 text-gray-400">
+                            Upgrade this League to Pro before inviting a manager.
                         </p>
-                    ) : null}
-
-                    {invitations.map((invitation) => {
-                        const busy =
-                            managerActionLoading &&
-                            managerActionInvitationId === invitation.id;
-                        return (
-                            <div
-                                key={invitation.id}
-                                className={`flex flex-wrap items-center justify-between gap-3 border px-4 py-3 ${accent.radius} ${accent.pending}`}
+                        {upgradeHref ? (
+                            <Link
+                                href={upgradeHref}
+                                className={`inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold transition ${accent.upgradeButton}`}
                             >
-                                <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-white">
-                                        @{invitation.profiles?.username ?? invitation.to_user_id}
-                                    </p>
-                                    <p className={`mt-1 text-[11px] leading-4 ${accent.pendingNote}`}>
-                                        {copy.pendingNote}
-                                    </p>
+                                View Pro
+                            </Link>
+                        ) : null}
+                    </div>
+                ) : (
+                    <>
+                        {activeManagers.map((manager) => {
+                            const busy =
+                                managerActionLoading && managerActionUserId === manager.user_id;
+                            return (
+                                <div
+                                    key={manager.id ?? manager.user_id}
+                                    className={`flex flex-wrap items-center justify-between gap-3 py-3 ${accent.row}`}
+                                >
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                            @{memberHandle(manager)}
+                                        </p>
+                                        <p className="mt-1 text-[11px] leading-4 text-gray-500">
+                                            Current manager
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={managerActionLoading}
+                                        onClick={() => {
+                                            if (!manager.user_id) return;
+                                            dispatch(
+                                                removeGroupManagerRequest({
+                                                    group_id: groupId,
+                                                    user_id: manager.user_id,
+                                                })
+                                            );
+                                        }}
+                                        className={`${settingsSecondaryButtonClassName} border-red-300/25 text-red-100 hover:bg-red-500/10`}
+                                    >
+                                        {busy ? "Working…" : "Remove manager"}
+                                    </button>
                                 </div>
+                            );
+                        })}
+
+                        {hiddenManagerCount > 0 ? (
+                            <p className="text-xs leading-5 text-gray-500">
+                                {hiddenManagerCount === 1
+                                    ? "1 more manager is not on this page of the roster."
+                                    : `${hiddenManagerCount} more managers are not on this page of the roster.`}
+                            </p>
+                        ) : null}
+
+                        {invitations.map((invitation) => {
+                            const busy =
+                                managerActionLoading &&
+                                managerActionInvitationId === invitation.id;
+                            return (
+                                <div
+                                    key={invitation.id}
+                                    className={`flex flex-wrap items-center justify-between gap-3 py-3 ${accent.row}`}
+                                >
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                            @{invitation.profiles?.username ?? invitation.to_user_id}
+                                        </p>
+                                        <p className={`mt-1 text-[11px] leading-4 ${accent.pendingNote}`}>
+                                            {copy.pendingNote}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={managerActionLoading}
+                                        onClick={() =>
+                                            dispatch(
+                                                cancelManagerInvitationRequest({
+                                                    group_id: groupId,
+                                                    invitation_id: invitation.id,
+                                                })
+                                            )
+                                        }
+                                        className={settingsSecondaryButtonClassName}
+                                    >
+                                        {busy ? "Working…" : "Cancel invitation"}
+                                    </button>
+                                </div>
+                            );
+                        })}
+
+                        {canInviteManager ? (
+                            <div className="flex flex-col gap-3 sm:flex-row">
+                                <select
+                                    aria-label={
+                                        groupType === "arena"
+                                            ? "Arena manager candidate"
+                                            : "League manager candidate"
+                                    }
+                                    value={candidateId}
+                                    onChange={(event) => setCandidateId(event.target.value)}
+                                    disabled={managerActionLoading || candidates.length === 0}
+                                    className={`${settingsInputClassName} min-w-0 flex-1 bg-black/50`}
+                                >
+                                    <option value="" className="bg-black">
+                                        {groupType === "arena"
+                                            ? "Choose an active member"
+                                            : "Choose a League member"}
+                                    </option>
+                                    {candidates.map((candidate) => (
+                                        <option
+                                            key={candidate.id ?? candidate.user_id}
+                                            value={candidate.user_id}
+                                            className="bg-black"
+                                        >
+                                            @{memberHandle(candidate)}
+                                        </option>
+                                    ))}
+                                </select>
                                 <button
                                     type="button"
-                                    disabled={managerActionLoading}
-                                    onClick={() =>
-                                        dispatch(
-                                            cancelManagerInvitationRequest({
-                                                group_id: groupId,
-                                                invitation_id: invitation.id,
-                                            })
-                                        )
-                                    }
-                                    className="min-h-9 rounded-lg border border-white/15 px-3 text-[10px] font-semibold uppercase tracking-wide text-gray-300 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                    onClick={sendInvitation}
+                                    disabled={!candidateId || managerActionLoading}
+                                    className={settingsPrimaryButtonClassName}
                                 >
-                                    {busy ? "Working…" : "Cancel invitation"}
+                                    {managerActionLoading ? "Working…" : "Send manager invitation"}
                                 </button>
                             </div>
-                        );
-                    })}
+                        ) : refusalRedundant ? null : refusal ? (
+                            <p className="text-xs leading-5 text-gray-500">{refusal}</p>
+                        ) : managerInvitationsLoading ? (
+                            <p className="text-xs leading-5 text-gray-500">Loading manager seats…</p>
+                        ) : null}
 
-                    {canInviteManager ? (
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <select
-                                aria-label={
-                                    groupType === "arena"
-                                        ? "Arena manager candidate"
-                                        : "League manager candidate"
-                                }
-                                value={candidateId}
-                                onChange={(event) => setCandidateId(event.target.value)}
-                                disabled={managerActionLoading || candidates.length === 0}
-                                className={`min-w-0 flex-1 border border-white/10 bg-black/60 px-4 py-3 text-sm text-white outline-none transition disabled:cursor-not-allowed disabled:opacity-50 ${accent.radius} ${accent.select}`}
-                            >
-                                <option value="">
-                                    {groupType === "arena"
-                                        ? "Choose an active member"
-                                        : "Choose a League member"}
-                                </option>
-                                {candidates.map((candidate) => (
-                                    <option
-                                        key={candidate.id ?? candidate.user_id}
-                                        value={candidate.user_id}
-                                    >
-                                        @{memberHandle(candidate)}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                type="button"
-                                onClick={sendInvitation}
-                                disabled={!candidateId || managerActionLoading}
-                                className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide transition disabled:cursor-not-allowed disabled:opacity-40 ${accent.radius} ${accent.primaryButton}`}
-                            >
-                                {managerActionLoading ? "Working…" : "Send manager invitation"}
-                            </button>
-                        </div>
-                    ) : refusalRedundant ? null : refusal ? (
-                        <p className="text-xs leading-5 text-gray-500">{refusal}</p>
-                    ) : managerInvitationsLoading ? (
-                        <p className="text-xs leading-5 text-gray-500">Loading manager seats…</p>
-                    ) : null}
-
-                    {/* Gated on a NON-EMPTY roster: an empty one means the members
-                        fetch has not landed yet, and "nobody to invite" is a
-                        different statement from "not loaded". */}
-                    {canInviteManager && roster.length > 0 && candidates.length === 0 ? (
-                        <p className="text-xs leading-5 text-gray-500">{copy.emptyCandidates}</p>
-                    ) : null}
-                </>
-            )}
-        </section>
+                        {/* Gated on a NON-EMPTY roster: an empty one means the members
+                            fetch has not landed yet, and "nobody to invite" is a
+                            different statement from "not loaded". */}
+                        {canInviteManager && roster.length > 0 && candidates.length === 0 ? (
+                            <p className="text-xs leading-5 text-gray-500">{copy.emptyCandidates}</p>
+                        ) : null}
+                    </>
+                )}
+            </div>
+        </SettingsDisclosure>
     );
 };
 

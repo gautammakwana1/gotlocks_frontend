@@ -304,13 +304,18 @@ export function PickReviewSheet({
                     the DOM as an inert attribute and the chevron never turned
                     (nor rendered, having had no size class either). The base
                     path points DOWN, which is the CLOSE direction, so it is the
-                    shut state that rotates. */}
+                    shut state that rotates. That rotation flips the shared
+                    hover nudge along with the glyph, so the fixed "down"
+                    direction always reads as "toward where this points". */}
                 <span
                   aria-hidden
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-gray-200 transition-transform duration-200 ${isOpen ? "" : "rotate-180"
                     }`}
                 >
-                  <ChevronUpDownIcon className="h-4 w-4" />
+                  <ChevronUpDownIcon
+                    data-directional-arrow="down"
+                    className="ui-directional-arrow h-4 w-4"
+                  />
                 </span>
               </div>
             </button>
@@ -484,7 +489,10 @@ export function PickReviewSheet({
                             Same Game Combo Picks
                           </p>
                           <span className="text-gray-400">
-                            <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isSameGameSectionCollapsed ? "" : "rotate-180"}`} />
+                            <ChevronUpDownIcon
+                              data-directional-arrow="down"
+                              className={`ui-directional-arrow h-4 w-4 shrink-0 ${isSameGameSectionCollapsed ? "" : "rotate-180"}`}
+                            />
                           </span>
                         </button>
 
@@ -631,7 +639,10 @@ export function PickReviewSheet({
                             Straight Picks
                           </p>
                           <span className="text-gray-400">
-                            <ChevronUpDownIcon className={`h-4 w-4 shrink-0 ${isStraightSectionCollapsed ? "" : "rotate-180"}`} />
+                            <ChevronUpDownIcon
+                              data-directional-arrow="down"
+                              className={`ui-directional-arrow h-4 w-4 shrink-0 ${isStraightSectionCollapsed ? "" : "rotate-180"}`}
+                            />
                           </span>
                         </button>
 

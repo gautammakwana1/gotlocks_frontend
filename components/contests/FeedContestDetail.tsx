@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
@@ -1468,7 +1469,8 @@ export const FeedContestDetail = ({
                                     <svg
                                         aria-hidden="true"
                                         viewBox="0 0 16 16"
-                                        className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                        data-directional-arrow="down"
+                                        className="ui-directional-arrow h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
                                     >
                                         <path
                                             d="m4 6 4 4 4-4"
@@ -1712,12 +1714,10 @@ export const FeedContestDetail = ({
                                     className={`group inline-flex shrink-0 items-center gap-2 py-0.5 text-sm font-semibold transition hover:text-white ${accentClasses.textStrong}`}
                                 >
                                     <span>{entryCtaLabel}</span>
-                                    <span
-                                        aria-hidden
-                                        className="text-base leading-none transition-transform group-hover:translate-x-1"
-                                    >
-                                        →
-                                    </span>
+                                    <AnimatedArrow
+                                        direction="right"
+                                        className="text-base leading-none"
+                                    />
                                 </Link>
                             ) : null
                         }
@@ -1813,7 +1813,8 @@ export const FeedContestDetail = ({
                                 <svg
                                     aria-hidden="true"
                                     viewBox="0 0 16 16"
-                                    className="h-4 w-4 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                    data-directional-arrow="down"
+                                    className="ui-directional-arrow h-4 w-4 text-gray-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
                                 >
                                     <path
                                         d="m4 6 4 4 4-4"
@@ -1884,7 +1885,8 @@ export const FeedContestDetail = ({
                                 <svg
                                     aria-hidden="true"
                                     viewBox="0 0 16 16"
-                                    className="h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180"
+                                    data-directional-arrow="down"
+                                    className="ui-directional-arrow h-4 w-4 shrink-0 text-gray-500 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none"
                                 >
                                     <path
                                         d="m4 6 4 4 4-4"

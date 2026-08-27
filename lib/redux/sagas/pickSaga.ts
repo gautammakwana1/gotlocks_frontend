@@ -2,7 +2,7 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import axios, { AxiosResponse } from "axios";
 import { API_BASE_URL } from "@/lib/utils/api";
 import axiosInstance from "@/lib/utils/axiosInstance";
-import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalLeaderboardFailure, fetchGlobalLeaderboardRequest, fetchGlobalLeaderboardSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, fetchSlipContestPicksFailure, fetchSlipContestPicksRequest, fetchSlipContestPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
+import { autoGradingPicksFailure, autoGradingPicksRequest, autoGradingPicksSuccess, createPickFailure, createPickReactionFailure, createPickReactionRequest, createPickReactionSuccess, createPickRequest, createPickSuccess, createPostPickFailure, createPostPickRequest, createPostPickSuccess, deletePickFailure, deletePickRequest, deletePickSuccess, deletePostPickFailure, deletePostPickRequest, deletePostPickSuccess, fetchAllContestsPicksFailure, fetchAllContestsPicksRequest, fetchAllContestsPicksSuccess, fetchAllGlobalPostPicksFailure, fetchAllGlobalPostPicksRequest, fetchAllGlobalPostPicksSuccess, fetchAllMyPostPicksFailure, fetchAllMyPostPicksRequest, fetchAllMyPostPicksSuccess, fetchAllPicksFailure, fetchAllPicksRequest, fetchAllPicksSuccess, fetchFollowingUsersAllStatusPostsFailure, fetchFollowingUsersAllStatusPostsRequest, fetchFollowingUsersAllStatusPostsSuccess, fetchFollowingUsersPostsFailure, fetchFollowingUsersPostsRequest, fetchFollowingUsersPostsSuccess, fetchFollowingUsersWinTopHitPostsFailure, fetchFollowingUsersWinTopHitPostsRequest, fetchFollowingUsersWinTopHitPostsSuccess, fetchGlobalAllStatusPostsFailure, fetchGlobalAllStatusPostsRequest, fetchGlobalAllStatusPostsSuccess, fetchGlobalLeaderboardFailure, fetchGlobalLeaderboardRequest, fetchGlobalLeaderboardSuccess, fetchGlobalPendingReactedPostsFailure, fetchGlobalPendingReactedPostsRequest, fetchGlobalPendingReactedPostsSuccess, fetchGlobalPendingTopHitPostsFailure, fetchGlobalPendingTopHitPostsRequest, fetchGlobalPendingTopHitPostsSuccess, fetchGlobalWinnerTopHitPostsFailure, fetchGlobalWinnerTopHitPostsRequest, fetchGlobalWinnerTopHitPostsSuccess, fetchMyPicksBySlipIdFailure, fetchMyPicksBySlipIdRequest, fetchMyPicksBySlipIdSuccess, fetchPostPicksByUserIdFailure, fetchPostPicksByUserIdRequest, fetchPostPicksByUserIdSuccess, fetchRecentPicksFailure, fetchRecentPicksRequest, fetchRecentPicksSuccess, fetchSlipContestPicksFailure, fetchSlipContestPicksRequest, fetchSlipContestPicksSuccess, replaceOrCreatePostablePickFailure, replaceOrCreatePostablePickRequest, replaceOrCreatePostablePickSuccess, resetPicksScoringPointsFailure, resetPicksScoringPointsRequest, resetPicksScoringPointsSuccess, updatePicksFailure, updatePicksRequest, updatePicksSuccess } from "../slices/pickSlice";
 import type { PayloadAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
 import type { AutoGradingPicksPayload, CreatePickPayload, CreatePostPickPayload, DeletePickPayload, DeletePostPickPayload, FetchContestPicksPayload, FetchPicksPaginationPayload, FetchPicksPayload, FetchPostPicksByUserIdPayload, FetchPostPicksPayload, FetchSlipContestPicksPayload, FetchSocialGlobalLeaderboardPayload, Picks, SlipContestPicksData, ReactionPickOfDayPayload, ReplaceOrCreatePostablePickPayload, ResetPicksScoringPointsPayload, UpdateMultiplePayload } from "@/lib/interfaces/interfaces";
@@ -259,6 +259,60 @@ function* handleFetchFollowingUsersPicksPosts(action: PayloadAction<FetchPostPic
     }
 }
 
+/* ----------------------------------------------------------------------------
+ * The two SOCIAL feeds, and the only two post-pick reads that are not narrowed
+ * to one result. `/pick/all-global-post-picks` and its following-scoped twin
+ * return pending, win, loss and void alike, ordered purely by recency
+ * (created_at DESC, id DESC) rather than by XP or points — which is what makes
+ * "newest on top" a server guarantee rather than a client re-sort of one page.
+ *
+ * DELIBERATELY separate from `fetchGlobalPendingTopHitPosts` rather than a
+ * re-point of it: HomeTab dispatches that one too, and it wants the pending-only,
+ * XP-ranked feed. They share the `postPicks` slot, so changing its URL would
+ * alter what Home leaves behind for the next screen to mount.
+ *
+ * Both endpoints CLAMP `limit` at 50 server-side and say nothing about it — the
+ * clamped value comes back in `pagination.limit`. The Social page is what has to
+ * respect that ceiling; nothing here can detect it.
+ * -------------------------------------------------------------------------- */
+function* handleFetchGlobalAllStatusPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
+    try {
+        const { page = 1, limit = 10 } = action.payload || {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/pick/all-global-post-picks`,
+            {
+                params: { page, limit }
+            }
+        );
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchGlobalAllStatusPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchGlobalAllStatusPostsFailure(getErrorMessage(error, "Global Feed Posts Fetch Failed")));
+    }
+}
+
+function* handleFetchFollowingUsersAllStatusPosts(action: PayloadAction<FetchPostPicksPayload | undefined>): SagaIterator {
+    try {
+        const { page = 1, limit = 10 } = action.payload || {};
+        const response: AxiosResponse<unknown> = yield call(
+            axiosInstance.get,
+            `${API_BASE_URL}/pick/following-users-all-post-picks`,
+            {
+                params: { page, limit }
+            }
+        );
+        const payload = response.data as { data?: { picks: Picks, pagination: FetchPicksPaginationPayload } };
+        const picks = payload.data?.picks ?? [];
+        const pagination = payload.data?.pagination;
+        yield put(fetchFollowingUsersAllStatusPostsSuccess({ picks, page, hasMore: pagination?.hasMore ?? picks.length === limit }));
+    } catch (error: unknown) {
+        yield put(fetchFollowingUsersAllStatusPostsFailure(getErrorMessage(error, "Following Feed Posts Fetch Failed")));
+    }
+}
+
 function* handleFetchPostPicksByUserIdPosts(action: PayloadAction<FetchPostPicksByUserIdPayload>): SagaIterator {
     try {
         const { user_id, page = 1, limit = 10, pick_id, sort_by, result, pick_type, confidence_lvl } = action.payload;
@@ -456,6 +510,11 @@ export default function* pickSaga() {
     yield takeLatest(fetchGlobalPendingTopHitPostsRequest.type, handleFetchGlobalPendingTopHitPosts);
     yield takeLatest(fetchFollowingUsersWinTopHitPostsRequest.type, handleFetchFollowingUsersWinTopHitPosts);
     yield takeLatest(fetchFollowingUsersPostsRequest.type, handleFetchFollowingUsersPicksPosts);
+    // takeLatest, not takeEvery: the tab-switch effect and the reaction-refresh
+    // effect can fire back to back, and cancelling the loser is what stops two
+    // different pages interleaving into the shared `postPicks` list.
+    yield takeLatest(fetchGlobalAllStatusPostsRequest.type, handleFetchGlobalAllStatusPosts);
+    yield takeLatest(fetchFollowingUsersAllStatusPostsRequest.type, handleFetchFollowingUsersAllStatusPosts);
     yield takeLatest(fetchPostPicksByUserIdRequest.type, handleFetchPostPicksByUserIdPosts);
     yield takeLatest(deletePostPickRequest.type, handleDeletePostPick);
     yield takeLatest(autoGradingPicksRequest.type, handleAutoGradingPicks);

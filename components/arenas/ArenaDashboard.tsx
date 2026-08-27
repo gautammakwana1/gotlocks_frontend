@@ -20,6 +20,17 @@ import InviteCodeCopy from "../group/InviteCodeCopy";
 import { DeleteGroupConfirmationModal } from "../group/ConfirmDeleteGroupModal";
 import GroupNotFoundNotice from "../group/GroupNotFoundNotice";
 import GroupManagerSettings from "../group/GroupManagerSettings";
+import {
+    SettingsActionBar,
+    SettingsDisclosure,
+    SettingsPage,
+    SettingsSection,
+    SettingsStatus,
+    settingsDangerButtonClassName,
+    settingsFieldLabelClassName,
+    settingsInputClassName,
+    settingsPrimaryButtonClassName,
+} from "@/components/settings/SettingsUI";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useDispatch, useSelector } from "react-redux";
 import { ArenaHostingDetails, ArenaUnlockDetails, FeedContest, FeedContestSection, Group, GroupJoinRequest, GroupSelector, LifetimeStandingsState, Members, RootState, UpdateArenaDetailsPayload } from "@/lib/interfaces/interfaces";
@@ -450,7 +461,7 @@ const ArenaContestsPanel = ({
                 : !unlocked
                     ? "Permanently unlock this Arena before creating contests."
                     : !hostingCreatable
-                        ? "New contests are unavailable while Arena hosting is read-only."
+                        ? "New contests are unavailable while the Arena plan is inactive."
                         : atContestLimit
                             ? "This Arena has reached its active contest limit."
                             : undefined;
@@ -553,7 +564,7 @@ const ArenaContestsPanel = ({
                 emptyTitle="No Arena contests yet"
                 emptyBody={
                     staff
-                        ? "Start the first contest when Arena hosting permits it."
+                        ? "Start the first contest when the Arena plan permits it."
                         : "Arena staff have not made a contest available yet."
                 }
                 // The tier's participating-member ceiling, which is what an Arena
@@ -946,7 +957,7 @@ const ArenaJoinRequestsSection = ({
 
             {!writable ? (
                 <p className="text-xs normal-case text-gray-500">
-                    Requests stay pending while Arena hosting is read-only.
+                    Requests stay pending while the Arena plan is inactive.
                 </p>
             ) : null}
         </section>
@@ -1434,6 +1445,14 @@ const ArenaSettingsPanel = ({
 }) => {
     const [name, setName] = useState(arena?.name ?? "");
     const [description, setDescription] = useState(arena?.description ?? "");
+    /* The inline "Arena information saved." line, on the same echo contract the
+     * two panels below use: it appears only once the ARENA RECORD comes back
+     * carrying what was submitted, so a refused write never claims a save. */
+    const [submittedIdentity, setSubmittedIdentity] = useState(false);
+    /* Seed the two identity fields ONCE per Arena. `arena` is a fresh reference
+     * on every group re-read — members, join requests, the post-save re-read —
+     * and without the latch each one would wipe whatever the owner had typed. */
+    const initializedArenaIdRef = useRef<string | null>(null);
     const [timeZone, setTimeZone] = useState("America/New_York");
     const [deleteConfirmation, setDeleteConfirmation] = useState("");
     const [deleteOtp, setDeleteOtp] = useState("");
@@ -1490,9 +1509,11 @@ const ArenaSettingsPanel = ({
     }, [joinPolicyError, joinPolicyMessage, dispatch, setToast]);
 
     useEffect(() => {
-        if (!arena) return;
+        if (!arena?.id || initializedArenaIdRef.current === arena.id) return;
+        initializedArenaIdRef.current = arena.id;
         setName(arena.name);
         setDescription(arena?.description ?? "");
+        setSubmittedIdentity(false);
     }, [arena]);
 
     // Every transfer write settles the pending request in the slice itself, so
@@ -1611,6 +1632,9 @@ const ArenaSettingsPanel = ({
     // Length and format are re-checked server-side; this only avoids a round-trip
     // for the one mistake people actually make.
     const identityError = nameError ?? descriptionError;
+    // The saved line keys off the STORED record: once the re-read lands, there
+    // is nothing left to write, and only then has the save actually happened.
+    const identitySaved = submittedIdentity && !hasIdentityChanges;
 
     const timeZoneOptions = TIME_ZONE_OPTIONS.includes(timeZone)
         ? TIME_ZONE_OPTIONS
@@ -1668,6 +1692,7 @@ const ArenaSettingsPanel = ({
         // Blank means "clear it", which the endpoint expects as an explicit null.
         if (descriptionChanged) payload.description = trimmedDescription || null;
 
+        setSubmittedIdentity(true);
         dispatch(updateArenaDetailsRequest(payload));
     };
 
@@ -1697,29 +1722,34 @@ const ArenaSettingsPanel = ({
 
 
     return (
-        /* The MVP's settings layout: full-bleed rules between sections rather
-           than a stack of bordered cards, with each section re-insetting itself. */
-        <div className="-mx-5 divide-y divide-white/10 sm:-mx-6">
-            <section className="space-y-4 px-5 pb-7 pt-1 sm:px-6">
-                <div>
-                    <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
-                        Arena identity
-                    </h2>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Arena times, deadlines, periods, and announcements use the stored timezone.
-                    </p>
-                </div>
+        /* THE SETTINGS SCREEN — the MVP's shared settings chrome, ported in
+           components/settings/SettingsUI.tsx. Full-bleed sections ruled by a
+           hairline rather than a stack of bordered cards, each re-insetting its
+           own body back onto the page gutter.
 
+           The rule now belongs to each SECTION (`SettingsSection`,
+           `SettingsDisclosure` and the venue panel all draw their own
+           `border-b`), so this container must NOT carry `divide-y` as it used
+           to — that would draw the hairline twice wherever one lands. */
+        <SettingsPage className="pt-1" data-settings-page="arena">
+            <SettingsSection
+                title="Arena information"
+                description="Update the name and description members see across this Arena."
+                bodyClassName="space-y-5"
+            >
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    <label className={`block ${settingsFieldLabelClassName}`}>
                         Arena name
                         <input
                             value={name}
-                            onChange={(event) => setName(event.target.value)}
+                            onChange={(event) => {
+                                setName(event.target.value);
+                                setSubmittedIdentity(false);
+                            }}
                             disabled={!identityWritable || updateLoading}
                             maxLength={ARENA_NAME_MAX}
                             aria-invalid={Boolean(nameError)}
-                            className="mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-300/60 disabled:cursor-not-allowed disabled:opacity-55"
+                            className={`${settingsInputClassName} mt-2 bg-black/60 normal-case`}
                         />
                         {identityWritable && nameError ? (
                             <span className="mt-1 block text-[10px] normal-case text-amber-200">
@@ -1727,13 +1757,13 @@ const ArenaSettingsPanel = ({
                             </span>
                         ) : null}
                     </label>
-                    <label className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    <label className={`block ${settingsFieldLabelClassName}`}>
                         Arena timezone
                         <select
                             value={timeZone}
                             onChange={(event) => setTimeZone(event.target.value)}
                             disabled
-                            className="mt-2 w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-300/60 disabled:cursor-not-allowed disabled:opacity-55"
+                            className={`${settingsInputClassName} mt-2 bg-black/60 normal-case`}
                         >
                             {timeZoneOptions.map((option) => (
                                 <option key={option} value={option}>
@@ -1750,16 +1780,19 @@ const ArenaSettingsPanel = ({
                     </label>
                 </div>
 
-                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                <label className={`block ${settingsFieldLabelClassName}`}>
                     Description
                     <textarea
                         rows={3}
                         value={description}
-                        onChange={(event) => setDescription(event.target.value)}
+                        onChange={(event) => {
+                            setDescription(event.target.value);
+                            setSubmittedIdentity(false);
+                        }}
                         disabled={!identityWritable || updateLoading}
                         maxLength={ARENA_DESCRIPTION_MAX}
                         aria-invalid={Boolean(descriptionError)}
-                        className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-sm normal-case text-white outline-none transition focus:border-sky-300/60 disabled:cursor-not-allowed disabled:opacity-55"
+                        className={`${settingsInputClassName} mt-2 min-h-28 resize-none bg-black/60 normal-case`}
                     />
                     {identityWritable ? (
                         <span className="mt-1 block text-[10px] normal-case text-gray-500">
@@ -1769,40 +1802,28 @@ const ArenaSettingsPanel = ({
                 </label>
 
                 {identityWritable ? (
-                    // Right-aligned, as every section-footer action in the MVP's
-                    // settings tab is (MVP ArenaDashboard:1005).
-                    <div className="flex justify-end">
+                    <SettingsActionBar>
+                        <SettingsStatus tone="success" className="border-0 bg-transparent px-0 py-0">
+                            {identitySaved ? "Arena information saved." : null}
+                        </SettingsStatus>
                         <button
                             type="button"
                             onClick={handleSave}
                             disabled={!hasIdentityChanges || Boolean(identityError) || updateLoading}
-                            className="rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                            className={settingsPrimaryButtonClassName}
                         >
-                            {updateLoading ? "Saving…" : "Save Arena details"}
+                            {updateLoading ? "Saving…" : "Save Arena information"}
                         </button>
-                    </div>
+                    </SettingsActionBar>
                 ) : (
                     <p className="text-xs text-gray-500">
                         {isOwner
-                            ? "Arena identity is read-only in the current hosting state."
+                            ? "Arena identity is read-only while the Arena plan is inactive."
                             : "Only the Arena owner can change Arena identity settings."}
                     </p>
                 )}
-            </section>
+            </SettingsSection>
 
-
-
-            {/* THE REWARD INBOX — PERMANENT OWNER ONLY, and rendered for nobody
-                else. `PUT /group/arena/details` answers 403 for a manager who
-                sends the field, and `GET /group/:id` deletes the key on the way
-                out for anyone but `created_by` — so a manager could neither read
-                the current value nor write a new one, and showing them an empty
-                box would read as "no inbox configured" when there may well be
-                one.
-
-                Unlike Arena identity, this is NOT gated on hosting state: a
-                paused Arena still owes prizes on contests it already published,
-                and the address winners claim them at has to stay correctable. */}
             {/* HOW MEMBERS JOIN — owner only, and only once setup has happened.
                 A NULL join_policy means the wizard was never finished, and
                 `PUT /group/arena/join-policy` refuses that case with a 409: it
@@ -1822,6 +1843,17 @@ const ArenaSettingsPanel = ({
                 />
             ) : null}
 
+            {/* THE REWARD INBOX — PERMANENT OWNER ONLY, and rendered for nobody
+                else. `PUT /group/arena/details` answers 403 for a manager who
+                sends the field, and `GET /group/:id` deletes the key on the way
+                out for anyone but `created_by` — so a manager could neither read
+                the current value nor write a new one, and showing them an empty
+                box would read as "no inbox configured" when there may well be
+                one.
+
+                Unlike Arena identity, this is NOT gated on hosting state: a
+                paused Arena still owes prizes on contests it already published,
+                and the address winners claim them at has to stay correctable. */}
             {isOwner ? (
                 <ArenaRewardContactSettings
                     rewardContactEmail={arena.reward_contact_email}
@@ -1844,19 +1876,18 @@ const ArenaSettingsPanel = ({
                 Notifications. Same panel the League settings tab mounts —
                 the endpoints behind it are one type-agnostic surface, so the
                 seat limit is the only thing that differs and it comes from the
-                server. */}
+                server.
+
+                It is a SettingsDisclosure of its own now, so it brings its own
+                rule and padding and needs no layout class from here. */}
             {isOwner ? (
                 <GroupManagerSettings
                     groupId={arenaId}
                     groupType="arena"
                     currentUserId={actorId}
-                    className="px-5 py-7 sm:px-6"
                 />
             ) : null}
 
-            {/* Permanent-unlock section: the only part of the hosting panel enabled so
-                far. Tier selection, change previews and the purchase-confirm flow stay
-                commented in ArenaHostingPanel below until their offer/usage data exists. */}
             {/* VENUE CHECK-IN — the MVP puts it between Arena identity and the
                 hosting panel, and it owns its own `/group/venue/detail` read. */}
             <ArenaVenueCheckInPanel
@@ -1874,21 +1905,17 @@ const ArenaSettingsPanel = ({
                 }
             />
 
-            {/* BILLING AND HOSTING — the MVP's compact summary.
+            {/* ARENA PLAN AND BILLING — the MVP's compact summary.
                 Tier selection, period controls and pause/resume are NOT repeated
                 here: /app-settings/plan/arena/[arenaId] owns them, and the button
                 below is the way in. The permanent-unlock CTA stays, because a
                 locked Arena has no other entry point to it. */}
-            <section className="space-y-4 px-5 py-7 sm:px-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">
-                            Billing and hosting
-                        </h2>
-                        <p className="mt-1 text-xs leading-5 text-gray-500">
-                            Arena hosting is billed separately from personal League Pro.
-                        </p>
-                    </div>
+            <SettingsSection
+                title="Arena plan and billing"
+                description="Arena plans are billed separately from personal League Pro."
+                bodyClassName="space-y-4"
+            >
+                <div className="flex flex-wrap items-start justify-end gap-3">
                     <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-300">
                         {unlock.status === "unlocked" ? "Permanently unlocked" : "Locked"}
                     </span>
@@ -1919,7 +1946,7 @@ const ArenaSettingsPanel = ({
                                 type="button"
                                 onClick={handleOpenUnlockDialog}
                                 disabled={unlockLoading}
-                                className="mt-4 rounded-xl bg-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                className={`${settingsPrimaryButtonClassName} mt-4`}
                             >
                                 {`Unlock Arena · ${unlockOffer.priceLabel} once`}
                             </button>
@@ -1937,7 +1964,7 @@ const ArenaSettingsPanel = ({
                             href={`/app-settings/plan/arena/${arenaId}`}
                             className="inline-flex min-h-11 items-center rounded-xl border border-violet-300/35 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20"
                         >
-                            Manage billing and hosting
+                            Manage Arena plan and billing
                         </Link>
                     </div>
                 ) : (
@@ -1974,48 +2001,51 @@ const ArenaSettingsPanel = ({
                     onClose={handleCloseUnlockDialog}
                     returnFocusRef={unlockButtonRef}
                 />
-            </section>
+            </SettingsSection>
 
+            {/* Collapsed by default, as in the MVP: deletion is the one action on
+                this screen that should take a deliberate extra click to reach. */}
             {isOwner ? (
-                <section className="space-y-4 px-5 py-7 sm:px-6">
-                    <div>
-                        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-red-200">
-                            Permanently delete Arena
-                        </h2>
-                        <p className="mt-1 text-xs leading-5 text-gray-500">
-                            Pausing is reversible and preserves everything. Deletion is a separate,
-                            permanent action: contests, standings, slips, messages and membership
-                            are all removed. Type the exact Arena name to continue.
-                        </p>
-                        {unlock.status === "unlocked" ? (
-                            <p className="mt-2 rounded-lg border border-red-300/25 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-100">
-                                This Arena&apos;s permanent unlock is destroyed with it and is not
-                                refunded or transferable. Pausing keeps the unlock intact.
+                <SettingsDisclosure summary="Danger zone" summaryDetail="Delete Arena">
+                    <div className="space-y-4">
+                        <div>
+                            <h2 className="text-base font-semibold text-red-200">
+                                Permanently delete Arena
+                            </h2>
+                            <p className="mt-1 text-xs leading-5 text-gray-500">
+                                Pausing is reversible and preserves everything. Deletion is a separate,
+                                permanent action: contests, standings, slips, messages and membership
+                                are all removed. Type the exact Arena name to continue.
                             </p>
-                        ) : null}
+                            {unlock.status === "unlocked" ? (
+                                <p className="mt-2 rounded-lg border border-red-300/25 bg-red-500/10 px-3 py-2 text-[11px] leading-5 text-red-100">
+                                    This Arena&apos;s permanent unlock is destroyed with it and is not
+                                    refunded or transferable. Pausing keeps the unlock intact.
+                                </p>
+                            ) : null}
+                        </div>
+                        <input
+                            aria-label="Exact Arena name confirmation"
+                            value={deleteConfirmation}
+                            onChange={(event) => setDeleteConfirmation(event.target.value)}
+                            placeholder={arena.name}
+                            disabled={arenaDeleteLoading}
+                            className={`${settingsInputClassName} border-red-300/20 bg-black/60`}
+                        />
+                        <SettingsActionBar>
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                disabled={deleteConfirmation !== arena.name || arenaDeleteLoading}
+                                className={settingsDangerButtonClassName}
+                            >
+                                {arenaDeleteLoading && !arenaDeleteOtpSent
+                                    ? "Sending code…"
+                                    : "Delete Arena permanently"}
+                            </button>
+                        </SettingsActionBar>
                     </div>
-                    <input
-                        aria-label="Exact Arena name confirmation"
-                        value={deleteConfirmation}
-                        onChange={(event) => setDeleteConfirmation(event.target.value)}
-                        placeholder={arena.name}
-                        disabled={arenaDeleteLoading}
-                        className="w-full rounded-xl border border-red-300/20 bg-black/60 px-4 py-3 text-sm text-white outline-none transition focus:border-red-300/60 disabled:cursor-not-allowed disabled:opacity-55"
-                    />
-                    {/* Right-aligned like the MVP's (MVP ArenaDashboard:1243). */}
-                    <div className="flex justify-end">
-                        <button
-                            type="button"
-                            onClick={handleDelete}
-                            disabled={deleteConfirmation !== arena.name || arenaDeleteLoading}
-                            className="rounded-xl border border-red-300/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            {arenaDeleteLoading && !arenaDeleteOtpSent
-                                ? "Sending code…"
-                                : "Delete Arena permanently"}
-                        </button>
-                    </div>
-                </section>
+                </SettingsDisclosure>
             ) : null}
 
             {/* Step 2 of the delete. Reuses the League code dialog so both flows
@@ -2034,7 +2064,7 @@ const ArenaSettingsPanel = ({
                 onClose={handleCloseDeleteDialog}
                 onConfirm={handleConfirmDelete}
             />
-        </div>
+        </SettingsPage>
     );
 };
 

@@ -5,6 +5,7 @@ import { BuiltPickPayload, Group, GroupObject, League, LeaguePickCandidate, Pick
 import { useDispatch, useSelector } from "react-redux";
 import { isGameEligible } from "@/lib/utils/games";
 import PickBuilderShell from "@/components/pick-builder/core/PickBuilderShell";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { toLocalDateKeyFromUTC } from "@/lib/utils/date";
 import { clearCreatePostPickMessage, createPostPickRequest, replaceOrCreatePostablePickRequest } from "@/lib/redux/slices/pickSlice";
 import { useToast } from "@/lib/state/ToastContext";
@@ -472,7 +473,7 @@ const PickBuilderClientPage = ({
                                     onClick={() => setDestinationStep("choose")}
                                     className="text-xs font-semibold text-gray-200 transition hover:text-white"
                                 >
-                                    &larr; back to destinations
+                                    <AnimatedArrow direction="left" /> back to destinations
                                 </button>
 
                                 <div className="space-y-3">

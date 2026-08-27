@@ -14,12 +14,19 @@ import { useToast } from "@/lib/state/ToastContext";
 import {
     getArenaCustomContactHref,
     getArenaHostingOffer,
+    getArenaUnlockOffer,
     SELF_SERVICE_ARENA_TIERS,
 } from "@/components/billing/arena";
 import type { ArenaSelfServiceHostingTier } from "@/components/billing/arena";
 import type { ArenaHostingDetails, ArenaSubscription } from "@/lib/interfaces/interfaces";
 import { ARENA_INCLUDED_TIER_LABEL } from "@/lib/arenas/tierLabels";
-import { getArenaHostingStatusLabel } from "../arenas/ArenaHostingStatus";
+import Link from "next/link";
+import {
+    SettingsActionBar,
+    SettingsSection,
+    settingsPrimaryButtonClassName,
+    settingsSecondaryButtonClassName,
+} from "@/components/settings/SettingsUI";
 
 /**
  * The owner-facing view of a real Stripe subscription.
@@ -304,95 +311,107 @@ const ArenaSubscriptionPanel = ({ arenaId, isOwner, hosting }: ArenaSubscription
     const customOffer = getArenaHostingOffer("custom");
     const busy = billingActionLoading;
 
-    return (
-        <section className="mb-6 flex flex-col gap-4" aria-label="Arena hosting subscription">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                        current status
-                    </p>
-                    <h2
-                        id="hosting-status-title"
-                        className="mt-1 text-lg font-semibold text-[var(--app-text)]"
-                    >
-                        {getArenaHostingStatusLabel(hosting)}
-                    </h2>
-                </div>
-                <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-300">
-                    simulated billing
-                </span>
-            </div>
-            <div className={`rounded-xl border px-4 py-3 ${TONE_CLASS[status.tone]}`}>
-                <p className="text-sm font-semibold">{status.label}</p>
-                {status.detail && <p className="mt-0.5 text-xs opacity-90">{status.detail}</p>}
-            </div>
+    /* ------------------------------------------------------------------
+       RENEWAL COPY. The MVP's "Renewal controls" blurb, re-derived from the
+       Stripe subscription instead of its simulated hosting row. Four states,
+       and each one has to answer the same two questions: what happens next,
+       and what happens to the Arena afterwards.
 
-            {/* During the included month these are two different plans, so they
-                are shown as two rows rather than one "current plan" line. */}
-            <dl className="grid grid-cols-2 gap-3 text-xs">
-                {subscription.in_included_month && (
-                    <div>
-                        <dt className="text-white/50">Running on now</dt>
-                        <dd className="mt-0.5 font-semibold text-white">
-                            {ARENA_INCLUDED_TIER_LABEL} · included
-                        </dd>
-                    </div>
-                )}
-                <div>
-                    <dt className="text-white/50">
-                        {subscription.in_included_month ? "Starts after included month" : "Your plan"}
-                    </dt>
-                    <dd className="mt-0.5 font-semibold text-white">
-                        {billedPlan ? `${billedPlan.name} · ${billedPlan.priceLabel}/mo` : "—"}
-                    </dd>
+       The unlock fee is read from the offer rather than typed, so this copy
+       cannot drift away from what the unlock actually costs.
+       ------------------------------------------------------------------ */
+    const unlockPriceLabel = getArenaUnlockOffer().priceLabel;
+    const renewalEndsLabel = formatDate(
+        subscription.cancel_at ?? subscription.current_period_ends_at
+    );
+    const readOnlyTail =
+        "The Arena becomes read-only: you cannot create or run contests, accept entries, add members, or make other changes. Your Arena, members, standings, and history stay saved, and you can restart a monthly tier later without paying the " +
+        unlockPriceLabel +
+        " permanent unlock fee again.";
+
+    const renewalDescription = subscription.cancel_at_period_end
+        ? `Monthly renewal is off. There will be no further charges after ${renewalEndsLabel}. ${readOnlyTail} Choose Keep plan active to continue.`
+        : subscription.in_included_month
+            ? `Your included ${ARENA_INCLUDED_TIER_LABEL} month is active through ${formatDate(
+                subscription.included_period_ends_at
+            )}. Turn off renewal to prevent the first monthly charge. ${readOnlyTail}`
+            : subscription.status === "active"
+                ? `Turn off monthly renewal to end your Arena plan on ${renewalEndsLabel}. ${readOnlyTail}`
+                : `Your Arena plan is inactive and the Arena is read-only. Your Arena, members, standings, and history remain saved. Choose a tier above whenever you are ready to return; your permanent unlock is still valid, so you will not pay the ${unlockPriceLabel} unlock fee again.`;
+
+    const canTurnOffRenewal =
+        !subscription.cancel_at_period_end &&
+        (subscription.status === "active" || subscription.in_included_month);
+
+    return (
+        <>
+            {/* THE MVP'S "Arena plan" SECTION. Same split layout, same one-row-per-
+                tier list — not the four-across grid this panel used to draw, which
+                made the current plan hard to pick out of the row. */}
+            <SettingsSection
+                title="Arena plan"
+                description="Choose the capacity and monthly price for this Arena."
+                bodyClassName="space-y-4"
+                layout="split"
+            >
+                <div className={`rounded-xl border px-4 py-3 ${TONE_CLASS[status.tone]}`}>
+                    <p className="text-sm font-semibold">{status.label}</p>
+                    {status.detail && <p className="mt-0.5 text-xs opacity-90">{status.detail}</p>}
                 </div>
-                {!subscription.in_included_month && (
+
+                {/* During the included month these are two different plans, so they
+                    are shown as two rows rather than one "current plan" line. */}
+                <dl className="grid grid-cols-2 gap-3 text-xs">
+                    {subscription.in_included_month && (
+                        <div>
+                            <dt className="text-white/50">Running on now</dt>
+                            <dd className="mt-0.5 font-semibold text-white">
+                                {ARENA_INCLUDED_TIER_LABEL} · included
+                            </dd>
+                        </div>
+                    )}
                     <div>
                         <dt className="text-white/50">
-                            {subscription.cancel_at_period_end ? "Ends" : "Next renewal"}
+                            {subscription.in_included_month
+                                ? "Starts after included month"
+                                : "Your plan"}
                         </dt>
                         <dd className="mt-0.5 font-semibold text-white">
-                            {formatDate(subscription.current_period_ends_at)}
+                            {billedPlan ? `${billedPlan.name} · ${billedPlan.priceLabel}/mo` : "—"}
                         </dd>
                     </div>
-                )}
-            </dl>
-
-            {pendingPlan && (
-                <p className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/80">
-                    Scheduled: moving to <strong className="text-white">{pendingPlan.name}</strong> on{" "}
-                    {formatDate(subscription.pending_plan_effective_at)}.
-                    {subscription.downgrade_blocked_reason === "member_count" && (
-                        <span className="mt-1 block text-amber-200">
-                            We kept your current plan — this Arena has more members than{" "}
-                            {pendingPlan.name} allows. Remove members to complete the change.
-                        </span>
+                    {!subscription.in_included_month && (
+                        <div>
+                            <dt className="text-white/50">
+                                {subscription.cancel_at_period_end ? "Ends" : "Next renewal"}
+                            </dt>
+                            <dd className="mt-0.5 font-semibold text-white">
+                                {formatDate(subscription.current_period_ends_at)}
+                            </dd>
+                        </div>
                     )}
-                </p>
-            )}
+                </dl>
 
-            {/* ------------------------------------------------------------------
-                Plan switcher — the MVP's ArenaTierGrid card layout
-                (gotlocks.app_mvp2/components/arenas/ArenaTierGrid.tsx).
+                {pendingPlan && (
+                    <p className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/80">
+                        Scheduled: moving to{" "}
+                        <strong className="text-white">{pendingPlan.name}</strong> on{" "}
+                        {formatDate(subscription.pending_plan_effective_at)}.
+                        {subscription.downgrade_blocked_reason === "member_count" && (
+                            <span className="mt-1 block text-amber-200">
+                                We kept your current plan — this Arena has more members than{" "}
+                                {pendingPlan.name} allows. Remove members to complete the change.
+                            </span>
+                        )}
+                    </p>
+                )}
 
-                FOUR cards, not three: the three self-service tiers plus the
-                contact-only Custom, drawn dashed because it is the one card that
-                cannot be bought here. Leaving it out made 250+ look like a
-                ceiling rather than the point where the conversation starts.
-
-                Only the CARDS are the MVP's. The per-plan timing copy underneath
-                is ours and stays — "change plan" genuinely means three different
-                things depending on where the Arena sits in its cycle, and the
-                MVP's simulator has no equivalent to say.
-               ------------------------------------------------------------------ */}
-            <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/60">
-                    {subscription.in_included_month ? "Plan after included month" : "Change plan"}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-5">
                     {SELF_SERVICE_ARENA_TIERS.map((tier) => {
                         const offer = getArenaHostingOffer(tier);
                         const isCurrent = subscription.plan_code === tier;
+                        const isScheduled =
+                            !isCurrent && subscription.pending_plan_code === tier;
                         const preview = planChangePreview({
                             tier,
                             offerName: offer.name,
@@ -406,150 +425,181 @@ const ArenaSubscriptionPanel = ({ arenaId, isOwner, hosting }: ArenaSubscription
                         return (
                             <article
                                 key={tier}
-                                className={`rounded-xl border p-4 ${isCurrent
-                                    ? "border-violet-300/45 bg-violet-500/10"
-                                    : "border-white/10 bg-white/[0.03]"
+                                className={`rounded-xl px-2 py-3 sm:px-4 ${isCurrent ? "bg-violet-500/[0.07] shadow-sm" : ""
                                     }`}
                             >
-                                <div className="flex items-start justify-between gap-2">
-                                    <p className="font-semibold text-white">{offer.name}</p>
+                                <div className="flex items-start justify-between gap-3">
+                                    <h3 className="font-semibold text-white">{offer.name}</h3>
                                     {isCurrent ? (
-                                        <span className="text-[9px] font-semibold uppercase tracking-wide text-violet-200">
-                                            Current
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-violet-200">
+                                            current
+                                        </span>
+                                    ) : isScheduled ? (
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-200">
+                                            {subscription.in_included_month
+                                                ? "starts after included month"
+                                                : "scheduled next period"}
                                         </span>
                                     ) : null}
                                 </div>
                                 <p className="mt-1 text-sm text-gray-300">
-                                    {offer.priceLabel}{" "}
-                                    <span className="text-xs text-gray-500">/ month</span>
+                                    {offer.priceLabel}/month
                                 </p>
                                 <p className="mt-3 text-xs leading-5 text-gray-500">
-                                    {offer.limits.participatingMemberLimit} members ·{" "}
-                                    {offer.limits.managerLimit} managers ·{" "}
-                                    {offer.limits.activeContestLimit} contests
+                                    {offer.summary}
                                 </p>
                                 {showAction ? (
-                                    <p
-                                        className={`mt-2 text-[11px] leading-4 ${preview.allowed ? "text-gray-500" : "text-amber-200"
-                                            }`}
-                                    >
-                                        {preview.summary}
-                                    </p>
-                                ) : null}
-                                {showAction ? (
-                                    <button
-                                        type="button"
-                                        disabled={busy || !preview.allowed}
-                                        onClick={() =>
-                                            dispatch(
-                                                changeArenaPlanRequest({ arena_id: arenaId, tier })
-                                            )
-                                        }
-                                        className="mt-3 rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-violet-300/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                    >
-                                        {working ? "Working…" : preview.actionLabel}
-                                    </button>
+                                    <>
+                                        <p
+                                            className={`mt-2 text-xs leading-5 ${preview.allowed ? "text-gray-500" : "text-amber-200"
+                                                }`}
+                                        >
+                                            {preview.summary}
+                                        </p>
+                                        {/* POST /group/arena/change-plan — the recurring-plan
+                                            update. Upgrades take effect immediately;
+                                            downgrades are scheduled for the period
+                                            boundary, which `preview.summary` says. */}
+                                        <button
+                                            type="button"
+                                            disabled={busy || !preview.allowed}
+                                            onClick={() =>
+                                                dispatch(
+                                                    changeArenaPlanRequest({ arena_id: arenaId, tier })
+                                                )
+                                            }
+                                            className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-200 underline underline-offset-4 transition hover:text-violet-100 disabled:cursor-not-allowed disabled:text-gray-500 disabled:no-underline"
+                                        >
+                                            {working ? "Working…" : preview.actionLabel}
+                                        </button>
+                                    </>
                                 ) : null}
                             </article>
                         );
                     })}
 
-                    {/* The fourth card. Contact-only by design — it has no price to
-                        charge and no limits to render, so it shows its summary and
-                        a way to start the conversation. */}
-                    <article className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] p-4">
-                        <p className="font-semibold text-white">{customOffer.name}</p>
-                        <p className="mt-1 text-sm text-gray-400">
-                            {customOffer.priceLabel} · {customOffer.cadenceLabel}
-                        </p>
+                    {/* The fourth tier. Contact-only by design — it has no price to
+                        charge here, so it shows its summary and a way to start the
+                        conversation. Leaving it out made 250+ look like a ceiling
+                        rather than the point where the conversation starts. */}
+                    <article className="rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-2 py-3 sm:px-4">
+                        <h3 className="font-semibold text-white">{customOffer.name}</h3>
+                        <p className="mt-1 text-sm text-gray-300">{customOffer.priceLabel}</p>
                         <p className="mt-3 text-xs leading-5 text-gray-500">
                             {customOffer.summary}
                         </p>
                         <a
                             href={getArenaCustomContactHref()}
-                            className="mt-3 inline-block rounded-lg border border-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-200 transition hover:border-violet-300/40 hover:text-white"
+                            className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-violet-200 underline underline-offset-4 transition hover:text-violet-100"
                         >
                             Contact gotLocks
                         </a>
                     </article>
                 </div>
-            </div>
+            </SettingsSection>
 
-            <h2
-                id="hosting-controls-title"
-                className="text-lg font-semibold text-[var(--app-text)]"
+            <SettingsSection
+                title="Renewal controls"
+                description={renewalDescription}
+                bodyClassName="space-y-4"
+                layout="split"
             >
-                Hosting controls
-            </h2>
-
-            {/* Card + cancellation */}
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => dispatch(openArenaBillingPortalRequest({ arena_id: arenaId }))}
-                    className="rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10 disabled:opacity-40"
-                >
-                    Manage card &amp; receipts
-                </button>
-
-                {subscription.cancel_at_period_end ? (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => dispatch(resumeArenaHostingRequest({ arena_id: arenaId }))}
-                        className="rounded-xl border border-emerald-300/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/15 disabled:opacity-40"
-                    >
-                        Keep hosting
-                    </button>
-                ) : (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setConfirmCancel(true)}
-                        className="rounded-xl border border-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white/70 transition hover:bg-white/5 disabled:opacity-40"
-                    >
-                        Cancel hosting
-                    </button>
-                )}
-            </div>
-
-            {confirmCancel && (
-                <div
-                    role="alertdialog"
-                    aria-label="Cancel hosting"
-                    className="rounded-xl border border-white/20 bg-black/40 px-4 py-3 text-sm text-white"
-                >
-                    <p className="font-semibold">Cancel hosting for this Arena?</p>
-                    <p className="mt-1 text-xs text-white/70">
-                        You keep everything until{" "}
-                        {formatDate(subscription.current_period_ends_at)} — you already paid for it.
-                        After that the Arena becomes read-only. Nothing is deleted, and you can
-                        restart any time. Your $50 unlock is permanent and is not charged again.
-                    </p>
-                    <div className="mt-3 flex gap-2">
+                {canTurnOffRenewal ? (
+                    <SettingsActionBar>
                         <button
                             type="button"
                             disabled={busy}
-                            onClick={() => {
-                                setConfirmCancel(false);
-                                dispatch(cancelArenaHostingRequest({ arena_id: arenaId }));
-                            }}
-                            className="rounded-lg border border-red-300/40 px-3 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-red-500/15 disabled:opacity-40"
+                            onClick={() => setConfirmCancel(true)}
+                            className="min-h-11 rounded-xl border border-amber-300/30 px-4 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                            {busy ? "Working…" : "Cancel at period end"}
+                            Turn off monthly renewal
                         </button>
+                    </SettingsActionBar>
+                ) : null}
+
+                {subscription.cancel_at_period_end ? (
+                    /* POST /group/arena/resume-hosting — clears cancel_at_period_end
+                       so the subscription renews normally again. */
+                    <SettingsActionBar>
                         <button
                             type="button"
-                            onClick={() => setConfirmCancel(false)}
-                            className="rounded-lg border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                            disabled={busy}
+                            onClick={() => dispatch(resumeArenaHostingRequest({ arena_id: arenaId }))}
+                            className="min-h-11 rounded-xl border border-emerald-300/30 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                            Keep hosting
+                            {busy ? "Working…" : "Keep plan active"}
                         </button>
+                    </SettingsActionBar>
+                ) : null}
+
+                {confirmCancel && (
+                    <div
+                        role="alertdialog"
+                        aria-label="Turn off monthly renewal"
+                        className="rounded-xl border border-white/20 bg-black/40 px-4 py-3 text-sm text-white"
+                    >
+                        <p className="font-semibold">Turn off renewal for this Arena?</p>
+                        <p className="mt-1 text-xs leading-5 text-white/70">
+                            You keep everything until {renewalEndsLabel} — you already paid for it.
+                            After that the Arena becomes read-only. Nothing is deleted, and you can
+                            restart any time. Your {unlockPriceLabel} unlock is permanent and is not
+                            charged again.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            {/* POST /group/arena/cancel-hosting — sets
+                                cancel_at_period_end on the Stripe subscription. */}
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                    setConfirmCancel(false);
+                                    dispatch(cancelArenaHostingRequest({ arena_id: arenaId }));
+                                }}
+                                className="min-h-11 rounded-xl border border-red-300/40 px-4 py-2 text-xs font-semibold text-red-100 transition hover:bg-red-500/15 disabled:opacity-40"
+                            >
+                                {busy ? "Working…" : "Turn off renewal"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmCancel(false)}
+                                className="min-h-11 rounded-xl border border-white/20 px-4 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10"
+                            >
+                                Keep plan active
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
-        </section>
+                )}
+            </SettingsSection>
+
+            {/* NOT IN THE MVP — it has no real payments, so it has no card to
+                manage and no receipts to hand out. Both live with Stripe here, so
+                this is the one place that can reach them. */}
+            <SettingsSection
+                title="Payment method and receipts"
+                description="Your card, invoices, and receipts for this Arena are handled by Stripe."
+                bodyClassName="space-y-4"
+                layout="split"
+            >
+                <SettingsActionBar>
+                    <Link
+                        href="/app-settings/transaction-history"
+                        className={settingsSecondaryButtonClassName}
+                    >
+                        View payment history
+                    </Link>
+                    {/* POST /group/arena/billing-portal — returns a Stripe-hosted
+                        portal URL for card changes, invoices and receipts. */}
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => dispatch(openArenaBillingPortalRequest({ arena_id: arenaId }))}
+                        className={settingsPrimaryButtonClassName}
+                    >
+                        {busy ? "Opening…" : "Manage card & receipts"}
+                    </button>
+                </SettingsActionBar>
+            </SettingsSection>
+        </>
     );
 };
 

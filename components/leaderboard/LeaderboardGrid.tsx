@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import { ArchiveLeaderboardSlip, ContestBadgeAward, DifficultyLabel, Group, Leaderboard, leaderboardSlip, Pick, Slip, TierIndex } from "@/lib/interfaces/interfaces";
 import Image from "next/image";
 import { getGroupTierColor, getGroupTierName, getTierMetaForPick, LEAGUE_CAP_TIER, TierMeta } from "@/lib/utils/scoring";
@@ -582,12 +583,7 @@ const SlipCellCard = ({
                         className={`inline-flex items-center gap-1 font-semibold leading-tight text-sky-50 ${LEADERBOARD_CARD_SIZING.emptyCopy}`}
                     >
                         Add your pick
-                        <span
-                            className="transition-transform group-hover:translate-x-0.5"
-                            aria-hidden
-                        >
-                            →
-                        </span>
+                        <AnimatedArrow direction="right" />
                     </span>
                     <span className="mt-auto inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-sky-200/80 md:text-[8px]">
                         <span className="h-1 w-1 animate-pulse rounded-full bg-sky-300" aria-hidden />
@@ -1505,12 +1501,7 @@ export const LeaderboardGrid = ({
                                                                     className={`inline-flex items-center gap-1 font-semibold leading-tight text-sky-50 ${LEADERBOARD_CARD_SIZING.emptyCopy}`}
                                                                 >
                                                                     Open first slip
-                                                                    <span
-                                                                        className="transition-transform group-hover:translate-x-0.5"
-                                                                        aria-hidden="true"
-                                                                    >
-                                                                        →
-                                                                    </span>
+                                                                    <AnimatedArrow direction="right" />
                                                                 </span>
                                                                 <span className="mt-auto inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-sky-200/80 md:text-[8px]">
                                                                     <span

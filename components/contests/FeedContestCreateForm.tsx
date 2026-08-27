@@ -2976,6 +2976,7 @@ export const FeedContestCreateForm = ({
                                         contest draft.
                                     </p>
                                     <ArenaRewardContactSettings
+                                        embedded
                                         rewardContactEmail={normalizedRewardContactEmail || null}
                                         saving={arenaDetailsSaving}
                                         onSave={(email) => {

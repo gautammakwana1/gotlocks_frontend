@@ -176,7 +176,8 @@ export const ArenaMemberContactsPanel = ({
                         </span>
                         <span
                             aria-hidden
-                            className="text-violet-200 transition-transform group-open:rotate-180"
+                            data-directional-arrow="down"
+                            className="ui-directional-arrow text-violet-200 transition-transform group-open:rotate-180 motion-reduce:transition-none"
                         >
                             ⌄
                         </span>

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
-import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
+import { SettingsHeader, SettingsPage } from "@/components/settings/SettingsUI";
 import { useCurrentUser } from "@/lib/auth/useCurrentUser";
 import { useToast } from "@/lib/state/ToastContext";
 import { fetchTransactionsRequest } from "@/lib/redux/slices/planSlice";
@@ -122,23 +123,16 @@ const TransactionHistoryPage = () => {
     }
 
     return (
-        <div className="mx-auto w-full max-w-2xl space-y-6 pb-20">
-            <header className="space-y-3 border-b border-[var(--border-soft)] pb-5">
-                <Link
-                    href="/app-settings"
-                    className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)] transition hover:text-[var(--app-text)]"
-                >
-                    <span className="flex items-center gap-2">
-                        <ArrowLeft size={14} /> account settings
-                    </span>
-                </Link>
-                <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
-                    Transaction history
-                </h1>
-                <p className="text-sm leading-6 text-[var(--text-secondary)]">
-                    Your gotLocks payments and refunds. Receipts are hosted securely by Stripe.
-                </p>
-            </header>
+        <SettingsPage className="pb-20">
+            <SettingsHeader
+                title="Transaction history"
+                description="Your gotLocks payments and refunds. Receipts are hosted securely by Stripe."
+                backHref="/app-settings"
+            />
+
+            {/* Receipt rows are cards rather than full-bleed settings sections,
+                so the body re-insets itself onto the page gutter. */}
+            <div className="space-y-6 px-5 pt-6 sm:px-6">
 
             {transactions.length > 0 ? (
                 <div className="space-y-3">
@@ -210,7 +204,8 @@ const TransactionHistoryPage = () => {
             </Link>
 
             {showScrollTop && <ScrollUpButton scrollToTop={scrollToTop} />}
-        </div>
+            </div>
+        </SettingsPage>
     );
 };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import dockStyles from "@/components/layout/BottomDock.module.css";
 import ContestRulesAcceptance from "@/components/contests/ContestRulesAcceptance";
 import { ChevronUpDownIcon } from "@/components/ui/SvgIcons";
@@ -1038,7 +1039,7 @@ export const ContestPickBuilder = ({
                                                     </div>
                                                 ))}
                                             </div>
-                                            <span className="text-xs text-gray-500">→</span>
+                                            <AnimatedArrow direction="right" className="text-xs text-gray-500" />
                                         </div>
                                     </div>
                                 );
@@ -1078,7 +1079,7 @@ export const ContestPickBuilder = ({
                                 }}
                                 className="text-xs font-semibold lowercase text-gray-200 transition hover:text-white"
                             >
-                                &larr; back to all matchups
+                                <AnimatedArrow direction="left" /> back to all matchups
                             </button>
                             <p className="text-xs text-gray-500">{activeGame.competition}</p>
                         </div>
@@ -1501,9 +1502,13 @@ export const ContestPickBuilder = ({
                                 {reviewOpen ? "Close review" : "Review entry"}
                                 {/* Base path points DOWN = close, so the shut
                                     state is the one that rotates. Matches the
-                                    core PickReviewSheet's affordance. */}
+                                    core PickReviewSheet's affordance. The
+                                    rotation also flips the shared hover nudge,
+                                    so a fixed "down" direction tracks whichever
+                                    way the glyph is currently pointing. */}
                                 <ChevronUpDownIcon
-                                    className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${reviewOpen ? "" : "rotate-180"
+                                    data-directional-arrow="down"
+                                    className={`ui-directional-arrow h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${reviewOpen ? "" : "rotate-180"
                                         }`}
                                 />
                             </button>

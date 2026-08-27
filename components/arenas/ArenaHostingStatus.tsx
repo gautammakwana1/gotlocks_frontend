@@ -30,26 +30,26 @@ export const statusTone: Record<ArenaHostingStatus, string> = {
 export const hostingMessage = (hosting: ArenaHostingDetails) => {
     switch (hosting.status) {
         case "not_started":
-            return "Permanent unlock is required before this Arena can begin hosting.";
+            return "Permanently unlock this Arena before selecting a plan.";
         case "included_month":
             return `The included ${ARENA_INCLUDED_TIER_LABEL} month is active${hosting.included_month_ends_at
                 ? ` through ${formatDateTime(hosting.included_month_ends_at)}`
                 : ""
                 }.`;
         case "active":
-            return `Monthly hosting is active${hosting.paid_through_at ? ` through ${formatDateTime(hosting.paid_through_at)}` : ""
+            return `Your monthly Arena plan is active${hosting.paid_through_at ? ` through ${formatDateTime(hosting.paid_through_at)}` : ""
                 }.`;
         case "past_due":
-            return "New Arena activity is paused until the owner restores simulated hosting.";
+            return "New Arena activity is unavailable until the owner restores the Arena plan.";
         case "pause_scheduled":
-            return `Hosting will pause${hosting.pause_scheduled_for
-                ? ` at ${formatDateTime(hosting.pause_scheduled_for)}`
-                : " at the end of this period"
-                }. Existing activity remains available until then.`;
+            return `Your Arena plan ends${hosting.pause_scheduled_for
+                ? ` on ${formatDateTime(hosting.pause_scheduled_for)}`
+                : " at the end of this billing period"
+                }. Your Arena remains active until then, and there will be no further charges.`;
         case "cleanup":
-            return "New activity is closed. Staff may finish unresolved Locked or Grading contests before the Arena becomes paused.";
+            return "New activity is closed. Staff may finish unresolved Locked or Grading contests before the Arena plan becomes inactive.";
         case "paused":
-            return "This Arena is read-only. Its identity, members, history, standings, and permanent unlock are preserved.";
+            return "The Arena plan is inactive, so this Arena is read-only. Its identity, members, history, standings, and permanent unlock are preserved. Restart the plan whenever you are ready.";
     }
 };
 

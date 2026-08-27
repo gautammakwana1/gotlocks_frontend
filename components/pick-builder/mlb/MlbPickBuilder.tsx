@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedArrow } from "@/components/ui/AnimatedArrow";
 import {
     PickReviewSheet,
     type ReviewSheetPostSelection,
@@ -4319,7 +4320,7 @@ export const MlbPickBuilder = ({
                                                                                             )} */}
                                                 </div>
                                                 <div className="items-center">
-                                                    <span className="text-xs text-gray-500">→</span>
+                                                    <AnimatedArrow direction="right" className="text-xs text-gray-500" />
                                                 </div>
                                             </div>
                                         </div>
@@ -4338,7 +4339,7 @@ export const MlbPickBuilder = ({
                                 onClick={handleBackToMatchups}
                                 className="text-xs font-semibold lowercase text-gray-200 transition hover:text-white"
                             >
-                                &larr; back to all matchups
+                                <AnimatedArrow direction="left" /> back to all matchups
                             </button>
                             <p className="text-xs text-gray-500 gap-2">
                                 Updated {formatDateTime(mlbSchedulesWithOdds?.updated)}

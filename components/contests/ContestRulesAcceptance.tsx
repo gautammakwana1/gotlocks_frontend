@@ -103,8 +103,9 @@ export const ContestRulesAcceptance = ({
                         </span>
                         <svg
                             aria-hidden="true"
+                            data-directional-arrow="down"
                             viewBox="0 0 16 16"
-                            className={`h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180 ${tone.chevron}`}
+                            className={`ui-directional-arrow h-4 w-4 shrink-0 transition-transform duration-200 group-open:rotate-180 motion-reduce:transition-none ${tone.chevron}`}
                         >
                             <path
                                 d="m4 6 4 4 4-4"

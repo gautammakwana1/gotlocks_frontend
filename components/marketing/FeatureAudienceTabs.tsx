@@ -230,7 +230,8 @@ export default function FeatureAudienceTabs() {
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className="size-5"
+            data-directional-arrow="left"
+            className="ui-directional-arrow size-5"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -252,7 +253,8 @@ export default function FeatureAudienceTabs() {
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className="size-5"
+            data-directional-arrow="right"
+            className="ui-directional-arrow size-5"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
